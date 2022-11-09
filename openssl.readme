@@ -1,13 +1,17 @@
 The versions of OpenSSL currently supported for use with Mosaic are
-0.9.4, 0.9.5, 0.9.7c, 0.9.7e and 0.9.8a (other versions after 0.9.4
-should work but have not been tested).  DEC C is required to build
-Mosaic with OpenSSL (GNU C and VAX C are still supported for non-OpenSSL
-builds).
+0.9.4, 0.9.5, 0.9.7c, 0.9.7e, 0.9.7k, 0.9.7m and 0.9.8a (other versions
+after 0.9.4 should work but have not been tested).  DEC C is required
+to build Mosaic with OpenSSL (GNU C and VAX C are still supported for
+non-OpenSSL builds).
 
 The OpenSSL package is available at http://www.openssl.org/source/
 and various mirrors around the world.  Note that it is your
 responsibility to follow any applicable import/export restrictions
 (using a mirror site within your country may avoid this issue).
+
+If you use Mosaic with a version of OpenSSL prior to version 0.9.8c 
+(in the 0.9.8 branch) or 0.9.7k (in the 0.9.7 branch), please read
+the file OPENSSL_SECADV_20060905.TXT in the Mosaic top level directory.
 
 If OpenSSL is installed just for use by Mosaic, then a complete
 OpenSSL build is not required.  Mosaic only requires the following
@@ -38,7 +42,7 @@ with parameter five):
 	    .OR.(P1.EQS."TEST").OR.(P1.EQS."APPS").OR.(P1.EQS."CONFIG")
 
 	Note 2:  the 0.9.5 include file OPENSSLCONF.H created on
-	an Alpha system will not work with a VAX Mosaic build.
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
 ----------------------------------------------------------------------
 
   OpenSSL 0.9.7c
@@ -66,7 +70,7 @@ File SSLROOT:[OPENSSL-0_9_7C.CRYPTO]O_TIME.C;1
 ************
 
 	Note 2:  the 0.9.7c include file OPENSSLCONF.H created on
-	an Alpha system will not work with a VAX Mosaic build.
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
 ----------------------------------------------------------------------
 
   OpenSSL 0.9.7e
@@ -82,11 +86,123 @@ File SSLROOT:[OPENSSL-0_9_7C.CRYPTO]O_TIME.C;1
 	is only required for VAX builds.
 
 	Note 2:  the 0.9.7e include file OPENSSLCONF.H created on
-	an Alpha system will not work with a VAX Mosaic build.
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
 ----------------------------------------------------------------------
 
-OpenSSL 0.9.8a (Alpha only)
+  OpenSSL 0.9.7k
 ----------------------------------------------------------------------
+	@MAKEVMS CONFIG "" NODEBUG DECC
+	@MAKEVMS BUILDINF "" NODEBUG DECC
+	@MAKEVMS SOFTLINKS "" NODEBUG DECC
+	@MAKEVMS CRYPTO "" NODEBUG DECC
+	@MAKEVMS SSL "" NODEBUG DECC
+
+	Note 1:  The following fixes to the 0.9.7k INSTALL.COM and
+	[.FIPS-1_0]INSTALL.COM files should be made prior to starting
+        the build.  Change "FIPS" to "FIPS-1_0" in INSTALL.COM and
+	"SHA1" to "SHA" in [.FIPS-1_0]INSTALL.COM as indicated below:
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7K]INSTALL.COM;2
+   55   $       DIRS := CRYPTO,FIPS-1_0,SSL,APPS,VMS!,RSAREF,TEST,TOOLS
+   56   $       EXHEADER := e_os2.h
+******
+File S4:[OPENSSL.OPENSSL-0_9_7K]INSTALL.COM;1
+   55   $       DIRS := CRYPTO,FIPS,SSL,APPS,VMS!,RSAREF,TEST,TOOLS
+   56   $       EXHEADER := e_os2.h
+************
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0]INSTALL.COM;2
+   29   $       FDIRS := ,RAND,SHA,DES,AES,DSA,RSA,DH,HMAC
+   30   $       EXHEADER_ := fips.h
+******
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0]INSTALL.COM;1
+   29   $       FDIRS := ,RAND,SHA1,DES,AES,DSA,RSA,DH,HMAC
+   30   $       EXHEADER_ := fips.h
+************
+
+	Note 2:  The following fixes to the 0.9.7k MAKEVMS.COM and
+	[.FIPS-1_0.SHA]FIPS_SHA.H files should be made prior to
+	starting a build on VAX.  Add a new line 313 to MAKEVMS.COM
+	and move line 170 to line 159 in FIPS_SHA.H as indicated:
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7K]MAKEVMS.COM;2
+  313   $   WRITE H_FILE "#define OPENSSL_NO_SHA512"
+  314   $!
+******
+File S4:[OPENSSL.OPENSSL-0_9_7K]MAKEVMS.COM;1
+  313   $!
+************
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0.SHA]FIPS_SHA.H;2
+  159   #ifndef OPENSSL_NO_SHA512
+  160   typedef struct SHA512state_st
+******
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0.SHA]FIPS_SHA.H;1
+  159   typedef struct SHA512state_st
+************
+************
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0.SHA]FIPS_SHA.H;2
+  171   int SHA384_Init(SHA512_CTX *c);
+******
+File S4:[OPENSSL.OPENSSL-0_9_7K.FIPS-1_0.SHA]FIPS_SHA.H;1
+  170   #ifndef OPENSSL_NO_SHA512
+  171   int SHA384_Init(SHA512_CTX *c);
+************
+
+	Note 3:  the 0.9.7k include file OPENSSLCONF.H created on
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
+----------------------------------------------------------------------
+
+  OpenSSL 0.9.7m
+----------------------------------------------------------------------
+	@MAKEVMS CONFIG "" NODEBUG DECC
+	@MAKEVMS BUILDINF "" NODEBUG DECC
+	@MAKEVMS SOFTLINKS "" NODEBUG DECC
+	@MAKEVMS CRYPTO "" NODEBUG DECC
+	@MAKEVMS SSL "" NODEBUG DECC
+
+	Note 1:  The following fixes to the 0.9.7m MAKEVMS.COM and
+	[.FIPS-1_0.SHA]FIPS_SHA.H files should be made prior to
+	starting a build on VAX.  Add a new line 313 to MAKEVMS.COM
+	and move line 170 to line 159 in FIPS_SHA.H as indicated:
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7M]MAKEVMS.COM;2
+  313   $   WRITE H_FILE "#define OPENSSL_NO_SHA512"
+  314   $!
+******
+File S4:[OPENSSL.OPENSSL-0_9_7M]MAKEVMS.COM;1
+  313   $!
+************
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_7M.FIPS-1_0.SHA]FIPS_SHA.H;2
+  159   #ifndef OPENSSL_NO_SHA512
+  160   typedef struct SHA512state_st
+******
+File S4:[OPENSSL.OPENSSL-0_9_7M.FIPS-1_0.SHA]FIPS_SHA.H;1
+  159   typedef struct SHA512state_st
+************
+************
+File S4:[OPENSSL.OPENSSL-0_9_7M.FIPS-1_0.SHA]FIPS_SHA.H;2
+  171   int SHA384_Init(SHA512_CTX *c);
+******
+File S4:[OPENSSL.OPENSSL-0_9_7M.FIPS-1_0.SHA]FIPS_SHA.H;1
+  170   #ifndef OPENSSL_NO_SHA512
+  171   int SHA384_Init(SHA512_CTX *c);
+************
+
+	Note 2:  the 0.9.7m include file OPENSSLCONF.H created on
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
+----------------------------------------------------------------------
+
+OpenSSL 0.9.8a
+----------------------------------------------------------------------
+	USER_CCDISABLEWARNINGS = "MIXLINKAGE,EMPTYFILE"
 	@MAKEVMS CONFIG "" NODEBUG DECC
 	@MAKEVMS BUILDINF "" NODEBUG DECC
 	@MAKEVMS SOFTLINKS "" NODEBUG DECC
@@ -102,7 +218,7 @@ File S4:[OPENSSL.OPENSSL-0_9_8A.CRYPTO]INSTALL.COM;2
    43                    STORE,PQUEUE
    44   $       EXHEADER_ := crypto.h,tmdiff.h,opensslv.h,opensslconf.h,ebcdic.h
 ******
-File S4:[OPENSSL.OPENSSL-0_9_8A.CRYPTO]INSTALL.COM;2
+File S4:[OPENSSL.OPENSSL-0_9_8A.CRYPTO]INSTALL.COM;1
    43                    STORE
    44   $       EXHEADER_ := crypto.h,tmdiff.h,opensslv.h,opensslconf.h,ebcdic.h
 ************
@@ -115,6 +231,49 @@ File S4:[OPENSSL.OPENSSL-0_9_8A.CRYPTO]INSTALL.COM;1
    92   $       LIBS := LIBCRYPTO
 ************
 
+	Note 2:  The following change to the 0.9.8a MAKEVMS.COM file
+	should be made prior to starting a build on VAX.  Add a new
+	line 323 as indicated:
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_8A]MAKEVMS.COM;2
+  323   $   WRITE H_FILE "#define OPENSSL_NO_SHA512"
+  324   $!
+******
+File S4:[OPENSSL.OPENSSL-0_9_8A]MAKEVMS.COM;1
+  323   $!
+************
+
+	Note 3:  The definition of symbol USER_CCDISABLEWARNINGS
+	is only required for VAX builds.
+
+	Note 4:  the 0.9.8a include file OPENSSLCONF.H created on
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
+----------------------------------------------------------------------
+
+OpenSSL 0.9.8e
+----------------------------------------------------------------------
+	@MAKEVMS CONFIG "" NODEBUG DECC
+	@MAKEVMS BUILDINF "" NODEBUG DECC
+	@MAKEVMS SOFTLINKS "" NODEBUG DECC
+	@MAKEVMS CRYPTO "" NODEBUG DECC
+	@MAKEVMS SSL "" NODEBUG DECC
+
+	Note 1:  The following fixes to the 0.9.8e MAKEVMS.COM and
+	should be made prior to starting a build on VAX.  Add a new
+        line 323 to MAKEVMS.COM.
+
+************
+File S4:[OPENSSL.OPENSSL-0_9_8E]MAKEVMS.COM;2
+  323   $   WRITE H_FILE "#define OPENSSL_NO_SHA512"
+  324   $!
+******
+File S4:[OPENSSL.OPENSSL-0_9_8E]MAKEVMS.COM;1
+  323   $!
+************
+
+	Note 2:  the 0.9.8e include file OPENSSLCONF.H created on
+	an Alpha or IA64 system will not work with a VAX Mosaic build.
 ----------------------------------------------------------------------
 
 Once the build is complete, then
@@ -143,3 +302,7 @@ developer takes no responsibility for any mis-use.  The CERT.PEM
 file provided is suitable for use with VMS Mosaic, but may not be
 suitable for other purposes.
 --------------------------------------------------------------------
+
+
+George Cook
+21-Aug-2007

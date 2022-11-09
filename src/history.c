@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -67,6 +69,7 @@
 #include <sys/types.h>
 #include "../libhtmlw/HTMLP.h"
 #include <Xm/List.h>
+
 #ifdef VMS
 extern char ftp_type[16];
 #endif /* VMS, BSN */
@@ -83,6 +86,9 @@ extern char ftp_type[16];
 extern int srcTrace;
 #endif
 
+/* Used by frame_cb in gui.c */
+int mo_recorded_visit;
+
 /* ------------------------------------------------------------------------ */
 /* ----------------------------- HISTORY LIST ----------------------------- */
 /* ------------------------------------------------------------------------ */
@@ -90,7 +96,7 @@ extern int srcTrace;
 /* ---------------------------- kill functions ---------------------------- */
 
 /* Free the data contained in a mo_node and the node itself. */
-mo_status mo_free_node (mo_node *node)
+mo_status mo_free_node(mo_node *node)
 {
   if (node->texthead)
       free(node->texthead);
@@ -114,8 +120,12 @@ mo_status mo_free_node (mo_node *node)
       free(node->expires);
   if (node->cipher)
       free(node->cipher);
+  if (node->cipher_issuer)
+      free(node->cipher_issuer);
   if (node->charset)
       free(node->charset);
+  if (node->ftp_type)
+      free(node->ftp_type);
   if (node->frames) {
       mo_frame *frame = node->frames;
       mo_frame *tmp;
@@ -126,8 +136,7 @@ mo_status mo_free_node (mo_node *node)
 	  if (frame->cached_widgets) {
 	      WidgetInfo *wid = (WidgetInfo *) frame->cached_widgets;
 
-	      wid->cache_count--;
-	      if (wid->cache_count < 1) {
+	      if (--wid->cache_count < 1) {
 		  if (wid->cached_forms)
 		      HTMLFreeFormInfo(wid->cached_forms);
 	          HTMLFreeWidgetInfo(frame->cached_widgets);
@@ -136,8 +145,8 @@ mo_status mo_free_node (mo_node *node)
 	  if (frame->scrolled_win) {
 	      HTMLWidget hw = (HTMLWidget) frame->scrolled_win;
 
-	      hw->html.node_count--;
-	      if (hw->html.node_count < 1)
+	      hw->html.widget_list = NULL;
+	      if (--hw->html.node_count < 1)
 		  XtDestroyWidget(frame->scrolled_win);
 	  }		  
 	  tmp = frame;
@@ -153,7 +162,7 @@ mo_status mo_free_node (mo_node *node)
 /* Kill a single mo_node associated with a given mo_window; if
  * the history list exists we delete it from that.  In any case
  * we call mo_free_node and return. */
-mo_status mo_kill_node (mo_window *win, mo_node *node)
+mo_status mo_kill_node(mo_window *win, mo_node *node)
 {
   if (win->history_list)
       XmListDeletePos(win->history_list, node->position);
@@ -166,7 +175,7 @@ mo_status mo_kill_node (mo_window *win, mo_node *node)
  * mo_node itself, and kill them.  This is equivalent to calling
  * mo_kill_node on each of those nodes, except this is faster since
  * all the Motif list entries can be killed at once. */
-mo_status mo_kill_node_descendents (mo_window *win, mo_node *node)
+mo_status mo_kill_node_descendents(mo_window *win, mo_node *node)
 {
   mo_node *next = node->next;
   mo_node *freeit;
@@ -186,11 +195,34 @@ mo_status mo_kill_node_descendents (mo_window *win, mo_node *node)
   return mo_succeed;
 }
 
+/* ------------------------ Widget data caching ------------------------ */
+
+static mo_status mo_cache_node_widget_data(mo_node *node)
+{
+  if (node->cached_widgets)
+      HTMLCacheWidgetInfo(node->cached_widgets);
+  if (node->frames) {
+      mo_frame *frame = node->frames;
+
+      while (frame) {
+          if (frame->cached_widgets) {
+              WidgetInfo *wid = (WidgetInfo *) frame->cached_widgets;
+
+              /* Must only be in use by this node */
+              if (wid->cache_count == 1)
+                  HTMLCacheWidgetInfo(wid);
+          }
+          frame = frame->next;
+      }
+  }
+  return mo_succeed;
+}
+
 /* ------------------------ mo_add_node_to_history ------------------------ */
 
 /* Called from mo_record_visit to insert a mo_node into the history
  * list of an mo_window. */
-static mo_status mo_add_node_to_history (mo_window *win, mo_node *node)
+static mo_status mo_add_node_to_history(mo_window *win, mo_node *node)
 {
   static int displayURLs;
   static int init = 0;
@@ -203,13 +235,12 @@ static mo_status mo_add_node_to_history (mo_window *win, mo_node *node)
   /* If there is no current node, this is our first time through. */
   if (!win->history) {
       win->history = node;
-      node->previous = NULL;
-      node->next = NULL;
+      node->previous = node->next = NULL;
       node->position = 1;
       win->current_node = node;
   } else {
-      /* Node becomes end of history list. */
-      /* Point back at current node. */
+      /* Node becomes end of history list.
+       * Point back at current node. */
       node->previous = win->current_node;
       /* Point forward to nothing. */
       node->next = NULL;
@@ -217,6 +248,8 @@ static mo_status mo_add_node_to_history (mo_window *win, mo_node *node)
       /* Kill descendents of current node, since we'll never
        * be able to go forward to them again. */
       mo_kill_node_descendents(win, win->current_node);
+      /* Cache widget data of current node after killing descendents */
+      mo_cache_node_widget_data(win->current_node);
       /* Current node points forward to this. */
       win->current_node->next = node;
       /* Current node now becomes new node. */
@@ -237,14 +270,14 @@ static mo_status mo_add_node_to_history (mo_window *win, mo_node *node)
 /* ---------------------------- mo_grok_title ----------------------------- */
 
 /* Make up an appropriate title for a document that does not otherwise
-   have one associated with it. */
-static char *mo_grok_alternate_title (char *url, char *ref)
+ * have one associated with it. */
+static char *mo_grok_alternate_title(char *url, char *ref, mo_node *node)
 {
   char *title, *foo1, *foo2;
 
   if (!strncmp(url, "gopher:", 7)) {
-      /* It's a gopher server. */
-      /* Do we have a ref? */
+      /* It's a gopher server.
+       * Do we have a ref? */
       if (ref) {
           char *tmp = ref;
 
@@ -258,10 +291,10 @@ static char *mo_grok_alternate_title (char *url, char *ref)
           foo2 = strstr(foo1, ":");
           /* If there's a trailing colon (always should be.. ??)... */
           if (foo2) {
-              char *server = (char *) malloc((foo2 - foo1 + 2));
+              char *server = (char *) malloc(foo2 - foo1 + 2);
               
-              memcpy(server, foo1, (foo2 - foo1));
-              server[(foo2 - foo1)] = '\0';
+              memcpy(server, foo1, foo2 - foo1);
+              server[foo2 - foo1] = '\0';
               
               title = (char *) malloc((strlen(server) + 32) * sizeof(char));
               sprintf(title, "%s %s", "Gopher server at" , server);
@@ -280,8 +313,8 @@ static char *mo_grok_alternate_title (char *url, char *ref)
 
   /* If get here, assume we should use 'ref' if possible for the WAIS title. */
   if (!strncmp(url, "wais:", 5)) {
-      /* It's a WAIS server. */
-      /* Do we have a ref? */
+      /* It's a WAIS server.
+       * Do we have a ref? */
       if (ref) {
           title = strdup(ref);
           goto done;
@@ -291,10 +324,10 @@ static char *mo_grok_alternate_title (char *url, char *ref)
           foo2 = strstr(foo1, ":");
           /* If there's a trailing colon (always should be.. ??)... */
           if (foo2) {
-              char *server = (char *) malloc((foo2 - foo1 + 2));
+              char *server = (char *) malloc(foo2 - foo1 + 2);
               
-              memcpy(server, foo1, (foo2 - foo1));
-              server[(foo2 - foo1)] = '\0';
+              memcpy(server, foo1, foo2 - foo1);
+              server[foo2 - foo1] = '\0';
               
               title = (char *) malloc((strlen(server) + 32) * sizeof(char));
               sprintf(title, "%s %s", "WAIS server at", server);
@@ -318,7 +351,7 @@ static char *mo_grok_alternate_title (char *url, char *ref)
           foo1 = url + 5;
           
           title = (char *)malloc((strlen(foo1) + 32) * sizeof(char));
-          sprintf(title, "%s %s", "USENET article" , foo1);
+          sprintf(title, "%s %s", "USENET article", foo1);
 
           goto done;
       } else {
@@ -352,18 +385,21 @@ static char *mo_grok_alternate_title (char *url, char *ref)
           goto done;
       } else {
           /* It's a remote file. */
+	  int flen = 0;
+
           foo1 = url + 7;
-          
 #ifndef VMS
           title = (char *)malloc((strlen(foo1) + 32) * sizeof(char));
           sprintf(title, "%s %s", "Remote file", foo1);
 #else
-          title = (char *)malloc((strlen(foo1) + strlen(ftp_type) + 32) *
-            sizeof(char));
-          if (ftp_type[0] == '\0') {
-            sprintf(title, "%s %s\0", "Remote file", foo1);
+	  if (node->ftp_type)
+	      flen = strlen(node->ftp_type);
+          title = (char *)malloc((strlen(foo1) + flen + 32) * sizeof(char));
+          if (flen) {
+              sprintf(title, "%s %s %s %s", "Remote", node->ftp_type,
+		      "file", foo1);
           } else {
-            sprintf(title, "%s %s %s %s\0", "Remote", ftp_type, "file", foo1);
+              sprintf(title, "%s %s", "Remote file", foo1);
 	  }
 #endif /* Display ftp server type, BSN */
           
@@ -373,18 +409,20 @@ static char *mo_grok_alternate_title (char *url, char *ref)
   
   if (!strncmp(url, "ftp:", 4)) {
       /* It's a remote file. */
+      int flen = 0;
+
       foo1 = url + 6;
-        
 #ifndef VMS
       title = (char *)malloc((strlen(foo1) + 32) * sizeof(char));
       sprintf(title, "%s %s", "Remote file", foo1);
 #else
-      title = (char *)malloc((strlen(foo1) + strlen(ftp_type) + 32) *
-                             sizeof(char));
-      if (ftp_type[0] == '\0') {
-          sprintf(title, "%s %s\0", "Remote file", foo1);
+      if (node->ftp_type)
+	  flen = strlen(node->ftp_type);
+      title = (char *)malloc((strlen(foo1) + flen + 32) * sizeof(char));
+      if (flen) {
+          sprintf(title, "%s %s %s %s", "Remote", node->ftp_type, "file", foo1);
       } else {
-          sprintf(title, "%s %s %s %s\0", "Remote", ftp_type, "file", foo1);
+          sprintf(title, "%s %s", "Remote file", foo1);
       }
 #endif /* Display ftp server type, BSN */
         
@@ -396,23 +434,29 @@ static char *mo_grok_alternate_title (char *url, char *ref)
   sprintf(title, "%s %s", "Untitled", url);
   
  done:
+  if (strstr(title, "%20")) {
+      /* URLs (FTP in particular) may have escaped spaces */
+      char *freeit = title;
+
+      title = mo_unescape_spaces(title);
+      free(freeit);
+  }
   return title;
 }
 
 /* Figure out a title for the given URL.  'ref', if it exists,
-   was the text used for the anchor that pointed us to this URL;
-   it is not required to exist. */
-char *mo_grok_title (mo_window *win, char *url, char *ref)
+ * was the text used for the anchor that pointed us to this URL;
+ * it is not required to exist. */
+char *mo_grok_title(mo_window *win, char *url, char *ref, mo_node *node)
 {
   char *title = NULL;
   char *t;
 
-  XtVaGetValues(win->scrolled_win, WbNtitleText, &title, NULL);
-
-  if (!title) {
-      t = mo_grok_alternate_title(url, ref);
-  } else if (!strcmp(title, "Document")) {
-      t = mo_grok_alternate_title(url, ref);
+  XtVaGetValues(win->scrolled_win,
+		WbNtitleText, &title,
+		NULL);
+  if (!title || !strcmp(title, "Document")) {
+      t = mo_grok_alternate_title(url, ref, node);
   } else {
       char *tmp = title;
 
@@ -422,10 +466,9 @@ char *mo_grok_title (mo_window *win, char *url, char *ref)
       if (*tmp) {
 	  t = strdup(tmp);
       } else {
-	  t = mo_grok_alternate_title(url, ref);
+	  t = mo_grok_alternate_title(url, ref, node);
       }
   }
-
   mo_convert_newlines_to_spaces(t);
 
   return t;
@@ -437,14 +480,14 @@ char *mo_grok_title (mo_window *win, char *url, char *ref)
 extern int securityType;
 
 /* Called when we visit a new node (as opposed to backing up or
-   going forward).  Create an mo_node entry, call mo_grok_title
-   to figure out what the title is, and call mo_node_to_history
-   to add the new mo_node to both the window's data structures and
-   to its Motif history list. */
-mo_status mo_record_visit (mo_window *win, char *url, char *newtext, 
-                           char *newtexthead, char *ref, char *last_modified,
-			   char *expires, char *cipher, int cipher_bits,
-			   char *charset)
+ * going forward).  Create an mo_node entry, call mo_grok_title
+ * to figure out what the title is, and call mo_node_to_history
+ * to add the new mo_node to both the window's data structures and
+ * to its Motif history list. */
+mo_status mo_record_visit(mo_window *win, char *url, char *newtext, 
+                          char *newtexthead, char *ref, char *last_modified,
+			  char *expires, char *cipher, int cipher_bits,
+			  char *cipher_issuer, int cipher_status, char *charset)
 {
   mo_node *node = (mo_node *)calloc(1, sizeof(mo_node));
 
@@ -454,21 +497,32 @@ mo_status mo_record_visit (mo_window *win, char *url, char *newtext,
   if (ref)
       node->ref = strdup(ref);
 
+  /** Set by calloc
   node->image_file = NULL;
+  node->cached_widgets = NULL;
+  node->cached_forms = NULL;
+  **/
+
+  mo_recorded_visit = 1;
+
   /* Figure out what the title is... */
-  node->title = mo_grok_title(win, url, ref);
+  if (*ftp_type && !strncmp(url, "ftp:", 4))
+      node->ftp_type = strdup(ftp_type);
+  node->title = mo_grok_title(win, url, ref, node);
 
   node->authType = securityType;
   securityType = HTAA_NONE;
   mo_gui_check_win_security_icon(node->authType, win);
 
-  node->cipher = cipher;
+  if (cipher)
+      node->cipher = strdup(cipher);
+  if (cipher_issuer)
+      node->cipher_issuer = strdup(cipher_issuer);
   node->cipher_bits = cipher_bits;
+  node->cipher_status = cipher_status;
 
   /* This will be recalc'd when we leave this node. */
   node->docid = 1;
-  node->cached_widgets = NULL;
-  node->cached_forms = NULL;
 
   /* This may or may not be filled in later! */
   if (last_modified)
@@ -490,29 +544,32 @@ mo_status mo_record_visit (mo_window *win, char *url, char *newtext,
 /* ------------------------- Navigation functions ------------------------- */
 
 /* Back up a node */
-mo_status mo_back_node (mo_window *win)
+mo_status mo_back_node(mo_window *win)
 {
+  mo_node *old_node = win->current_node;
+
   /* If there is no previous node, choke. */
-  if (!win->current_node || !win->current_node->previous)
+  if (!old_node || !old_node->previous)
       return mo_fail;
 
-  mo_gui_apply_default_icon();
-
-  mo_set_win_current_node(win, win->current_node->previous);
+  mo_set_win_current_node(win, old_node->previous);
   win->refreshable = False;	/* Don't do refresh URLs when moving back */
+  mo_cache_node_widget_data(old_node);
 
   return mo_succeed;
 }
 
 /* Go forward a node */
-mo_status mo_forward_node (mo_window *win)
+mo_status mo_forward_node(mo_window *win)
 {
+  mo_node *old_node = win->current_node;
+
   /* If there is no next node, choke. */
-  if (!win->current_node || !win->current_node->next)
+  if (!old_node || !old_node->next)
       return mo_fail;
 
-  mo_gui_apply_default_icon();
-  mo_set_win_current_node(win, win->current_node->next);
+  mo_set_win_current_node(win, old_node->next);
+  mo_cache_node_widget_data(old_node);
 
   return mo_succeed;
 }
@@ -521,36 +578,34 @@ mo_status mo_forward_node (mo_window *win)
  * list entry is double-clicked upon.
  *
  * Iterate through the window history; find the mo_node associated
- * with the given position.  Call mo_set_win_current_node. */
-static mo_status mo_visit_position (mo_window *win, int pos)
+ * with the given position.  Call mo_set_win_current_node.
+ */
+static mo_status mo_visit_position(mo_window *win, int pos)
 {
   mo_node *node;
   
   for (node = win->history; node; node = node->next) {
       if (node->position == pos) {
+	  mo_node *old_node = win->current_node;;
+
           mo_set_win_current_node(win, node);
-          goto done;
+	  if (old_node)
+	      mo_cache_node_widget_data(old_node);
+	  return mo_succeed;
       }
   }
-
-#ifndef DISABLE_TRACE
-  if (srcTrace)
-      fprintf(stderr, "Asked for position %d, ain't got it.\n", pos);
-#endif
-
- done:
-  return mo_succeed;
+  return mo_fail;
 }
 
 /* ---------------------------- misc functions ---------------------------- */
 
 #ifdef dump_history
-static mo_status mo_dump_history (mo_window *win)
+static mo_status mo_dump_history(mo_window *win)
 {
-  mo_node *node;
-
 #ifndef DISABLE_TRACE
   if (srcTrace) {
+      mo_node *node;
+
       fprintf(stderr, "----------------- history -------------- \n");
       fprintf(stderr, "HISTORY is 0x%08x\n", win->history);
       for (node = win->history; node; node = node->next) {
@@ -572,30 +627,30 @@ static mo_status mo_dump_history (mo_window *win)
 /* ------------------------------------------------------------------------ */
 
 /* We've just init'd a new history list widget; look at the window's
-   history and load 'er up. */
-static void mo_load_history_list (mo_window *win, Widget list)
+ * history and load 'er up. */
+static void mo_load_history_list(mo_window *win, Widget list)
 {
   mo_node *node;
+  static int urls = -1;
+
+  if (urls == -1)
+      urls = get_pref_boolean(eDISPLAY_URLS_NOT_TITLES);
   
   for (node = win->history; node; node = node->next) {
-      XmString xmstr = XmxMakeXmstrFromString(
-				    get_pref_boolean(eDISPLAY_URLS_NOT_TITLES) ?
-                                    node->url : node->title);
+      XmString xmstr = XmxMakeXmstrFromString(urls ? node->url : node->title);
 
       XmListAddItemUnselected(list, xmstr, 0);
       XmStringFree(xmstr);
   }
-  
   XmListSetBottomPos(list, 0);
   if (win->current_node)
       XmListSelectPos(win->history_list, win->current_node->position, False);
-
   return;
 }
 
 /* ----------------------------- mail history ----------------------------- */
 
-static XmxCallback (mailhist_win_cb)
+static XmxCallback(mailhist_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   char *to, *subj;
@@ -606,36 +661,33 @@ static XmxCallback (mailhist_win_cb)
       XtUnmanageChild(win->mailhist_win);
 
       to = XmxTextGetString(win->mailhist_to_text);
-      if (!to || !*to)
+      if (!to || !*to) {
+	  if (to)
+	      XtFree(to);
           return;
-
+      }
       subj = XmxTextGetString(win->mailhist_subj_text);
 
       /* Open a file descriptor to sendmail. */
-      fp = mo_start_sending_mail_message(to, subj, "text/x-html", NULL);
-      if (!fp) {
+      if (!(fp = mo_start_sending_mail_message(to, subj, "text/html", NULL))) {
 	  application_error("Unable to mail History.", "Mail Error");
           goto oops;
       }
       {
         mo_node *node;
         
-        fprintf(fp, "<HTML>\n");
-        fprintf(fp, "<H1>History Path From %s</H1>\n",
+        fprintf(fp, "<HTML>\n<H1>History Path From %s</H1>\n<DL>\n",
                 get_pref_string(eDEFAULT_AUTHOR_NAME));
-        fprintf(fp, "<DL>\n");
         for (node = win->history; node; node = node->next)
             fprintf(fp, "<DT>%s\n<DD><A HREF=\"%s\">%s</A>\n", 
                     node->title, node->url, node->url);
-        fprintf(fp, "</DL>\n");
-        fprintf(fp, "</HTML>\n");
+        fprintf(fp, "</DL>\n</HTML>\n");
       }
-        
       mo_finish_sending_mail_message();
 
-    oops:
-      free(to);
-      free(subj);
+     oops:
+      XtFree(to);
+      XtFree(subj);
 
       break;
     case 1:
@@ -648,25 +700,23 @@ static XmxCallback (mailhist_win_cb)
          	  NULL, NULL);
       break;
   }
-
   return;
 }
 
-static mo_status mo_post_mailhist_win (mo_window *win)
+static mo_status mo_post_mailhist_win(mo_window *win)
 {
   /* This shouldn't happen. */
   if (!win->history_win)
       return mo_fail;
 
   if (!win->mailhist_win) {
-      Widget dialog_frame;
-      Widget dialog_sep, buttons_form;
+      Widget dialog_frame, dialog_sep, buttons_form;
       Widget mailhist_form, to_label, subj_label;
       
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->mailhist_win = XmxMakeFormDialog 
-        (win->history_win, "VMS Mosaic: Mail Window History" );
+      win->mailhist_win = XmxMakeFormDialog(win->history_win,
+					    "VMS Mosaic: Mail Window History");
       dialog_frame = XmxMakeFrame(win->mailhist_win, XmxShadowOut);
 
       /* Constraints for base. */
@@ -686,10 +736,9 @@ static mo_status mo_post_mailhist_win (mo_window *win)
 
       dialog_sep = XmxMakeHorizontalSeparator(mailhist_form);
       
-      buttons_form = XmxMakeFormAndThreeButtons
-        (mailhist_form, mailhist_win_cb, "Mail",
-	 "Dismiss", "Help...", 0, 1, 2);
-
+      buttons_form = XmxMakeFormAndThreeButtons(mailhist_form, mailhist_win_cb,
+						"Mail",	"Dismiss", "Help...",
+						0, 1, 2);
       /* Constraints for mailhist_form. */
       XmxSetOffsets(to_label, 14, 0, 10, 0);
       XmxSetConstraints
@@ -721,7 +770,6 @@ static mo_status mo_post_mailhist_win (mo_window *win)
          XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
   }
-  
   XtManageChild(win->mailhist_win);
   
   return mo_succeed;
@@ -729,7 +777,7 @@ static mo_status mo_post_mailhist_win (mo_window *win)
 
 /* ---------------------------- history_win_cb ---------------------------- */
 
-static XmxCallback (history_win_cb)
+static XmxCallback(history_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
@@ -747,27 +795,23 @@ static XmxCallback (history_win_cb)
                   NULL, NULL);
       break;
   }
-
   return;
 }
 
-static XmxCallback (history_list_cb)
+static XmxCallback(history_list_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   XmListCallbackStruct *cs = (XmListCallbackStruct *)call_data;
   
   mo_visit_position(win, cs->item_position);
-
   return;
 }
 
-mo_status mo_post_history_win (mo_window *win)
+mo_status mo_post_history_win(mo_window *win)
 {
   if (!win->history_win) {
-      Widget dialog_frame;
-      Widget dialog_sep, buttons_form;
-      Widget history_label;
-      Widget history_form;
+      Widget dialog_frame, dialog_sep, buttons_form;
+      Widget history_label, history_form;
       XtTranslations listTable;
       static char listTranslations[] =
 	"~Shift ~Ctrl ~Meta ~Alt <Btn2Down>: ListKbdSelectAll() ListBeginSelect() \n\
@@ -777,8 +821,8 @@ mo_status mo_post_history_win (mo_window *win)
       
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->history_win = XmxMakeFormDialog 
-        (win->base, "VMS Mosaic: Window History" );
+      win->history_win = XmxMakeFormDialog(win->base,
+					   "VMS Mosaic: Window History");
       dialog_frame = XmxMakeFrame(win->history_win, XmxShadowOut);
 
       /* Constraints for base. */
@@ -790,7 +834,7 @@ mo_status mo_post_history_win (mo_window *win)
       history_form = XmxMakeForm(dialog_frame);
 
       XmxSetArg(XmNalignment, XmALIGNMENT_BEGINNING);
-      history_label = XmxMakeLabel(history_form, "Where you've been:" );
+      history_label = XmxMakeLabel(history_form, "Where you've been:");
 
       /* History list itself. */
       XmxSetArg(XmNresizable, False);
@@ -804,12 +848,9 @@ mo_status mo_post_history_win (mo_window *win)
 
       dialog_sep = XmxMakeHorizontalSeparator(history_form);
       
-      buttons_form = XmxMakeFormAndThreeButtons(history_form,
-						history_win_cb,
-						"Mail To...",
-						"Dismiss", 
-						"Help...", 
-						1, 0, 2);
+      buttons_form = XmxMakeFormAndThreeButtons(history_form, history_win_cb,
+						"Mail To...", "Dismiss", 
+						"Help...", 1, 0, 2);
       XmxSetButtonClue("Send history via Mail", "Close this menu",
 		       "Open help in new Mosaic window", NULL, NULL);
 
@@ -819,7 +860,7 @@ mo_status mo_post_history_win (mo_window *win)
         (history_label, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_FORM,
          XmATTACH_NONE, NULL, NULL, NULL, NULL);
       /* History list is stretchable. */
-      XmxSetOffsets(XtParent (win->history_list), 0, 10, 10, 10);
+      XmxSetOffsets(XtParent(win->history_list), 0, 10, 10, 10);
       XmxSetConstraints
         (XtParent(win->history_list), 
          XmATTACH_WIDGET, XmATTACH_WIDGET, XmATTACH_FORM, XmATTACH_FORM, 
@@ -830,14 +871,13 @@ mo_status mo_post_history_win (mo_window *win)
          XmATTACH_NONE, XmATTACH_WIDGET, XmATTACH_FORM, XmATTACH_FORM,
          NULL, buttons_form, NULL, NULL);
       XmxSetConstraints 
-        (buttons_form, XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, 
-         XmATTACH_FORM,
+        (buttons_form,
+	 XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
 
       /* Go get the history up to this point set up... */
       mo_load_history_list(win, win->history_list);
   }
-
   XmxManageRemanage(win->history_win);
   
   return mo_succeed;

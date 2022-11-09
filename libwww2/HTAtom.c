@@ -16,7 +16,7 @@
 #define HASH_SIZE	101		/* Tunable */
 #include "HTAtom.h"
 
-#include <stdio.h>				/* joe@athena, TBL 921019 */
+#include <stdio.h>			/* joe@athena, TBL 921019 */
 #include "HTUtils.h"
 #include "tcp.h"
 
@@ -29,12 +29,12 @@ PRIVATE BOOL initialised = NO;
 
 PUBLIC HTAtom *HTAtom_for(char *string)
 {
-    int hash;
-    WWW_CONST char *p;
+    int hash = 0;
+    char *p;
     HTAtom *a;
 
     /* Bug hack. */
-    if (!string || !*string)
+    if (!string)
         string = strdup("blargh");
     
     /*		First time around, clear hash table
@@ -43,13 +43,13 @@ PUBLIC HTAtom *HTAtom_for(char *string)
         int i;
 
 	for (i = 0; i < HASH_SIZE; i++)
-	    hash_table[i] = (HTAtom *) 0;
+	    hash_table[i] = NULL;
 	initialised = YES;
     }
     
     /*		Generate hash function
     */
-    for (p = string, hash = 0; *p; p++)
+    for (p = string; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
     
     /*		Search for the string in the list
@@ -58,26 +58,24 @@ PUBLIC HTAtom *HTAtom_for(char *string)
 	if (!strcmp(a->name, string)) {
 #ifndef DISABLE_TRACE
     	    if (www2Trace)
-		fprintf(stderr,	"HTAtom: Old atom %p for `%s'\n", a, string);
+		fprintf(stderr,	"HTAtom: Found atom for `%s'\n", string);
 #endif
-	    return a;				/* Found: return it */
+	    return a;			/* Found: return it */
 	}
     }
     
     /*		Generate a new entry
     */
-    a = (HTAtom *)malloc(sizeof(*a));
-    if (a == NULL)
+    if (!(a = (HTAtom *)malloc(sizeof(*a))))
 	outofmem(__FILE__, "HTAtom_for");
-    a->name = (char *)malloc(strlen(string) + 1);
-    if (a->name == NULL)
+    if (!(a->name = (char *)malloc(strlen(string) + 1)))
 	outofmem(__FILE__, "HTAtom_for");
     strcpy(a->name, string);
     a->next = hash_table[hash];		/* Put onto the head of list */
     hash_table[hash] = a;
 #ifndef DISABLE_TRACE
     if (www2Trace)
-	fprintf(stderr, "HTAtom: New atom %p for `%s'\n", a, string);
+	fprintf(stderr, "HTAtom: Created atom for `%s'\n", string);
 #endif
     return a;
 }
@@ -85,8 +83,8 @@ PUBLIC HTAtom *HTAtom_for(char *string)
 
 PUBLIC HTAtom *HTAtom_exists(char *string)
 {
-    int hash;
-    WWW_CONST char *p;
+    int hash = 0;
+    char *p;
     HTAtom *a;
     
     if (!initialised)
@@ -94,7 +92,7 @@ PUBLIC HTAtom *HTAtom_exists(char *string)
     
     /*		Generate hash function
     */
-    for (p = string, hash = 0; *p; p++)
+    for (p = string; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
     
     /*		Search for the string in the list
@@ -103,6 +101,5 @@ PUBLIC HTAtom *HTAtom_exists(char *string)
 	if (!strcmp(a->name, string))
 	    return a;				/* Found: return it */
     }
-    
     return NULL;
 }

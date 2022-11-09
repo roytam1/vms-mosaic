@@ -52,9 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
-/* Note that this code is taken almost straight from the httpd cgi-src
+/* Note that this code was taken almost straight from the httpd cgi-src
  * directory. */
 
 #include "../config.h"
@@ -72,15 +72,15 @@
 
 void getword(char *word, char *line, char stop)
 {
-    int x, y;
+    int x;
+    int y = 0;
 
-    for (x = 0; ((line[x]) && (line[x] != stop)); x++)
+    for (x = 0; line[x] && (line[x] != stop); x++)
         word[x] = line[x];
 
     word[x] = '\0';
     if (line[x])
-	++x;
-    y = 0;
+	x++;
 
     while (line[y++] = line[x++])
 	;
@@ -89,16 +89,16 @@ void getword(char *word, char *line, char stop)
 
 char *makeword(char *line, char stop)
 {
-    int x, y;
+    int x;
+    int y = 0;
     char *word = (char *) malloc(sizeof(char) * (strlen(line) + 1));
 
-    for (x = 0; ((line[x]) && (line[x] != stop)); x++)
+    for (x = 0; line[x] && (line[x] != stop); x++)
         word[x] = line[x];
 
     word[x] = '\0';
     if (line[x])
-	++x;
-    y = 0;
+	x++;
 
     while (line[y++] = line[x++])
 	;
@@ -108,13 +108,9 @@ char *makeword(char *line, char stop)
 
 char *fmakeword(FILE *f, char stop, int *cl)
 {
-    int wsize;
-    char *word;
-    int ll;
-
-    wsize = 102400;
-    ll = 0;
-    word = (char *) malloc(sizeof(char) * (wsize + 1));
+    int wsize = 102400;
+    int ll = 0;
+    char *word = (char *) malloc(sizeof(char) * (wsize + 1));
 
     while (1) {
         word[ll] = (char)fgetc(f);
@@ -124,13 +120,13 @@ char *fmakeword(FILE *f, char stop, int *cl)
             word = (char *)realloc(word, sizeof(char) * (wsize + 1));
         }
         --(*cl);
-        if ((word[ll] == stop) || feof(f) || !(*cl)) {
+        if ((word[ll] == stop) || feof(f) || !*cl) {
             if (word[ll] != stop)
 		ll++;
             word[ll] = '\0';
             return word;
         }
-        ++ll;
+        ll++;
     }
 }
 
@@ -148,9 +144,9 @@ char x2c(char *what)
 
 void unescape_url(char *url)
 {
-    register int x,y;
+    register int x, y;
 
-    for (x = 0, y=0; url[y]; ++x, ++y) {
+    for (x = 0, y = 0; url[y]; ++x, ++y) {
         if ((url[x] = url[y]) == '%') {
             url[x] = x2c(&url[y + 1]);
             y += 2;
@@ -197,7 +193,7 @@ int getline(char *s, int n, FILE *f)
             s[i] = '\0';
             return (feof(f) ? 1 : 0);
         }
-        ++i;
+        i++;
     }
 }
 
@@ -229,16 +225,16 @@ int ind(char *s, char c)
 
 void escape_shell_cmd(char *cmd)
 {
-    register int x, y, l;
+    register int x, y;
+    register int l = strlen(cmd);
 
-    l = strlen(cmd);
     for (x = 0; cmd[x]; x++) {
         if (ind("&;`'\"|*?~<>^()[]{}$\\", cmd[x]) != -1) {
             for (y = l + 1; y > x; y--)
                 cmd[y] = cmd[y - 1];
-            l++; /* length has been increased */
+            l++;  /* Length has been increased */
             cmd[x] = '\\';
-            x++; /* skip the character */
+            x++;  /* Skip the character */
         }
     }
 }

@@ -11,15 +11,15 @@
 #ifndef HTWSRC_H
 #define HTWSRC_H
 
-#include "HTUtils.h"
+#ifndef HTFORMAT_H
 #include "HTFormat.h"
+#endif
 
-extern  HTStream *HTWSRCConvert PARAMS((
-        HTPresentation         *pres,
-        HTParentAnchor         *anchor,
-        HTStream               *sink,
-        HTFormat                format_in,
-        int                     compressed));
+extern  HTStream *HTWSRCConvert (HTPresentation *pres,
+        			 HTParentAnchor *anchor,
+        			 HTStream       *sink,
+        			 HTFormat        format_in,
+        			 int             compressed);
 
 #endif
 

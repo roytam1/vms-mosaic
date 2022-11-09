@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include <stdio.h>
@@ -85,16 +85,10 @@ char *strdup(char *str)
 {
   char *dup;
 
-  if (!str)
+  if (!str || !(dup = (char *)malloc(strlen(str) + 1)))
     return NULL;
 
-  dup = (char *)malloc(strlen(str) + 1);
-  if (!dup)
-    return NULL;
-
-  dup = strcpy(dup, str);
-
-  return dup;
+  return(strcpy(dup, str));
 }
 #endif
 
@@ -160,7 +154,7 @@ char *getFileName(char *file_src)
 	if (!ptr || !*ptr)
 		return(file_src);
 
-	if (*ptr == '/' && *(ptr+1))
+	if (*ptr == '/' && *(ptr + 1))
 		ptr++;
 
 #ifdef VMS /* GEC */
@@ -170,16 +164,14 @@ char *getFileName(char *file_src)
         ** "device:[directory]/".
         */
         if (*ptr == '/')
-        	return("\0");
-
+        	return("");
         /*
         ** Handle case of filename having multiple dots, which is invalid on
         ** VMS. Remove all but the last dot (like unzip).
         */
         {
-           char *ptr2, *ptr3;
-
-           ptr3 = strrchr(ptr, '.');   /* Pointer to last dot. */
+           char *ptr2;
+	   char *ptr3 = strrchr(ptr, '.');   /* Pointer to last dot. */
 
            /* Handle special cases of compressed files, PGE */
            if (ptr3 && !strcmp(ptr3, ".gz")) {
@@ -207,7 +199,6 @@ char *getFileName(char *file_src)
 	      ptr = ++ptr3;
         }
 #endif
-
 	return(ptr);
 }
 
@@ -277,8 +268,7 @@ char *strrcasechr(char *src, char srch)
 
 char *strstrdup(char *src, char *srch, char *rplc)
 {
-	char *dest = NULL, *local;
-	char *start, *found = NULL, *next = NULL;
+	char *dest, *start, *local, *next, *found;
 	int rplcLen = 0;
 	int i, srchLen;
 
@@ -291,26 +281,24 @@ char *strstrdup(char *src, char *srch, char *rplc)
 	srchLen = strlen(srch);
 
 	if (rplcLen > srchLen) {
-		dest = (char *)calloc(1, sizeof(char));
+		dest = (char *)malloc(sizeof(char));
 	} else {
 		dest = strdup(src);
 	}
 	*dest = '\0';
 
-	local = strdup(src);
-	start = local;
+	start = local = strdup(src);
 	while (*start) {
 		if (!(found = strstr(start, srch))) {
 			if (rplcLen > srchLen) {
 				realloc((void *)dest,
-					((strlen(dest) + strlen(start) + 4) *
-					 sizeof(char)));
+					(strlen(dest) + strlen(start) + 4) *
+					sizeof(char));
 				strcat(dest, start);
 			} else {
 				strcat(dest, start);
 			}
 			free(local);
-
 			return(dest);
 		}
 
@@ -319,8 +307,8 @@ char *strstrdup(char *src, char *srch, char *rplc)
 		*found = '\0';
 		if (rplcLen > srchLen) {
 			realloc((void *)dest,
-				((rplcLen + strlen(dest) + strlen(start) + 4) *
-				  sizeof(char)));
+				(rplcLen + strlen(dest) + strlen(start) + 4) *
+				 sizeof(char));
 			strcat(dest, start);
 			if (rplcLen)
 				strcat(dest, rplc);
@@ -336,26 +324,26 @@ char *strstrdup(char *src, char *srch, char *rplc)
 
 char **string_to_token_array(char *str, char *delimiter)
 {
-  char **array, *tmp;
-  int num = 0, i = 0;
+  char **array;
+  char *tmp;
+  int num = 1;
+  int i = 0;
 
   if (!str || !*str || !delimiter || !*delimiter)
       return NULL;
 
   /* First get number of tokens */
   tmp = strstr(str, delimiter);
-  num++;
   tmp++;
-  while((tmp = strstr(tmp, delimiter)) != NULL) {
+  while (tmp = strstr(tmp, delimiter)) {
       tmp++;
       num++;
   }
 
   array = malloc(sizeof(char *) * (num + 2));
-  array[0] = strdup(strtok(str, delimiter));
+  *array = strdup(strtok(str, delimiter));
 
-  i++;
-  while((array[i++] = strdup(strtok((char *) NULL, delimiter))) != NULL)
+  while (array[++i] = strdup(strtok((char *) NULL, delimiter)))
       ;
 
   free(str);
@@ -366,7 +354,7 @@ char *my_strndup(char *str, int num)
 {
   char *nstr;
 
-  if (!str || !*str)
+  if (!str)
       return NULL;
 
   nstr = malloc(sizeof(char) * (num + 1));
@@ -385,14 +373,12 @@ char *my_chop(char *str)
 
   /* Remove blank space from end of string. */
   ptr = str + strlen(str) - 1;
-  while ((ptr >= str) && isspace(*ptr)) {
-      *ptr = '\0';
-      ptr--;
-  }
+  while ((ptr >= str) && isspace(*ptr))
+      *ptr-- = '\0';
 
   /* Remove blank space from start of string. */
   ptr = str;
-  while(isspace(ptr[0]))
+  while(isspace(*ptr))
       ptr++;
 
   /*
@@ -401,7 +387,7 @@ char *my_chop(char *str)
   ** moved.  memmove is used because it is safe for overlapping regions.
   */
   if (ptr != str)
-      memmove(str, ptr, strlen (ptr) + 1);
+      memmove(str, ptr, strlen(ptr) + 1);
 
   return str;
 }
@@ -409,23 +395,22 @@ char *my_chop(char *str)
 /* Remove both spaces and tabs from a string */
 int removeblanks(char *str)
 {
-  int i, j;
-  int removed = 0;
+  int i;
+  int j = 0;
 
   if (!str || !*str)
       return 0;
 
-  for (i = j = 0; str[i]; i++) {
+  for (i = 0; str[i]; i++) {
       if ((str[i] != ' ') && (str[i] != '\t'))
           str[j++] = str[i];
   }
 
   if (i > j) {
-      str[j] = 0;
-      removed = 1;
+      str[j] = '\0';
+      return 1;
   }
-
-  return removed;
+  return 0;
 }
  
 int my_strcasecmp(char *str1, char *str2)
@@ -456,9 +441,7 @@ int my_strcasecmp(char *str1, char *str2)
       }
       if (str1[i] + offset1 != str2[i] + offset2)
 	  return (str1[i] + offset1) - (str2[i] + offset2);
-
   }
-
   /* They're equal up to min */
   return length1 - length2;
 }
@@ -466,13 +449,11 @@ int my_strcasecmp(char *str1, char *str2)
 
 int my_strncasecmp(char *str1, char *str2, int n)
 {
-  int i, min, offset1, offset2;
-  int length1, length2;
+  int i, offset1, offset2, length1, length2;
+  int min = n;
 
   if (!str1 || !str2 || !*str1 || !*str2 || !n)
       return 1;
-
-  min = n;
 
   if ((length1 = strlen(str1)) < min)
       min = length1;
@@ -501,10 +482,10 @@ int my_strncasecmp(char *str1, char *str2, int n)
   }
 
   /* They're equal up to min */
-  if (min >= n) {
+  if (min >= n)
       return 0; 
-  } else {   /* If they specified n greater than min return the shorter string
-	      * as lexiographically smaller */
-      return length1 - length2;
-  }
+
+  /* If they specified n greater than min return the shorter string
+   * as lexiographically smaller */
+  return length1 - length2;
 }

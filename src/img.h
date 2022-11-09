@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -65,5 +65,8 @@
 extern mo_status mo_free_image_data(void *);
 extern void ImageResolve(Widget w, XtPointer clid, XtPointer calld);
 extern void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs);
+extern void MultiImageLoad(Widget w, XtPointer clid, XtPointer calld);
+extern void ResetMultiLoad();
+extern ImageInfo *BlankImageData(HTMLWidget hw);
 
 #endif

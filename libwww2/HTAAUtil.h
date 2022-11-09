@@ -34,24 +34,10 @@
 #define HTAAUTIL_H
 
 #ifndef __SRC__
-#include "HTUtils.h"            /* BOOL, PARAMS, ARGS */
+#include "HTUtils.h"            /* BOOL */
 #include "HTList.h"
 #include "tcp.h"
 #endif
-
-#ifdef SHORT_NAMES
-#define HTAASenu        HTAAScheme_enum
-#define HTAASnam        HTAAScheme_name
-#define HTAAMenu        HTAAMethod_enum
-#define HTAAMnam        HTAAMethod_name
-#define HTAAMinL        HTAAMethod_inList
-#define HTAAteMa        HTAA_templateMatch
-#define HTAAmaPT        HTAA_makeProtectionTemplate
-#define HTAApALi        HTAA_parseArgList
-#define HTAAsuRe        HTAA_setupReader
-#define HTAAgUfL        HTAA_getUnfoldedLine
-#endif
-
 
 /*
 
@@ -106,7 +92,7 @@ typedef enum {
     HTAA_MD5,
     HTAA_DOMAIN,
     HTAA_MAX_SCHEMES, /* THIS MUST ALWAYS BE LAST! Number of schemes */
-    HTAA_LOGIN        /* No, this must always be last because it is a FTP hack*/
+    HTAA_LOGIN        /* No, this must always be last because it's an FTP hack*/
 } HTAAScheme;
 
 /*
@@ -138,7 +124,7 @@ Authentication Schemes
 ** ON EXIT:
 **      returns         the enumerated constant for that scheme.
 */
-extern HTAAScheme HTAAScheme_enum PARAMS((WWW_CONST char *name));
+extern HTAAScheme HTAAScheme_enum (WWW_CONST char *name);
 
 
 /* PUBLIC                                               HTAAScheme_name()
@@ -148,10 +134,10 @@ extern HTAAScheme HTAAScheme_enum PARAMS((WWW_CONST char *name));
 **                      HTAA_NONE, HTAA_BASIC, HTAA_MD5, ...
 **
 ** ON EXIT:
-**      returns         the name of the scheme, i.e.
+**      returns         the name of the scheme, i.e.,
 **                      "none", "basic", ...
 */
-extern char *HTAAScheme_name PARAMS((HTAAScheme scheme));
+extern char *HTAAScheme_name (HTAAScheme scheme);
 
 /*
 
@@ -168,7 +154,7 @@ Methods
 **      returns         HTAAMethod enumerated value corresponding
 **                      to the given name.
 */
-extern HTAAMethod HTAAMethod_enum PARAMS((WWW_CONST char *name));
+extern HTAAMethod HTAAMethod_enum (WWW_CONST char *name);
 
 
 /* PUBLIC                                               HTAAMethod_name()
@@ -178,10 +164,10 @@ extern HTAAMethod HTAAMethod_enum PARAMS((WWW_CONST char *name));
 **                      METHOD_GET, METHOD_PUT, ...
 **
 ** ON EXIT:
-**      returns         the name of the scheme, i.e.
+**      returns         the name of the scheme, i.e.,
 **                      "GET", "PUT", ...
 */
-extern char *HTAAMethod_name PARAMS((HTAAMethod method));
+extern char *HTAAMethod_name (HTAAMethod method);
 
 
 /* PUBLIC                                               HTAAMethod_inList()
@@ -194,8 +180,7 @@ extern char *HTAAMethod_name PARAMS((HTAAMethod method));
 **      returns         YES, if method was found.
 **                      NO, if not found.
 */
-extern BOOL HTAAMethod_inList PARAMS((HTAAMethod     method,
-                                     HTList         *list));
+extern BOOL HTAAMethod_inList (HTAAMethod method, HTList *list);
 /*
 
 Match Template Against Filename
@@ -224,8 +209,8 @@ Match Template Against Filename
 **      returns         YES, if filename matches the template.
 **                      NO, otherwise.
 */
-extern BOOL HTAA_templateMatch PARAMS((WWW_CONST char *template,
-                                       WWW_CONST char *filename));
+extern BOOL HTAA_templateMatch (WWW_CONST char *template,
+                                WWW_CONST char *filename);
 
 
 /* PUBLIC                                       HTAA_makeProtectionTemplate()
@@ -247,7 +232,7 @@ extern BOOL HTAA_templateMatch PARAMS((WWW_CONST char *template,
 **                              being a comment marker here,
 **                              there really isn't any space.
 */
-extern char *HTAA_makeProtectionTemplate PARAMS((WWW_CONST char *docname));
+extern char *HTAA_makeProtectionTemplate (WWW_CONST char *docname);
 
 /*
 
@@ -281,7 +266,7 @@ MIME Argument List Parser
 **              the number of order number of that item. E.g.
 **              "1" for the first, etc.
 */
-extern HTList *HTAA_parseArgList PARAMS((char *str));
+extern HTList *HTAA_parseArgList (char *str);
 
 /*
 
@@ -308,9 +293,7 @@ Header Line Reader
 **                      will use this buffer first and then
 **                      proceed to read from socket.
 */
-extern void HTAA_setupReader PARAMS((char      *start_of_headers,
-                                     int        length,
-                                     int        soc));
+extern void HTAA_setupReader (char *start_of_headers, int length, int soc);
 
 
 /* PUBLIC                                               HTAA_getUnfoldedLine()
@@ -334,8 +317,7 @@ extern void HTAA_setupReader PARAMS((char      *start_of_headers,
 **      Field-Name: Blaa-Blaa This-Is-A-Continuation-Line Here-Is_Another
 **
 */
-extern char *HTAA_getUnfoldedLine NOPARAMS;
+extern char *HTAA_getUnfoldedLine ();
 
-#endif /* Not in SRC tree */
-#endif  /* NOT HTAAUTIL_H */
-
+#endif  /* Not in SRC tree */
+#endif  /* HTAAUTIL_H */

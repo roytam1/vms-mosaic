@@ -9,12 +9,14 @@
 #ifndef HTAUTH_H
 #define HTAUTH_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"
+#endif
+#ifndef HTAAUTIL_H
 #include "HTAAUtil.h"
+#endif
+#ifndef HTAAPROT_H
 #include "HTAAProt.h"
-
-#ifdef SHORT_NAMES
-#define HTAAauth        HTAA_authenticate
 #endif
 
 /*
@@ -48,8 +50,8 @@ typedef struct {
 **                      representing authenticated user,
 **                      which should not be freed.
 */
-PUBLIC HTAAUser *HTAA_authenticate PARAMS((HTAAScheme   scheme,
-                                           char        *scheme_specifics,
-                                           HTAAProt    *prot));
+PUBLIC HTAAUser *HTAA_authenticate (HTAAScheme   scheme,
+                                    char        *scheme_specifics,
+                                    HTAAProt    *prot);
 
-#endif /* not HTAUTH_H */
+#endif  /* HTAUTH_H */

@@ -12,14 +12,20 @@
 #ifndef HTNEWS_H
 #define HTNEWS_H
 
+#ifndef HTACCESS_H
 #include "HTAccess.h"
+#endif
+#ifndef HTANCHOR_H
 #include "HTAnchor.h"
+#endif
+#ifndef NEWSRC_H
 #include "../src/newsrc.h"
+#endif
 
 extern HTProtocol HTNews;
 
-extern void HTSetNewsHost PARAMS((WWW_CONST char *value));
-extern WWW_CONST char *HTGetNewsHost NOPARAMS;
+extern void HTSetNewsHost(WWW_CONST char *value);
+extern WWW_CONST char *HTGetNewsHost();
 
 extern char *HTNewsHost;
 extern int newsShowAllGroups;
@@ -30,7 +36,7 @@ extern char *NewsGroup;
 extern newsgroup_t *NewsGroupS;
 extern int newsShowAllArticles;
 
-void HTSetNewsConfig (int, int, int, int, int, int, int, int );
+void HTSetNewsConfig(int, int, int, int, int, int, int, int);
 void news_index(char *);
 void news_next(char *);
 void news_nextt(char *);
@@ -56,4 +62,4 @@ typedef struct NEWSART {
 
 extern NewsArt *CurrentArt;
 
-#endif /* HTNEWS_H */
+#endif  /* HTNEWS_H */

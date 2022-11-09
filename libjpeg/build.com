@@ -10,22 +10,22 @@ $! Modified for VMS Mosaic 2.6 build, 5-Nov-1995, George Cook
 $! Modified for VMS Mosaic 2.7 GNU C build, 10-Sep-1996, George Cook
 $!
 $ OPT = ""
-$ If (F$Locate("DECC=1",P1) .NE. F$Length(P1))
-$  Then DoCompile := CC /DECC /NoDebug /Optimize
+$ If (F$Locate("DECC=1", P1) .NE. F$Length(P1))
+$  Then DoCompile := CC/DECC/NoDebug/Optimize
 $  Endif
-$ If (F$Locate("DECCVAXC=1",P1) .NE. F$Length(P1))
+$ If (F$Locate("DECCVAXC=1", P1) .NE. F$Length(P1))
 $  Then
-$   DoCompile := CC /VAXC /PRECISION=SINGLE /NoDebug /Optimize
+$   DoCompile := CC/VAXC/PRECISION=SINGLE/NoDebug/Optimize
 $   OPT = ",Sys$Disk:[]makvms.opt/Option"
 $  Endif
-$ If (F$Locate("VAXC=2",P1) .NE. F$Length(P1))
+$ If (F$Locate("VAXC=2", P1) .NE. F$Length(P1))
 $  Then
-$   DoCompile := CC /PRECISION=SINGLE /NoDebug /Optimize
+$   DoCompile := CC/PRECISION=SINGLE/NoDebug/Optimize
 $   OPT = ",Sys$Disk:[]makvms.opt/Option"
 $  Endif
-$ If (F$Locate("GNUC",P1) .NE. F$Length(P1))
+$ If (F$Locate("GNUC", P1) .NE. F$Length(P1))
 $  Then
-$    DoCompile := GCC /NoDebug /Optimize /Names=Upper
+$    DoCompile := GCC/NoDebug/Optimize/Names=Upper
 $    OPT = ",GNU_CC:[000000]gcclib.olb/lib,Sys$Disk:[]makvms.opt/Option"
 $  EndIf
 $!
@@ -76,7 +76,7 @@ $ DoCompile jerror.c
 $ DoCompile jmemmgr.c
 $ DoCompile jmemnobs.c
 $!
-$ Library /Create libjpeg.olb  jcapimin.obj,jcapistd.obj,jctrans.obj, -
+$ Library/Create libjpeg.olb  jcapimin.obj,jcapistd.obj,jctrans.obj, -
           jcparam.obj,jdatadst.obj,jcinit.obj,jcmaster.obj,jcmarker.obj, -
           jcmainct.obj,jcprepct.obj,jccoefct.obj,jccolor.obj,jcsample.obj, -
           jchuff.obj,jcphuff.obj,jcdctmgr.obj,jfdctfst.obj,jfdctflt.obj, -
@@ -87,8 +87,9 @@ $ Library /Create libjpeg.olb  jcapimin.obj,jcapistd.obj,jctrans.obj, -
           jquant1.obj,jquant2.obj,jdmerge.obj,jcomapi.obj,jutils.obj, -
           jerror.obj,jmemmgr.obj,jmemnobs.obj
 $!
-$! Skip self-test since it causes too many problems for Mosaic builds
-$! Also skip building the executables since Mosaic doesn't need them
+$! Skip self-test since it causes too many problems for Mosaic builds.
+$! Also skip building the executables since Mosaic doesn't need them.
+$!
 $ Exit
 $!
 $ DoCompile cjpeg.c
@@ -100,7 +101,7 @@ $ DoCompile rdbmp.c
 $ DoCompile rdswitch.c
 $ DoCompile cdjpeg.c
 $!
-$ Link /Executable = cjpeg.exe  cjpeg.obj,rdppm.obj,rdgif.obj,rdtarga.obj, -
+$ Link/Executable=cjpeg.exe  cjpeg.obj,rdppm.obj,rdgif.obj,rdtarga.obj, -
           rdrle.obj,rdbmp.obj,rdswitch.obj,cdjpeg.obj,libjpeg.olb/Library'OPT'
 $!
 $ DoCompile djpeg.c
@@ -112,20 +113,21 @@ $ DoCompile wrbmp.c
 $ DoCompile rdcolmap.c
 $ DoCompile cdjpeg.c
 $!
-$ Link /Executable = djpeg.exe  djpeg.obj,wrppm.obj,wrgif.obj,wrtarga.obj, -
+$ Link/Executable=djpeg.exe  djpeg.obj,wrppm.obj,wrgif.obj,wrtarga.obj, -
           wrrle.obj,wrbmp.obj,rdcolmap.obj,cdjpeg.obj,libjpeg.olb/Library'OPT'
 $!
 $ DoCompile jpegtran.c
 $ DoCompile rdswitch.c
 $ DoCompile cdjpeg.c
 $!
-$ Link /Executable = jpegtran.exe  jpegtran.obj,rdswitch.obj,cdjpeg.obj,libjpeg.olb/Library'OPT'
+$ Link/Executable=jpegtran.exe  jpegtran.obj,rdswitch.obj,cdjpeg.obj, -
+	  libjpeg.olb/Library'OPT'
 $!
 $ DoCompile rdjpgcom.c
-$ Link /Executable = rdjpgcom.exe  rdjpgcom.obj'OPT'
+$ Link/Executable=rdjpgcom.exe  rdjpgcom.obj'OPT'
 $!
 $ DoCompile wrjpgcom.c
-$ Link /Executable = wrjpgcom.exe  wrjpgcom.obj'OPT'
+$ Link/Executable=wrjpgcom.exe  wrjpgcom.obj'OPT'
 $!
 $! Run the self-test
 $!
@@ -135,11 +137,11 @@ $ mcr sys$disk:[]cjpeg -dct int      -outfile testout.jpg testimg.ppm
 $ mcr sys$disk:[]djpeg -dct int -ppm -outfile testoutp.ppm testprog.jpg
 $ mcr sys$disk:[]cjpeg -dct int -progressive -opt -outfile testoutp.jpg testimg.ppm
 $ mcr sys$disk:[]jpegtran -outfile testoutt.jpg testprog.jpg
-$ Backup /Compare/Log testimg.ppm testout.ppm;
-$ Backup /Compare/Log testimg.gif testout.gif;
-$ Backup /Compare/Log testimg.jpg testout.jpg;
-$ Backup /Compare/Log testimg.ppm testoutp.ppm;
-$ Backup /Compare/Log testimgp.jpg testoutp.jpg;
-$ Backup /Compare/Log testorig.jpg testoutt.jpg;
+$ Backup/Compare/Log testimg.ppm testout.ppm;
+$ Backup/Compare/Log testimg.gif testout.gif;
+$ Backup/Compare/Log testimg.jpg testout.jpg;
+$ Backup/Compare/Log testimg.ppm testoutp.ppm;
+$ Backup/Compare/Log testimgp.jpg testoutp.jpg;
+$ Backup/Compare/Log testorig.jpg testoutt.jpg;
 $!
 $ Exit

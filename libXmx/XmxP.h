@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #ifndef __XMXP_H__
 #define __XMXP_H__
@@ -120,8 +120,9 @@
 #include <Xm/TextF.h>
 #include <Xm/ToggleBG.h>
 #include <Xm/ToggleB.h>
+#include <Xm/MwmUtil.h>
 
 /* Prototypes for internal routines found in Xmx.c. */
 extern int _XmxMakeClientData(int);
 
-#endif /* __XMXP_H__ */
+#endif  /* __XMXP_H__ */

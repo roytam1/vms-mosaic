@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -78,29 +80,25 @@ static XmxCallback(links_win_cb)
   char *text, *fnam, *url;
   
   switch (XmxExtractToken((int)client_data)) {
-  case 0: /* GOTO */
+    case 0:  /* GOTO */
       if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
-          if (pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
-                                        XmSTRING_DEFAULT_CHARSET,
-                                        &text)) {
+          if (pcount && XmStringGetLtoR(win->links_items[posns[0] - 1],
+                                        XmSTRING_DEFAULT_CHARSET, &text)) {
               if (strncmp(text, "===", 3))
                   mo_access_document(win, text);
               XtFree(text);
           }
 	  XtFree((char *)posns);
       }
-
       mo_gui_done_with_icon();
 
       return;
-  case 3:
+    case 3:  /* SAVE */
       if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
-          
-          if (pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
-                                        XmSTRING_DEFAULT_CHARSET,
-                                        &text)) {
+          if (pcount && XmStringGetLtoR(win->links_items[posns[0] - 1],
+                                        XmSTRING_DEFAULT_CHARSET, &text)) {
               if (strncmp(text, "===", 3)) {
-                      /* SAVE TO FILE */
+                  /* SAVE TO FILE */
                   url = mo_url_canonicalize(text, win->current_node->url);
 		  mo_gui_clear_icon();
                   if (mo_pull_er_over_virgin(url, fnam = mo_tmpnam(text)))
@@ -112,20 +110,18 @@ static XmxCallback(links_win_cb)
           }
           XtFree((char *)posns);
       }
-
       mo_gui_done_with_icon();
 
       return;        
-  case 1: /* DISMISS */
+    case 1:  /* DISMISS */
       XtUnmanageChild(win->links_win);
       break;
-  case 2: /* HELP */
+    case 2:  /* HELP */
       mo_open_another_window(win,
 			     mo_assemble_help_url("help-on-links-win.html"),
                              NULL, NULL);
       break;
   }
-
   return;
 }
 
@@ -135,23 +131,20 @@ static void links_list_cb(Widget w, XtPointer client, XtPointer call)
   char *text;
   XmListCallbackStruct *cs = (XmListCallbackStruct *) call;
   
-  if (XmStringGetLtoR(win->links_items[cs->item_position-1],
-                      XmSTRING_DEFAULT_CHARSET,
-                      &text)) {
+  if (XmStringGetLtoR(win->links_items[cs->item_position - 1],
+                      XmSTRING_DEFAULT_CHARSET, &text)) {
       if (strncmp(text, "===", 3))
           mo_access_document(win, text);
       XtFree(text);
   }
-
   /* Don't unmanage the list. */
-  
+
   return;
 }
 
 mo_status mo_post_links_window(mo_window *win)
 {
-  Widget dialog_frame;
-  Widget dialog_sep, buttons_form;
+  Widget dialog_frame, dialog_sep, buttons_form;
   Widget links_form, list, scroller, label;
     
   if (!win->links_win) {
@@ -159,8 +152,8 @@ mo_status mo_post_links_window(mo_window *win)
       XmxSetUniqid(win->id);
 
       Xmx_n = 0;
-      win->links_win = XmxMakeFormDialog 
-        (win->base, "VMS Mosaic: Document Links");
+      win->links_win = XmxMakeFormDialog(win->base,
+					 "VMS Mosaic: Document Links");
       dialog_frame = XmxMakeFrame(win->links_win, XmxShadowOut);
 
       /* Constraints for base. */
@@ -173,28 +166,21 @@ mo_status mo_post_links_window(mo_window *win)
       
       dialog_sep = XmxMakeHorizontalSeparator(links_form);
       
-      buttons_form = XmxMakeFormAndFourButtons
-          (links_form, links_win_cb, 
-           "Goto URL" , "Save" , 
-	   "Dismiss" , "Help..." , 
-           0, 3, 1, 2);
-
+      buttons_form = XmxMakeFormAndFourButtons(links_form, links_win_cb, 
+				       "Goto URL", "Save", "Dismiss", "Help...",
+				       0, 3, 1, 2);
       XmxSetButtonClue("Open highlighted URL", "Save highlighted URL to a file",
   		       "Close this menu", "Open help in new Mosaic window",
 		       NULL);
-
-      label = XtVaCreateManagedWidget("Document Links & Images ..." ,
-                                      xmLabelWidgetClass,
-                                      links_form,
+      label = XtVaCreateManagedWidget("Document Links & Images ...",
+                                      xmLabelWidgetClass, links_form,
                                       XmNwidth, 500,
                                       XmNleftAttachment, XmATTACH_FORM,
                                       XmNrightAttachment, XmATTACH_FORM,
                                       XmNtopAttachment, XmATTACH_FORM,
                                       XmNtopOffset, 2,
                                       NULL);
-      
-      scroller = XtVaCreateWidget("scroller",
-                                  xmScrolledWindowWidgetClass,
+      scroller = XtVaCreateWidget("scroller", xmScrolledWindowWidgetClass,
                                   links_form,
                                   XmNheight, 200,
                                       /* Form attachments */
@@ -210,33 +196,29 @@ mo_status mo_post_links_window(mo_window *win)
                                   XmNleftOffset, 8,
                                   XmNrightOffset, 8,
                                   NULL);
-      
-      list = XtVaCreateManagedWidget("list", xmListWidgetClass, 
-                                     scroller,
+      list = XtVaCreateManagedWidget("list", xmListWidgetClass, scroller,
                                      XmNvisibleItemCount, 10,
                                      XmNresizable, False,
                                      XmNscrollBarDisplayPolicy, XmSTATIC,
                                      XmNlistSizePolicy, XmCONSTANT,
                                      NULL);
-
       XtAddCallback(list, XmNdefaultActionCallback, links_list_cb,
 		    (XtPointer) win);
       XmxAddClue(list, "Double click on entry to visit it");
-      
+
       win->links_list = list;
       win->links_items = NULL;
       win->links_count = 0;
-      
+
       XtManageChild(scroller);
 
       XmxSetArg(XmNtopOffset, 10);
-      XmxSetConstraints 
-        (dialog_sep, 
+      XmxSetConstraints
+        (dialog_sep,
 	 XmATTACH_NONE, XmATTACH_WIDGET, XmATTACH_FORM, XmATTACH_FORM,
          NULL, buttons_form, NULL, NULL);
-
-      XmxSetConstraints 
-        (buttons_form, 
+      XmxSetConstraints
+        (buttons_form,
 	 XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
   }
@@ -251,13 +233,12 @@ mo_status mo_update_links_window(mo_window *win)
 {
     char **hrefs, **imgs;
     int i, p, count, hcount, icount;
-    XmString *xmstr;
+    XmStringTable xmstr;
 
     hrefs = HTMLGetHRefs(win->scrolled_win, &hcount);
     imgs = HTMLGetImageSrcs(win->scrolled_win, &icount);
 
     count = icount + hcount;
-    
     if (!count) {
         XtVaSetValues(win->links_list,
                       XmNitemCount, 0,
@@ -267,25 +248,25 @@ mo_status mo_update_links_window(mo_window *win)
 	    count++;
         if (imgs)
 	    count++;
-        xmstr = (XmString *) XtMalloc(sizeof(XmString)*count);
+        xmstr = (XmStringTable) XtMalloc(sizeof(XmString) * count);
         p = 0;
 
         if (hrefs) {
-            xmstr[p++] =
-                XmStringCreateLtoR("=== Links ===", XmSTRING_DEFAULT_CHARSET);
-            for (i=0; i < hcount; i++, p++) {
-                xmstr[p] =
-                    XmStringCreateLtoR(hrefs[i], XmSTRING_DEFAULT_CHARSET);
+            xmstr[p++] = XmStringCreateLtoR("=== Links ===",
+					    XmSTRING_DEFAULT_CHARSET);
+            for (i = 0; i < hcount; i++, p++) {
+                xmstr[p] = XmStringCreateLtoR(hrefs[i],
+					      XmSTRING_DEFAULT_CHARSET);
                 free(hrefs[i]);
             }
             free(hrefs);
         }
         if (imgs) {
-            xmstr[p++] =
-                XmStringCreateLtoR("=== Images ===", XmSTRING_DEFAULT_CHARSET);
-            for (i=0; i < icount; i++, p++) {
-                xmstr[p] =
-                    XmStringCreateLtoR(imgs[i], XmSTRING_DEFAULT_CHARSET);
+            xmstr[p++] = XmStringCreateLtoR("=== Images ===",
+					    XmSTRING_DEFAULT_CHARSET);
+            for (i = 0; i < icount; i++, p++) {
+                xmstr[p] = XmStringCreateLtoR(imgs[i],
+					      XmSTRING_DEFAULT_CHARSET);
                 free(imgs[i]);
             }
             free(imgs);
@@ -295,11 +276,11 @@ mo_status mo_update_links_window(mo_window *win)
                       XmNitemCount, count,
                       NULL);
     }
-    
     if (win->links_count) {
-        XtFree((char *)(win->links_items));
+	for (i = 0; i < win->links_count; i++)
+	    XmStringFree(win->links_items[i]);
+        XtFree((char *)win->links_items);
     }
-
     win->links_count = count;
     win->links_items = xmstr;
 
@@ -311,61 +292,65 @@ static struct {
     char *expand;
 } abouts[] = {
     {"about",
-	"<TITLE>Some magic words...</TITLE><p><ul>\
-	 <li><a href=\"about:mosaic\">mosaic</a>\
-	 <li><a href=\"about:xmosaic\">xmosaic</a>\
-	 <li><a href=\"about:cci\">cci</a>\
-	 <li><a href=\"about:cgi\">cgi</a>\
-	 <li><a href=\"about:help\">help</a>\
-	 <li><a href=\"about:html\">html</a>\
-	 <li><a href=\"about:motif\">motif</a>\
-         <li><a href=\"about:wvnet\">wvnet</a></ul></p>"},
+	"<TITLE>Some magic words...</TITLE>\n<p><ul>\
+	 <li><a href=\"about:mosaic\">mosaic</a>\n\
+	 <li><a href=\"about:xmosaic\">xmosaic</a>\n\
+	 <li><a href=\"about:cgi\">cgi</a>\n\
+	 <li><a href=\"about:help\">help</a>\n\
+	 <li><a href=\"about:html\">html</a>\n\
+	 <li><a href=\"about:motif\">motif</a>\n\
+	 <li><a href=\"about:cats\">cats</a>\n\
+         <li><a href=\"about:wvnet\">wvnet</a>\n</ul></p>"},
     {"mosaic", "0http://vaxa.wvnet.edu/vmswww/vms_mosaic.html"},
     {"xmosaic",
 #if !defined(VMS) || defined(__DECC)  /* VAX C is different (and has a line length limit) */
 	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:"
         "</p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>."
         "</blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.  "
-        "Batteries not included. May cause drowsiness.  Must be over 17.  Not available in all states.  "
+        "Batteries not included.  May cause drowsiness.  Must be over 17.  Not available in all states.  "
         "Not responsible for acts of God.  Prices subject to change without notice. Proof of purchase required.  "
         "Read label before using.  Some assembly required.  Not responsible for typographical errors.  Some restrictions apply.  "
         "Subject to local regulation.  Warrantee period limited.  Close cover before striking.  "
         "No resemblance to any person, living or dead, is intended.  Subject to availability.  No COD's.  "
-        "Sales tax not included. Shipping and handling extra.  For external use only. May cause excitability.  "
+        "Sales tax not included.  Shipping and handling extra.  For external use only. May cause excitability.  "
         "Avoid alcoholic beverages while using this software.  If symptoms persist, consult your physician.  "
         "Keep this and all software out of the reach of children.  Parental guidance suggested.  "
         "The buyer assumes all risks associated with using this product.  In case of irritation, flush eyes with cold water "
         "and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation. "
         "Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.  "
-        "Store in original containers. Harmful if swallowed.  Do not fold, bend, staple or mutilate. "
+        "Store in original containers.  Harmful if swallowed.  Do not fold, bend, staple or mutilate. "
         "PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product, "
         "it may cease to exist or will exist only in a vague and undetermined state.</p>"},
 #else
-	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:\
-</p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>.\
-</blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.\
-  Batteries not included. May cause drowsiness.  Must be over 17.  Not available in all states.\
+ "<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:\
+  </p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>.\
+  </blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.\
+  Batteries not included.  May cause drowsiness.  Must be over 17.  Not available in all states.\
   Not responsible for acts of God.  Prices subject to change without notice. Proof of purchase required.\
   Read label before using.  Some assembly required.  Not responsible for typographical errors.  Some restrictions apply.\
   Subject to local regulation.  Warrantee period limited.  Close cover before striking.\
   No resemblance to any person, living or dead, is intended.  Subject to availability.  No COD's.\
-  Sales tax not included. Shipping and handling extra.  For external use only. May cause excitability.\
+  Sales tax not included.  Shipping and handling extra.  For external use only. May cause excitability.\
   Avoid alcoholic beverages while using this software.  If symptoms persist, consult your physician.\
   Keep this and all software out of the reach of children.  Parental guidance suggested.\
   The buyer assumes all risks associated with using this product.  In case of irritation, flush eyes with cold water\
- and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation.\
- Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.\
-  Store in original containers. Harmful if swallowed.  Do not fold, bend, staple or mutilate.\
- PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product,\
- it may cease to exist or will exist only in a vague and undetermined state.</p>"},
+  and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation.\
+  Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.\
+  Store in original containers.  Harmful if swallowed.  Do not fold, bend, staple or mutilate.\
+  PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product,\
+  it may cease to exist or will exist only in a vague and undetermined state.</p>"},
 #endif
     {"blank", "<TITLE>Blank Page</TITLE>"},
+    /** Gone
     {"cci", "0http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/CCI/cci-spec.html"},
+    **/
     {"cgi", "0http://hoohoo.ncsa.uiuc.edu/cgi/overview.html"},
     {"help", "0http://wvnvms.wvnet.edu/vmswww/mosaic/d2-userguide.html"},
     {"html", "0http://wvnvms.wvnet.edu/vmswww/mosaic/htmlprimerall.html"},
     {"logo", "0http://wvnvms.wvnet.edu/vmswww/mosaic.gif"},
     {"motif", "0http://www.faqs.org/faqs/motif-faq/"},
+    {"cats",
+     "<TITLE>Cats</TITLE>There is no such thing as a bad cat, only bad people."},
     {"wvnet", "0http://www.wvnet.edu/"},
     {NULL, NULL}
 };
@@ -375,16 +360,13 @@ char *mo_special_urls(char *url)
 {
     int i;
 
-    if (!url)
+    if (!url || my_strncasecmp(url, "about:", 6))
 	return NULL;
 
-    if (my_strncasecmp(url, "about:", 6))
-	return NULL;
-    
     if (!my_strcasecmp(url, "about:"))
 	return strdup(abouts[0].expand);
     
-    for (i=0; abouts[i].name; i++) {
+    for (i = 0; abouts[i].name; i++) {
         if (!my_strncasecmp(&url[6], abouts[i].name, strlen(abouts[i].name))) {
             if (abouts[i].expand[0] == '0') {
                 return abouts[i].expand;
@@ -393,50 +375,49 @@ char *mo_special_urls(char *url)
 	    }
         }
     }
-
     return NULL;
 }
 
-
 void GUI_System(char *cmd, char *title)
 {
-    char buf[BUFSIZ], final[BUFSIZ*2];
+    char buf[BUFSIZ];
     int retValue;
 
-    *final = '\0';
-
     if ((retValue = my_system(cmd, buf, BUFSIZ)) != SYS_SUCCESS) {
+        char *msg;
+
 	/* Give them the error code message */
 	switch(retValue) {
 	    case SYS_NO_COMMAND:
-		sprintf(final, "%s%s", final,
-			"There was no command to execute.\n");
+		msg = "There was no command to execute.";
 		break;
 	    case SYS_FORK_FAIL:
-		sprintf(final, "%s%s", final, "The fork call failed.\n");
+		msg = "The fork call failed.";
 		break;
 	    case SYS_PROGRAM_FAILED:
-		sprintf(final, "%s%s", final,
-		       "The program specified could not execute.\n");
+		msg = "The program specified could not execute.";
 		break;
 	    case SYS_NO_RETBUF:
-		sprintf(final, "%s%s", final, "There was no return buffer.\n");
+		msg = "There was no return buffer.";
 		break;
 	    case SYS_FCNTL_FAILED:
-		sprintf(final, "%s%s", final,
-			"Fcntl failed to set non-block on the pipe.\n");
+		msg = "Fcntl failed to set non-block on the pipe.";
 		break;
+	    default:
+		msg = "Unknown failure.";
 	}
 	/* Give them the output */
 	if (*buf) {
-	    sprintf(final, "%s%s", final, buf);
+            char final[BUFSIZ * 2];
+
+	    sprintf(final, "%s\n%s", msg, buf);
+	    application_error(final, title);
+	} else {
+	    application_error(msg, title);
 	}
-	application_error(final, title);
     } else if (*buf) {
 	/* Give them the output */
-	sprintf(final, "%s%s", final, buf);
-	application_error(final, title);
+	application_error(buf, title);
     }
-
     return;
 }

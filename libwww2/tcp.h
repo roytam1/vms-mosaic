@@ -36,7 +36,7 @@
 Default values
 
    These values may be reset and altered by system-specific sections
-   later on.  there are also a bunch of defaults at the end .
+   later on.  There are also a bunch of defaults at the end.
    
  */
 /* Default values of those: */
@@ -53,7 +53,6 @@ Default values
 #endif
 
 typedef struct sockaddr_in SockA;  /* See netinet/in.h */
-
 
 #ifndef STDIO_H
 #include <stdio.h>
@@ -86,7 +85,9 @@ typedef struct sockaddr_in SockA;  /* See netinet/in.h */
 #endif
 #endif
 
+#ifndef __STRING_LOADED
 #include <string.h>
+#endif
 
 /* Use builtin strdup when appropriate. */
 #if defined(ultrix) || defined(VMS) || defined(NeXT)
@@ -223,11 +224,8 @@ VAX/VMS
 #include <time.h>
 #endif /* Multinet */
 
+#ifndef __STRING_LOADED
 #include <string.h>
-
-#ifndef STDIO_H
-#include <stdio.h>
-#define STDIO_H
 #endif
 
 #ifdef SOCKETSHR

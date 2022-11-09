@@ -1,4 +1,3 @@
-
 /* MODULE							HTAAUtil.c
 **		COMMON PARTS OF ACCESS AUTHORIZATION MODULE
 **			FOR BOTH SERVER AND BROWSER
@@ -12,7 +11,7 @@
 **
 **	Therefore also all the strings returned by this package
 **	are only valid until the next call to the same function
-**	is made. This approach is selected, because of the nature
+**	is made.  This approach is selected, because of the nature
 **	of access authorization: no string returned by the package
 **	needs to be valid longer than until the next call.
 **
@@ -67,7 +66,7 @@ extern int www2Trace;
 ** ON EXIT:
 **	returns		the enumerated constant for that scheme.
 */
-PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char *, name)
+PUBLIC HTAAScheme HTAAScheme_enum (WWW_CONST char *name)
 {
     static char *upcased = NULL;
     char *cur;
@@ -105,10 +104,10 @@ PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char *, name)
 **			HTAA_NONE, HTAA_BASIC, HTAA_MD5, ...
 **
 ** ON EXIT:
-**	returns		the name of the scheme, i.e.
+**	returns		the name of the scheme, i.e.,
 **			"None", "Basic", "Digest", ...
 */
-PUBLIC char *HTAAScheme_name ARGS1(HTAAScheme, scheme)
+PUBLIC char *HTAAScheme_name (HTAAScheme scheme)
 {
     switch (scheme) {
       case HTAA_NONE:
@@ -138,9 +137,9 @@ PUBLIC char *HTAAScheme_name ARGS1(HTAAScheme, scheme)
 **	returns		HTAAMethod enumerated value corresponding
 **			to the given name.
 */
-PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
+PUBLIC HTAAMethod HTAAMethod_enum (WWW_CONST char *name)
 {
-    char tmp[MAX_METHODNAME_LEN+1];
+    char tmp[MAX_METHODNAME_LEN + 1];
     WWW_CONST char *src = name;
     char *dest = tmp;
 
@@ -148,17 +147,16 @@ PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
 	return METHOD_UNKNOWN;
 
     while (*src) {
-	*dest = TOUPPER(*src);
-	dest++;
+	*dest++ = TOUPPER(*src);
 	src++;
     }
-    *dest = 0;
+    *dest = '\0';
 
-    if (0 == strcmp(tmp, "GET")) {
+    if (!strcmp(tmp, "GET")) {
 	return METHOD_GET;
-    } else if (0 == strcmp(tmp, "PUT")) {
+    } else if (!strcmp(tmp, "PUT")) {
 	return METHOD_PUT;
-    } else if (0 == strcmp(tmp, "META")) {
+    } else if (!strcmp(tmp, "META")) {
 	return METHOD_META;
     } else {
 	return METHOD_UNKNOWN;
@@ -173,10 +171,10 @@ PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
 **			METHOD_GET, METHOD_PUT, ...
 **
 ** ON EXIT:
-**	returns		the name of the scheme, i.e.
+**	returns		the name of the scheme, i.e.,
 **			"GET", "PUT", ...
 */
-PUBLIC char *HTAAMethod_name ARGS1(HTAAMethod, method)
+PUBLIC char *HTAAMethod_name (HTAAMethod method)
 {
     switch (method) {
       case METHOD_GET:
@@ -203,13 +201,12 @@ PUBLIC char *HTAAMethod_name ARGS1(HTAAMethod, method)
 **	returns		YES, if method was found.
 **			NO, if not found.
 */
-PUBLIC BOOL HTAAMethod_inList ARGS2(HTAAMethod,	method,
-				    HTList *,	list)
+PUBLIC BOOL HTAAMethod_inList (HTAAMethod method, HTList *list)
 {
     HTList *cur = list;
     char *item;
 
-    while (NULL != (item = (char *)HTList_nextObject(cur))) {
+    while (item = (char *)HTList_nextObject(cur)) {
 #ifndef DISABLE_TRACE
 	if (www2Trace)
 	    fprintf(stderr, " %s", item);
@@ -220,7 +217,6 @@ PUBLIC BOOL HTAAMethod_inList ARGS2(HTAAMethod,	method,
 
     return NO;	/* Not found */
 }
-
 
 
 /* PUBLIC						HTAA_templateMatch()
@@ -245,15 +241,15 @@ PUBLIC BOOL HTAAMethod_inList ARGS2(HTAAMethod,	method,
 **	returns		YES, if filename matches the template.
 **			NO, otherwise.
 */
-PUBLIC BOOL HTAA_templateMatch ARGS2(WWW_CONST char *, template, 
-				     WWW_CONST char *, filename)
+PUBLIC BOOL HTAA_templateMatch (WWW_CONST char *template, 
+				WWW_CONST char *filename)
 {
     WWW_CONST char *p = template;
     WWW_CONST char *q = filename;
     int m;
 
     for (; *p  &&  *q  &&  *p == *q; p++, q++)	/* Find first mismatch */
-	; /* do nothing else */
+	;  /* Do nothing else */
     
     if (!*p && !*q) {
 	return YES;			/* Equally long equal strings */
@@ -294,7 +290,7 @@ PUBLIC BOOL HTAA_templateMatch ARGS2(WWW_CONST char *, template,
 **				being a comment marker here,
 **				there really isn't any space.
 */
-PUBLIC char *HTAA_makeProtectionTemplate ARGS1(WWW_CONST char *, docname)
+PUBLIC char *HTAA_makeProtectionTemplate (WWW_CONST char *docname)
 {
     char *template = NULL;
     char *slash = NULL;
@@ -307,7 +303,7 @@ PUBLIC char *HTAA_makeProtectionTemplate ARGS1(WWW_CONST char *, docname)
 	} else {
 	    slash = template;
 	}
-	*slash = (char)0;
+	*slash = '\0';
 	StrAllocCat(template, "*");
     } else {
 	StrAllocCopy(template, "*");
@@ -322,18 +318,15 @@ PUBLIC char *HTAA_makeProtectionTemplate ARGS1(WWW_CONST char *, docname)
     return template;
 }
 
-
-
-
 /*
 ** Skip leading whitespace from *s forward
 */
-#define SKIPWS(s) while (*s==' ' || *s=='\t') s++;
+#define SKIPWS(s) while (*s == ' ' || *s == '\t') s++;
 
 /*
 ** Kill trailing whitespace starting from *(s-1) backwords
 */
-#define KILLWS(s) {char *c=s-1; while (*c==' ' || *c=='\t') *(c--)=(char)0;}
+#define KILLWS(s) {char *c = s - 1; while (*c==' ' || *c=='\t') *(c--) = '\0';}
 
 
 /* PUBLIC						HTAA_parseArgList()
@@ -357,12 +350,12 @@ PUBLIC char *HTAA_makeProtectionTemplate ARGS1(WWW_CONST char *, docname)
 **			   name = "value" ,  foo = "bar"
 **
 ** ON EXIT:
-**	returns	a list of name-value pairs (actually HTAssocList*).
+**	returns	a list of name-value pairs (actually HTAssocList *).
 **		For items with no name, just value, the name is
-**		the number of order number of that item. E.g.
+**		the number of order number of that item.  E.g.
 **		"1" for the first, etc.
 */
-PUBLIC HTAssocList *HTAA_parseArgList ARGS1(char *, str)
+PUBLIC HTAssocList *HTAA_parseArgList (char *str)
 {
     HTAssocList *assoc_list = HTAssocList_new();
     char *cur = NULL;
@@ -377,44 +370,43 @@ PUBLIC HTAssocList *HTAA_parseArgList ARGS1(char *, str)
 	cur = str;
 	index++;
 
-	while (*cur  &&  *cur != '='  &&  *cur != ',')
+	while (*cur && *cur != '=' && *cur != ',')
 	    cur++;	/* Find end of name (or lonely value without a name) */
 	KILLWS(cur);	/* Kill trailing whitespace */
 
 	if (*cur == '=') {			/* Name followed by a value */
-	    *(cur++) = (char)0;			/* Terminate name */
+	    *cur++ = '\0';			/* Terminate name */
 	    StrAllocCopy(name, str);
 	    SKIPWS(cur);			/* Skip WS leading the value */
 	    str = cur;
 	    if (*str == '"') {			/* Quoted value */
-		str++;
-		cur = str;
-		while (*cur  &&  *cur != '"')
+		cur = ++str;
+		while (*cur && *cur != '"')
 		    cur++;
 		if (*cur == '"')
-		    *(cur++) = (char)0;	/* Terminate value */
-		/* else it is lacking terminating quote */
+		    *cur++ = '\0';	        /* Terminate value */
+		/* Else it is lacking terminating quote */
 		SKIPWS(cur);			/* Skip WS leading comma */
 		if (*cur == ',')
 		    cur++;			/* Skip separating colon */
 	    } else {				/* Unquoted value */
-		while (*cur  &&  *cur != ',')
+		while (*cur && *cur != ',')
 		    cur++;
 		KILLWS(cur);			/* Kill trailing whitespace */
 		if (*cur == ',')
-		    *(cur++) = (char)0;
-		/* else *cur already NULL */
+		    *cur++ = '\0';
+		/* Else *cur already NULL */
 	    }
 	} else {	/* No name, just a value */
 	    if (*cur == ',') 
-		*(cur++) = (char)0;		/* Terminate value */
-	    /* else last value on line (already terminated by NULL) */
-	    StrAllocCopy(name, "nnn");	/* Room for item order number */
-	    sprintf(name, "%d", index); /* Item order number for name */
+		*cur++ = '\0';			/* Terminate value */
+	    /* Else last value on line (already terminated by NULL) */
+	    StrAllocCopy(name, "nnn");	 /* Room for item order number */
+	    sprintf(name, "%d", index);  /* Item order number for name */
 	}
 	HTAssocList_add(assoc_list, name, str);
 	str = cur;
-    } /* while *str */
+    }
 
     return assoc_list;
 }
@@ -430,7 +422,7 @@ PRIVATE char *end_pointer = buffer;
 PRIVATE int in_soc = -1;
 
 /* PUBLIC						HTAA_setupReader()
-**		SET UP HEADER LINE READER, i.e. give
+**		SET UP HEADER LINE READER, i.e., give
 **		the already-read-but-not-yet-processed
 **		buffer of text to be read before more
 **		is read from the socket.
@@ -448,9 +440,7 @@ PRIVATE int in_soc = -1;
 **			will use this buffer first and then
 **			proceed to read from socket.
 */
-PUBLIC void HTAA_setupReader ARGS3(char *,	start_of_headers,
-				   int,		length,
-				   int,		soc)
+PUBLIC void HTAA_setupReader (char *start_of_headers, int length, int soc)
 {
     start_pointer = buffer;
     if (start_of_headers) {
@@ -473,7 +463,7 @@ PUBLIC void HTAA_setupReader ARGS3(char *,	start_of_headers,
 **
 ** ON EXIT:
 **	returns	a newly-allocated character string representing
-**		the read line.  The line is unfolded, i.e.
+**		the read line.  The line is unfolded, i.e.,
 **		lines that begin with whitespace are appended
 **		to current line.  E.g.
 **
@@ -486,7 +476,7 @@ PUBLIC void HTAA_setupReader ARGS3(char *,	start_of_headers,
 **	Field-Name: Blaa-Blaa This-Is-A-Continuation-Line Here-Is_Another
 **
 */
-PUBLIC char *HTAA_getUnfoldedLine NOARGS
+PUBLIC char *HTAA_getUnfoldedLine (void)
 {
     char *line = NULL;
     char *cur;
@@ -494,8 +484,7 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
     BOOL peek_for_folding = NO;
 
     if (in_soc < 0) {
-	fprintf(stderr, "%s %s\n",
-		"HTAA_getUnfoldedLine: buffer not initialized",
+	fprintf(stderr, "HTAA_getUnfoldedLine: buffer not initialized %s\n",
 		"with function HTAA_setupReader()");
 	return NULL;
     }
@@ -520,47 +509,39 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
 	    }
 	    start_pointer = buffer;
 	    end_pointer = buffer + count;
-	    *end_pointer = (char)0;
+	    *end_pointer = '\0';
 #ifdef NOT_ASCII
 	    cur = start_pointer;
 	    while (cur < end_pointer) {
 		*cur = TOASCII(*cur);
 		cur++;
 	    }
-#endif /*NOT_ASCII*/
+#endif
 	}
 	cur = start_pointer;
 
-
 	/* Unfolding */
-	
 	if (peek_for_folding) {
-	    if (*cur != ' '  &&  *cur != '\t') {
+	    if (*cur != ' ' && *cur != '\t') {
 		return line;	/* Ok, no continuation line */
 	    } else {		/* So this is a continuation line, continue */
 		peek_for_folding = NO;
 	    }
 	}
 
-
 	/* Finding end-of-line */
+	while (cur < end_pointer && *cur != '\n')  /* Find the end-of-line */
+	    cur++;				   /* (or end-of-buffer).  */
 
-	while (cur < end_pointer && *cur != '\n') /* Find the end-of-line */
-	    cur++;				  /* (or end-of-buffer).  */
-
-	
 	/* Terminating line */
-
 	if (cur < end_pointer) {	/* So *cur==LF, terminate line */
-	    *cur = (char)0;		/* Overwrite LF */
-	    if (*(cur-1) == '\r')
-		*(cur-1) = (char)0;	/* Overwrite CR */
+	    *cur = '\0';		/* Overwrite LF */
+	    if (*(cur - 1) == '\r')
+		*(cur - 1) = '\0';	/* Overwrite CR */
 	    peek_for_folding = YES;	/* Check for a continuation line */
 	}
 
-
 	/* Copying the result */
-
 	if (line) {
 	    StrAllocCat(line, start_pointer);	/* Append */
 	} else {
@@ -568,6 +549,5 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
 	}
 	start_pointer = cur + 1;		/* Skip the read line */
 
-    } /* forever */
+    }  /* Forever */
 }
-

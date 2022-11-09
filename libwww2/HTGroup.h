@@ -8,14 +8,6 @@
 #include "HTUtils.h"
 #include "HTList.h"
 
-#ifdef SHORT_NAMES
-#define HTAApGrD        HTAA_parseGroupDef
-#define HTAArGrR        HTAA_resolveGroupReferences
-#define HTAApGrD        HTAA_printGroupDef
-#define HTAAGD_d        GroupDef_delete
-#define HTAAuIIG        HTAA_userAndInetInGroup
-#endif
-
 typedef HTList GroupDefList;
 typedef HTList ItemList;
 
@@ -103,7 +95,7 @@ Group definition grammar
   PARSE GROUP DEFINITION
   
  */
-PUBLIC GroupDef *HTAA_parseGroupDef PARAMS((FILE *fp));
+PUBLIC GroupDef *HTAA_parseGroupDef (FILE *fp);
 
 /*
 
@@ -113,17 +105,17 @@ Fill in Pointers to referenced Group Definitions in a Group Definition
    and pointers to those structures are added to group_def.
    
  */
-PUBLIC void HTAA_resolveGroupReferences PARAMS((GroupDef     *group_def,
-                                                GroupDefList *group_def_list));
+PUBLIC void HTAA_resolveGroupReferences (GroupDef     *group_def,
+                                         GroupDefList *group_def_list);
 /*
 
 Read Group File (and do caching)
 
-   If group file is already in cache returns a pointer to previously read group definition
-   list.
+   If group file is already in cache returns a pointer to previously
+   read group definition list.
    
  */
-PUBLIC GroupDefList *HTAA_readGroupFile PARAMS((WWW_CONST char *filename));
+PUBLIC GroupDefList *HTAA_readGroupFile (WWW_CONST char *filename);
 
 /*
 
@@ -133,14 +125,14 @@ Delete Group Definition
    be used to free group definitions read by HTAA_parseGroupDef.
    
  */
-PUBLIC void GroupDef_delete PARAMS((GroupDef *group_def));
+PUBLIC void GroupDef_delete (GroupDef *group_def);
 
 /*
 
 Print Out Group Definition (for trace purposes)
 
  */
-PUBLIC void HTAA_printGroupDef PARAMS((GroupDef *group_def));
+PUBLIC void HTAA_printGroupDef (GroupDef *group_def);
 
 /*
 
@@ -167,8 +159,8 @@ Does a User Belong to a Given Set of Groups
 **                      to the group.
 **                      HTAA_OK if both IP address and user are ok.
 */
-PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup PARAMS((GroupDef *group,
-                                                          char     *username,
-                                                          char     *ip_number,
-                                                          char     *ip_name));
-#endif /* not HTGROUP_H */
+PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup (GroupDef *group,
+                                                   char     *username,
+                                                   char     *ip_number,
+                                                   char     *ip_name);
+#endif  /* HTGROUP_H */

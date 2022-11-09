@@ -11,31 +11,33 @@
 #include <stdio.h>				/* joe@athena, TBL 921019 */
 
 #ifndef DISABLE_TRACE
-extern int www2Trace;
+extern int reportBugs;
 #endif
 
-HTList *HTList_new NOARGS
+HTList *HTList_new (void)
 {
-  HTList *newList = (HTList *)malloc(sizeof(HTList));
+  HTList *newList = (HTList *)calloc(1, sizeof(HTList));
 
   if (!newList)
     outofmem(__FILE__, "HTList_new");
+  /** calloc does it
   newList->object = NULL;
   newList->next = NULL;
+  **/
   return newList;
 }
 
-void HTList_delete ARGS1(HTList *, me)
+void HTList_delete (HTList *me)
 {
   HTList *current;
 
   while (current = me) {
     me = me->next;
-    free (current);
+    free(current);
   }
 }
 
-void HTList_addObject ARGS2(HTList *, me, void *, newObject)
+void HTList_addObject (HTList *me, void *newObject)
 {
   if (me) {
     HTList *newNode = (HTList *)malloc(sizeof(HTList));
@@ -47,14 +49,14 @@ void HTList_addObject ARGS2(HTList *, me, void *, newObject)
     me->next = newNode;
   }
 #ifndef DISABLE_TRACE
-  else if (www2Trace) {
+  else if (reportBugs) {
     fprintf(stderr, "HTList: Trying to add object %p to a nonexisting list\n",
 	    newObject);
   }
 #endif
 }
 
-void HTList_addObjectAtEnd ARGS2(HTList *, me, void *, newObject)
+void HTList_addObjectAtEnd (HTList *me, void *newObject)
 {
   if (me) {
     HTList *newNode = (HTList *)malloc(sizeof(HTList));
@@ -68,14 +70,14 @@ void HTList_addObjectAtEnd ARGS2(HTList *, me, void *, newObject)
     me->next = newNode;
   }
 #ifndef DISABLE_TRACE
-  else if (www2Trace) {
+  else if (reportBugs) {
     fprintf(stderr, "HTList: Trying to add object %p to a nonexisting list\n",
 	    newObject);
   }
 #endif
 }
 
-BOOL HTList_removeObject ARGS2(HTList *, me, void *, oldObject)
+BOOL HTList_removeObject (HTList *me, void *oldObject)
 {
   if (me) {
     HTList *previous;
@@ -85,7 +87,7 @@ BOOL HTList_removeObject ARGS2(HTList *, me, void *, oldObject)
       me = me->next;
       if (me->object == oldObject) {
 	previous->next = me->next;
-	free (me);
+	free(me);
 	return YES;  /* Success */
       }
     }
@@ -93,21 +95,21 @@ BOOL HTList_removeObject ARGS2(HTList *, me, void *, oldObject)
   return NO;  /* object not found or NULL list */
 }
 
-void *HTList_removeLastObject ARGS1 (HTList *, me)
+void *HTList_removeLastObject (HTList *me)
 {
   if (me && me->next) {
     HTList *lastNode = me->next;
     void *lastObject = lastNode->object;
 
     me->next = lastNode->next;
-    free (lastNode);
+    free(lastNode);
     return lastObject;
   } else {  /* Empty list */
     return NULL;
   }
 }
 
-void *HTList_removeFirstObject ARGS1 (HTList *, me)
+void *HTList_removeFirstObject (HTList *me)
 {
   if (me && me->next) {
     HTList *prevNode;
@@ -126,17 +128,18 @@ void *HTList_removeFirstObject ARGS1 (HTList *, me)
   }
 }
 
-int HTList_count ARGS1 (HTList *, me)
+int HTList_count (HTList *me)
 {
   int count = 0;
 
-  if (me)
+  if (me) {
     while (me = me->next)
       count++;
+  }
   return count;
 }
 
-int HTList_indexOf ARGS2(HTList *, me, void *, object)
+int HTList_indexOf (HTList *me, void *object)
 {
   if (me) {
     int position = 0;
@@ -150,16 +153,14 @@ int HTList_indexOf ARGS2(HTList *, me, void *, object)
   return -1;  /* Object not in the list */
 }
 
-void *HTList_objectAt ARGS2(HTList *, me, int, position)
+void *HTList_objectAt (HTList *me, int position)
 {
-  if (position < 0)
+  if (!me || (position < 0))
     return NULL;
-  if (me) {
-    while (me = me->next) {
-      if (position == 0)
-	return me->object;
-      position--;
-    }
+
+  while (me = me->next) {
+    if (!position--)
+       return me->object;
   }
   return NULL;  /* Reached the end of the list */
 }
@@ -169,27 +170,23 @@ void *HTList_objectAt ARGS2(HTList *, me, int, position)
 **	(->object) for the object, and NULL if the list is empty, or
 **	if it doesn't exist - Yuk!).
 */
-PUBLIC void *HTList_removeObjectAt ARGS2(HTList *, me,	int, position)
+PUBLIC void *HTList_removeObjectAt (HTList *me, int position)
 {
-    HTList *temp = me;
-    HTList *prevNode;
-    int pos = position;
+    HTList *previous = me;
 
-    if (!temp || pos < 0)
+    if (!me || (position < 0))
 	return NULL;
 
-    prevNode = temp;
-    while ((temp = temp->next)) {
-	if (pos == 0) {
-	    prevNode->next = temp->next;
-	    prevNode = temp;
-	    free(temp);
-	    return prevNode->object;
-	}
-	prevNode = temp;
-	pos--;
-    }
+    while ((me = me->next)) {
+	if (!position--) {
+	    void *object = me->object;
 
+	    previous->next = me->next;
+	    free(me);
+	    return object;
+	}
+	previous = me;
+    }
     return NULL;  /* Reached the end of the list */
 }
 
@@ -197,19 +194,15 @@ PUBLIC void *HTList_removeObjectAt ARGS2(HTList *, me,	int, position)
 **      If position is 0, this places the object at the head of the list
 **      and is equivalent to HTList_addObject().
 */
-PUBLIC void HTList_insertObjectAt ARGS3(
-	HTList *,	me,
-	void *,		newObject,
-	int,		pos)
+PUBLIC void HTList_insertObjectAt (HTList *me, void *newObject, int pos)
 {
-    HTList *newNode;
+    HTList *newNode, *prevNode;
     HTList *temp = me;
-    HTList *prevNode;
     int Pos = pos;
 
     if (!temp) {
 #ifndef DISABLE_TRACE
-	if (www2Trace)
+	if (reportBugs)
 	    fprintf(stderr,
 		    "HTList: Trying to add object %p to a nonexisting list\n",
 		    newObject);
@@ -219,17 +212,15 @@ PUBLIC void HTList_insertObjectAt ARGS3(
     if (Pos < 0) {
 	Pos = 0;
 #ifndef DISABLE_TRACE
-	if (www2Trace)
+	if (reportBugs)
 	    fprintf(stderr,
-		    "HTList: Treating negative object position %d as %d.\n",
-		    pos, Pos);
+		    "HTList: Treating negative position %d as 0.\n", pos);
 #endif
     }
-
     prevNode = temp;
     while ((temp = temp->next)) {
-	if (Pos == 0) {
-	    if ((newNode = (HTList *)calloc(1, sizeof(HTList))) == NULL)
+	if (!Pos--) {
+	    if (!(newNode = (HTList *)malloc(sizeof(HTList))))
 	        outofmem(__FILE__, "HTList_addObjectAt");
 	    newNode->object = newObject;
 	    newNode->next = temp;
@@ -238,10 +229,8 @@ PUBLIC void HTList_insertObjectAt ARGS3(
 	    return;
 	}
 	prevNode = temp; 
-	Pos--;
     }
     if (Pos >= 0)
         HTList_addObject(prevNode, newObject);
-
     return;
 }

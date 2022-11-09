@@ -66,9 +66,10 @@
 extern mo_status mo_free_node (mo_node *);
 extern mo_status mo_kill_node (mo_window *, mo_node *);
 extern mo_status mo_kill_node_descendents (mo_window *win, mo_node *node);
-extern char *mo_grok_title (mo_window *, char *, char *);
-extern mo_status mo_record_visit (mo_window *, char *, char *, char *,
-                                  char *, char *, char *, char *, int, char *);
+extern char *mo_grok_title (mo_window *, char *, char *, mo_node *);
+extern mo_status mo_record_visit (mo_window *, char *, char *, char *, char *,
+                                  char *, char *, char *, int, char *, int,
+				  char *);
 extern mo_status mo_back_node (mo_window *);
 extern mo_status mo_forward_node (mo_window *);
 extern mo_status mo_post_history_win (mo_window *);

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -82,15 +82,14 @@ void mo_gui_update_meter(int level, char *text);
 int anchor_visited_predicate(Widget, char *);
 void mo_stop_it(mo_window *);
 void mo_stop_animations(mo_window *win, int check_drawing);
+void mo_presentation_mode(mo_window *win);
 
 void mo_gui_check_win_security_icon(int type, mo_window *win);
-void mo_gui_check_security_icon(int type);
 
 void mo_do_gui(int, char **);
 void mo_switch_mode(mo_window *);
 void mo_flush_passwd_cache(mo_window *);
 void pub_anchor_ltd(char *);
-void mo_gui_apply_default_icon(void);
 void mo_delete_frames(mo_window *);
 
 #endif

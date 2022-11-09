@@ -41,7 +41,7 @@ extern int www2Trace;
 **		(which is automatically freed next time
 **		this fuction is called).
 */
-PUBLIC char *HTAA_getAclFilename ARGS1(WWW_CONST char *, pathname)
+PUBLIC char *HTAA_getAclFilename (WWW_CONST char *pathname)
 {
     static char *local_copy = NULL;
     static char *acl_path = NULL;
@@ -50,7 +50,6 @@ PUBLIC char *HTAA_getAclFilename ARGS1(WWW_CONST char *, pathname)
 
     StrAllocCopy(local_copy, pathname);	/* Also frees local_copy */
                                         /* from previous call.   */
-
     directory = local_copy;
     filename = strrchr(directory, '/');
     if (!filename) {		/* No path in front of filename */
@@ -80,7 +79,7 @@ PUBLIC char *HTAA_getAclFilename ARGS1(WWW_CONST char *, pathname)
 **	returns		the FILE* to open ACL.
 **			NULL, if ACL not found.
 */
-PUBLIC FILE *HTAA_openAcl ARGS1(WWW_CONST char *, pathname)
+PUBLIC FILE *HTAA_openAcl (WWW_CONST char *pathname)
 {
     return fopen(HTAA_getAclFilename(pathname), "r");
 }
@@ -94,7 +93,7 @@ PUBLIC FILE *HTAA_openAcl ARGS1(WWW_CONST char *, pathname)
 ** ON EXIT:
 **	returns	nothing.
 */
-PUBLIC void HTAA_closeAcl ARGS1(FILE *, acl_file)
+PUBLIC void HTAA_closeAcl (FILE *acl_file)
 {
     if (acl_file) 
 	fclose(acl_file);
@@ -146,9 +145,9 @@ PUBLIC void HTAA_closeAcl ARGS1(FILE *, acl_file)
 **	HTAA_readGroupFile()) and after that access authorization
 **	can be checked with function HTAA_userAndInetGroup().
 */
-PUBLIC GroupDef *HTAA_getAclEntry ARGS3(FILE *,		acl_file,
-					WWW_CONST char *,	pathname,
-					HTAAMethod,	method)
+PUBLIC GroupDef *HTAA_getAclEntry (FILE *acl_file,
+				   WWW_CONST char *pathname,
+				   HTAAMethod method)
 {
     static GroupDef *group_def = NULL;
     WWW_CONST char *filename;
@@ -218,4 +217,3 @@ PUBLIC GroupDef *HTAA_getAclEntry ARGS3(FILE *,		acl_file,
     return NULL;	/* No entry for requested file */
                         /* (or an empty entry).        */
 }
-

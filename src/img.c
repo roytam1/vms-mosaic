@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 
@@ -60,8 +62,10 @@
 #include "mo-www.h"
 #include "globalhist.h"
 #include "../libhtmlw/HTMLp.h"
+#include "../libhtmlw/HTMLputil.h"
 #include "../libnut/str-tools.h"
 #include "img.h"
+#include "../libwww2/HTMultiLoad.h"
 #include "picread.h"
 #ifdef CCI
 #include "cci.h"
@@ -91,45 +95,72 @@ int force_image_load = 0;
 char *image_file_fnam = NULL;
 extern char *HTReferer;
 
-/* For selective image loading */
-#define BlankImage_width 8
-#define BlankImage_height 8
+static int DoMultiLoad = 0;
+static HTBTree *image_loads = NULL;
+extern int HTMultiLoadLimit;
 
+/* For selective image loading */
 extern char **imagekill_sites;
 
-ImageInfo *BlankImageData(HTMLWidget w)
+typedef struct img_list {
+        Pixmap img;
+        Pixel fg_pixel;
+        Pixel bg_pixel;
+        struct img_list *next;
+} ImgList;
+
+ImageInfo *BlankImageData(HTMLWidget hw)
 {
 	static Pixel fg_pixel, bg_pixel;
-	static unsigned char BlankImage_bits[] = {
-  		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
+	static unsigned char BlankImage_bits[] = { 0x00, 0x00 };
 	static ImageInfo *blank_image = NULL;
+	static ImgList *images;
+	ImgList *next;
 
-        if (blank_image == NULL) {
-		blank_image = (ImageInfo *)malloc(sizeof(ImageInfo));
-		blank_image->width = BlankImage_width;
-		blank_image->height = BlankImage_height;
+        if (!blank_image) {
+		/* First time */
+		images = (ImgList *)malloc(sizeof(ImgList));
+		images->next = NULL;
+		blank_image = GetImageRec();
+		blank_image->width = 1;
+		blank_image->height = 1;
 		blank_image->image_data = (unsigned char *)BlankImage_bits;
-		fg_pixel = w->manager.foreground;
-		bg_pixel = w->core.background_pixel;
-                blank_image->image = XCreatePixmapFromBitmapData(XtDisplay(w),
-                        XtWindow(w), (char *) BlankImage_bits,
-                        BlankImage_width, BlankImage_height,
-                        fg_pixel,
-                        bg_pixel,
-                        DefaultDepthOfScreen(XtScreen(w)));
+		images->fg_pixel = fg_pixel = hw->manager.foreground;
+		images->bg_pixel = bg_pixel = hw->core.background_pixel;
+                images->img = blank_image->image = XCreatePixmapFromBitmapData(
+					    hw->html.dsp, XtWindow(hw),
+					    (char *) BlankImage_bits, 1, 1,
+					    fg_pixel, bg_pixel,
+					    DefaultDepthOfScreen(XtScreen(hw)));
+	} else if ((fg_pixel != hw->manager.foreground) ||
+	           (bg_pixel != hw->core.background_pixel)) {
+		/* Check for match in cached images */
+		next = images;
+		while (next) {
+		    if ((next->fg_pixel == hw->manager.foreground) &&
+			(next->bg_pixel == hw->core.background_pixel))
+			break;
+		    next = next->next;
+		}
+		if (next) {
+		    fg_pixel = next->fg_pixel;
+		    bg_pixel = next->bg_pixel;
+		    blank_image->image = next->img;
+		} else {
+		    /* Didn't find a match, so create a new one */
+		    next = images;
+		    images = (ImgList *)malloc(sizeof(ImgList));
+		    images->next = next;
+		    images->fg_pixel = fg_pixel = hw->manager.foreground;
+		    images->bg_pixel = bg_pixel = hw->core.background_pixel;
+		    blank_image->image = XCreatePixmapFromBitmapData(
+					    hw->html.dsp, XtWindow(hw),
+					    (char *) BlankImage_bits, 1, 1,
+         				    fg_pixel, bg_pixel,
+					    DefaultDepthOfScreen(XtScreen(hw)));
+		    images->img = blank_image->image;
+		}
 	}
-	if ((fg_pixel != w->manager.foreground) ||
-	    (bg_pixel != w->core.background_pixel)) {
-		fg_pixel = w->manager.foreground;
-		bg_pixel = w->core.background_pixel;
-                blank_image->image = XCreatePixmapFromBitmapData(XtDisplay(w),
-                        XtWindow(w), (char *) BlankImage_bits,
-                        BlankImage_width, BlankImage_height,
-                        fg_pixel,
-                        bg_pixel,
-                        DefaultDepthOfScreen(XtScreen(w)));
-	}
-
 	return(blank_image);
 }
 
@@ -138,19 +169,13 @@ static unsigned char nums[] = { 1, 2, 4, 8, 16, 32, 64, 128 };
 void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 {
 	int bg = img_info->bg_index;
-	int i, j, cnt, bcnt, pnum;
+	int i, j, cnt, bcnt, pnum, indx;
+	int transition_count, widthbyheight;
 	int Used[256];
-	int transition_count;
-	int widthbyheight;
-	int indx;
 	unsigned short bg_red, bg_green, bg_blue;
-	unsigned char *bg_map;
-	unsigned char *bgptr;
-	unsigned char *cptr;
-	unsigned char *ptr;
-	static int clipping;
-	static int max_clip;
-	static int max_colors;
+	unsigned char *bg_map = NULL;
+	unsigned char *bgptr, *cptr, *ptr;
+	static int clipping, max_clip, max_colors;
 	static int init = 0;
 
 	if (!init) {
@@ -159,9 +184,9 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		max_colors = get_pref_int(eCOLORS_PER_INLINED_IMAGE);
 		init = 1;
 	}
-	/* If we have a transparent background, prepare for it */
-	bg_map = NULL;
+	widthbyheight = img_info->width * img_info->height;
 
+	/* If we have a transparent background, prepare for it */
 	if (bg >= 0) {
 		XColor tmpcolr;
 		Colormap colmap;
@@ -172,20 +197,18 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		 *  -- GWP
 		 */
 		XtVaGetValues(w,
-			      XtNbackground, &(tmpcolr.pixel),
+			      XtNbackground, &tmpcolr.pixel,
 			      XtNcolormap, &colmap,
 			      NULL);
 		XQueryColor(XtDisplay(w), colmap, &tmpcolr);
 		bg_red = colrs[bg].red = tmpcolr.red;
 		bg_green = colrs[bg].green = tmpcolr.green;
 		bg_blue = colrs[bg].blue = tmpcolr.blue;
-		colrs[bg].flags = DoRed|DoGreen|DoBlue;
-		bg_map = (unsigned char *)malloc(img_info->width *
-						 img_info->height);
+		colrs[bg].flags = DoRed | DoGreen | DoBlue;
+		bg_map = (unsigned char *)malloc(widthbyheight);
 		if (!bg_map)
 			img_info->bg_index = bg = (-1);
 	}
-
 	if ((bg >= 0 ) && clipping) {
 		img_info->clip_data = (unsigned char *)calloc(1,
 				((img_info->width + 7) / 8) * img_info->height);
@@ -200,7 +223,6 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		bg = img_info->bg_index = (-1);
 	}
 
-	widthbyheight = img_info->width * img_info->height;
         /* Zero out used color array. */
 	memset(Used, 0, 256 * sizeof(int));
 	cnt = 1;
@@ -214,10 +236,8 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 	 */
 	for (i = 0; i < img_info->height; i++) {
 		for (j = 0, bcnt = 0; j < img_info->width; j++) {
-			if (Used[*ptr] == 0) {
-				Used[*ptr] = cnt;
-				cnt++;
-			}
+			if (!Used[*ptr])
+				Used[*ptr] = cnt++;
 			if (bg >= 0) {
 				if (*ptr == bg) {
 					*bgptr = 1;
@@ -229,7 +249,8 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 						transition_count++;
 					*cptr += nums[bcnt % 8];
 				}
-				if ((bcnt % 8) == 7 || j == (img_info->width-1))
+				if (((bcnt % 8) == 7) ||
+				    (j == (img_info->width - 1)))
 					cptr++;
 				bgptr++;
 				bcnt++;
@@ -244,7 +265,6 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		fprintf(stderr, "[IMG] transparency transition count = %d\n",
 			transition_count);
 #endif
-
 	/* The background color was never used */
 	if (transition_count == 1) {
 		img_info->transparent = 0;
@@ -279,10 +299,8 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		cnt = 1;
 		ptr = img_info->image_data;
 		for (i = 0; i < widthbyheight; i++) {
-			if (Used[(int)*ptr] == 0) {
-				Used[*ptr] = cnt;
-				cnt++;
-			}
+			if (!Used[(int)*ptr])
+				Used[*ptr] = cnt++;
 			ptr++;
 		}
 		cnt--;
@@ -301,10 +319,10 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 #endif
 	/* bg is not set in here if it gets munged by MedCut */
 	for (i = 0; i < 256; i++) {
-		if (Used[i] != 0) {
+		if (Used[i]) {
 			indx = Used[i] - 1;
 			img_info->colrs[indx] = colrs[i];
-			/* squeegee in the background color */
+			/* Squeegee in the background color */
 			if ((bg >= 0) && (i == bg)) {
 				img_info->colrs[indx].red = bg_red;
 				img_info->colrs[indx].green = bg_green;
@@ -326,11 +344,8 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 	for (i = 0; i < widthbyheight; i++) {
 		*ptr = (unsigned char)(Used[*ptr] - 1);
 		/* If MedianCut ate the background, enforce it here */
-		if (bg == 256) {
-			if (*bgptr)
-				*ptr = (unsigned char) img_info->bg_index;
-			bgptr++;
-		}
+		if ((bg == 256) && *bgptr++)
+			*ptr = (unsigned char) img_info->bg_index;
 		ptr++;
 	}
 	if (bg_map)	/* Free the background map if we have one */
@@ -338,50 +353,224 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 }
 
 
+static char *GetImageURL(HTMLWidget hw, char *src, char *cached_url)
+{
+	char *url;
+
+	/* Get cleaned up copy of source url */
+	if (!src || !(src = mo_clean_and_escape_url(src, 0)))
+		return NULL;
+
+#ifndef DISABLE_TRACE
+        if (srcTrace)
+		fprintf(stderr, "[IMG] Processing src = '%s'\n", src);
+#endif
+	url = mo_url_canonicalize(src, cached_url);
+	free(src);
+
+	/* Hack to remove any remaining ../ */
+	if (strstr(url, "../")) {
+		src = mo_url_canonicalize(url, "");
+		free(url);
+		url = src;
+	}
+	return url;
+}
+
+
+/* Multiple image load callback.  Does nothing except set flag. */
+void MultiImageLoad(Widget w, XtPointer clid, XtPointer calld)
+{
+	mo_window *win = (mo_window *) clid;
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "[IMG] Multi image load callback\n");
+#endif
+	if (win->multi_image_load)
+		DoMultiLoad = 1;
+}
+
+void ResetMultiLoad()
+{
+	HTBTElement *ele;
+	MultiInfo *multi;
+
+	/* Safe to reset it here */
+	mo_set_image_cache_nuke_point();
+
+	/* Call WWW2 to clean up streams and files */
+	if (image_loads) {
+		HTResetMultiLoad();
+		ele = HTBTree_next(image_loads, NULL);
+	} else {
+		return;
+	}
+
+	while (ele) {
+		multi = (MultiInfo *)HTBTree_object(ele);
+		if (multi->url)
+			free(multi->url);
+		if (multi->filename)
+			free(multi->filename);
+		if (multi->referer)
+			free(multi->referer);
+		ele = HTBTree_next(image_loads, ele);
+	}
+	HTBTreeAndObject_free(image_loads);
+	image_loads = NULL;
+}
+
+/* Compare routine for image_loads BTree */
+static int compare_multi(MultiInfo *m1, MultiInfo *m2)
+{
+    return my_strcasecmp(m1->url, m2->url);
+}
+
+
+/* Start multiple image loading */
+static void StartMultiLoad(HTMLWidget hw, char *cached_url)
+{
+	HTBTree *images;
+	HTBTElement *ele, *next;
+	MultiInfo *multi;
+	ImageInfo *cached;
+	char *url;
+	MultiInfo new;
+	int start_multi = 0;
+	static int init = 0;
+
+	if (!init) {
+		HTMultiLoadLimit = get_pref_int(eMULTIPLE_IMAGE_LIMIT);
+		if (HTMultiLoadLimit < 2) {
+			HTMultiLoadLimit = 2;
+			set_pref_int(eMULTIPLE_IMAGE_LIMIT, 2);
+		}
+		init = 1;
+	}
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "[IMG] Starting multi load\n");
+#endif
+	if (!image_loads)
+		image_loads = HTBTree_new((HTComparer) compare_multi);
+
+	/* Create multi load list with cache info, etc. */
+	images = hw->html.image_src;
+	next = HTBTree_next(images, NULL);
+	while (next) {
+		ele = next;
+		next = HTBTree_next(images, ele);
+
+		/* Get the full URL */
+		url = GetImageURL(hw, (char *)HTBTree_object(ele), cached_url);
+		if (!url || my_strncasecmp(url, "http", 4)) {
+#ifndef DISABLE_TRACE
+			if (srcTrace)
+				fprintf(stderr, "[IMG] Bad MultiLoad URL\n");
+#endif
+			continue;
+		}
+		/* Already on loading list?  Inline frames need this check. */
+		new.url = url;
+		if (HTBTree_search(image_loads, &new)) {
+			free(url);
+			continue;
+		}
+
+		/* Create entry on image load list */
+		multi = (MultiInfo *)calloc(1, sizeof(MultiInfo));
+		multi->url = url;
+		HTBTree_add(image_loads, multi);
+
+	        if (imagekill_sites) {
+			int i;
+
+			for (i = 0; imagekill_sites[i]; i++) {
+				if (strstr(url, imagekill_sites[i])) {
+					multi->killed = 1;
+					break;
+				}
+			}
+			if (multi->killed)
+				continue;
+		}
+
+		/* Already in the cache? */
+        	cached = mo_fetch_cached_image_data(url);
+        	if (cached && cached->image_data) {
+			multi->cached = (void *)cached;
+			multi->loaded = 1;
+		} else {
+			/* Not in cache and not previously on list */
+			start_multi = 1;
+			multi->referer = strdup(cached_url);
+		}
+	}
+
+	HTBTreeAndObject_free(images);
+	hw->html.image_src = NULL;
+
+	/* Any not in cache or loaded (or being loaded) to file? */
+	if (start_multi) {
+		if (HTStartMultiLoad(image_loads) == -1)
+			interrupted = 1;
+	}
+}
+
+static void killimage(HTMLWidget hw, ImageInfo *img_info)
+{
+	ImageInfo *bim = BlankImageData(hw);
+
+	img_info->width = bim->width;
+	img_info->height = bim->height;
+	img_info->internal = 3;
+	img_info->delayed = 0;
+	img_info->fetched = 0;
+	img_info->image_data = bim->image_data;
+	img_info->image = bim->image;
+#ifdef CCI
+	if (cci_event) 
+		MoCCISendEventOutput(IMAGE_LOADED);
+#endif
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "[IMG] Killed it\n");
+#endif
+}
+
 /* Image resolution function. */
 void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 {
 	ImageInfo *img_info = (ImageInfo *) calld;
 	mo_window *win = (mo_window *) clid;
-	mo_window *load_win;
+	mo_window *load_win = (mo_window *) clid;
 	HTMLWidget hw = (HTMLWidget) w;
-	ImageInfo *cache_info;
+	ImageInfo *cache_info = NULL;
 	ImageInfo *ainfo, *previous, *tmp;
 	AnimInfo *anim_info;
-	char *src = NULL;
-	int width, height, aw, ah;
-	int x, y, ax, ay;
-	XColor colrs[256];
-	XColor acolrs[256];
-	char *filename;
-	char *url;
-	int rc;
-	int bg, abg;
-	unsigned char *bit_data;
-	unsigned char *adata;
-	int animated;
-	int delay;
-	int disposal, adisposal;
-	int i, count;
+	MultiInfo new;
+	MultiInfo *multi_info;
+	XColor colrs[256], acolrs[256];
+	char *filename, *url;
+	unsigned char *bit_data, *adata, *alpha;
+	int animated, delay, disposal, adisposal;
+	int width, height, aw, ah, x, y, ax, ay;
+	int rc, bg, abg, count, i;
 	FILE *gif_fp = NULL;
-	unsigned char *alpha;
 	static init = 0;
 	static Display *disp;
 	static unsigned int depth;
 	static char *referer = NULL;
 
-        img_info->fetched = 0;
-        img_info->internal = 0;
-        img_info->cached = 0;
-        img_info->width = 0;
-        img_info->height = 0;
+        img_info->fetched = img_info->internal = img_info->cached = 0;
+        img_info->width = img_info->height = 0;
         img_info->num_colors = 0;
-        img_info->image_data = NULL;
-        img_info->clip_data = NULL;
+        img_info->image_data = img_info->clip_data = NULL;
 	img_info->transparent = 0;
 	img_info->bg_index = -1;
-	img_info->image = (Pixmap)NULL;
-	img_info->anim_image = (Pixmap)NULL;
+	img_info->image = img_info->anim_image = (Pixmap)NULL;
 	img_info->text = NULL;
 	img_info->is_bg_image = 0;
 	img_info->aligned = 0;
@@ -394,22 +583,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		depth = DefaultDepthOfScreen(XtScreen(w));
 		init = 1;
 	}
-	if (!w) {
-		fprintf(stderr, "[IMG] No Widget!\n");
-		return;
-	}
 
-	/* Get cleaned up copy of source url */
-	if (img_info->src)
-		src = mo_clean_and_escape_url(img_info->src, 0);
-	if (!src)
-		return;
-
-#ifndef DISABLE_TRACE
-        if (srcTrace)
-		fprintf(stderr, "[IMG] Processing src = '%s'\n", src);
-#endif
-	load_win = win;
 	/* Get top level mo_window */
 	while (win->is_frame)
 		win = win->parent;
@@ -418,49 +592,71 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 	    strcmp(load_win->cached_url, cached_url)) {
 		if (cached_url)
 			free(cached_url);
-		cached_url = strdup(load_win->cached_url ?
-				    load_win->cached_url : "lose");
-		if (load_win->cached_url)
-			free(load_win->cached_url);
-		load_win->cached_url = strdup(cached_url);
+		if (load_win->cached_url) {
+			cached_url = strdup(load_win->cached_url);
+		} else {
+			cached_url = strdup("lose");
+			load_win->cached_url = strdup("lose");
+		}
 	}
 
-	url = mo_url_canonicalize(src, load_win->cached_url);
+	/* Can do multi load now that we have cached url */
+	if (DoMultiLoad && hw->html.image_src) {
+		DoMultiLoad = 0;
+		if (!interrupted)
+			StartMultiLoad(hw, cached_url);
+	}
+
+	/* Get the URL */
+	if (!(url = GetImageURL(hw, img_info->src, cached_url)))
+		return;
 
 	free(img_info->src);
 	img_info->src = strdup(url);
-	free(src);
 
-	/* First, should we just kill it? */
-        if (imagekill_sites) {
-        	for (i = 0; imagekill_sites[i]; i++) {
-                	if (strstr(url, imagekill_sites[i])) {
-		    		ImageInfo *bim;
-
-		    		bim = BlankImageData(hw);
-		    		img_info->width = bim->width;
-		    		img_info->height = bim->height;
-		    		img_info->internal = 3;
-		    		img_info->delayed = 0;
-		    		img_info->fetched = 0;
-		    		img_info->image_data = bim->image_data;
-		    		img_info->image = bim->image;
-#ifdef CCI
-		    		if (cci_event) 
-					MoCCISendEventOutput(IMAGE_LOADED);
-#endif
-#ifndef DISABLE_TRACE
-	            		if (srcTrace)
-					fprintf(stderr, "[IMG] Killed it\n");
-#endif
-		   		free(url);
-		    		return;
-                	}
-            	}
+	/* Already on loading list? */
+	new.url = url;
+	if (multi_info = HTBTree_search(image_loads, &new)) {
+		if (multi_info->killed) {
+			killimage(hw, img_info);
+			free(url);
+			return;
+		}
+		if (multi_info->cached) {
+			cache_info = (ImageInfo *)multi_info->cached;
+		} else if (multi_info->loaded) {
+			filename = strdup(multi_info->filename);
+			goto multi_loaded;
+		} else if (!multi_info->failed && !interrupted) {
+			/* Go finish loading it */
+			if (HTMultiLoad(multi_info) == -1)
+			    interrupted = 1;
+			/* Could have loaded prior to the interrupt */
+			if (multi_info->loaded) {
+			    filename = strdup(multi_info->filename);
+			    goto multi_loaded;
+			}
+			free(url);
+			return;
+		} else {
+			free(url);
+			return;
+		}
+	} else {
+		/* Should we kill it? */
+		if (imagekill_sites) {
+        		for (i = 0; imagekill_sites[i]; i++) {
+                		if (strstr(url, imagekill_sites[i])) {
+					killimage(hw, img_info);
+			   		free(url);
+			    		return;
+  		              	}
+    	        	}
+		}
+		/* Next look in the cache */
+ 	       cache_info = mo_fetch_cached_image_data(url);
         }
 
-	/* Second, look in the cache */
-        cache_info = mo_fetch_cached_image_data(url);
         if (cache_info && cache_info->image_data) {
         	img_info->internal = 0;
         	img_info->delayed = 0;
@@ -480,10 +676,10 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			img_info->next = NULL;
 		} else if (cache_info->anim_info && win->image_animation) {
 			img_info->anim_info =
-				(AnimInfo *)malloc(sizeof(AnimInfo));
+					   (AnimInfo *)malloc(sizeof(AnimInfo));
 			img_info->anim_info->hw = hw;
 			img_info->anim_info->drawing =
-				img_info->anim_info->hw->html.draw_count;
+				       img_info->anim_info->hw->html.draw_count;
 			img_info->anim_info->count = cache_info->iterations;
 			img_info->anim_info->start = img_info;
 			img_info->anim_info->next = NULL;
@@ -504,10 +700,9 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			tmp = cache_info->next;
 			previous = img_info;
 			while (tmp) {
-				ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+				ainfo = GetImageRec();
 				previous->next = ainfo;
 				previous = ainfo;
-				ainfo->next = NULL;
 		  	     	ainfo->transparent = tmp->transparent;        
 		  	     	ainfo->bg_index = tmp->bg_index;        
 				ainfo->width = tmp->width;
@@ -519,13 +714,16 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		                ainfo->clip_data = tmp->clip_data;
 		                ainfo->alpha = tmp->alpha;
 				ainfo->delay = tmp->delay;
+				/** GetImageRec zeros them
+				ainfo->next = NULL;
 				ainfo->image = (Pixmap)NULL;
 				ainfo->clip = None;
 				ainfo->internal = 0;
 				ainfo->anim_info = NULL;
+				**/
 				ainfo->num_colors = tmp->num_colors;
-				for (i = 0; i < ainfo->num_colors; i++)
-					ainfo->colrs[i] = tmp->colrs[i];
+				memcpy(ainfo->colrs, tmp->colrs,
+		    		       ainfo->num_colors * sizeof(XColor));
 				tmp = tmp->next;
 			}
 		} else {
@@ -543,8 +741,8 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		img_info->x = cache_info->x;
 		img_info->y = cache_info->y;
 		img_info->num_colors = cache_info->num_colors;
-		for (i = 0; i < img_info->num_colors; i++)
-			img_info->colrs[i] = cache_info->colrs[i];
+		memcpy(img_info->colrs, cache_info->colrs,
+		       img_info->num_colors * sizeof(XColor));
 #ifdef CCI
 		if (cci_event) 
 			MoCCISendEventOutput(IMAGE_LOADED);
@@ -562,8 +760,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		free (url);
 #ifndef DISABLE_TRACE
 		if (srcTrace)
-			fprintf(stderr, "[IMG] Return interrupted %d\n",
-				interrupted);
+			fprintf(stderr, "[IMG] Interrupted %d\n", interrupted);
 #endif
 		return;
 	}
@@ -586,18 +783,18 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 	HTReferer = referer;
 
 	filename = mo_tmpnam(url);
-        rc = mo_pull_er_over_virgin(url, filename);
-
-	if (!rc) {
+        if (!(rc = mo_pull_er_over_virgin(url, filename))) {
 #ifndef DISABLE_TRACE
                 if (srcTrace)
 			fprintf(stderr,
-				"mo_pull_er_over_virgin returned %d\n", rc);
+				"[IMG] mo_pull_er_over_virgin returned NULL\n");
 #endif
 		free(filename);
 		free(url);
 		return;
 	}
+
+ multi_loaded:
 
 #ifdef CCI
 	/* Send it through CCI if need be */
@@ -605,7 +802,6 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 #endif
 	bit_data = ReadBitmap(w, filename, &width, &height, &x, &y, colrs, &bg,
 		              &animated, &delay, &disposal, &gif_fp, &alpha);
-
 	if (!bit_data) {
 #ifndef DISABLE_TRACE
 		if (srcTrace)
@@ -616,7 +812,6 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		free(url);
 		return;
 	}
-
 	if (gif_fp && win->image_animation) {
 		count = 2;
 		if (win->min_animation_delay > delay) {
@@ -646,11 +841,10 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		previous = img_info;
 		previous->next = NULL;
 		while (adata = ReadGIF(gif_fp, &aw, &ah, acolrs, &abg, count,
-				       &i, &delay, &ax, &ay, &disposal, NULL)) {
-			ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+				       &i, &delay, &ax, &ay, &disposal)) {
+			ainfo = GetImageRec();
 			previous->next = ainfo;
 			previous = ainfo;
-			ainfo->next = NULL;
 		       	ainfo->bg_index = abg;        
 			ainfo->width = aw;
 			ainfo->height = ah;
@@ -672,11 +866,14 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			} else {
 				ainfo->delay = delay;
 			}
-			ainfo->image = (Pixmap)NULL;
+			/** GetImageRec zeros them
 			ainfo->clip = None;
+			ainfo->next = NULL;
+			ainfo->image = (Pixmap)NULL;
 			ainfo->alpha = NULL;
 			ainfo->internal = 0;
 			ainfo->anim_info = NULL;
+			**/
 			ProcessImageData(w, ainfo, acolrs);
 			/* Force animation image if transparent */
 			if (!adisposal && ainfo->transparent && (disposal == 2))
@@ -688,14 +885,14 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		} else {
 			anim_info->count = img_info->iterations = 1;
 		}
-		if (count == 2) { /* Not animated */
+		if (count == 2) {  /* Not animated */
 			img_info->iterations = -1;
 			img_info->next = NULL;
 			if (anim_info)
 				free(anim_info);
 			anim_info = NULL;
 		} else if (adisposal) {
-			/* Has at least one disposal == 1 or has mixed
+			/* Has at least one disposal == 1, has mixed
 			 * image sizes or has transparent image with
 			 * disposal == 2 */
 			if (!img_info->cw_only) {
@@ -762,13 +959,14 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		}
 		image_file_fnam = NULL;
 	}
-
-	cache_info = (ImageInfo *)malloc(sizeof(ImageInfo));
+	cache_info = GetImageRec();
         cache_info->bg_index = img_info->bg_index;        
-       	cache_info->internal = 0;
-       	cache_info->delayed = 0;
 	cache_info->width = width;
 	cache_info->height = height;
+	/** GetImageRec zeros them
+       	cache_info->internal = 0;
+       	cache_info->delayed = 0;
+	**/
 	cache_info->awidth = img_info->awidth;
 	cache_info->aheight = img_info->aheight;
 	cache_info->x = x;
@@ -784,8 +982,8 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
         cache_info->clip_data = img_info->clip_data;
         cache_info->alpha = img_info->alpha;
 	cache_info->transparent = img_info->transparent;
-	for (i = 0; i < img_info->num_colors; i++)
-		cache_info->colrs[i] = img_info->colrs[i];
+	memcpy(cache_info->colrs, img_info->colrs,
+	       img_info->num_colors * sizeof(XColor));
 	cache_info->anim_info = anim_info;
 	if (img_info->cw_only) {
 		if (anim_info) {
@@ -798,10 +996,9 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		tmp = img_info->next;
 		previous = cache_info;
 		while (tmp) {
-			ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+			ainfo = GetImageRec();
 			previous->next = ainfo;
 			previous = ainfo;
-			ainfo->next = NULL;
 	  	     	ainfo->transparent = tmp->transparent;        
 	  	     	ainfo->bg_index = tmp->bg_index;        
 			ainfo->width = tmp->width;
@@ -812,14 +1009,17 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			ainfo->image_data = tmp->image_data;
 	                ainfo->clip_data = tmp->clip_data;
 			ainfo->delay = tmp->delay;
+			ainfo->alpha = tmp->alpha;
+			/** GetImageRec zeros them
+			ainfo->next = NULL;
 			ainfo->image = (Pixmap)NULL;
 			ainfo->clip = None;
-			ainfo->alpha = tmp->alpha;
 			ainfo->internal = 0;
 			ainfo->anim_info = NULL;
+			**/
 			ainfo->num_colors = tmp->num_colors;
-			for (i = 0; i < ainfo->num_colors; i++)
-				ainfo->colrs[i] = tmp->colrs[i];
+			memcpy(ainfo->colrs, tmp->colrs,
+			       ainfo->num_colors * sizeof(XColor));
 			tmp = tmp->next;
 		}
 	} else {
@@ -831,6 +1031,8 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			url, cache_info);
 #endif
 	mo_cache_data(url, (void *)cache_info, mo_cache_image);
+	if (multi_info)
+		multi_info->cached = (void *)cache_info; 
 
 	free(url);
 
@@ -849,8 +1051,6 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 mo_status mo_free_image_data(void *ptr)
 {
 	ImageInfo *img = (ImageInfo *)ptr;
-	ImageInfo *next = img->next;
-	ImageInfo *tmp;
 
 #ifndef DISABLE_TRACE
 	if (srcTrace || cacheTrace)
@@ -859,26 +1059,8 @@ mo_status mo_free_image_data(void *ptr)
 	if (!img)
 		return mo_fail;
 
-	if (img->image_data)
-		free(img->image_data);
-	if (img->clip_data)
-		free(img->clip_data);
-	if (img->alpha)
-		free(img->alpha);
-	/* Free any animation */
-	while (next) {
-		tmp = next;
-		next = tmp->next;
-		if (tmp->image_data)
-			free(tmp->image_data);
-		if (tmp->clip_data)
-			free(tmp->clip_data);
-		if (tmp->alpha)
-			free(tmp->alpha);
-		free(tmp);
-	}
-
-	free(img);  /* Free the struc also */
+	img->cached = 0;
+	FreeImageInfo(img, NULL);
 
 	return mo_succeed;
 }

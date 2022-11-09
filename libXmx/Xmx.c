@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -74,6 +74,20 @@ extern char *strdup();
 
 extern Pixmap dialogError, dialogInformation, dialogQuestion, dialogWarning;
 
+static XmString blank = NULL;
+static Display *dsp = NULL;
+
+/* Modal dialog stuff */
+static Widget Xmx_shell = NULL;
+static Widget InfoDialog = NULL;
+static Widget PassDialog = NULL;
+static Widget PromptDialog = NULL;
+static Widget QuestDialog = NULL;
+static Widget InfoParent = NULL;
+static Widget PassParent = NULL;
+static Widget PromptParent = NULL;
+static Widget QuestParent = NULL;
+
 /* ---------------------------- FILE VARIABLES ---------------------------- */
 
 /* Variables accessed through Xmx.h as extern. */
@@ -94,6 +108,7 @@ static String Xmx_button2_help = NULL;
 static String Xmx_button3_help = NULL;
 static String Xmx_button4_help = NULL;
 static String Xmx_button5_help = NULL;
+int XmxBlockTimers = 0;
 
 /* Counter for values returned from XmxMakeNewUniqid. */
 static int Xmx_uniqid_counter = 0;
@@ -101,14 +116,11 @@ static int Xmx_uniqid_counter = 0;
 /* Flag for whether or not XmxSetUniqid has ever been called. */
 static int Xmx_uniqid_has_been_set = 0;
 
-
 /* --------------------------- UNIQID FUNCTIONS --------------------------- */
 
 int XmxMakeNewUniqid(void)
 {
-  Xmx_uniqid_counter++;
-
-  return Xmx_uniqid_counter;
+  return (++Xmx_uniqid_counter);
 }
 
 void XmxSetUniqid(int uniqid)
@@ -130,39 +142,33 @@ void XmxZeroUniqid(void)
 int XmxExtractUniqid(int cd)
 {
   /* Pull the high 16 bits, if uniqid has been set. */
-  if (Xmx_uniqid_has_been_set) {
+  if (Xmx_uniqid_has_been_set)
       return (cd >> 16);
-  } else {
-      return 0;
-  }
+  return 0;
 }
 
 int XmxExtractToken(int cd)
 {
   /* Pull the low 16 bits, if uniqid has been set. */
-  if (Xmx_uniqid_has_been_set) {
+  if (Xmx_uniqid_has_been_set)
       return ((cd << 16) >> 16);
-  } else {
-      return cd;
-  }
+  return cd;
 }
 
 /* This function should be called by every Xmx routine
-   when registering a callback or event handler. */
+ * when registering a callback or event handler. */
 /* This is PRIVATE but accessible to Xmx2.c also. */
 int _XmxMakeClientData(int token)
 {
-  if (Xmx_uniqid_has_been_set) {
+  if (Xmx_uniqid_has_been_set)
       return ((Xmx_uniqid << 16) | token);
-  } else {
-      return token;
-  }
+  return token;
 }
 
 /* -------------------------- INTERNAL CALLBACKS -------------------------- */
 
 /* Internal routine to unmanage file selection box on Cancel. */
-static XmxCallback(_XmxCancelCallback)
+static XmxCallback(XmxCancelCallback)
 {
   XtUnmanageChild(w);
   return;
@@ -221,8 +227,8 @@ static void XmxCenteringResize(CompositeWidget w, XConfigureEvent *event,
                 XmNwidth, &w_width,
                 NULL);
   XtVaSetValues(children[0],
-                XmNx, width/2 - w_width/2,
-                XmNy, height/2 - w_height/2,
+                XmNx, width / 2 - w_width / 2,
+                XmNy, height / 2 - w_height / 2,
                 NULL);
   return;
 }
@@ -241,7 +247,14 @@ void XmxStartup(void)
   return;
 }
 
-/* sets an arg */
+/* Set Display to use */
+void XmxSetDisplay(Display *disp)
+{
+  dsp = disp;
+  return;
+}
+
+/* Set an arg */
 void XmxSetArg(String arg, XtArgVal val)
 {
   XtSetArg(Xmx_wargs[Xmx_n], arg, val);
@@ -251,8 +264,19 @@ void XmxSetArg(String arg, XtArgVal val)
 
 void XmxSetValues(Widget w)
 {
-  XtSetValues(w, Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
+  if (Xmx_n) {
+      XtSetValues(w, Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+  }
+  return;
+}
+
+void XmxGetValues(Widget w)
+{
+  if (Xmx_n) {
+      XtGetValues(w, Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+  }
   return;
 }
 
@@ -261,9 +285,9 @@ void XmxManageRemanage(Widget w)
 {
   if (XtIsManaged(w)) {
       if (XtIsShell(w)) {
-          XRaiseWindow(XtDisplay(w), XtWindow(w));
+          XRaiseWindow(dsp, XtWindow(w));
       } else {
-          XMapRaised(XtDisplay(w), XtWindow(XtParent(w)));
+          XMapRaised(dsp, XtWindow(XtParent(w)));
       }
   } else {
       XtManageChild(w);
@@ -274,9 +298,11 @@ void XmxManageRemanage(Widget w)
 /* args do nothing */
 void XmxSetSensitive(Widget w, int state)
 {
-  assert(state == XmxSensitive || state == XmxUnsensitive);
-  XtSetSensitive(w, (state == XmxSensitive) ? True : False);
-
+  if ((state != XmxSensitive) && (state != XmxUnsensitive)) {
+      fprintf(stderr, "Bug in XmxSetSensitive.  State = %d\n", state);
+  } else {
+      XtSetSensitive(w, (state == XmxSensitive) ? True : False);
+  }
   return;
 }
 
@@ -300,7 +326,6 @@ Widget XmxMakePushButton(Widget parent, String name, XtCallbackProc cb,
                                 parent, Xmx_wargs, Xmx_n);
   XtAddCallback(Xmx_w, XmNactivateCallback, cb, 
                 (XtPointer)_XmxMakeClientData(cb_data));
-
   if (xmstr)
       XmStringFree(xmstr);
 
@@ -336,7 +361,6 @@ Widget XmxMakeBlankButton(Widget parent, XtCallbackProc cb, int cb_data)
                                 parent, Xmx_wargs, Xmx_n);
   XtAddCallback(Xmx_w, XmNactivateCallback, cb, 
                 (XtPointer)_XmxMakeClientData(cb_data));
-  
   Xmx_n = 0;
   return Xmx_w;
 }
@@ -354,7 +378,6 @@ Widget XmxMakeCommand(Widget parent, String prompt, XtCallbackProc cb,
 			        Xmx_wargs, Xmx_n);
   XtAddCallback(Xmx_w, XmNcommandEnteredCallback, cb, 
 		(XtPointer)_XmxMakeClientData(cb_data));
-
   XmStringFree(xmstr);
 
   Xmx_n = 0;
@@ -394,7 +417,7 @@ Widget XmxMakeDrawingArea(Widget parent, int width, int height)
 /* args work */
 Widget XmxMakeRadioBox(Widget parent)
 {
-  /* Could set XmxNspacing here to avoid having to play with
+  /* Set XmNspacing here to avoid having to play with
    * margins for each togglebutton. */
   XmxSetArg(XmNspacing, (XtArgVal)0);
   XmxSetArg(XmNentryClass, (XtArgVal)xmToggleButtonGadgetClass);
@@ -439,9 +462,12 @@ Widget XmxMakeToggleButton(Widget parent, String name, XtCallbackProc cb,
 /* args work */
 void XmxSetToggleButton(Widget button, int set_state)
 {
-  assert(set_state == XmxSet || set_state == XmxUnset);
-  XmToggleButtonSetState(button, (set_state == XmxSet) ? True : False, False);
-
+  if ((set_state != XmxSet) && (set_state != XmxUnset)) {
+      fprintf(stderr, "Bug in XmxSetToggleButton. set_state = %d\n", set_state);
+  } else {
+      XmToggleButtonSetState(button,
+			     (set_state == XmxSet) ? True : False, False);
+  }
   Xmx_n = 0;
   return;
 }
@@ -467,12 +493,10 @@ Widget XmxMakeScale(Widget parent, XtCallbackProc cb, int cb_data,
   }
   Xmx_w = XtCreateManagedWidget("scale", xmScaleWidgetClass, parent,
                                 Xmx_wargs, Xmx_n);
-
   XtAddCallback(Xmx_w, XmNvalueChangedCallback, cb, 
 		(XtPointer)_XmxMakeClientData(cb_data));
   XtAddCallback(Xmx_w, XmNdragCallback, cb, 
                 (XtPointer)_XmxMakeClientData(cb_data));
-
   Xmx_n = 0;
   return Xmx_w;
 }
@@ -491,9 +515,6 @@ void XmxAdjustScale(Widget scale, int val)
 /* args work */
 Widget XmxMakeFrame(Widget parent, int shadow)
 {
-  assert(shadow == XmxShadowIn || shadow == XmxShadowOut ||
-	 shadow == XmxShadowEtchedIn || shadow == XmxShadowEtchedOut);
-
   switch(shadow) {
     case XmxShadowIn:
       XmxSetArg(XmNshadowType, (XtArgVal)XmSHADOW_IN);
@@ -507,6 +528,8 @@ Widget XmxMakeFrame(Widget parent, int shadow)
     case XmxShadowEtchedOut:
       XmxSetArg(XmNshadowType, (XtArgVal)XmSHADOW_ETCHED_OUT);
       break;
+    default:
+      fprintf(stderr, "Bug in XmxMakeFrame.  Shadow = %d\n", shadow);
   }
   Xmx_w = XtCreateManagedWidget("frame", xmFrameWidgetClass,
                                 parent, Xmx_wargs, Xmx_n);
@@ -647,15 +670,15 @@ Widget XmxMakeVerticalBboard(Widget parent)
 /* args work */
 Widget XmxMakeVerticalBboardWithFont(Widget parent, String fontname)
 {
-  XFontStruct *font;
   XmFontList fontlist;
+  XFontStruct *font = XLoadQueryFont(dsp, fontname);
 
-  font = XLoadQueryFont(XtDisplay(parent), fontname);
-  if (font != (XFontStruct *)NULL) {
+  if (font) {
       fontlist = XmFontListCreate(font, XmSTRING_DEFAULT_CHARSET);
       XmxSetArg(XmNbuttonFontList, (XtArgVal)fontlist);
       XmxSetArg(XmNlabelFontList, (XtArgVal)fontlist);
       XmxSetArg(XmNtextFontList, (XtArgVal)fontlist);
+      /* fontlist can be freed here, but may be better to leave it cached? */
   }
   XmxSetArg(XmNmarginWidth, (XtArgVal)0);
   XmxSetArg(XmNmarginHeight, (XtArgVal)0);
@@ -752,8 +775,14 @@ Widget XmxMakeBlankLabel(Widget parent)
 
 /* ------------------------------- DIALOGS -------------------------------- */
 
+static XmxCallback(XmxDeleteDialogCallback)
+{
+  XtDestroyWidget(w);
+}
+
 /* args work */
-Widget XmxMakeErrorDialog(Widget parent, String name, String title)
+/* Manages and deletes itself */
+void XmxMakeErrorDialog(Widget parent, String name, String title)
 {
   XmString message = XmStringCreateLtoR(name, XmSTRING_DEFAULT_CHARSET);
   XmString dialog = XmStringCreateLtoR(title, XmSTRING_DEFAULT_CHARSET);
@@ -766,15 +795,46 @@ Widget XmxMakeErrorDialog(Widget parent, String name, String title)
   XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_CANCEL_BUTTON));
   XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_HELP_BUTTON));
 
+  XtAddCallback(Xmx_w, XmNokCallback, XmxDeleteDialogCallback, NULL);
+
+  XtManageChild(Xmx_w);
+
   XmStringFree(message);
   XmStringFree(dialog);
 
   Xmx_n = 0;
-  return Xmx_w;
+  return;
 }
 
 /* args work */
-Widget XmxMakeInfoDialog(Widget parent, String name, String title)
+/* Manages and deletes itself */
+void XmxMakeWarningDialog(Widget parent, String name, String title)
+{
+  XmString message = XmStringCreateLtoR(name, XmSTRING_DEFAULT_CHARSET);
+  XmString dialog = XmStringCreateLtoR(title, XmSTRING_DEFAULT_CHARSET);
+
+  XmxSetArg(XmNmessageString, (XtArgVal)message);
+  XmxSetArg(XmNdialogTitle, (XtArgVal)dialog);
+  XmxSetArg(XmNsymbolPixmap, (XtArgVal)dialogWarning);
+
+  Xmx_w = XmCreateWarningDialog(parent, "warning", Xmx_wargs, Xmx_n);
+  XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_CANCEL_BUTTON));
+  XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_HELP_BUTTON));
+
+  XtAddCallback(Xmx_w, XmNokCallback, XmxDeleteDialogCallback, NULL);
+
+  XtManageChild(Xmx_w);
+
+  XmStringFree(message);
+  XmStringFree(dialog);
+
+  Xmx_n = 0;
+  return;
+}
+
+/* args work */
+/* Manages and deletes itself */
+void XmxMakeInfoDialog(Widget parent, String name, String title)
 {
   XmString message = XmStringCreateLtoR(name, XmSTRING_DEFAULT_CHARSET);
   XmString dialog = XmStringCreateLtoR(title, XmSTRING_DEFAULT_CHARSET);
@@ -787,14 +847,19 @@ Widget XmxMakeInfoDialog(Widget parent, String name, String title)
   XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_CANCEL_BUTTON));
   XtUnmanageChild(XmMessageBoxGetChild(Xmx_w, XmDIALOG_HELP_BUTTON));
 
+  XtAddCallback(Xmx_w, XmNokCallback, XmxDeleteDialogCallback, NULL);
+
+  XtManageChild(Xmx_w);
+
   XmStringFree(message);
   XmStringFree(dialog);
 
   Xmx_n = 0;
-  return Xmx_w;
+  return;
 }
 
 /* args work */
+/* Does not manage or delete itself */
 Widget XmxMakeQuestionDialog(Widget parent, String question, String title,
 			     XtCallbackProc cb, int yes_token, int no_token)
 {
@@ -833,23 +898,33 @@ XmString XmxMakeXmstrFromFile(String filename)
 {
   FILE *f;
   char mstr[81];
-  XmString xmstr;
+  XmString xmstr = NULL;
+  XmString str1, str2, sep;
 
   f = fopen(filename, "r");
-  assert(f != (FILE *)NULL);
+  if (!f) {
+      fprintf(stderr, "Bug in XmxMakeXmstrFromFile.  Failed to open file.\n");
+      return(NULL);
+  }
+  sep = XmStringSeparatorCreate();
 
-  xmstr = (XmString)NULL;
   while (!feof(f)) {
-      if (fgets(mstr, 80, f) == (char *)NULL)
+      if (!fgets(mstr, 80, f))
           break;
       mstr[strlen(mstr) - 1] = '\0';
-      if (xmstr != (XmString)NULL)
-          xmstr = XmStringConcat(xmstr, XmStringSeparatorCreate());
-      /* Used to be XmStringCreate; changed to standard call. */
-      xmstr = XmStringConcat(xmstr,
-			    XmStringCreateLtoR(mstr, XmSTRING_DEFAULT_CHARSET));
+      if (xmstr) {
+	  str1 = xmstr;
+          xmstr = XmStringConcat(str1, sep);
+	  XmStringFree(str1);
+      }
+      str1 = xmstr;
+      str2 = XmStringCreateLtoR(mstr, XmSTRING_DEFAULT_CHARSET);
+      xmstr = XmStringConcat(str1, str2);
+      XmStringFree(str1);
+      XmStringFree(str2);
   }
 
+  XmStringFree(sep);
   fclose(f);
   return xmstr;
 }
@@ -857,10 +932,7 @@ XmString XmxMakeXmstrFromFile(String filename)
 /* args do nothing */
 XmString XmxMakeXmstrFromString(String mstr)
 {
-  XmString xmstr;
-
-  xmstr = XmStringCreateLtoR(mstr, XmSTRING_DEFAULT_CHARSET);
-  return xmstr;
+  return XmStringCreateLtoR(mstr, XmSTRING_DEFAULT_CHARSET);
 }
 
 /* args work */
@@ -904,7 +976,7 @@ Widget XmxMakeFileSBDialog(Widget parent, String title, String selection_txt,
   XmxSetArg(XmNdialogTitle, (XtArgVal)dialog_title);
   /* Can't set width of box with XmNwidth here... why not? */
 
-  /* This will cause the dialog to only resize if needed. That 
+  /* This will cause the dialog to only resize if needed.  That 
    * way it won't be growing and shrinking all the time... very annoying. */
   XmxSetArg(XmNresizePolicy, (XtArgVal)XmRESIZE_GROW);
 
@@ -913,8 +985,8 @@ Widget XmxMakeFileSBDialog(Widget parent, String title, String selection_txt,
   XtUnmanageChild(XmFileSelectionBoxGetChild(Xmx_w, XmDIALOG_HELP_BUTTON));
   XtAddCallback(Xmx_w, XmNokCallback, cb,
                 (XtPointer)_XmxMakeClientData(cb_data));
-  XtAddCallback(Xmx_w, XmNcancelCallback, 
-                (XtCallbackProc)_XmxCancelCallback, 0);
+  XtAddCallback(Xmx_w, XmNcancelCallback,
+		(XtCallbackProc)XmxCancelCallback, NULL);
 
   /* Set selection label to specified selection_txt. */
   Xmx_n = 0;
@@ -948,7 +1020,7 @@ Widget XmxMakeHelpDialog(Widget parent, XmString xmstr, String title)
 }
 
 /* Boy, this is a hack. */
-static XmxCallback(_XmxHelpTextCancelCallback)
+static XmxCallback(XmxHelpTextCancelCallback)
 {
   /* This is highly dependent on the button being four layers
    * below the dialog shell... what a ridiculous hack. */
@@ -994,7 +1066,7 @@ Widget XmxMakeHelpTextDialog(Widget parent, String str, String title,
   sep = XmxMakeHorizontalSeparator(form);
 
   /* Make an OK button. */
-  buttons_form = XmxMakeFormAndOneButton(form, _XmxHelpTextCancelCallback,
+  buttons_form = XmxMakeFormAndOneButton(form, XmxHelpTextCancelCallback,
 					 "OK", 0);
   /* Constraints for form. */
   XmxSetConstraints 
@@ -1078,7 +1150,6 @@ Widget XmxMakeHorizontalBoundary(Widget parent)
   XmxMakeHorizontalSeparator(parent);
   XmxMakeHorizontalSpacer(parent);
 
-  Xmx_n = 0;
   return Xmx_w;
 }
 
@@ -1182,7 +1253,7 @@ void XmxInstallColormaps(Widget toplevel, Widget glw)
 
   windows[0] = XtWindow(glw);
   windows[1] = XtWindow(toplevel);
-  XSetWMColormapWindows(XtDisplay(toplevel), XtWindow(toplevel), windows, 2);
+  XSetWMColormapWindows(dsp, XtWindow(toplevel), windows, 2);
   return;
 }
 
@@ -1191,36 +1262,28 @@ void XmxInstallColormapsWithOverlay(Widget toplevel, Widget glw)
   Window windows[5];
   Window overlay, popup, underlay;
   Arg args[5];
-  register int i;
-  
-  i = 0;
-  XtSetArg(args[i], GlxNoverlayWindow, &overlay); i++;
-  XtSetArg(args[i], GlxNpopupWindow, &popup); i++;
-  XtSetArg(args[i], GlxNunderlayWindow, &underlay); i++;
-  XtGetValues(glw, args, i);
-  i = 0;
-  if (overlay) {
-      windows[i] = overlay;
-      i++;
-  }
-  if (popup) {
-      windows[i] = popup;
-      i++;
-  }
-  if (underlay) {
-      windows[i] = underlay;
-      i++;
-  }
-  windows[i] = XtWindow(glw); i++;
-  windows[i] = XtWindow(toplevel); i++;
-  XSetWMColormapWindows(XtDisplay(toplevel), XtWindow(toplevel), windows, i);
+  register int i = 0;
+
+  XtSetArg(args[0], GlxNoverlayWindow, &overlay);
+  XtSetArg(args[1], GlxNpopupWindow, &popup);
+  XtSetArg(args[2], GlxNunderlayWindow, &underlay);
+  XtGetValues(glw, args, 3);
+  if (overlay)
+      windows[i++] = overlay;
+  if (popup)
+      windows[i++] = popup;
+  if (underlay)
+      windows[i++] = underlay;
+  windows[i++] = XtWindow(glw);
+  windows[i++] = XtWindow(toplevel);
+  XSetWMColormapWindows(dsp, XtWindow(toplevel), windows, i);
   
   return;
 }
 
 void XmxWinset(Widget w)
 {
-  GLXwinset(XtDisplay(w), XtWindow(w));
+  GLXwinset(dsp, XtWindow(w));
   return;
 }
 #endif /* __sgi */
@@ -1269,21 +1332,18 @@ void XmxWinset(Widget w)
 void XmxApplyBitmapToLabelWidget(Widget label, String data,
 				 unsigned int width, unsigned int height)
 {
-  Display *disp;
   Pixel fg, bg;
   Pixmap pix;
 
-  disp = XtDisplay(label);
-
   Xmx_n = 0;
-  XmxSetArg(XmNforeground, (XtArgVal)(&fg));
-  XmxSetArg(XmNbackground, (XtArgVal)(&bg));
+  XmxSetArg(XmNforeground, (XtArgVal)&fg);
+  XmxSetArg(XmNbackground, (XtArgVal)&bg);
   XtGetValues(label, Xmx_wargs, Xmx_n);
   Xmx_n = 0;
 
-  pix = XCreatePixmapFromBitmapData(disp, DefaultRootWindow(disp), data, width,
-			    height, fg, bg,
-			    DefaultDepthOfScreen(DefaultScreenOfDisplay(disp)));
+  pix = XCreatePixmapFromBitmapData(dsp, DefaultRootWindow(dsp), data, width,
+			     height, fg, bg,
+			     DefaultDepthOfScreen(DefaultScreenOfDisplay(dsp)));
   XmxSetArg(XmNlabelPixmap, (XtArgVal)pix);
   XmxSetArg(XmNlabelType, (XtArgVal)XmPIXMAP);
   XmxSetValues(label);
@@ -1296,21 +1356,18 @@ void XmxApplyBitmapToLabelWidget(Widget label, String data,
 Pixmap XmxCreatePixmapFromBitmap(Widget label, String data,
 				 unsigned int width, unsigned int height)
 {
-  Display *disp;
   Pixel fg, bg;
   Pixmap pix;
 
-  disp = XtDisplay(label);
-
   Xmx_n = 0;
-  XmxSetArg(XmNforeground, (XtArgVal)(&fg));
-  XmxSetArg(XmNbackground, (XtArgVal)(&bg));
+  XmxSetArg(XmNforeground, (XtArgVal)&fg);
+  XmxSetArg(XmNbackground, (XtArgVal)&bg);
   XtGetValues(label, Xmx_wargs, Xmx_n);
   Xmx_n = 0;
 
-  pix = XCreatePixmapFromBitmapData(disp, DefaultRootWindow(disp), data, width,
-			    height, fg, bg,
-			    DefaultDepthOfScreen(DefaultScreenOfDisplay(disp)));
+  pix = XCreatePixmapFromBitmapData(dsp, DefaultRootWindow(dsp), data, width,
+			     height, fg, bg,
+			     DefaultDepthOfScreen(DefaultScreenOfDisplay(dsp)));
   return pix;
 }
 
@@ -1573,7 +1630,46 @@ Widget XmxMakeFormAndFiveButtons(Widget parent, XtCallbackProc cb,
   return Xmx_w;
 }
 
-static void _XmxYesOrNoResponse(Widget w, int *answer, XmAnyCallbackStruct *cbs)
+/* ---------------------------MODAL DIALOGS -------------------------------- */
+
+Widget XmxInitModalDialogs(Widget toplevel)
+{
+  if (Xmx_shell)
+      return Xmx_shell;
+  if (!toplevel)
+      return NULL;
+
+  Xmx_shell = XtCreatePopupShell("xmx_shell", topLevelShellWidgetClass,
+				 toplevel, NULL, 0);
+  return Xmx_shell;
+}
+
+/* Delete cached modal dialogs */
+void XmxResetModalDialogs()
+{
+  if (InfoDialog) {
+      XtDestroyWidget(InfoDialog);
+      InfoDialog = NULL;
+      InfoParent = NULL;
+  }
+  if (QuestDialog) {
+      XtDestroyWidget(QuestDialog);
+      QuestDialog = NULL;
+      QuestParent = NULL;
+  }
+  if (PassDialog) {
+      XtDestroyWidget(PassDialog);
+      PassDialog = NULL;
+      PassParent = NULL;
+  }
+  if (PromptDialog) {
+      XtDestroyWidget(PromptDialog);
+      PromptDialog = NULL;
+      PromptParent = NULL;
+  }
+}
+
+static void XmxYesOrNoResponse(Widget w, int *answer, XmAnyCallbackStruct *cbs)
 {
   if (cbs->reason == XmCR_OK) {
       *answer = 1;
@@ -1582,74 +1678,91 @@ static void _XmxYesOrNoResponse(Widget w, int *answer, XmAnyCallbackStruct *cbs)
   }
 }
 
-int XmxModalYesOrNo(Widget parent, XtAppContext app, 
+int XmxModalYesOrNo(Widget parent, XtAppContext app,
                     char *questionstr, char *yesstr, char *nostr)
 {
-  Widget dialog;
-  XmString question, yes, no, title;
-  int answer = -1;
+  Widget shell;
+  XmString question, yes, no;
+  static int answer;
 
+  answer = -1;
+
+  if (!Xmx_shell) {
+      if (QuestDialog && (parent != QuestParent)) {
+	  XtDestroyWidget(QuestDialog);
+	  QuestDialog = NULL;
+	  QuestParent = NULL;
+      }
+      shell = parent;
+  } else {
+      shell = Xmx_shell;
+  }
+
+  if (!QuestDialog) {
+      XmString title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
+
+      XmxSetArg(XmNdialogTitle, (XtArgVal)title);
+      XmxSetArg(XmNsymbolPixmap, (XtArgVal)dialogQuestion);
+      XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+      XmxSetArg(XmNmwmDecorations, MWM_DECOR_BORDER | MWM_DECOR_TITLE);
+
+      QuestDialog = XmCreateQuestionDialog(shell, "modal_dialog",
+					   Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+  
+      XtUnmanageChild(XmMessageBoxGetChild(QuestDialog, XmDIALOG_HELP_BUTTON));
+      XtAddCallback(QuestDialog, XmNokCallback, 
+                    (XtCallbackProc)XmxYesOrNoResponse, &answer);
+      XtAddCallback(QuestDialog, XmNcancelCallback, 
+                    (XtCallbackProc)XmxYesOrNoResponse, &answer);
+      XmStringFree(title);
+  }
   question = XmStringCreateLtoR(questionstr, XmSTRING_DEFAULT_CHARSET);
   yes = XmStringCreateLtoR(yesstr, XmSTRING_DEFAULT_CHARSET);
   no = XmStringCreateLtoR(nostr, XmSTRING_DEFAULT_CHARSET);
-  title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
   
-  XmxSetArg(XmNdialogTitle, (XtArgVal)title);
-  XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
   XmxSetArg(XmNmessageString, (XtArgVal)question);
   XmxSetArg(XmNokLabelString, (XtArgVal)yes);
   XmxSetArg(XmNcancelLabelString, (XtArgVal)no);
-  XmxSetArg(XmNsymbolPixmap, (XtArgVal)dialogQuestion);
+  XmxSetValues(QuestDialog);
 
-  dialog = XmCreateQuestionDialog(parent, "question_dialog", Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
-  
-  XtUnmanageChild(XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-  XtAddCallback(dialog, XmNokCallback, 
-                (XtCallbackProc)_XmxYesOrNoResponse, &answer);
-  XtAddCallback(dialog, XmNcancelCallback, 
-                (XtCallbackProc)_XmxYesOrNoResponse, &answer);
+  XtManageChild(QuestDialog);
 
-  XtManageChild(dialog);
-
+  XmxBlockTimers = 1;
   while (answer == -1) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
-  XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
-  XmUpdateDisplay(dialog);
+  XtUnmanageChild(QuestDialog);
+  XSync(dsp, 0);
+  XmUpdateDisplay(QuestDialog);
 
   XmStringFree(question);
   XmStringFree(yes);
   XmStringFree(no);
-  XmStringFree(title);
-
-  XtDestroyWidget(dialog);
 
   return answer;
 }
 
-/* ------------------------------------------------------------------------ */
-
 #define XMX_NO_ANSWER "-*-no answer, dammit, but Xmx rules, yo yo yo-*-"
 
-static void _XmxActivate(Widget w, char **answer, 
-                         XmSelectionBoxCallbackStruct *cbs)
+static void XmxActivate(Widget w, char **answer,
+			XmSelectionBoxCallbackStruct *cbs)
 {
   *answer = XMX_NO_ANSWER;
 }
 
-static void _XmxPromptForStringResponse(Widget w, char **answer, 
-                                        XmSelectionBoxCallbackStruct *cbs)
+static void XmxPromptForStringResponse(Widget w, char **answer, 
+                                       XmSelectionBoxCallbackStruct *cbs)
 {
   if (!XmStringGetLtoR(cbs->value, XmSTRING_DEFAULT_CHARSET, answer))
       *answer = XMX_NO_ANSWER;
 }
 
-static void _XmxPromptForStringCancel(Widget w, char **answer, 
-                                      XmSelectionBoxCallbackStruct *cbs)
+static void XmxPromptForStringCancel(Widget w, char **answer, 
+                                     XmSelectionBoxCallbackStruct *cbs)
 {
   *answer = XMX_NO_ANSWER;
 }
@@ -1657,45 +1770,61 @@ static void _XmxPromptForStringCancel(Widget w, char **answer,
 static void XmxMakeDialogWait(Widget parent, XtAppContext app, char *infostr,
 			      char *titlestr, char *yesstr, Pixmap pix)
 {
-  Widget dialog;
-  XmString info, yes, title;
-  char *answer = NULL;
+  Widget shell;
+  XmString title, info, yes;
+  static char *answer;
 
+  answer = NULL;
+
+  if (!Xmx_shell) {
+      if (InfoDialog && (parent != InfoParent)) {
+	  XtDestroyWidget(InfoDialog);
+	  InfoDialog = NULL;
+	  InfoParent = parent; 
+      }
+      shell = parent;
+  } else {
+      shell = Xmx_shell;
+  }
+
+  if (!InfoDialog) {
+      XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+      XmxSetArg(XmNmwmDecorations, MWM_DECOR_BORDER | MWM_DECOR_TITLE);
+
+      InfoDialog = XmCreateInformationDialog(shell, "information_dialog",
+				             Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+
+      XtUnmanageChild(XmMessageBoxGetChild(InfoDialog, XmDIALOG_HELP_BUTTON));
+      XtUnmanageChild(XmMessageBoxGetChild(InfoDialog, XmDIALOG_CANCEL_BUTTON));
+      XtAddCallback(InfoDialog, XmNokCallback,
+		    (XtCallbackProc)XmxActivate, &answer);
+  }
+  title = XmStringCreateLtoR(titlestr, XmSTRING_DEFAULT_CHARSET);
   info = XmStringCreateLtoR(infostr, XmSTRING_DEFAULT_CHARSET);
   yes = XmStringCreateLtoR(yesstr, XmSTRING_DEFAULT_CHARSET);
-  title = XmStringCreateLtoR(titlestr, XmSTRING_DEFAULT_CHARSET);
-  
   XmxSetArg(XmNdialogTitle, (XtArgVal)title);
-  XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
   XmxSetArg(XmNmessageString, (XtArgVal)info);
   XmxSetArg(XmNokLabelString, (XtArgVal)yes);
   XmxSetArg(XmNsymbolPixmap, (XtArgVal)pix);
+  XmxSetValues(InfoDialog);
 
-  dialog = XmCreateInformationDialog(parent, "information_dialog",
-				     Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
+  XtManageChild(InfoDialog);
 
-  XtUnmanageChild(XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-  XtUnmanageChild(XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
-
-  XtAddCallback(dialog, XmNokCallback, 
-                (XtCallbackProc)_XmxActivate, &answer);
-  XtManageChild(dialog);
-
-  while (answer == NULL) {
+  XmxBlockTimers = 1;
+  while (!answer) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
-  XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
-  XmUpdateDisplay(dialog);
+  XtUnmanageChild(InfoDialog);
+  XSync(dsp, 0);
+  XmUpdateDisplay(InfoDialog);
 
+  XmStringFree(title);
   XmStringFree(info);
   XmStringFree(yes);
-  XmStringFree(title);
-
-  XtDestroyWidget(dialog);
 
   return;
 }
@@ -1707,103 +1836,124 @@ void XmxMakeInfoDialogWait(Widget parent, XtAppContext app,
 }
 
 
-void XmxMakeWarningDialogWait(Widget parent, XtAppContext app, 
+void XmxMakeWarningDialogWait(Widget parent, XtAppContext app,
                               char *infostr, char *titlestr, char *yesstr)
 {
   XmxMakeDialogWait(parent, app, infostr, titlestr, yesstr, dialogWarning);
 }
 
 
-void XmxMakeErrorDialogWait(Widget parent, XtAppContext app, 
+void XmxMakeErrorDialogWait(Widget parent, XtAppContext app,
                             char *infostr, char *titlestr, char *yesstr)
 {
   XmxMakeDialogWait(parent, app, infostr, titlestr, yesstr, dialogError);
 }
 
-char *XmxModalPromptForString(Widget parent, XtAppContext app, 
+char *XmxModalPromptForString(Widget parent, XtAppContext app,
                               char *questionstr, char *yesstr, char *nostr)
 {
-  Widget dialog;
-  XmString question, yes, no, title;
-  char *answer = NULL;
+  Widget shell;
+  XmString question, yes, no;
+  static char *answer;
+
+  answer = NULL;
+
+  if (!Xmx_shell) {
+      if (PromptDialog && (parent != PromptParent)) {
+	  XtDestroyWidget(PromptDialog);
+	  PromptDialog = NULL;
+	  PromptParent = NULL;
+      }
+      shell = parent;
+  } else {
+      shell = Xmx_shell;
+  }
+
+  if (!PromptDialog) {
+      XmString title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
+
+      if (!blank)
+          blank = XmStringCreateSimple("");
+      XmxSetArg(XmNdialogTitle, (XtArgVal)title);
+      XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+      XmxSetArg(XmNmwmDecorations, MWM_DECOR_BORDER | MWM_DECOR_TITLE);
+
+      PromptDialog = XmCreatePromptDialog(shell, "modal_dialog",
+					  Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+      
+      XtUnmanageChild(XmSelectionBoxGetChild(PromptDialog,
+					     XmDIALOG_HELP_BUTTON));
+      XtAddCallback(PromptDialog, XmNokCallback, 
+                    (XtCallbackProc)XmxPromptForStringResponse, &answer);
+      XtAddCallback(PromptDialog, XmNcancelCallback, 
+                    (XtCallbackProc)XmxPromptForStringCancel, &answer);
+      XmStringFree(title);
+  }
 
   question = XmStringCreateLtoR(questionstr, XmSTRING_DEFAULT_CHARSET);
   yes = XmStringCreateLtoR(yesstr, XmSTRING_DEFAULT_CHARSET);
   no = XmStringCreateLtoR(nostr, XmSTRING_DEFAULT_CHARSET);
-  title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
   
-  XmxSetArg(XmNdialogTitle, (XtArgVal)title);
-  XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+  /* Must blank it out when reused */
+  XmxSetArg(XmNtextString, (XtArgVal)blank);
   XmxSetArg(XmNselectionLabelString, (XtArgVal)question);
   XmxSetArg(XmNokLabelString, (XtArgVal)yes);
   XmxSetArg(XmNcancelLabelString, (XtArgVal)no);
-  dialog = XmCreatePromptDialog(parent, "question_dialog", Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
+  XmxSetValues(PromptDialog);
   
-  XtUnmanageChild(XmSelectionBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-  XtAddCallback(dialog, XmNokCallback, 
-                (XtCallbackProc)_XmxPromptForStringResponse, &answer);
-  XtAddCallback(dialog, XmNcancelCallback, 
-                (XtCallbackProc)_XmxPromptForStringCancel, &answer);
-  XtManageChild(dialog);
+  XtManageChild(PromptDialog);
 
-  while (answer == NULL) {
+  XmxBlockTimers = 1;
+  while (!answer) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
-  XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
-  XmUpdateDisplay(dialog);
+  XtUnmanageChild(PromptDialog);
+  XSync(dsp, 0);
+  XmUpdateDisplay(PromptDialog);
 
   XmStringFree(question);
   XmStringFree(yes);
   XmStringFree(no);
-  XmStringFree(title);
 
-  XtDestroyWidget(dialog);
-
-  if (!answer || strcmp(answer, XMX_NO_ANSWER) == 0) {
+  if (!strcmp(answer, XMX_NO_ANSWER)) {
       return NULL;
   } else {
       return answer;
   }
 }
 
+static char *xmx_passwd = NULL;
 
-/* ------------------------------------------------------------------------ */
-
-static char *_passwd = NULL;
-
-static void _XmxPromptForPasswordResponse(Widget w, char **answer, 
-                                          XmSelectionBoxCallbackStruct *cbs)
+static void XmxPromptForPasswordResponse(Widget w, char **answer, 
+                                         XmSelectionBoxCallbackStruct *cbs)
 {
   if (!XmStringGetLtoR(cbs->value, XmSTRING_DEFAULT_CHARSET, answer))
       *answer = XMX_NO_ANSWER;
 }
 
-static void _XmxPromptForPasswordCancel(Widget w, char **answer, 
-                                        XmSelectionBoxCallbackStruct *cbs)
+static void XmxPromptForPasswordCancel(Widget w, char **answer, 
+                                       XmSelectionBoxCallbackStruct *cbs)
 {
   *answer = XMX_NO_ANSWER;
 }
 
-static void _XmxPromptForPasswordVerify(Widget text_w, XtPointer unused, 
-                                        XmTextVerifyCallbackStruct *cbs)
+static void XmxPromptForPasswordVerify(Widget text_w, XtPointer unused, 
+                                       XmTextVerifyCallbackStruct *cbs)
 {
-  char *new;
-  int len;
-  
   if (cbs->reason != XmCR_MODIFYING_TEXT_VALUE)
       return;
 
-  if (cbs->text->ptr == NULL) {  /* Backspace */
+  if (!cbs->text->ptr) {  /* Backspace */
       cbs->doit = True;
-      if (_passwd && *_passwd) {
-	  int start;
+      if (xmx_passwd && *xmx_passwd) {
 	  char *tptr;
-	
-	  len = strlen(_passwd);
+	  int start;
+	  int len = strlen(xmx_passwd);
+
 	  /* Find the start of the delete */
 	  if (cbs->startPos < len) {
 	      start = cbs->startPos;
@@ -1812,43 +1962,43 @@ static void _XmxPromptForPasswordVerify(Widget text_w, XtPointer unused,
 	  }
 	  /* Move up stuff after the delete */
 	  if (cbs->endPos > len) {
-	      tptr = &(_passwd[len]);
+	      tptr = &xmx_passwd[len];
 	  } else {
-	      tptr = &(_passwd[cbs->endPos]);
+	      tptr = &xmx_passwd[cbs->endPos];
 	  }
-	  _passwd[start] ='\0';
-	  strcat(_passwd, tptr);
+	  xmx_passwd[start] = '\0';
+	  strcat(xmx_passwd, tptr);
       }
   } else if (cbs->text->length >= 1) {
       int i;
 
-      if (_passwd == NULL) {
-	  _passwd = XtMalloc(cbs->text->length + 1);
-	  strncpy(_passwd, cbs->text->ptr, cbs->text->length);
-	  _passwd[cbs->text->length] = '\0';
+      if (!xmx_passwd) {
+	  xmx_passwd = XtMalloc(cbs->text->length + 1);
+	  strncpy(xmx_passwd, cbs->text->ptr, cbs->text->length);
+	  xmx_passwd[cbs->text->length] = '\0';
       } else {
-	  char *tptr;
+	  char *tptr, *new;
 	  char tchar;
 	  int start;
+	  int len = strlen(xmx_passwd);
 
-	  len = strlen(_passwd);
 	  /* Find the start of the delete */
 	  if (cbs->startPos < len) {
 	      start = cbs->startPos;
 	  } else {
 	      start = len;
 	  }
-	  tptr = &(_passwd[start]);
+	  tptr = &xmx_passwd[start];
 	  tchar = *tptr;
 	  *tptr = '\0';
 	  new = XtMalloc(len + cbs->text->length + 1);
-	  strcpy(new, _passwd);
+	  strcpy(new, xmx_passwd);
 	  strncat(new, cbs->text->ptr, cbs->text->length);
 	  new[start + cbs->text->length] = '\0';
 	  *tptr = tchar;
 	  strcat(new, tptr);
-	  XtFree(_passwd);
-	  _passwd = new;
+	  XtFree(xmx_passwd);
+	  xmx_passwd = new;
       }
       cbs->doit = True;
       /* Make a '*' show up instead of what they typed */
@@ -1860,62 +2010,86 @@ static void _XmxPromptForPasswordVerify(Widget text_w, XtPointer unused,
 char *XmxModalPromptForPassword(Widget parent, XtAppContext app, 
                                 char *questionstr, char *yesstr, char *nostr)
 {
-  Widget dialog;
-  XmString question, yes, no, title;
-  char *answer = NULL;
+  Widget shell;
+  XmString question, yes, no;
+  static char *answer;
 
-  _passwd = NULL;
+  answer = NULL;
+  xmx_passwd = NULL;
+
+  if (!Xmx_shell) {
+      if (PassDialog && (parent != PassParent)) {
+	  XtDestroyWidget(PassDialog);
+	  PassDialog = NULL;
+	  PassParent = NULL;
+      }
+      shell = parent;
+  } else {
+      shell = Xmx_shell;
+  }
+
+  if (!PassDialog) {
+      XmString title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
+  
+      if (!blank)
+          blank = XmStringCreateSimple("");
+      XmxSetArg(XmNdialogTitle, (XtArgVal)title);
+      XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+      XmxSetArg(XmNmwmDecorations, MWM_DECOR_BORDER | MWM_DECOR_TITLE);
+
+      PassDialog = XmCreatePromptDialog(shell, "modal_dialog",
+					Xmx_wargs, Xmx_n);
+      Xmx_n = 0;
+  
+      XtUnmanageChild(XmSelectionBoxGetChild(PassDialog, XmDIALOG_HELP_BUTTON));
+      XtAddCallback(XmSelectionBoxGetChild(PassDialog, XmDIALOG_TEXT),
+     		    XmNmodifyVerifyCallback,
+		    (XtCallbackProc)XmxPromptForPasswordVerify, NULL);
+      XtAddCallback(PassDialog, XmNokCallback, 
+                    (XtCallbackProc)XmxPromptForPasswordResponse, &answer);
+      XtAddCallback(PassDialog, XmNcancelCallback, 
+                    (XtCallbackProc)XmxPromptForPasswordCancel, &answer);
+      XmStringFree(title);
+  }
 
   question = XmStringCreateLtoR(questionstr, XmSTRING_DEFAULT_CHARSET);
   yes = XmStringCreateLtoR(yesstr, XmSTRING_DEFAULT_CHARSET);
   no = XmStringCreateLtoR(nostr, XmSTRING_DEFAULT_CHARSET);
-  title = XmStringCreateLtoR("Prompt", XmSTRING_DEFAULT_CHARSET);
-  
-  XmxSetArg(XmNdialogTitle, (XtArgVal)title);
-  XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+
+  /* Must blank it out when reused */
+  XmxSetArg(XmNtextString, (XtArgVal)blank);
   XmxSetArg(XmNselectionLabelString, (XtArgVal)question);
   XmxSetArg(XmNokLabelString, (XtArgVal)yes);
   XmxSetArg(XmNcancelLabelString, (XtArgVal)no);
-  dialog = XmCreatePromptDialog(parent, "question_dialog", Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
-  
-  XtUnmanageChild(XmSelectionBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-  XtAddCallback(XmSelectionBoxGetChild(dialog, XmDIALOG_TEXT),
-     		XmNmodifyVerifyCallback,
-		(XtCallbackProc)_XmxPromptForPasswordVerify, 0);
-  XtAddCallback(dialog, XmNokCallback, 
-                (XtCallbackProc)_XmxPromptForPasswordResponse, &answer);
-  XtAddCallback(dialog, XmNcancelCallback, 
-                (XtCallbackProc)_XmxPromptForPasswordCancel, &answer);
-  XtManageChild(dialog);
+  XmxSetValues(PassDialog);
 
-  while (answer == NULL) {
+  XtManageChild(PassDialog);
+
+  XmxBlockTimers = 1;
+  while (!answer) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
-  XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
-  XmUpdateDisplay(dialog);
+  XtUnmanageChild(PassDialog);
+  XSync(dsp, 0);
+  XmUpdateDisplay(PassDialog);
 
   XmStringFree(question);
   XmStringFree(yes);
   XmStringFree(no);
-  XmStringFree(title);
 
-  XtDestroyWidget(dialog);
-
-  if (!answer || strcmp(answer, XMX_NO_ANSWER) == 0 ||
-      !_passwd || !(*_passwd)) {
+  if (!strcmp(answer, XMX_NO_ANSWER) || !xmx_passwd || !*xmx_passwd) {
       return NULL;
   } else {
-      return strdup(_passwd);
+      return strdup(xmx_passwd);
   }
 }
 
 static int DoFourButtonsAnswer;
 
-static void _XmxDoFourButtons_cb(Widget w, int answer, XtPointer call)
+static void XmxDoFourButtons_cb(Widget w, int answer, XtPointer call)
 {
     DoFourButtonsAnswer = answer;
 }
@@ -1945,7 +2119,7 @@ int XmxDoFourButtons(Widget parent, XtAppContext app, String title,
   dialog_sep = XmxMakeHorizontalSeparator(dialog_form);
       
   buttons_form = XmxMakeFormAndFourButtons(dialog_form,
-					   (XtCallbackProc)_XmxDoFourButtons_cb,
+					   (XtCallbackProc)XmxDoFourButtons_cb,
 					   name1, name2, name3, name4,
 					   1, 2, 3, 4);
   Xmx_uniqid = 0;
@@ -1971,21 +2145,20 @@ int XmxDoFourButtons(Widget parent, XtAppContext app, String title,
 
   XtManageChild(dialog);
 
+  XmxBlockTimers = 1;
   while(DoFourButtonsAnswer == -1) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
   XmxClearButtonClue(Xmx_button1_help, Xmx_button2_help, Xmx_button3_help,
 		     Xmx_button4_help, NULL);
-  Xmx_button1 = NULL;
-  Xmx_button2 = NULL;
-  Xmx_button3 = NULL;
-  Xmx_button4 = NULL;
+  Xmx_button1 = Xmx_button2 = Xmx_button3 = Xmx_button4 = NULL;
   XcgLiteClueResetWait(liteClue);
 
   XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
+  XSync(dsp, 0);
   XmUpdateDisplay(dialog);
 
   XtDestroyWidget(dialog);
@@ -1995,7 +2168,7 @@ int XmxDoFourButtons(Widget parent, XtAppContext app, String title,
 
 static int DoFiveButtonsAnswer;
 
-static void _XmxDoFiveButtons_cb(Widget w, int answer, XtPointer call)
+static void XmxDoFiveButtons_cb(Widget w, int answer, XtPointer call)
 {
     DoFiveButtonsAnswer = answer;
 }
@@ -2025,7 +2198,7 @@ int XmxDoFiveButtons(Widget parent, XtAppContext app, String title,
   dialog_sep = XmxMakeHorizontalSeparator(dialog_form);
       
   buttons_form = XmxMakeFormAndFiveButtons(dialog_form,
-					   (XtCallbackProc)_XmxDoFiveButtons_cb,
+					   (XtCallbackProc)XmxDoFiveButtons_cb,
 					   name1, name2, name3, name4, name5,
 					   1, 2, 3, 4, 5);
   Xmx_uniqid = 0;
@@ -2051,22 +2224,20 @@ int XmxDoFiveButtons(Widget parent, XtAppContext app, String title,
 
   XtManageChild(dialog);
 
+  XmxBlockTimers = 1;
   while(DoFiveButtonsAnswer == -1) {
       XtAppProcessEvent(app, XtIMAll);
-      XSync(XtDisplay(dialog), 0);
+      XSync(dsp, 0);
   }
+  XmxBlockTimers = 0;
 
   XmxClearButtonClue(Xmx_button1_help, Xmx_button2_help, Xmx_button3_help,
 		     Xmx_button4_help, Xmx_button5_help);
-  Xmx_button1 = NULL;
-  Xmx_button2 = NULL;
-  Xmx_button3 = NULL;
-  Xmx_button4 = NULL;
-  Xmx_button5 = NULL;
+  Xmx_button1 = Xmx_button2 = Xmx_button3 = Xmx_button4 = Xmx_button5 = NULL;
   XcgLiteClueResetWait(liteClue);
 
   XtUnmanageChild(dialog);
-  XSync(XtDisplay(dialog), 0);
+  XSync(dsp, 0);
   XmUpdateDisplay(dialog);
 
   XtDestroyWidget(dialog);
@@ -2159,9 +2330,8 @@ void XmxClueTimers(int wait, int cancelwait, int popdowndelay)
 
 void XmxClueFont(String fontname)
 {
-  XFontStruct *font;
+  XFontStruct *font = XLoadQueryFont(dsp, fontname);
 
-  font = XLoadQueryFont(XtDisplay(liteClue), fontname);
   if (font)
       XtVaSetValues(liteClue, XtNfont, font, NULL);
 }

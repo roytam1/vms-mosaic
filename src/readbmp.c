@@ -20,7 +20,7 @@
  * 
 \*/
 
-/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -35,7 +35,7 @@ extern int srcTrace;
 extern int reportBugs;
 #endif
 
-#define	MAXCOLORS   	256
+#define	MAXCOLORS 256
 
 typedef unsigned char pixval;
 
@@ -74,6 +74,14 @@ static char er_internal[] = "BMP: %s: internal error!\n";
 #define BI_RLE4      2
 #define BI_BITFIELDS 3
 
+/* For expanding 5-bit pixel values to 8-bit with best rounding */
+static const unsigned char c5to8bits[32] = {
+    0,   8,  16,  25,  33,  41,  49,  58,
+   66,  74,  82,  90,  99, 107, 115, 123,
+  132, 140, 148, 156, 165, 173, 181, 189,
+  197, 206, 214, 222, 230, 239, 247, 255
+};
+
 
 static int GetShift(unsigned long mask, int *masklen)
 {
@@ -85,13 +93,12 @@ static int GetShift(unsigned long mask, int *masklen)
 			mask = mask >> 1;
 			shift--;
 		}
-		while ((mask & 1)) {
+		while (mask & 1) {
 			mask = mask >> 1;
 			len++;
 		}
 	}
 	shift += 8 - len;
-
 	*masklen = len;
 
 	return shift;
@@ -123,12 +130,12 @@ static unsigned long BMPleninfoheader(int class)
 
 static unsigned long BMPlenrgbtable(bmpInfo *bmp)
 {
-	unsigned long   lenrgb;
+	unsigned long lenrgb;
 
 	/* No color map if more than 8 color bits */
 	if (bmp->cBitCount > 8) {
-		/* Bit fields take up 12 bytes in color table area
-		 * except for V4 and V5 where they are part of the Bitmap Header
+		/* Bit fields take up 12 bytes in color table area except
+		 * for V4 and V5 where they are part of the Bitmap Header
 		 */
 		if ((bmp->comp == BI_BITFIELDS) &&
 		    (bmp->class != C_WIN_V4) && (bmp->class != C_WIN_V5)) {
@@ -156,8 +163,8 @@ static unsigned long BMPlenrgbtable(bmpInfo *bmp)
 		return 0;
 	}
 
-	return bmp->colors ? (bmp->colors * lenrgb) :
-			     ((1 << bmp->cBitCount) * lenrgb);
+	return bmp->colors ? bmp->colors * lenrgb :
+			     (1 << bmp->cBitCount) * lenrgb;
 }
 
 
@@ -170,18 +177,16 @@ static unsigned long BMPlenrgbtable(bmpInfo *bmp)
  */
 static unsigned long BMPlenline(bmpInfo *bmp)
 {
-	unsigned long   bitsperline;
-
-	bitsperline = bmp->cx * bmp->cBitCount;
+	unsigned long bitsperline = bmp->cx * bmp->cBitCount;
 
 	/*
 	 * If bitsperline is not a multiple of 32, then round
 	 * bitsperline up to the next multiple of 32.
 	 */
-	if ((bitsperline % 32) != 0)
-		bitsperline += (32 - (bitsperline % 32));
+	if (bitsperline % 32)
+		bitsperline += 32 - (bitsperline % 32);
 
-	/* Number of bytes per line == bitsperline/8 */
+	/* Number of bytes per line == bitsperline / 8 */
 	return bitsperline >> 3;
 }
 
@@ -217,10 +222,10 @@ static unsigned long BMPlenfile(bmpInfo *bmp)
 \*/
 
 struct bitstream {
-	FILE 	       *f;		/* bytestream */
-	unsigned long	bitbuf;		/* bit buffer */
-	int		nbitbuf;	/* number of bits in 'bitbuf' */
-	char		mode;
+	FILE *f;		/* Bytestream */
+	unsigned long bitbuf;	/* Bit buffer */
+	int nbitbuf;		/* Number of bits in 'bitbuf' */
+	char mode;
 };
 
 typedef struct bitstream *BITSTREAM;
@@ -242,15 +247,11 @@ typedef struct bitstream *BITSTREAM;
  *
  * Returns 0 on error.
  */
-static struct bitstream *pm_bitinit(f, mode)
-	FILE   *f;
-	char   *mode;
+static struct bitstream *pm_bitinit(FILE *f, char *mode)
 {
-	struct bitstream *ans = (struct bitstream *)0;
+	struct bitstream *ans = (struct bitstream *) NULL;
 
-	if (!f || !mode || !*mode)
-		return ans;
-	if (strcmp(mode, "r") && strcmp(mode, "w"))
+	if (!f || !mode || !*mode || (strcmp(mode, "r") && strcmp(mode, "w")))
 		return ans;
 
 	ans = (struct bitstream *)calloc(1, sizeof(struct bitstream));
@@ -258,7 +259,6 @@ static struct bitstream *pm_bitinit(f, mode)
 		ans->f = f;
 		ans->mode = *mode;
 	}
-
 	return ans;
 }
 
@@ -271,8 +271,7 @@ static struct bitstream *pm_bitinit(f, mode)
  *
  * Returns the number of bytes written, -1 on error.
  */
-static int pm_bitfini(b)
-	struct bitstream *b;
+static int pm_bitfini(struct bitstream *b)
 {
 	int nbyte = 0;
 
@@ -291,14 +290,13 @@ static int pm_bitfini(b)
 		if (b->nbitbuf)	{
 			char	c;
 
-			BitPut(b, 0, (long)8 - (b->nbitbuf));
+			BitPut(b, 0, (long)8 - b->nbitbuf);
 			c = (char) BitGet(b, (long)8);
 			if (putc(c, b->f) == EOF)
 				return -1;
 			nbyte++;
 		}
 	}
-
 	free(b);
 	return nbyte;
 }
@@ -310,11 +308,8 @@ static int pm_bitfini(b)
  * 
  * Returns the number of bytes read, -1 on error.
  */
-
-static int pm_bitread(b, nbits, val)
-	struct bitstream *b;
-	unsigned long     nbits;
-	unsigned long    *val;
+static int pm_bitread(struct bitstream *b, unsigned long nbits,
+		      unsigned long *val)
 {
 	int nbyte = 0;
 	int c;
@@ -326,7 +321,7 @@ static int pm_bitread(b, nbits, val)
 		if ((c = getc(b->f)) == EOF)
 			return -1;
 		nbyte++;
-		BitPut(b, c, (long) 8);
+		BitPut(b, c, (long)8);
 	}
 
 	*val = BitGet(b, nbits);
@@ -336,7 +331,7 @@ static int pm_bitread(b, nbits, val)
 
 static int GetByte(FILE *fp)
 {
-	int   v;
+	int v;
 
 	if ((v = fgetc(fp)) == EOF) {
 #ifndef DISABLE_TRACE
@@ -350,8 +345,8 @@ static int GetByte(FILE *fp)
 
 static short GetShort(FILE *fp)
 {
-	int	c;
-	short	v;
+	int c;
+	short v;
 
 	if ((c = fgetc(fp)) == EOF)
 		goto ErrReturn;
@@ -377,8 +372,8 @@ static short GetShort(FILE *fp)
 
 static long GetLong(FILE *fp)
 {
-	int	c;
-	long	v;
+	int c;
+	long v;
 
 	if ((c = fgetc(fp)) == EOF)
 		goto ErrReturn;
@@ -414,13 +409,11 @@ static long GetLong(FILE *fp)
  */
 static void readto(bmpInfo *bmp, unsigned long dst)
 {
-	FILE           *fp = bmp->fp;
-	unsigned long   pos;
+	FILE *fp = bmp->fp;
+	unsigned long pos = bmp->pos;
 
 	if (!fp)
 		return;
-
-	pos = bmp->pos;
 
 	if (pos > dst) {
 #ifndef DISABLE_TRACE
@@ -437,7 +430,6 @@ static void readto(bmpInfo *bmp, unsigned long dst)
 #endif
 		}
 	}
-
 	bmp->pos = pos;
 }
 
@@ -448,8 +440,8 @@ static void readto(bmpInfo *bmp, unsigned long dst)
 
 static int BMPreadfileheader(bmpInfo *bmp)
 {
-	FILE           *fp = bmp->fp;
-	unsigned short  c;
+	FILE *fp = bmp->fp;
+	unsigned short c;
 
 	if (GetByte(fp) != 'B') {
 #ifndef DISABLE_TRACE
@@ -470,7 +462,6 @@ static int BMPreadfileheader(bmpInfo *bmp)
 #endif
 		return 0;
 	}
-
 	GetLong(fp);			/* cbSize */
 	GetShort(fp);			/* xHotSpot */
 	GetShort(fp);			/* yHotSpot */
@@ -484,15 +475,9 @@ static int BMPreadfileheader(bmpInfo *bmp)
 static int BMPreadinfoheader(bmpInfo *bmp)
 {
 	FILE           *fp = bmp->fp;
-	unsigned long   cbFix;
-	unsigned short  cPlanes;
-	unsigned long   cx;
-	unsigned long   cy;
-	unsigned short  cBitCount;
-	unsigned long	cCompress;
-	int             class;
-	int	        colors;
-	int		i;
+	unsigned long   cbFix, cx, cy, cCompress;
+	unsigned short  cBitCount, cPlanes;
+	int             class, colors, i;
 
 	cbFix = GetLong(fp);
 
@@ -517,7 +502,6 @@ static int BMPreadinfoheader(bmpInfo *bmp)
 		cPlanes = GetShort(fp);
 		cBitCount = GetShort(fp);
 		cCompress = GetLong(fp);
-
 		/*
 		 * We've read 20 bytes so far, need to read 20 more
 		 * for the required total of 40.
@@ -538,7 +522,6 @@ static int BMPreadinfoheader(bmpInfo *bmp)
 		cPlanes = GetShort(fp);
 		cBitCount = GetShort(fp);
 		cCompress = GetLong(fp);
-
 		/*
 		 * We've read 20 bytes so far, need to read 44 more
 		 * for the required total of 64.
@@ -559,7 +542,6 @@ static int BMPreadinfoheader(bmpInfo *bmp)
 		cPlanes = GetShort(fp);
 		cBitCount = GetShort(fp);
 		cCompress = GetLong(fp);
-
 		/*
 		 * We've read 20 bytes so far, need to read 88 more
 		 * for the required total of 108.
@@ -585,7 +567,6 @@ static int BMPreadinfoheader(bmpInfo *bmp)
 		cPlanes = GetShort(fp);
 		cBitCount = GetShort(fp);
 		cCompress = GetLong(fp);
-
 		/*
 		 * We've read 20 bytes so far, need to read 104 more
 		 * for the required total of 124.
@@ -661,17 +642,12 @@ static int BMPreadinfoheader(bmpInfo *bmp)
 /*
  * Returns the number of colors read.
  */
-static int BMPreadrgbtable(bmp, R, G, B)
-	bmpInfo        *bmp;
-	pixval         *R;
-	pixval         *G;
-	pixval         *B;
+static int BMPreadrgbtable(bmpInfo *bmp, pixval *R, pixval *G, pixval *B)
 {
-	FILE           *fp = bmp->fp;
-	int             i;
-	int		nbyte = 0;
-	long            ncolors = bmp->colors ? bmp->colors :
-				  (1 << bmp->cBitCount);
+	FILE *fp = bmp->fp;
+	int i;
+	int nbyte = 0;
+	long ncolors = bmp->colors ? bmp->colors : (1 << bmp->cBitCount);
 
 	for (i = 0; i < ncolors; i++) {
 		if (i < MAXCOLORS) {
@@ -690,7 +666,6 @@ static int BMPreadrgbtable(bmp, R, G, B)
 			nbyte++;
 		}
 	}
-
 	bmp->pos += nbyte;
 	return ncolors;
 }
@@ -707,7 +682,6 @@ static int BMPreadrow(bmpInfo *bmp, unsigned char *row)
 	unsigned long   x;
 
 	if (cBitCount == 32) {
-		unsigned char *ptr;
 		int v, y;
 
 		for (x = 0; x < cx; x++) {
@@ -739,9 +713,9 @@ static int BMPreadrow(bmpInfo *bmp, unsigned char *row)
 
 		for (x = 0; x < cx; x++) {
 			v = GetShort(fp);
-			row[2] = (unsigned char) ((v & 0x001f) << 3) ;
-			row[1] = (unsigned char) ((v & 0x03e0) >> 2);
-			row[0] = (unsigned char) ((v & 0x7c00) >> 7);
+			row[2] = c5to8bits[v & 0x001f];
+			row[1] = c5to8bits[(v >> 5) & 0x001f];
+			row[0] = c5to8bits[(v >> 10) & 0x001f];
 			row += 3;
 			nbyte += 2;
 		}
@@ -768,8 +742,7 @@ static int BMPreadrow(bmpInfo *bmp, unsigned char *row)
 			nbyte += rc;
 			*row++ = (unsigned char) v;
 		}
-
-		if ((rc = pm_bitfini(b)) != 0)
+		if (rc = pm_bitfini(b))
 			return -1;
 	}
 	/*
@@ -786,13 +759,11 @@ static int BMPreadrow(bmpInfo *bmp, unsigned char *row)
 
 static unsigned char *BMPreadbits(bmpInfo *bmp)
 {
-	unsigned char  *image;
-	unsigned char  *ptr;
+	unsigned char  *image, *ptr;
 	unsigned long   cx = bmp->cx;
 	unsigned long   cy = bmp->cy;
 	long            y;
-	int		rc;
-	int             components;
+	int		rc, components;
 
 	readto(bmp, bmp->offBits);
 
@@ -802,10 +773,8 @@ static unsigned char *BMPreadbits(bmpInfo *bmp)
 		components = 1;
 	}
 
-	image = (unsigned char *)malloc(cx * cy * components);
-	if (!image)
+	if (!(image = (unsigned char *)malloc(cx * cy * components)))
 		return NULL;
-
 	/*
 	 * The picture is stored bottom line first, top line last
 	 */
@@ -831,7 +800,6 @@ static unsigned char *BMPreadbits(bmpInfo *bmp)
 			return NULL;
 		}
 	}
-
 	return image;
 }
 
@@ -841,12 +809,10 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 	FILE 	       *fp = bmp->fp;
 	unsigned long   cx = bmp->cx;
 	unsigned long   cy = bmp->cy;
-	unsigned char  *image;
-	unsigned char  *ptr;
+	unsigned char  *image, *ptr;
 	long            x, y;
 	int		comp = bmp->comp;
-	int             components;
-	int 		i, b1, b2, b3;
+	int             components, i, b1, b2, b3;
 
 	if (bmp->cBitCount >= 16) {
 		components = 3;
@@ -854,13 +820,11 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 		components = 1;
 	}
 
-	image = (unsigned char *)malloc(cx * cy * components);
-	if (!image)
+	if (!(image = (unsigned char *)malloc(cx * cy * components)))
 		return NULL;
 
 	if ((comp == BI_RLE8) || (comp == BI_RLE4)) {
-		x = 0;
-		y = 0;
+		y = x = 0;
 		ptr = image + ((cy - 1) * cx);
 		readto(bmp, bmp->offBits);
 
@@ -925,13 +889,10 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 				}
 			}
 		}
-
 	} else if ((comp == BI_BITFIELDS) && (bmp->cBitCount == 16)) {
 		unsigned short v;
 		unsigned long red, green, blue;
-		int redshift;
-		int greenshift;
-		int blueshift;
+		int redshift, greenshift, blueshift;
 		int rlen, glen, blen;
 
 		if ((bmp->class != C_WIN_V4) && (bmp->class != C_WIN_V5)) {
@@ -939,7 +900,7 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 			red = GetLong(fp);
 			green = GetLong(fp);
 			blue = GetLong(fp);
-			bmp->pos = bmp->pos + 12;
+			bmp->pos += 12;
 		} else {
 			red = bmp->redmask;
 			green = bmp->greenmask;
@@ -961,24 +922,24 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 				v = GetShort(fp);
 				if (blueshift >= 0) {
 					ptr[2] = (unsigned char)
-						((v & blue) << blueshift);
+						 ((v & blue) << blueshift);
 				} else {
 					ptr[2] = (unsigned char)
-						((v & blue) >> (-blueshift));
+						 ((v & blue) >> (-blueshift));
 				}
 				if (greenshift >= 0) {
 					ptr[1] = (unsigned char)
-						((v & green) << greenshift);
+						 ((v & green) << greenshift);
 				} else {
 					ptr[1] = (unsigned char)
-						((v & green) >> (-greenshift));
+						 ((v & green) >> (-greenshift));
 				}
 				if (redshift >= 0) {
 					ptr[0] = (unsigned char)
-						((v & red) << redshift);
+						 ((v & red) << redshift);
 				} else {
 					ptr[0] = (unsigned char)
-						((v & red) >> (-redshift));
+						 ((v & red) >> (-redshift));
 				}
 				ptr += 3;
 			}
@@ -988,15 +949,12 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 				GetByte(fp);
 		}
 	} else if ((comp == BI_BITFIELDS) && (bmp->cBitCount == 32)) {
-		unsigned long v;
-		unsigned long red, green, blue, alpha;
+		unsigned long v, red, green, blue, alpha;
 		unsigned char *a, *aptr;
-		int redshift;
-		int greenshift;
-		int blueshift;
-		int alphashift;
+		int redshift, greenshift, blueshift, alphashift;
 		int rlen, glen, blen, alen;
-		int has_alpha = 0;
+		int has_NZ_alpha = 0;
+		int has_N255_alpha = 0;
 
 		if ((bmp->class != C_WIN_V4) && (bmp->class != C_WIN_V5)) {
 			/* Get RGB mask from color table field */
@@ -1004,7 +962,7 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 			green = GetLong(fp);
 			blue = GetLong(fp);
 			alpha = 0;
-			bmp->pos = bmp->pos + 12;
+			bmp->pos += 12;
 		} else {
 			red = bmp->redmask;
 			green = bmp->greenmask;
@@ -1040,35 +998,37 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 				v = GetLong(fp);
 				if (blueshift >= 0) {
 					ptr[2] = (unsigned char)
-						((v & blue) << blueshift);
+						 ((v & blue) << blueshift);
 				} else {
 					ptr[2] = (unsigned char)
-						((v & blue) >> (-blueshift));
+						 ((v & blue) >> (-blueshift));
 				}
 				if (greenshift >= 0) {
 					ptr[1] = (unsigned char)
-						((v & green) << greenshift);
+						 ((v & green) << greenshift);
 				} else {
 					ptr[1] = (unsigned char)
-						((v & green) >> (-greenshift));
+						 ((v & green) >> (-greenshift));
 				}
 				if (redshift >= 0) {
 					ptr[0] = (unsigned char)
-						((v & red) << redshift);
+						 ((v & red) << redshift);
 				} else {
 					ptr[0] = (unsigned char)
-						((v & red) >> (-redshift));
+						 ((v & red) >> (-redshift));
 				}
 				if (alpha) {
 					if (alphashift >= 0) {
-						*aptr = 255 - (unsigned char)
+						*aptr = (unsigned char)
 						 ((v & alpha) << alphashift);
 					} else {
-						*aptr = 255 - (unsigned char)
+						*aptr = (unsigned char)
 						 ((v & alpha) >> (-alphashift));
 					}
+					if (*aptr)
+					        has_NZ_alpha = 1;
 					if (*aptr++ != 255)
-						has_alpha = 1;
+						has_N255_alpha = 1;
 				}
 				ptr += 3;
 			}
@@ -1077,7 +1037,8 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 			while (x++ % 4)
 				GetByte(fp);
 		}
-		if (alpha && !has_alpha) {
+		/* Not an alpha if all zero or all 255 */
+		if (alpha && !(has_NZ_alpha && has_N255_alpha)) {
 			free(a);
 			*alpha_channel = NULL;
 		} else if (alpha) {
@@ -1093,7 +1054,6 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 #endif
 		return NULL;
 	}
-
 	return image;
 }
 
@@ -1101,14 +1061,9 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 		       unsigned char **alpha)
 {
-	int		i;
-	pixval          R[MAXCOLORS];	/* reds */
-	pixval          G[MAXCOLORS];	/* greens */
-	pixval          B[MAXCOLORS];	/* blues */
-	unsigned char  *image;
-	bmpInfo	       *bmp;
+	unsigned char *image;
+	bmpInfo *bmp = (bmpInfo *)malloc(sizeof(bmpInfo));
 
-	bmp = (bmpInfo *)malloc(sizeof(bmpInfo));
 	if (!bmp)
 		return NULL;
 
@@ -1126,21 +1081,22 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 		fprintf(stderr, "BMP: offBits is %d, expected %d\n",
 			bmp->offBits, BMPoffbits(bmp));
 #endif
-
 	if (bmp->cBitCount <= 8) {
-		int ncolors;
+		pixval R[MAXCOLORS];	/* Reds */
+		pixval G[MAXCOLORS];	/* Greens */
+		pixval B[MAXCOLORS];	/* Blues */
+		int ncolors, i;
 
 		/* 16, 24 and 32 bit images do not have color maps */
 		ncolors = BMPreadrgbtable(bmp, R, G, B);
 		for (i = 0; i < ncolors; i++) {
-			colrs[i].red = R[i] * 256;
-			colrs[i].green = G[i] * 256;
-			colrs[i].blue = B[i] * 256;
+			colrs[i].red = R[i] << 8;
+			colrs[i].green = G[i] << 8;
+			colrs[i].blue = B[i] << 8;
 			colrs[i].pixel = i;
-			colrs[i].flags = DoRed|DoGreen|DoBlue;
+			colrs[i].flags = DoRed | DoGreen | DoBlue;
 		}
 	}
-
 	if (bmp->comp == BI_RGB) {
 		image = BMPreadbits(bmp);
 	} else {
@@ -1153,7 +1109,6 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 		fprintf(stderr,	"BMP: read %d bytes, expected %d bytes\n",
 			bmp->pos, BMPlenfile(bmp));
 #endif
-
 	/* Convert 3 component (RGB) data to 8 bit colormap data */
 	if ((bmp->cBitCount >= 16) && image) {
 		unsigned char *newimage;
@@ -1166,7 +1121,6 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 			free(bmp);
 			return newimage;
 		}
-
 #ifndef DISABLE_TRACE
 		if (srcTrace)
 			fprintf(stderr, "BMP: Quantize 24 bit image\n");
@@ -1186,7 +1140,6 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 			goto ErrReturn;
 		}
 	}
-
 	free(bmp);
 	return image;
 

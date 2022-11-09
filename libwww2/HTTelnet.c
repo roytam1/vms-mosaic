@@ -1,34 +1,30 @@
-/*		Telnet Acees, Roligin, etc			HTAccess.c
-**		==========================
+/*		Telnet Access, Rlogin, etc.			HTAccess.c
+**		===========================
 **
 ** Authors
 **	TBL	Tim Berners-Lee timbl@info.cern.ch
 **	JFG	Jean-Francois Groff jgh@next.com
 **	DD	Denis DeLaRoca (310) 825-4580  <CSP1DWD@mvs.oac.ucla.edu>
 ** History
-**       8 Jun 92 Telnet hopping prohibited as telnet is not secure (TBL)
+**       8 Jun 92 Telnet hopping prohibited as telnet is not secure. (TBL)
 **	26 Jun 92 When over DECnet, suppressed FTP, Gopher and News. (JFG)
 **	 6 Oct 92 Moved HTClientHost and logfile into here. (TBL)
 **	17 Dec 92 Tn3270 added, bug fix. (DD)
-**	 2 Feb 93 Split from HTAccess.c. Registration.(TBL)
+**	 2 Feb 93 Split from HTAccess.c.  Registration. (TBL)
 */
+
 #include "../config.h"
-/* Implements:
-*/
 #include "HTTelnet.h"
 
 #include <signal.h>
 #include "HTParse.h"
 #include "HTAnchor.h"
-#include "HTTP.h"
 #include "HTFile.h"
+#include "HTTP.h"
+#include "HTAlert.h"
 #include <errno.h>
 #include <stdio.h>
 
-#include "HText.h"
-
-#include "HTAccess.h"
-#include "HTAlert.h"
 #include "../libnut/str-tools.h"
 
 #ifdef VMS
@@ -45,11 +41,11 @@ extern int www2Trace;
 **	Also remove leading '-' or '+'.
 **	-----------------------------------------------------
 */
-PRIVATE void make_system_secure ARGS1(char *, str)
+PRIVATE void make_system_secure (char *str)
 {
 	char *ptr1, *ptr2;
 
-	if ((str == NULL) || (*str == '\0'))
+	if (!str || !*str)
 		return;
 
 	/*
@@ -61,15 +57,13 @@ PRIVATE void make_system_secure ARGS1(char *, str)
 
 	ptr1 = ptr2 = str;
 
-	while (*ptr1 != '\0') {
-		if ((!isalpha((int)*ptr1)) && (!isdigit((int)*ptr1)) &&
+	while (*ptr1) {
+		if (!isalpha((int)*ptr1) && !isdigit((int)*ptr1) &&
 			(*ptr1 != '.') && (*ptr1 != '_') &&
 			(*ptr1 != '+') && (*ptr1 != '-')) {
 			ptr1++;
 		} else {
-			*ptr2 = *ptr1;
-			ptr2++;
-			ptr1++;
+			*ptr2++ = *ptr1++;
 		}
 	}
 	*ptr2 = *ptr1;
@@ -77,29 +71,26 @@ PRIVATE void make_system_secure ARGS1(char *, str)
 
 
 #ifndef VMS
-PRIVATE void run_a_command ARGS1(char *, command)
+PRIVATE void run_a_command (char *command)
 {
 	char **argv;
-	int argc;
 	char *str;
-	int alen;
+	int argc = 0;
+	int alen = 10;
+	int i;
 
-	alen = 10;
 	argv = (char **)malloc(10 * sizeof(char *));
-	if (argv == NULL)
+	if (!argv)
 		return;
-	argc = 0;
 
 	str = strtok(command, " \t\n");
-	while (str != NULL) {
+	while (str) {
 		argv[argc] = strdup(str);
-		argc++;
-		if (argc >= alen) {
-			int i;
+		if (++argc >= alen) {
 			char **tmp_av;
 
 			tmp_av = (char **)malloc((alen + 10) * sizeof(char *));
-			if (tmp_av == NULL)
+			if (!tmp_av)
 				return;
 			for (i = 0; i < alen; i++)
 				tmp_av[i] = argv[i];
@@ -111,17 +102,15 @@ PRIVATE void run_a_command ARGS1(char *, command)
 	}
 	argv[argc] = NULL;
 
-	if (fork() == 0) {
+	if (!fork()) {
 		execvp(argv[0], argv);
 	} else {
-		int i;
-
 		/*
 		 * The signal handler in main.c will clean this child
 		 * up when it exits.
 		 */
 		for (i = 0; i < argc; i++) {
-			if (argv[i] != NULL)
+			if (argv[i])
 				free(argv[i]);
 		}
 		free((char *)argv);
@@ -130,46 +119,43 @@ PRIVATE void run_a_command ARGS1(char *, command)
 /*
  * Spawn a subprocess, but do not wait for completion so that the
  * application_user_feedback can pop up before we need it.
- * Also, do not close the terminal window after logout until the user has
- * hit Return.
+ * Also, do not close the terminal window after logout until the user
+ * has hit Return.
  * Clean up this later.
  */
-PRIVATE void run_a_command ARGS2(char *, command, char *, xterm_str)
+PRIVATE void run_a_command (char *command, char *xterm_str)
 {
-	char cmd[256], *fcname, null_dev[] = "NL:";
+	char cmd[256];
+	char *fcname;
+	char null_dev[] = "NL:";
 	FILE *fpc;
-	int status, flags = 1;
+	int flags = 1;
         $DESCRIPTOR(cmd_desc, NULL);
         $DESCRIPTOR(null_dev_desc, NULL);
 
         cmd_desc.dsc$a_pointer = cmd;
         null_dev_desc.dsc$a_pointer = null_dev;
 
-	fcname = mo_tmpnam((char *) 0);
+	fcname = mo_tmpnam(NULL);
 	strcat(fcname, ".COM");
 
-	fpc = fopen(fcname, "w");
-	if (!fpc) {
-	  fprintf(stderr,
-	    "\nVMS scratch file open error: %s\n", strerror(errno, vaxc$errno));
-	  return;
+	if (!(fpc = fopen(fcname, "w"))) {
+	    fprintf(stderr, "\nVMS scratch file open error: %s\n",
+		    strerror(errno, vaxc$errno));
+	    return;
 	}
-	fprintf(fpc, "$ Set NoVerify\n");
-	fprintf(fpc, "$ On Error Then GoTo End\n");
+	fprintf(fpc, "$ Set NoVerify\n$ On Error Then GoTo End\n");
 	fprintf(fpc, "$ Define/User SYS$Input SYS$Command\n");
-	fprintf(fpc, "$ %s\n", command);
-	fprintf(fpc, "$End:\n");
-	fprintf(fpc, "$ Write SYS$Output \" \"\n");
+	fprintf(fpc, "$ %s\n$End:\n$ Write SYS$Output \" \"\n", command);
 	fprintf(fpc,
-	  "$ Read/Prompt=\"Hit Return to close window: \" SYS$Command ANS\n");
-	fprintf(fpc, "$ Set NoOn\n");
-	fprintf(fpc, "$ Delete$$/NoConfirm/NoLog %s;\n", fcname);
-	fprintf(fpc, "$ Exit\n");
+	    "$ Read/Prompt=\"Hit Return to close window: \" SYS$Command ANS\n");
+	fprintf(fpc, "$ Set NoOn\n$ Delete$$/NoConfirm/NoLog %s;\n$ Exit\n",
+		fcname);
 	fclose(fpc);
 	sprintf(cmd, "%s @%s", xterm_str, fcname);
 	cmd_desc.dsc$w_length = strlen(cmd);
 
-	status = lib$spawn(&cmd_desc, &null_dev_desc, &null_dev_desc, &flags);
+	lib$spawn(&cmd_desc, &null_dev_desc, &null_dev_desc, &flags);
 	free(fcname);
 #endif /* VMS, BSN, GEC for PE */
 }
@@ -178,47 +164,44 @@ PRIVATE void run_a_command ARGS2(char *, command, char *, xterm_str)
 /*	Telnet or "rlogin" access
 **	-------------------------
 */
-PRIVATE int remote_session ARGS2(char *, access, char *, host)
+PRIVATE int remote_session (char *access, char *host)
 {
   char *user, *hostname, *port;
-  int portnum;
   char command[256];
   char *xterm_str;
+  int portnum;
   enum _login_protocol { telnet, rlogin, tn3270 } login_protocol;
   extern char *global_xterm_str;
 
   if (!access || !host) {
-      application_user_feedback 
-        ("Cannot open remote session, because\nURL is malformed.\0");
-      return HT_NO_DATA;
+      application_user_feedback (
+                      "Cannot open remote session, because\nURL is malformed.");
+      return HT_NO_ACCESS;
   }
-
-  login_protocol =
-    my_strcasecmp(access, "rlogin") == 0 ? rlogin :
-      my_strcasecmp(access, "tn3270") == 0 ? tn3270 : 
-        telnet;
+  login_protocol = !my_strcasecmp(access, "rlogin") ? rlogin :
+      		   !my_strcasecmp(access, "tn3270") ? tn3270 : telnet;
 
   /* Make sure we won't overrun the size of command with a huge host string */
   if (strlen(host) > 200)
       host[200] = '\0';
   
-  user = host;
   hostname = strchr(host, '@');
   port = strchr(host, ':');
   
   if (hostname) {
-      *hostname++ = 0;	/* Split */
+      *hostname++ = '\0';	/* Split */
+      user = host;
   } else {
       hostname = host;
-      user = 0;		/* No user specified */
+      user = NULL;		/* No user specified */
   }
   if (port) {
-      *port++ = 0;	/* Split */
+      *port++ = '\0';		/* Split */
       portnum = atoi(port);
   }
 
   /*
-   * Make user and hostname secure by removing leading '-' or '+'.
+   * Make user and hostname secure by removing leading '-' or '+'
    * and allowing only alphanumeric, '.', '_', '+', and '-'.
    */
   make_system_secure(user);
@@ -229,7 +212,7 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
   if (login_protocol == rlogin) {
 #if !defined(VMS) || defined(WIN_TCP)
       /* For rlogin, we should use -l user. */
-      if ((port) && (portnum > 0) && (portnum < 63336)) {
+      if (port && (portnum > 0) && (portnum < 63336)) {
           sprintf(command, "%s -e %s %s %d %s %s", xterm_str, access,
                   hostname, portnum,
                   user ? "-l" : "",
@@ -256,9 +239,9 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
 #endif /* VMS, BSN */
   } else {
       /* For telnet, -l isn't safe to use at all -- most platforms
-         don't understand it. */
+       * don't understand it. */
 #ifndef VMS
-      if ((port)&&(portnum > 0)&&(portnum < 63336)) {
+      if (port && (portnum > 0) && (portnum < 63336)) {
           sprintf(command, "%s -e %s %s %d", xterm_str, access,
                   hostname, portnum);
       } else {
@@ -272,7 +255,7 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
       if (getenv("MULTINET_ROOT") || getenv("CMUTEK_ROOT") ||
           (getenv("TWG$TCP") && (!getenv("TELNET") ||
 	   (*getenv("TELNET") != '$')))) {
-          if ((login_protocol == tn3270) && (!getenv("CMUTEK_ROOT"))) {
+          if ((login_protocol == tn3270) && !getenv("CMUTEK_ROOT")) {
               sprintf(command, "TELNET/TN3270 %s%s %s",
                       port ? "/PORT=" : "",
                       port ? port : "",
@@ -292,7 +275,7 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
   
 #ifndef DISABLE_TRACE
   if (www2Trace)
-      fprintf(stderr, "HTaccess: Command is: %s\n", command);
+      fprintf(stderr, "HTTelnet: Command is: %s\n", command);
 #endif
 #ifndef VMS
   run_a_command(command);
@@ -300,8 +283,7 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
   run_a_command(command, xterm_str);
 #endif /* VMS, BSN */
 
-  /* No need for application feedback if we're rlogging directly
-     in... */
+  /* No need for application feedback if we're rlogging directly in... */
   if (user && login_protocol != rlogin) {
       char str[200];
 
@@ -311,7 +293,6 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
       sprintf(str, "When you are connected, log in as '%s'.", user);
       application_user_feedback(str);
   }
-  
   return HT_NO_DATA;		/* Ok - it was done but no data */
 }
 
@@ -319,31 +300,24 @@ PRIVATE int remote_session ARGS2(char *, access, char *, host)
 **	------------------------------------------
 **
 ** On entry,
-**	addr		must point to the fully qualified hypertext reference.
+**	addr	   must point to the fully qualified hypertext reference.
 **
 ** On exit,
-**	returns		<0	Error has occured.
-**			>=0	Value of file descriptor or socket to be used
-**				 to read data.
-**	*pFormat	Set to the format of the file, if known.
-**			(See WWW.h)
+**	returns	   HT_NO_ACCESS	   Error.
+**		   HT_NO_DATA	   Success.
 **
 */
 #ifndef VMS
-PRIVATE int HTLoadTelnet
+PRIVATE int HTLoadTelnet (
 #else
-PUBLIC int HTLoadTelnet
+PUBLIC int HTLoadTelnet (
 #endif /* VMS, BSN */
-ARGS4
-(
- WWW_CONST char *,	addr,
- HTParentAnchor *,	anchor,
- HTFormat,		format_out,
- HTStream *,		sink			/* Ignored */
-)
+	WWW_CONST char *addr,
+	HTParentAnchor *anchor,
+	HTFormat format_out,
+	HTStream *sink)
 {
-    char *access;
-    char *host;
+    char *access, *host;
     int status;
     
     if (sink) {
@@ -351,7 +325,6 @@ ARGS4
 	return HT_NO_ACCESS;
     }
     access =  HTParse(addr, "file:", PARSE_ACCESS);
-    
     host = HTParse(addr, "", PARSE_HOST);
     status = remote_session(access, host);
 
@@ -360,8 +333,6 @@ ARGS4
     return status;
 }
 
-
 PUBLIC HTProtocol HTTelnet = { "telnet", HTLoadTelnet, NULL };
 PUBLIC HTProtocol HTRlogin = { "rlogin", HTLoadTelnet, NULL };
 PUBLIC HTProtocol HTTn3270 = { "tn3270", HTLoadTelnet, NULL };
-

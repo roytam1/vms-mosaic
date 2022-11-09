@@ -52,45 +52,40 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2003, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2003, 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #define COMMENT_CARD_FILENAME ".mosaic-cc-"
 #define COMMENT_TIME 5
 
 #ifndef VMS
-#define MO_COMMENT_OS "Not Supported" /* Not used on VMS */
+#define MO_COMMENT_OS "Not Supported"  /* Not used on VMS */
 #endif
 
 extern void CommentCard(mo_window *win);
 extern long GetCardCount(char *fname);
-extern char *MakeFilename();
 
 #ifdef _COMMENT_H
-char *comment_card_html_top = "<title>Comment Card for VMS Mosaic 4.0</title>\n\
+
+char *comment_card_html_top = "<title>Comment Card for VMS Mosaic 4.2</title>\n\
 <h1 align=center>\n\
 Please Help Keep VMS Mosaic Alive!\n\
-</h1>\n\
-<hr>\n\
-<h2>\n\
+</h1><hr><h2>\n\
 Thank you for using VMS Mosaic!  I would appreciate\n\
 your taking the time to answer these few questions.\n\
 <p align=right>\n\
 George Cook&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\n\
 </h2>\n\
 <hr>\n\
-<form method=\"POST\" action=\"http://wvnvms.wvnet.edu/htbin/cgi-mailto-mosaic/mosaic/Mosaic_4.0_Comment_Card\">\n\
+<form method=\"POST\" action=\"http://wvnvms.wvnet.edu/htbin/cgi-mailto-mosaic/mosaic/Mosaic_4.2_Comment_Card\">\n\
 <h3>\n\
 <ul>\n\
 <li>\n\
 If you do not like surveys or you have already\n\
 completed this survey, please press this button,\n\
-<input type=\"submit\" value=\"Just Count Me\" \n\
-name=\"countme\">,\n\
-to be counted. Pushing the button\n\
-will send the following information about\n\
+<input type=\"submit\" value=\"Just Count Me\" name=\"countme\">,\n\
+to be counted. Pushing the button will send the following information about\n\
 your system to be used in my statistics:\n\
-<p>\n\
-\n";
+<p>\n";
  
 char *comment_card_html_bot = "</p>\n\
 </li>\n\
@@ -136,40 +131,9 @@ Do you also use Mozilla on VMS platforms?\n\
 	<option value=\"no\">\n\
 		No, I Do Not\n\
 </select>\n\
-<p>\n\
-Are you on the VMS Mosaic mail list?\n\
-<br>\n\
-<select name=\"mosaic_list\">\n\
-	<option value=\"no comment\" selected>\n\
-		No Comment\n\
-	<option value=\"yes\">\n\
-		Yes, I Am\n\
-	<option value=\"no\">\n\
-		No, I Am Not\n\
-</select>\n\
-\n\
-<dl>\n\
-<dd>\n\
-If so, has it been useful?\n\
-<br>\n\
-<select name=\"useful\">\n\
-	<option value=\"no comment\" selected>\n\
-		No Comment\n\
-	<option value=\"yes\">\n\
-		Yes, It Has\n\
-	<option value=\"no\">\n\
-		No, It Has Not\n\
-</select>\n\
-<dl>\n\
-<dd>\n\
-Why or why not?\n\
-<br>\n\
-<textarea name=\"useful_feedback\" rows=2 cols=40>\n\
-</textarea>\n\
-</dd>\n\
-</dl>\n\
-</dd>\n\
-</dl>\n\
+<input type=hidden name=\"mosaic_list\" value=\"no comment\">\n\
+<input type=hidden name=\"useful\" value=\"no comment\">\n\
+<input type=hidden name=\"useful_feedback\" value=\"no comment\">\n\
 <p>\n\
 Please enter the improvement\n\
 you would most like to see in VMS Mosaic:\n\
@@ -189,8 +153,8 @@ Other comments and/or suggestions are welcomed:\n\
 <p>\n\
 When you are done, please press this button:\n\
 <br>\n\
-<input type=\"submit\" value=\"Submit Comment Card for VMS Mosaic\"\n\
-	name=\"submitme\">\n\
-</form>\n\
-\n";
+<input type=\"submit\" value=\"Submit Comment Card for VMS Mosaic\" \
+name=\"submitme\">\n\
+</form>\n\n";
+
 #endif

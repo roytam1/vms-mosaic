@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -117,11 +117,11 @@ extern int reportBugs;
  */
 static void xpmFreeColorTable(XpmColor *colorTable, int ncolors)
 {
-    int a, b;
-    XpmColor *color;
-    char **sptr;
-
     if (colorTable) {
+	int a, b;
+	XpmColor *color;
+	char **sptr;
+
 	for (a = 0, color = colorTable; a < ncolors; a++, color++) {
 	    for (b = 0, sptr = (char **) color; b <= NKEYS; b++, sptr++) {
 		if (*sptr)
@@ -168,21 +168,21 @@ static int ParseComment(xpmData *data)
 	s = data->Comment;
 	*s = data->Bcmt[0];
 
-	/* skip the string beginning comment */
+	/* Skip the string beginning comment */
 	s2 = data->Bcmt;
 	do {
 	    c = *data->cptr++;
 	    *++s = c;
 	    n++;
 	    s2++;
-	} while (c == *s2 && *s2 != '\0' && c);
+	} while (c == *s2 && *s2 && c);
 
-	if (*s2 != '\0') {
-	    /* this wasn't the beginning of a comment */
+	if (*s2) {
+	    /* This wasn't the beginning of a comment */
 	    data->cptr -= n;
 	    return 0;
 	}
-	/* store comment */
+	/* Store comment */
 	data->Comment[0] = *s;
 	s = data->Comment;
 	notend = 1;
@@ -191,7 +191,7 @@ static int ParseComment(xpmData *data)
 	    s2 = data->Ecmt;
 	    while (*s != *s2 && c) {
 		c = *data->cptr++;
-		if (n == BUFSIZ - 1)  { /* forget it */
+		if (n == BUFSIZ - 1) {  /* Forget it */
 		    s = data->Comment;
 		    n = 0;
 		}
@@ -201,16 +201,16 @@ static int ParseComment(xpmData *data)
 	    data->CommentLength = n;
 	    do {
 		c = *data->cptr++;
-		if (n == BUFSIZ - 1)  { /* forget it */
+		if (n == BUFSIZ - 1) {  /* Forget it */
 		    s = data->Comment;
 		    n = 0;
 		}
 		*++s = c;
 		n++;
 		s2++;
-	    } while (c == *s2 && *s2 != '\0' && c);
-	    if (*s2 == '\0') {
-		/* this is the end of the comment */
+	    } while (c == *s2 && *s2 && c);
+	    if (!*s2) {
+		/* This is the end of the comment */
 		notend = 0;
 		data->cptr--;
 	    }
@@ -226,23 +226,23 @@ static int ParseComment(xpmData *data)
 	s = data->Comment;
 	*s = data->Bcmt[0];
 
-	/* skip the string beginning comment */
+	/* Skip the string beginning comment */
 	s2 = data->Bcmt;
 	do {
 	    c = getc(file);
 	    *++s = c;
 	    n++;
 	    s2++;
-	} while (c == *s2 && *s2 != '\0' && c != EOF);
+	} while (c == *s2 && *s2 && c != EOF);
 
-	if (*s2 != '\0') {
-	    /* this wasn't the beginning of a comment */
-	    /* put characters back in the order that we got them */
+	if (*s2) {
+	    /* This wasn't the beginning of a comment */
+	    /* Put characters back in the order that we got them */
 	    for (a = n; a > 0; a--, s--)
 		ungetc(*s, file);
 	    return 0;
 	}
-	/* store comment */
+	/* Store comment */
 	data->Comment[0] = *s;
 	s = data->Comment;
 	notend = 1;
@@ -251,7 +251,7 @@ static int ParseComment(xpmData *data)
 	    s2 = data->Ecmt;
 	    while (*s != *s2 && c != EOF) {
 		c = getc(file);
-		if (n == BUFSIZ - 1)  { /* forget it */
+		if (n == BUFSIZ - 1) {  /* Forget it */
 		    s = data->Comment;
 		    n = 0;
 		}
@@ -261,16 +261,16 @@ static int ParseComment(xpmData *data)
 	    data->CommentLength = n;
 	    do {
 		c = getc(file);
-		if (n == BUFSIZ - 1)  { /* forget it */
+		if (n == BUFSIZ - 1) {  /* Forget it */
 		    s = data->Comment;
 		    n = 0;
 		}
 		*++s = c;
 		n++;
 		s2++;
-	    } while (c == *s2 && *s2 != '\0' && c != EOF);
-	    if (*s2 == '\0') {
-		/* this is the end of the comment */
+	    } while (c == *s2 && *s2 && c != EOF);
+	    if (!*s2) {
+		/* This is the end of the comment */
 		notend = 0;
 		ungetc(*s, file);
 	    }
@@ -290,13 +290,13 @@ static int xpmNextString(xpmData *mdata)
     } else if (mdata->type == XPMBUFFER) {
 	register char c;
 
-	/* get to the end of the current string */
+	/* Get to the end of the current string */
 	if (mdata->Eos) {
 	    while ((c = *mdata->cptr++) && c != mdata->Eos)
 		;
 	}
 	/*
-	 * then get to the beginning of the next string looking for possible
+	 * Then get to the beginning of the next string looking for possible
 	 * comment
 	 */
 	if (mdata->Bos) {
@@ -313,13 +313,13 @@ static int xpmNextString(xpmData *mdata)
 	register int c;
 	FILE *file = mdata->stream.file;
 
-	/* get to the end of the current string */
+	/* Get to the end of the current string */
 	if (mdata->Eos) {
 	    while ((c = getc(file)) != mdata->Eos && c != EOF)
 		;
 	}
 	/*
-	 * then get to the beginning of the next string looking for possible
+	 * Then get to the beginning of the next string looking for possible
 	 * comment
 	 */
 	if (mdata->Bos) {
@@ -340,9 +340,9 @@ static int xpmNextString(xpmData *mdata)
 static unsigned int atoui(register char *p, unsigned int l,
 			  unsigned int *ui_return)
 {
-    register int n, i;
+    register int n = 0;
+    register int i;
 
-    n = 0;
     for (i = 0; i < l; i++) {
 	if (*p >= '0' && *p <= '9') {
 	    n = n * 10 + *p++ - '0';
@@ -350,7 +350,7 @@ static unsigned int atoui(register char *p, unsigned int l,
 	    break;
 	}
     }
-    if (i != 0 && i == l) {
+    if (i && i == l) {
 	*ui_return = n;
 	return 1;
     } else {
@@ -447,8 +447,11 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 	 */
 	int i;
 	char *ptr;
-	Bool got_one, saw_width = False, saw_height = False;
-	Bool saw_ncolors = False, saw_chars_per_pixel = False;
+	Bool got_one;
+	Bool saw_width = False;
+	Bool saw_height = False;
+	Bool saw_ncolors = False;
+	Bool saw_chars_per_pixel = False;
 
 	for (i = 0; i < 4; i++) {
 	    l = xpmNextWord(data, buf);
@@ -465,7 +468,7 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 		if (!ptr)
 		    return (XpmFileInvalid);
 		switch (l - (ptr - buf)) {
-		case 6:
+		  case 6:
 		    if (saw_width || strncmp("_width", ptr, 6) ||
 			!xpmNextUI(data, width)) {
 			return (XpmFileInvalid);
@@ -474,7 +477,7 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 		    }
 		    got_one = True;
 		    break;
-		case 7:
+		  case 7:
 		    if (saw_height || strncmp("_height", ptr, 7) ||
 			!xpmNextUI(data, height)) {
 			return (XpmFileInvalid);
@@ -483,7 +486,7 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 		    }
 		    got_one = True;
 		    break;
-		case 8:
+		  case 8:
 		    if (saw_ncolors || strncmp("_ncolors", ptr, 8) ||
 			!xpmNextUI(data, ncolors)) {
 			return (XpmFileInvalid);
@@ -492,7 +495,7 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 		    }
 		    got_one = True;
 		    break;
-		case 16:
+		  case 16:
 		    if (saw_chars_per_pixel ||
 			strncmp("_chars_per_pixel", ptr, 16) ||
 			!xpmNextUI(data, cpp)) {
@@ -502,11 +505,11 @@ static int ParseValues(xpmData *data, unsigned int *width, unsigned int *height,
 		    }
 		    got_one = True;
 		    break;
-		default:
+		  default:
 		    ptr++;
 		}
 	    }
-	    /* skip the end of line */
+	    /* Skip the end of line */
 	    xpmNextString(data);
 	}
 	if (!saw_width || !saw_height || !saw_ncolors || !saw_chars_per_pixel)
@@ -522,13 +525,12 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 		       XpmColor **colorTablePtr, xpmHashTable *hashtable)
 {
     unsigned int key, l, a, b;
-    unsigned int curkey;		/* current color key */
-    unsigned int lastwaskey;		/* key read */
+    unsigned int curkey;		/* Current color key */
+    unsigned int lastwaskey;		/* Key read */
     char buf[BUFSIZ];
-    char curbuf[BUFSIZ];		/* current buffer */
+    char curbuf[BUFSIZ];		/* Current buffer */
     char **sptr, *s;
-    XpmColor *color;
-    XpmColor *colorTable;
+    XpmColor *color, *colorTable;
     char **defaults;
     int ErrorStatus;
     static char *xpmColorKeys[] = {
@@ -546,7 +548,6 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
     if (!data->format) {		/* XPM 2 or 3 */
 	for (a = 0, color = colorTable; a < ncolors; a++, color++) {
 	    xpmNextString(data);	/* Skip the line */
-
 	    /*
 	     * Read pixel value
 	     */
@@ -570,24 +571,22 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 		    return (ErrorStatus);
 		}
 	    }
-
 	    /*
 	     * Read color keys and values
 	     */
 	    defaults = (char **) color;
-	    curkey = 0;
-	    lastwaskey = 0;
-	    *curbuf = '\0';		/* init curbuf */
+	    curkey = lastwaskey = 0;
+	    *curbuf = '\0';		/* Init curbuf */
 	    while (l = xpmNextWord(data, buf)) {
 		if (!lastwaskey) {
 		    for (key = 0, sptr = xpmColorKeys; key < NKEYS; key++,
 			 sptr++) {
-			if ((strlen(*sptr) == l) && (!strncmp(*sptr, buf, l)))
+			if ((strlen(*sptr) == l) && !strncmp(*sptr, buf, l))
 			    break;
 		    }
 		}
-		if (!lastwaskey && key < NKEYS) {	/* open new key */
-		    if (curkey) {	/* flush string */
+		if (!lastwaskey && key < NKEYS) {	/* Open new key */
+		    if (curkey) {	/* Flush string */
 			s = (char *) XpmMalloc(strlen(curbuf) + 1);
 			if (!s) {
 			    xpmFreeColorTable(colorTable, ncolors);
@@ -596,22 +595,22 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 			defaults[curkey] = s;
 			strcpy(s, curbuf);
 		    }
-		    curkey = key + 1;	/* set new key  */
-		    *curbuf = '\0';	/* reset curbuf */
+		    curkey = key + 1;	/* Set new key  */
+		    *curbuf = '\0';	/* Reset curbuf */
 		    lastwaskey = 1;
 		} else {
-		    if (!curkey) {	/* key without value */
+		    if (!curkey) {	/* Key without value */
 			xpmFreeColorTable(colorTable, ncolors);
 			return (XpmFileInvalid);
 		    }
 		    if (!lastwaskey)
-			strcat(curbuf, " ");	/* append space */
+			strcat(curbuf, " ");	/* Append space */
 		    buf[l] = '\0';
-		    strcat(curbuf, buf);	/* append buf */
+		    strcat(curbuf, buf);	/* Append buf */
 		    lastwaskey = 0;
 		}
 	    }
-	    if (!curkey) {		/* key without value */
+	    if (!curkey) {		/* Key without value */
 		xpmFreeColorTable(colorTable, ncolors);
 		return (XpmFileInvalid);
 	    }
@@ -652,17 +651,16 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 		    return (ErrorStatus);
 		}
 	    }
-
 	    /*
 	     * Read color values
 	     */
-	    xpmNextString(data);	/* get to the next string */
-	    *curbuf = '\0';		/* init curbuf */
+	    xpmNextString(data);	/* Get to the next string */
+	    *curbuf = '\0';		/* Init curbuf */
 	    while (l = xpmNextWord(data, buf)) {
-		if (*curbuf != '\0')
-		    strcat(curbuf, " "); /* append space */
+		if (*curbuf)
+		    strcat(curbuf, " ");	/* Append space */
 		buf[l] = '\0';
-		strcat(curbuf, buf);	/* append buf */
+		strcat(curbuf, buf);
 	    }
 	    s = (char *) XpmMalloc(strlen(curbuf) + 1);
 	    if (!s) {
@@ -671,9 +669,9 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 	    }
 	    strcpy(s, curbuf);
 	    color->c_color = s;
-	    *curbuf = '\0';		/* reset curbuf */
+	    *curbuf = '\0';		/* Reset curbuf */
 	    if (a < ncolors - 1)
-		xpmNextString(data);	/* get to the next string */
+		xpmNextString(data);	/* Get to the next string */
 	}
     }
     *colorTablePtr = colorTable;
@@ -682,8 +680,8 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 }
 
 /* Free all allocated pointers at all exits */
-#define FREE_CIDX {int f; for (f = 0; f < 256; f++) \
-	if (cidx[f]) XpmFree(cidx[f]);}
+#define FREE_CIDX { int f; for (f = 0; f < 256; f++) \
+	if (cidx[f]) XpmFree(cidx[f]); }
 
 static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 		       unsigned int ncolors, unsigned int cpp,
@@ -700,9 +698,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
     iptr = iptr2;
 
     switch (cpp) {
-
-    case (1):				/* Optimize for single character
-					 * colors */
+      case (1):			/* Optimize for single character colors */
 	{
 	    unsigned short colidx[256];
 
@@ -715,7 +711,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 		for (x = 0; x < width; x++, iptr++) {
 		    int c = xpmGetC(data);
 
-		    if (c > 0 && c < 256 && colidx[c] != 0) {
+		    if (c > 0 && c < 256 && colidx[c]) {
 			*iptr = colidx[c] - 1;
 		    } else {
 			XpmFree(iptr2);
@@ -726,20 +722,19 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 	}
 	break;
 
-    case (2):				/* Optimize for double character
-					 * colors */
+      case (2):			/* Optimize for double character colors */
 	{
-	    /* array of pointers malloced by need */
+	    /* Array of pointers malloced by need */
 	    unsigned short *cidx[256];
 	    int char1;
 
-	    memset(cidx, 0, 256 * sizeof(unsigned short *)); /* init */
+	    memset(cidx, 0, 256 * sizeof(unsigned short *));
 	    for (a = 0; a < ncolors; a++) {
 		char1 = colorTable[a].string[0];
-		if (cidx[char1] == NULL) { /* get new memory */
+		if (cidx[char1] == NULL) {  /* Get new memory */
 		    cidx[char1] = (unsigned short *)
-			XpmCalloc(256, sizeof(unsigned short));
-		    if (cidx[char1] == NULL) { /* new block failed */
+					 XpmCalloc(256, sizeof(unsigned short));
+		    if (cidx[char1] == NULL) {
 			FREE_CIDX;
 			XpmFree(iptr2);
 			return (XpmNoMemory);
@@ -757,7 +752,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 			int cc2 = xpmGetC(data);
 
 			if (cc2 > 0 && cc2 < 256 &&
-			    cidx[cc1] && cidx[cc1][cc2] != 0) {
+			    cidx[cc1] && cidx[cc1][cc2]) {
 			    *iptr = cidx[cc1][cc2] - 1;
 			} else {
 			    FREE_CIDX;
@@ -775,8 +770,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 	}
 	break;
 
-    default:				/* Non-optimized case of long color
-					 * names */
+      default:			/* Non-optimized case of long color names */
 	{
 	    char *s;
 	    char buf[BUFSIZ];
@@ -791,7 +785,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 			for (a = 0, s = buf; a < cpp; a++, s++)
 			    *s = xpmGetC(data);
 			slot = xpmHashSlot(hashtable, buf);
-			if (!*slot) {	/* no color matches */
+			if (!*slot) {	/* No color matches */
 			    XpmFree(iptr2);
 			    return (XpmFileInvalid);
 			}
@@ -808,7 +802,7 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 			    if (!strcmp(colorTable[a].string, buf))
 				break;
 			}
-			if (a == ncolors) {	/* no color matches */
+			if (a == ncolors) {	/* No color matches */
 			    XpmFree(iptr2);
 			    return (XpmFileInvalid);
 			}
@@ -830,7 +824,8 @@ static int ParsePixels(xpmData *data, unsigned int width, unsigned int height,
 static int xpmParseHeader(xpmData *data)
 {
     char buf[BUFSIZ];
-    int l, n = 0;
+    int l;
+    int n = 0;
     static xpmDataType xpmDataTypes[] = {
         "", "!", "\n", '\0', '\n', "", "", "", "",	/* Natural type */
         "C", "/*", "*/", '"', '"', ",\n", "static char *", "[] = {\n", "};\n",
@@ -858,7 +853,7 @@ static int xpmParseHeader(xpmData *data)
 	    ptr = strrchr(buf, '_');
 	    if (!ptr || strncmp("_format", ptr, l - (ptr - buf)))
 		return XpmFileInvalid;
-	    /* this is definitely an XPM 1 file */
+	    /* This is definitely an XPM 1 file */
 	    data->format = 1;
 	    n = 1;			/* handle XPM1 as mainly XPM2 C */
 #ifndef DISABLE_TRACE
@@ -874,11 +869,10 @@ static int xpmParseHeader(xpmData *data)
 	    if ((l == 3 && !strncmp("XPM", buf, 3)) ||
 		(l == 4 && !strncmp("XPM2", buf, 4))) {
 		if (l == 3) {
-		    n = 1;		/* handle XPM as XPM2 C */
+		    n = 1;		/* Handle XPM as XPM2 C */
 		} else {
 		    /* Get the type key word */
 		    l = xpmNextWord(data, buf);
-
 		    /*
 		     * Get infos about this type
 		     */
@@ -897,10 +891,10 @@ static int xpmParseHeader(xpmData *data)
 	    }
 	}
 	if (xpmDataTypes[n].type) {
-	    if (n == 0) {		/* natural type */
+	    if (n == 0) {		/* Natural type */
 		data->Bcmt = xpmDataTypes[n].Bcmt;
 		data->Ecmt = xpmDataTypes[n].Ecmt;
-		xpmNextString(data);	/* skip the end of the headerline */
+		xpmNextString(data);	/* Skip the end of the headerline */
 		data->Bos = xpmDataTypes[n].Bos;
 		data->Eos = xpmDataTypes[n].Eos;
 	    } else {
@@ -930,15 +924,13 @@ static int xpmParseHeader(xpmData *data)
  */
 static int xpmGetCmt(xpmData *mdata, char **cmt)
 {
-    if (!mdata->type) {
+    if (!mdata->type || !mdata->CommentLength) {
 	*cmt = NULL;
-    } else if (mdata->CommentLength) {
+    } else {
 	*cmt = (char *) XpmMalloc(mdata->CommentLength + 1);
 	strncpy(*cmt, mdata->Comment, mdata->CommentLength);
 	(*cmt)[mdata->CommentLength] = '\0';
 	mdata->CommentLength = 0;
-    } else {
-	*cmt = NULL;
     }
     return 0;
 }
@@ -952,27 +944,25 @@ static int xpmParseData(xpmData *data, xpmInternAttrib *attrib_return,
 			XpmAttributes *attributes)
 {
     /* Variables to return */
-    unsigned int width, height, ncolors, cpp;
-    unsigned int x_hotspot, y_hotspot, hotspot = 0, extensions = 0;
+    unsigned int width, height, ncolors, cpp, cmts;
+    unsigned int x_hotspot, y_hotspot;
+    unsigned int hotspot = 0;
+    unsigned int extensions = 0;
     XpmColor *colorTable = NULL;
     unsigned int *pixelindex = NULL;
     char *hints_cmt = NULL;
     char *colors_cmt = NULL;
     char *pixels_cmt = NULL;
-
-    unsigned int cmts;
     int ErrorStatus;
     xpmHashTable hashtable;
 
     cmts = attributes && (attributes->valuemask & XpmReturnInfos);
-
     /*
      * Parse the header
      */
     ErrorStatus = xpmParseHeader(data);
     if (ErrorStatus != XpmSuccess)
 	return (ErrorStatus);
-
     /*
      * Read values
      */
@@ -980,13 +970,11 @@ static int xpmParseData(xpmData *data, xpmInternAttrib *attrib_return,
 			      &x_hotspot, &y_hotspot, &hotspot, &extensions);
     if (ErrorStatus != XpmSuccess)
 	return (ErrorStatus);
-
     /*
      * Store the hints comment line
      */
     if (cmts)
 	xpmGetCmt(data, &hints_cmt);
-
     /*
      * Init the hashtable
      */
@@ -995,7 +983,6 @@ static int xpmParseData(xpmData *data, xpmInternAttrib *attrib_return,
 	if (ErrorStatus != XpmSuccess)
 	    return (ErrorStatus);
     }
-
     /*
      * Read colors
      */
@@ -1005,13 +992,11 @@ static int xpmParseData(xpmData *data, xpmInternAttrib *attrib_return,
 	    xpmHashTableFree(&hashtable);
 	goto error;
     }
-
     /*
      * Store the colors comment line
      */
     if (cmts)
 	xpmGetCmt(data, &colors_cmt);
-
     /*
      * Read pixels and index them on color number
      */
@@ -1024,13 +1009,11 @@ static int xpmParseData(xpmData *data, xpmInternAttrib *attrib_return,
 	xpmHashTableFree(&hashtable);
     if (ErrorStatus != XpmSuccess)
 	goto error;
-
     /*
      * Store the pixels comment line
      */
     if (cmts)
 	xpmGetCmt(data, &pixels_cmt);
-
     /*
      * Store found informations in the xpmInternAttrib structure
      */
@@ -1100,7 +1083,7 @@ static void xpmOpenArray(char **data, xpmData *mdata)
     mdata->CommentLength = 0;
     mdata->Bcmt = mdata->Ecmt = NULL;
     mdata->Bos = mdata->Eos = '\0';
-    mdata->format = 0;                  /* this can only be Xpm 2 or 3 */
+    mdata->format = 0;                  /* This can only be Xpm 2 or 3 */
 }
 
 
@@ -1113,15 +1096,12 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
     xpmData mdata;
     XpmAttributes attributes;
     xpmInternAttrib attrib;
-    int ErrorStatus;
-    int Colors;
+    int ErrorStatus, Colors, i;
     XColor tmpcolr;
-    int i;
     char *colorName;
-    unsigned char *pix_data;
-    unsigned char *bptr;
+    unsigned char *pix_data, *bptr;
     unsigned int *pixels;
-    Display *disp;
+    unsigned int size;
     Colormap default_cmap;
 
     *w = 0;
@@ -1146,14 +1126,14 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
 
     *w = (int)attrib.width;
     *h = (int)attrib.height;
+    size = attrib.width * attrib.height;
     Colors = (int)attrib.ncolors;
 
-    disp = XtDisplay(wid);
-    default_cmap = DefaultColormap(disp, DefaultScreen(disp));
+    default_cmap = DefaultColormap(dsp, DefaultScreen(dsp));
     for (i = 0; i < Colors; i++) {
 	colorName = attrib.colorTable[i].c_color ?
 		    attrib.colorTable[i].c_color : "black";
-	if (strcmp(colorName, TRANSPARENT_COLOR) == 0) {
+	if (!strcmp(colorName, TRANSPARENT_COLOR)) {
 	    unsigned long bg_pixel;
 
 	    /* First, go fetch the pixel. */
@@ -1163,31 +1143,27 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
 	    tmpcolr.pixel = bg_pixel;
 
 	    /* Now query for the full color info. */
-	    XQueryColor(disp, (installed_colormap ? installed_cmap :
-			       default_cmap),
+	    XQueryColor(dsp, installed_colormap ? installed_cmap : default_cmap,
 			&tmpcolr);
 	    *bg = i;
 	} else {
-	    XParseColor(disp, (installed_colormap ? installed_cmap :
-			       default_cmap),
+	    XParseColor(dsp, installed_colormap ? installed_cmap : default_cmap,
 			colorName, &tmpcolr);
 	}
 	colrs[i].red = tmpcolr.red;
 	colrs[i].green = tmpcolr.green;
 	colrs[i].blue = tmpcolr.blue;
 	colrs[i].pixel = i;
-	colrs[i].flags = DoRed|DoGreen|DoBlue;
+	colrs[i].flags = DoRed | DoGreen | DoBlue;
     }
     for (i = Colors; i < 256; i++) {
-	colrs[i].red = 0;
-	colrs[i].green = 0;
-	colrs[i].blue = 0;
+	colrs[i].red = colrs[i].green = colrs[i].blue = 0;
 	colrs[i].pixel = i;
-	colrs[i].flags = DoRed|DoGreen|DoBlue;
+	colrs[i].flags = DoRed | DoGreen | DoBlue;
     }
     pixels = attrib.pixelindex;
-    pix_data = (unsigned char *)malloc((*w) * (*h));
-    if (pix_data == NULL) {
+    pix_data = (unsigned char *)malloc(size);
+    if (!pix_data) {
 #ifndef DISABLE_TRACE
 	if (srcTrace || reportBugs)
 	    fprintf(stderr, "Not enough memory for pixmap.\n");
@@ -1196,16 +1172,14 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
         return((unsigned char *)NULL);
     }
     bptr = pix_data;
-    for (i = 0; i < ((*w) * (*h)); i++) {
+    for (i = 0; i < size; i++) {
 	int pix;
 
-	pix = (int)*pixels;
+	pix = (int)*pixels++;
         if (pix > 255)
             pix = 0;
 	*bptr++ = (unsigned char)pix;
-        pixels++;
     }
-
     xpmFreeInternAttrib(&attrib);
 
     return(pix_data);

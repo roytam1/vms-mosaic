@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 /* This module intended to handle child process clean up through callbacks */
 #include "../config.h"
@@ -66,7 +66,7 @@
 #endif /* Some non-ANSI routines need a prefix, GEC */
 
 #ifndef DISABLE_TRACE
-extern int srcTrace;
+extern int reportBugs;
 #endif
 
 #ifdef VMS
@@ -99,7 +99,7 @@ void AddChildProcessHandler(pid_t pid, void (*callback)(), void *callBackData)
 
 	if (!(p = (ProcessHandle *) malloc(sizeof(ProcessHandle)))) {
 #ifndef DISABLE_TRACE
-		if (srcTrace)
+		if (reportBugs)
 			fprintf(stderr, "AddChild out of memory\n");
 #endif
 		return;
@@ -117,30 +117,26 @@ void AddChildProcessHandler(pid_t pid, void (*callback)(), void *callBackData)
 #ifndef VMS
 static ProcessHandle *SearchForChildRecordByPID(pid_t pid)
 {
-	ProcessHandle *p;
+	ProcessHandle *p = (ProcessHandle *) ListHead(childProcessList);
 
-	p = (ProcessHandle *) ListHead(childProcessList);
 	while (p) {
 		if (p->pid == pid)
 			return(p);
 		p = (ProcessHandle *) ListNext(childProcessList);
 	}
-
 	return(NULL);
 }
 
 #else
 static ProcessHandle *SearchForChildRecordByNum(int num)
 {
-	ProcessHandle *p;
+	ProcessHandle *p = (ProcessHandle *) ListHead(childProcessList);
 
-	p = (ProcessHandle *) ListHead(childProcessList);
 	while (p) {
 		if (p->child_num == num)
 			return(p);
 		p = (ProcessHandle *) ListNext(childProcessList);
 	}
-
 	return(NULL);
 }
 #endif /* VMS, GEC */
@@ -150,10 +146,9 @@ static ProcessHandle *SearchForChildRecordByNum(int num)
  */
 void KillAllChildren(void)
 {
-	ProcessHandle *p;
+	ProcessHandle *p = (ProcessHandle *) ListHead(childProcessList);
 
 	/* First, be nice and send SIGHUP */
-	p = (ProcessHandle *) ListHead(childProcessList);
 	while (p) {
 		kill(p->pid, SIGHUP);
 		p = (ProcessHandle *) ListNext(childProcessList);
@@ -192,9 +187,8 @@ void ChildTerminated(void)
 #else
 void ChildTerminated(int num)
 {
-	ProcessHandle *p;
+	ProcessHandle *p = SearchForChildRecordByNum(num);
 
-	p = SearchForChildRecordByNum(num);
 #endif /* VMS, GEC */
 	if (!p)
 		/* Unregistered child process */
@@ -207,4 +201,3 @@ void ChildTerminated(int num)
 
 	return;
 }
-

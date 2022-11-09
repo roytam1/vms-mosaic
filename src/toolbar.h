@@ -1,9 +1,8 @@
-/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 /* Toolbar Stuff */
 
-struct toolbar 
-{
+struct toolbar {
     Widget w;
     int gray;
 };
@@ -29,7 +28,6 @@ struct tool {
     Pixmap *greyimage;     /* The greyed icon or NULL */
     int toolset;           /* Tool set it belongs too (0=always on) */
     int kioskok;           /* Allowed in kiosk mode */
-    char *unused;
 };
 
 extern void mo_tool_state(struct toolbar *t, int state, int index);

@@ -50,12 +50,11 @@ PRIVATE char salt_chars [65] =
 **	about the security inside the machine.
 **
 */
-PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
+PUBLIC char *HTAA_encryptPasswd (WWW_CONST char *password)
 {
     char salt[3];
     char chunk[9];
-    char *result;
-    char *tmp;
+    char *result, *tmp
     WWW_CONST char *cur = password;
     int len = strlen(password);
     extern time_t theTime;
@@ -64,14 +63,14 @@ PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
     if (!(result = (char *)malloc(13 * ((strlen(password) + 7) / 8) + 1)))
 	outofmem(__FILE__, "HTAA_encryptPasswd");
 
-    *result = (char)0;
+    *result = '\0';
     while (len > 0) {
 	salt[0] = salt_chars[random % 64];
 	salt[1] = salt_chars[(random / 64) % 64];
-	salt[2] = (char)0;
+	salt[2] = '\0';
 
 	strncpy(chunk, cur, 8);
-	chunk[8] = (char)0;
+	chunk[8] = '\0';
 
 	tmp = crypt((char *)password, salt);  /* crypt doesn't change args */
 	strcat(result, tmp);
@@ -79,8 +78,7 @@ PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
 
 	cur += 8;
 	len -= 8;
-    } /* while */
-
+    }
     return result;
 }
 
@@ -99,8 +97,8 @@ PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
 **	returns		YES, if password matches the encrypted one.
 **			NO, if not, or if either parameter is NULL.
 */
-PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
-				   WWW_CONST char *, encrypted)
+PUBLIC BOOL HTAA_passwdMatch (WWW_CONST char *password,
+			      WWW_CONST char *encrypted)
 {
     char *result;
     int len;
@@ -115,7 +113,7 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
     if (!(result = (char *)malloc(len + 1)))
 	outofmem(__FILE__, "HTAA_encryptPasswd");
 
-    *result = (char)0;
+    *result = '\0';
     while (len > 0) {
 	char salt[3];
 	char chunk[9];
@@ -125,10 +123,10 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
 
 	salt[0] = *cur2;
 	salt[1] = *(cur2 + 1);
-	salt[2] = (char)0;
+	salt[2] = '\0';
 
 	strncpy(chunk, cur1, 8);
-	chunk[8] = (char)0;
+	chunk[8] = '\0';
 
 	tmp = crypt((char *)password, salt);
 	strcat(result, tmp);
@@ -137,7 +135,7 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
 	cur1 += 8;
 	cur2 += 13;
 	len -= 13;
-    } /* while */
+    }
 
     status = strcmp(result, encrypted);
 
@@ -182,17 +180,16 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
 **	There may be whitespace (blanks or tabs) in the beginning and
 **	the end of each field. They are ignored.
 */
-PUBLIC int HTAAFile_readPasswdRec ARGS3(FILE *, fp,
-					char *, out_username,
-					char *, out_password)
+PUBLIC int HTAAFile_readPasswdRec (FILE *fp, char *out_username,
+				   char *out_password)
 {
     char terminator;
     
     terminator = HTAAFile_readField(fp, out_username, MAX_USERNAME_LEN);
 
-    if (terminator == EOF) {				/* End of file */
+    if (terminator == EOF) {				  /* End of file */
 	return EOF;
-    } else if (terminator == CR  ||  terminator == LF) { /* End of line */
+    } else if (terminator == CR  ||  terminator == LF) {  /* End of line */
 	HTAAFile_nextRec(fp);
 	return 1;
     } else {
@@ -218,9 +215,9 @@ PUBLIC int HTAAFile_readPasswdRec ARGS3(FILE *, fp,
 **	returns		YES, if the username-password pair was correct.
 **			NO, otherwise; also, if open fails.
 */
-PUBLIC BOOL HTAA_checkPassword ARGS3(WWW_CONST char *, username,
-				     WWW_CONST char *, password,
-				     WWW_CONST char *, filename)
+PUBLIC BOOL HTAA_checkPassword (WWW_CONST char *username,
+				WWW_CONST char *password,
+				WWW_CONST char *filename)
 {
     FILE *fp = NULL;
     char user[MAX_USERNAME_LEN + 1];
@@ -269,9 +266,8 @@ PUBLIC BOOL HTAA_checkPassword ARGS3(WWW_CONST char *, username,
 #endif
 
     if (status == EOF) {
-        return NO;  /* We traversed to the end without luck */
+        return NO;   /* We traversed to the end without luck */
     } else {
-        return YES; /* The user was found */
+        return YES;  /* The user was found */
     }
 }
-

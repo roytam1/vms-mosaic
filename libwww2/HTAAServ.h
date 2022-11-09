@@ -33,18 +33,11 @@
 #define HTAASERV_H
 
 #include <stdio.h>              /* FILE                 */
-#include "HTUtils.h"            /* BOOL, PARAMS, ARGS   */
+#include "HTUtils.h"            /* BOOL                 */
 #include "HTRules.h"            /* This module interacts with rule system */
 #include "HTAAUtil.h"           /* Common parts of AA   */
 #include "HTAuth.h"             /* Authentication       */
 
-
-#ifdef SHORT_NAMES
-#define HTAAstMs        HTAA_statusMessage
-#define HTAAchAu        HTAA_checkAuthorization
-#define HTAAcoAH        HTAA_composeAuthHeaders
-#define HTAAsLog        HTAA_startLogging
-#endif
 
 /*
 
@@ -80,10 +73,10 @@ Check Access Authorization
 **      file twice).
 **
 */
-PUBLIC int HTAA_checkAuthorization PARAMS((WWW_CONST char *url,
-                                           WWW_CONST char *method_name,
-                                           WWW_CONST char *scheme_name,
-                                           char           *scheme_specifics));
+PUBLIC int HTAA_checkAuthorization (WWW_CONST char *url,
+                                    WWW_CONST char *method_name,
+                                    WWW_CONST char *scheme_name,
+                                    char           *scheme_specifics);
 /*
 
 Compose Status Line Message
@@ -99,7 +92,7 @@ Compose Status Line Message
 **      returns a string containing the error message
 **              corresponding to internal HTAAFailReason.
 */
-PUBLIC char *HTAA_statusMessage NOPARAMS;
+PUBLIC char *HTAA_statusMessage ();
 /*
 
 Compose "Authenticate:" Header Lines for Server Reply
@@ -121,7 +114,7 @@ Compose "Authenticate:" Header Lines for Server Reply
 **              NULL, if authentication won't help in accessing
 **              the requested document.
 */
-PUBLIC char *HTAA_composeAuthHeaders NOPARAMS;
+PUBLIC char *HTAA_composeAuthHeaders ();
 /*
 
 Start Access Authorization Logging
@@ -134,7 +127,7 @@ Start Access Authorization Logging
 **      fp      is the open log file.
 **
 */
-PUBLIC void HTAA_startLogging PARAMS((FILE *fp));
+PUBLIC void HTAA_startLogging (FILE *fp);
 
 
 #endif  /* NOT HTAASERV_H */

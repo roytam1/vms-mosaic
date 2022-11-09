@@ -52,15 +52,11 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2006 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
- *
- * This file contains stuff from the old "mosaic.h" file.  I am breaking
- * that file up because it was too big, and required a re-compile of all
- * the source whenever something changed.
  */
 
 
@@ -69,7 +65,10 @@
 
 #ifdef HAVE_JPEG
 unsigned char *ReadJPEG(FILE *infile, int *width, int *height, XColor *colrs);
+
+#ifdef WRITE_JPEG
 int WriteJPEG(FILE *outfile, unsigned char *image, int width, int height);
+#endif
 #endif
 
 #endif

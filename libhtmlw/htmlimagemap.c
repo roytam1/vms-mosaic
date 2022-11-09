@@ -15,12 +15,12 @@
  *
  *  Author:	David Jones
  *  Date:	19-MAR-1994
- *  Revised:	20-JUL-1994		Add xlate operation to inp file.
- *  Revised:    27-SEP-1994		Support case sensitive paths.
- *  Revised:    13-JAN-1994		Make default work independant of position.
- *  Revised:     6-FEB-1995		Accept + as coordinate delimiter.
- *  Revised:    23-JUN-1995		Fix bugs in polygon processing.
- *  Revised:	10-JAN-1995		Declare sqrt() using math.h header file.
+ *  Revised:	20-JUL-1994	Add xlate operation to inp file.
+ *  Revised:    27-SEP-1994	Support case sensitive paths.
+ *  Revised:    13-JAN-1994	Make default work independant of position.
+ *  Revised:     6-FEB-1995	Accept + as coordinate delimiter.
+ *  Revised:    23-JUN-1995	Fix bugs in polygon processing.
+ *  Revised:	10-JAN-1995	Declare sqrt() using math.h header file.
  *
  *  Modified for use with VMS Mosaic on 6-May-1998 by George Cook
  */ 
@@ -45,17 +45,20 @@ extern int htmlwTrace;
  */
 static int check_polygon(CoordInfo *coords, int intx, int inty)
 {
-    int npnts, count, i, prev;
-    float x1, y1, x2, y2, x, y;
-    CoordInfo *coord, *end;
+    int npnts, i;
+    int count = 0;
+#ifndef DISABLE_TRACE
+    int prev = 0;
+#endif
+    float x1, y1, x2, y2;
+    float x = intx;
+    float y = inty;
+    CoordInfo *coord = coords;
+    CoordInfo *end;
 
     /*
      * Find number of points in polygon and duplicate first point
      */
-    x = intx;
-    y = inty;
-    coord = coords;
-
     for (npnts = 0; coord->x > -1; npnts++)
 	coord = coord->next;
 
@@ -72,7 +75,7 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
      * to left (less) than x value.  Line segment with endpoint at
      * same y as test point only counts if it is the endpoint with lower y.
      */
-    for (prev = count = 0, i = 1; i <= npnts; i++) {
+    for (i = 1; i <= npnts; i++) {
 	/* Set vertices */
 	x1 = coord->x;
 	y1 = coord->y;
@@ -97,13 +100,12 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
 	    if ((x >= x1) && (x >= x2)) {
 		count++;	/* Easy test */
 	    } else if ((x < x1) && (x < x2)) {
-		;		/* to left */
+		;		/* To left */
 	    } else {
 		/* Tougher case, find intercept position. */
-		float slope;
+		float slope = (x2 - x1) / (y2 - y1);
 
-		slope = (x2 - x1) / (y2 - y1);
-		x1 = x1 + (slope * (y - y1));
+		x1 += slope * (y - y1);
 		/* Test if we are 2 right of intercept position */
 #ifndef DISABLE_TRACE
 		if (htmlwTrace)
@@ -142,11 +144,10 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
      * Now we have the count, determine if we are inside the polygon.
      * We are inside if we are 2 right of an odd number of sides.
      */
-    if ((count % 2) == 1) {
+    if ((count % 2) == 1)
 	return 1;
-    } else {
-	return 0;
-    }
+
+    return 0;
 } 
 
 /********************************************************************/
@@ -180,7 +181,7 @@ AreaInfo *GetMapArea(MapInfo *map, int x, int y)
 
     while (area) {
 	switch (area->shape) {
-	    case -1:		/* Bad area, skip it */
+	    case -1:			/* Bad area, skip it */
 		break;
 
 	    case AREA_RECT:		/* Rectangle */
@@ -214,4 +215,3 @@ AreaInfo *GetMapArea(MapInfo *map, int x, int y)
     }
     return (NULL);
 }
-

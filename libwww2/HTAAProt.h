@@ -1,5 +1,4 @@
-/*                                   PROTECTION SETUP FILE
-                                             
+/*                            PROTECTION SETUP FILE
  */
 
 #ifndef HTAAPROT_H
@@ -9,20 +8,9 @@
 #include "HTGroup.h"
 #include "HTAssoc.h"
 
-#ifdef SHORT_NAMES
-#define HTAAgUid        HTAA_getUid
-#define HTAAgGid        HTAA_getGid
-#define HTAAgDPr        HTAA_setDefaultProtection
-#define HTAAsCPr        HTAA_setCurrentProtection
-#define HTAAgCPr        HTAA_getCurrentProtection
-#define HTAAgDPr        HTAA_getDefaultProtection
-#define HTAAclPr        HTAA_clearProtections
-#endif
-
 /*
  * Server's Representation of Document (Tree) Protections
  */
-
 typedef struct {
     char         *template;     /* Template for this protection         */
     char         *filename;     /* Current document file                */
@@ -33,6 +21,7 @@ typedef struct {
     HTAssocList  *values;       /* Association list for scheme specific */
                                 /* parameters.                          */
 } HTAAProt;
+
 /*
 
 Callbacks for rule system
@@ -68,9 +57,9 @@ Callbacks for rule system
 **      returns         nothing.
 **                      Sets the module-wide variable default_prot.
 */
-PUBLIC void HTAA_setDefaultProtection PARAMS((WWW_CONST char *cur_docname,
-                                              WWW_CONST char *prot_filename,
-                                              WWW_CONST char *eff_ids));
+PUBLIC void HTAA_setDefaultProtection (WWW_CONST char *cur_docname,
+                                       WWW_CONST char *prot_filename,
+                                       WWW_CONST char *eff_ids);
 
 
 
@@ -93,9 +82,9 @@ PUBLIC void HTAA_setDefaultProtection PARAMS((WWW_CONST char *cur_docname,
 **      returns         nothing.
 **                      Sets the module-wide variable current_prot.
 */
-PUBLIC void HTAA_setCurrentProtection PARAMS((WWW_CONST char *cur_docname,
-                                              WWW_CONST char *prot_filename,
-                                              WWW_CONST char *eff_ids));
+PUBLIC void HTAA_setCurrentProtection (WWW_CONST char *cur_docname,
+                                       WWW_CONST char *prot_filename,
+                                       WWW_CONST char *eff_ids);
 
 
 /* SERVER INTERNAL                                      HTAA_clearProtections()
@@ -109,7 +98,7 @@ PUBLIC void HTAA_setCurrentProtection PARAMS((WWW_CONST char *cur_docname,
 **      returns nothing.
 **              Frees the memory used by protection information.
 */
-PUBLIC void HTAA_clearProtections NOPARAMS;
+PUBLIC void HTAA_clearProtections ();
 /*
 
 Getting Protection Settings
@@ -137,7 +126,7 @@ Getting Protection Settings
 **              protection setup of the HTTranslate()'d file.
 **              This must not be free()'d.
 */
-PUBLIC HTAAProt *HTAA_getCurrentProtection NOPARAMS;
+PUBLIC HTAAProt *HTAA_getCurrentProtection ();
 
 
 
@@ -159,7 +148,7 @@ PUBLIC HTAAProt *HTAA_getCurrentProtection NOPARAMS;
 **              protection settings).
 **              This must not be free()'d.
 */
-PUBLIC HTAAProt *HTAA_getDefaultProtection NOPARAMS;
+PUBLIC HTAAProt *HTAA_getDefaultProtection ();
 /*
 
 Get User and Group IDs to Which Set to
@@ -175,7 +164,7 @@ Get User and Group IDs to Which Set to
 **      returns the uid number to give to setuid() system call.
 **              Default is 65534 (nobody).
 */
-PUBLIC int HTAA_getUid NOPARAMS;
+PUBLIC int HTAA_getUid ();
 
 
 /* PUBLIC                                                       HTAA_getGid()
@@ -187,7 +176,7 @@ PUBLIC int HTAA_getUid NOPARAMS;
 **      returns the uid number to give to setgid() system call.
 **              Default is 65534 (nogroup).
 */
-PUBLIC int HTAA_getGid NOPARAMS;
+PUBLIC int HTAA_getGid ();
 
 
-#endif /* not HTAAPROT_H */
+#endif  /* not HTAAPROT_H */

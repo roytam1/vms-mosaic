@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - the VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 
@@ -66,27 +68,41 @@
 
 #include "../src/prefs.h"
 
+#ifndef DISABLE_TRACE
+extern int htmlwTrace;
+extern int reportBugs;
+#endif
+
+typedef struct text_rec {
+        struct text_rec *next;
+} TextBlock;
+
 static ElemInfo *elem_start;
 static MarkInfo *mark_start;
+static ImageInfo *image_start = NULL;
+static TextBlock *textA_start = NULL;
+static TextBlock *textB_start = NULL;
+static TextBlock *textC_start = NULL;
+static TextBlock *textD_start = NULL;
+static TextBlock *textE_start = NULL;
+static TextBlock *textF_start = NULL;
+static int count_big = 0;
 
 /* Free up the passed linked list of parsed HTML objects, freeing
  * all memory associated with each object.
  */
 void FreeMarkUpList(MarkInfo *List)
 {
-	MarkInfo *current;
+	MarkInfo *current = List;
 	MarkInfo *mptr;
 
-	current = List;
 	while (current) {
 		mptr = current;
 		current = current->next;
 		if (mptr->start)
-			free(mptr->start);
+			FreeMarkText(mptr->start);
 		if (mptr->text)
-			free(mptr->text);
-		if (mptr->end)
-			free(mptr->end);
+			FreeMarkText(mptr->text);
 
 		/* Any tag can have one */
 		if (mptr->anc_name)
@@ -94,29 +110,23 @@ void FreeMarkUpList(MarkInfo *List)
 
 		if (!mptr->is_end && (mptr->type == M_ANCHOR)) {
 			if (mptr->anc_href)
-				free(mptr->anc_href);
+				FreeMarkText(mptr->anc_href);
 			if (mptr->anc_title)
 				free(mptr->anc_title);
 			if (mptr->anc_target)
 				free(mptr->anc_target);
 		}
-
-		if (mptr->s_aps)	/* Aprog */
-			_FreeAprogStruct(mptr->s_aps);
 		if (mptr->s_ats)	/* Applet */
 			_FreeAppletStruct(mptr->s_ats);
 		if (mptr->t_p1)		/* Table */
 			_FreeTableStruct(mptr->t_p1);
 
-		if (mptr->preallo) {
-			/* Place back on preallocated list */
-			mptr->next = mark_start;
-			mark_start = mptr;
-		} else {
-			free(mptr);
-		}
+		/* Place back on free list */
+		mptr->next = mark_start;
+		mark_start = mptr;
 	}
 }
+
 /* Free up the passed linked list of parsed HTML usemaps, freeing
  * all memory associated with each map.
  */
@@ -151,30 +161,104 @@ void FreeMapList(MapInfo *map)
 	}
 }
 
+/* Free image data */
+void FreeImageInfo(ImageInfo *picd, HTMLWidget hw)
+{
+	Display *dsp;
+
+	/* Will be NULL when deleting cached data */
+	if (hw)
+		dsp = hw->html.dsp;
+        /*
+         * Don't free internal image pixmaps or data
+         */
+	if (picd->image && picd->fetched) {
+		XFreePixmap(dsp, picd->image);
+		if (picd->clip)
+			XFreePixmap(dsp, picd->clip);
+		if (picd->ori_colrs)
+			free(picd->ori_colrs);
+	}
+	/* Free any animation ImageInfo and Pixmaps */
+	if (picd->anim_info && picd->next) {
+		ImageInfo *next = picd->next;
+		ImageInfo *tmp;
+
+		while (next) {
+			tmp = next;
+			next = tmp->next;
+			if (tmp->image)
+				XFreePixmap(dsp, tmp->image);
+			if (tmp->clip)
+				XFreePixmap(dsp, tmp->clip);
+			/* Free rescaled animation data */
+			if (picd->fetched && !picd->cached) {
+				if (tmp->image_data)
+					free(tmp->image_data);
+				if (tmp->clip_data)
+					free(tmp->clip_data);
+				if (tmp->alpha)
+					free(tmp->alpha);
+			}
+			/* Put on free list */
+			tmp->next = image_start;
+			image_start = tmp;
+		}
+		if (picd->has_anim_image && picd->anim_image)
+			XFreePixmap(dsp, picd->anim_image);
+		if (picd->has_anim_image && picd->bg_image)
+			XFreePixmap(dsp, picd->bg_image);
+		if (picd->timer)
+			XtRemoveTimeOut(picd->timer);
+	}
+	/* Background image with alpha channel */
+	if (picd->is_bg_image && picd->alpha && picd->alpha_image_data)
+		free(picd->alpha_image_data);
+
+	/* Private copy if it was rescaled */
+	if (picd->fetched && !picd->cached) {
+		if (picd->image_data)
+			free(picd->image_data);
+		if (picd->clip_data)
+			free(picd->clip_data);
+		if (picd->alpha)
+			free(picd->alpha);
+	}
+	/* Internal images can have these */
+	if (picd->src)
+		free(picd->src);
+	if (picd->text)
+		free(picd->text);
+	if (picd->alt_text)
+		free(picd->alt_text);
+	if (picd->usemap)
+		free(picd->usemap);
+
+	/* Place back on free list */
+	picd->next = image_start;
+	image_start = picd;
+}
+
 /* Free up the passed linked list of formatted elements, freeing
  * all memory associated with each element.
  */
 void FreeLineList(ElemInfo *list, HTMLWidget hw)
 {
-	ElemInfo *current;
+	ElemInfo *current = list;
 	ElemInfo *eptr;
-	ImageInfo *picd;
-	ImageInfo *next;
-	ImageInfo *tmp;
 	int iframe_done = 0;
 
-	current = list;
 	while (current) {
 		eptr = current;
 		current = current->next;
 		if (eptr->edata)
-			free(eptr->edata);
+			FreeMarkText(eptr->edata);
 		if (eptr->label_id)
 			free(eptr->label_id);
 		if (eptr->title)
 			free(eptr->title);
 		if (eptr->type == E_IFRAME) {
-			/* Delete all of them if not already done */
+			/* Delete all of them if not already done. */
 			if (!iframe_done) {
 				FrameCbData cbs;
 
@@ -191,96 +275,60 @@ void FreeLineList(ElemInfo *list, HTMLWidget hw)
 				free(eptr->frame);
 			}
 		}
-		if ((eptr->type == E_IMAGE) && eptr->pic_data) {
-			picd = eptr->pic_data;
-                        /*
-                         * Don't free internal image pixmaps or data
-                         */
-			if ((picd->image != (Pixmap)NULL) && picd->fetched) {
-				XFreePixmap(XtDisplay(hw), picd->image);
-				if (picd->clip != (Pixmap)NULL)
-					XFreePixmap(XtDisplay(hw), picd->clip);
-				if (picd->ori_colrs)
-					free(picd->ori_colrs);
-			}
-			/* Free any animation ImageInfo and Pixmaps */
-			if (picd->anim_info && picd->next) {
-				next = picd->next;
-				while (next) {
-					tmp = next;
-					next = tmp->next;
-					if (tmp->image != (Pixmap)NULL) {
-						XFreePixmap(XtDisplay(hw),
-							    tmp->image);
-						tmp->image = (Pixmap)NULL;
-					}
-					if (tmp->clip != (Pixmap)NULL) {
-						XFreePixmap(XtDisplay(hw),
-							    tmp->clip);
-						tmp->clip = (Pixmap)NULL;
-					}
-					/* Free rescaled animation data */
-					if (picd->fetched && !picd->cached) {
-						if (tmp->image_data)
-							free(tmp->image_data);
-						if (tmp->clip_data)
-							free(tmp->clip_data);
-						if (tmp->alpha)
-							free(tmp->alpha);
-					}
-					free(tmp);
-				}
-				if (picd->has_anim_image &&
-				    (picd->anim_image != (Pixmap)NULL))
-					XFreePixmap(XtDisplay(hw),
-						    picd->anim_image);
-				if (picd->has_anim_image &&
-				    (picd->bg_image != (Pixmap)NULL))
-					XFreePixmap(XtDisplay(hw),
-						    picd->bg_image);
-				if (picd->timer)
-					XtRemoveTimeOut(picd->timer);
-			}
-			/* Background image with alpha channel */
-			if (picd->is_bg_image && picd->alpha &&
-			    picd->alpha_image_data)
-				free(picd->alpha_image_data);
+		if ((eptr->type == E_IMAGE) && eptr->pic_data)
+			FreeImageInfo(eptr->pic_data, hw);
 
-			/* Private copy if it was rescaled */
-			if (picd->fetched && !picd->cached) {
-				if (picd->image_data)
-					free(picd->image_data);
-				if (picd->clip_data)
-					free(picd->clip_data);
-				if (picd->alpha)
-					free(picd->alpha);
-			}
-			/* Internal images can have these */
-			if (picd->src)
-				free(picd->src);
-			if (picd->text)
-				free(picd->text);
-			if (picd->alt_text)
-				free(picd->alt_text);
-			if (picd->usemap)
-				free(picd->usemap);
-			free(picd);
-		}
-		if (eptr->preallo) {
-			/* Place element back on preallocated list */
-			eptr->next = elem_start;
-			elem_start = eptr;
-		} else {
-			free(eptr);
-		}
+		/* Place element back on preallocated list */
+		eptr->next = elem_start;
+		elem_start = eptr;
+	}
+}
+
+/* Free text block */
+void FreeMarkText(char *text)
+{
+	text--;
+	switch (*text) {
+	    case '0':
+		/* Actually free oversize ones */
+		free(text);
+		count_big--;
+		break;
+	    case 'A':
+		((TextBlock *)text)->next = textA_start;
+		textA_start = (TextBlock *)text;
+		break;
+	    case 'B':
+		((TextBlock *)text)->next = textB_start;
+		textB_start = (TextBlock *)text;
+		break;
+	    case 'C':
+		((TextBlock *)text)->next = textC_start;
+		textC_start = (TextBlock *)text;
+		break;
+	    case 'D':
+		((TextBlock *)text)->next = textD_start;
+		textD_start = (TextBlock *)text;
+		break;
+	    case 'E':
+		((TextBlock *)text)->next = textE_start;
+		textE_start = (TextBlock *)text;
+		break;
+	    case 'F':
+		((TextBlock *)text)->next = textF_start;
+		textF_start = (TextBlock *)text;
+		break;
+	    default:
+		fprintf(stderr, "Free of bad text block\n");
 	}
 }
 
 /* Handles allocation of Element memory */
 ElemInfo *GetElemRec()
 {
-	static int init = 0;
 	ElemInfo *next;
+	static int init = 0;
+	static int ecount;
 
 	/* Preallocate some elements */
 	if (!init) {
@@ -289,37 +337,51 @@ ElemInfo *GetElemRec()
 
 		if (num < 1)
 			num = 1;
-		next = elem_start = (ElemInfo *) calloc(num * sizeof(ElemInfo),
+		next = elem_start = (ElemInfo *) malloc(num * sizeof(ElemInfo) *
 							sizeof(char));
 		CHECK_OUT_OF_MEM(next);
-		next->preallo = 1;
+		ecount = num;
 		for (i = 1; i < num; i++) {
 			next->next = next + 1;
 			next = next->next;
-			next->preallo = 1;
 		}
 		next->next = NULL;
 		init = 1;
 	}
 	if (!elem_start) {
-		/* Preallocated list was empty */
-		next = (ElemInfo *) calloc(sizeof(ElemInfo), sizeof(char));
+		int i;
+
+		/* Preallocated list was empty, so allo another block */
+		next = elem_start = (ElemInfo *) malloc(512 * sizeof(ElemInfo) *
+							sizeof(char));
 		CHECK_OUT_OF_MEM(next);
-	} else {
-		/* Return top of preallocated list */
-		next = elem_start;
-		/* Zero it */
-		memset(next, 0, sizeof(ElemInfo));
-		elem_start = next->next;
+		ecount += 512;
+		for (i = 1; i < 512; i++) {
+			next->next = next + 1;
+			next = next->next;
+		}
+		next->next = NULL;
+#ifndef DISABLE_TRACE
+                if (htmlwTrace || reportBugs)
+                       fprintf(stderr,
+			       "Allocated 512 elements.  Total = %d\n", ecount);
+#endif
 	}
+
+	/* Return top of preallocated list */
+	next = elem_start;
+	elem_start = next->next;
+	/* Zero it */
+	memset(next, 0, sizeof(ElemInfo));
 	return next;
 }
 
 /* Handles allocation of Markup memory */
 MarkInfo *GetMarkRec()
 {
-	static int init = 0;
 	MarkInfo *next;
+	static int init = 0;
+	static int mcount;
 
 	/* Preallocate some */
 	if (!init) {
@@ -328,36 +390,245 @@ MarkInfo *GetMarkRec()
 
 		if (num < 1)
 			num = 1;
-		next = mark_start = (MarkInfo *) calloc(num * sizeof(MarkInfo),
+		next = mark_start = (MarkInfo *) malloc(num * sizeof(MarkInfo) *
 							sizeof(char));
 		CHECK_OUT_OF_MEM(next);
-		next->preallo = 1;
+		mcount = num;
 		for (i = 1; i < num; i++) {
 			next->next = next + 1;
 			next = next->next;
-			next->preallo = 1;
 		}
 		next->next = NULL;
 		init = 1;
 	}
 	if (!mark_start) {
-		/* Preallocated list was empty */
-		next = (MarkInfo *) calloc(sizeof(MarkInfo), sizeof(char));
+		int i;
+
+		/* Preallocated list was empty, so allo another block */
+		next = mark_start = (MarkInfo *) malloc(512 * sizeof(MarkInfo) *
+							sizeof(char));
 		CHECK_OUT_OF_MEM(next);
-	} else {
-		/* Return top of preallocated list */
-		next = mark_start;
-		/* Zero it */
-		memset(next, 0, sizeof(MarkInfo));
-		mark_start = next->next;
+		mcount += 512;
+		for (i = 1; i < 512; i++) {
+			next->next = next + 1;
+			next = next->next;
+		}
+		next->next = NULL;
+#ifndef DISABLE_TRACE
+                if (htmlwTrace || reportBugs)
+                       fprintf(stderr,
+			       "Allocated 512 marks.  Total = %d\n", mcount);
+#endif
 	}
 
+	/* Return top of preallocated list */
+	next = mark_start;
+	mark_start = next->next;
+	memset(next, 0, sizeof(MarkInfo));
 	return next;
+}
+
+void FreeMarkRec(MarkInfo *mark)
+{
+	/* Place back on free list */
+	mark->next = mark_start;
+	mark_start = mark;
+}
+
+/* Handles allocation of ImageInfo memory */
+ImageInfo *GetImageRec()
+{
+	ImageInfo *next;
+	static int icount = 0;
+
+	if (!image_start) {
+		int i;
+
+		/* Allocate a block */
+		next = image_start = (ImageInfo *) malloc(32 *
+							  sizeof(ImageInfo) *
+							  sizeof(char));
+		CHECK_OUT_OF_MEM(next);
+		icount += 32;
+		for (i = 1; i < 32; i++) {
+			next->next = next + 1;
+			next = next->next;
+		}
+		next->next = NULL;
+#ifndef DISABLE_TRACE
+                if (htmlwTrace || reportBugs)
+                       fprintf(stderr,
+			       "Allocated 32 ImageInfo.  Total = %d\n", icount);
+#endif
+	}
+
+	/* Return top of preallocated list */
+	next = image_start;
+	image_start = next->next;
+	memset(next, 0, sizeof(ImageInfo));
+	return next;
+}
+
+/* Allocate a block of text memory */
+static TextBlock *AlloBlock(int num, int size)
+{
+	TextBlock *text = (TextBlock *)malloc(num * size * sizeof(char));
+	TextBlock *next;
+	char *block;
+	int i;
+
+	CHECK_OUT_OF_MEM(text);
+	next = text;
+	for (i = 1; i < num; i++) {
+		block = (char *)next;
+		block += size;
+		next->next = (TextBlock *)block;
+		next = next->next;
+	}
+	next->next = NULL;
+	return text;
+}
+
+/* Handles allocation of Markup text memory */
+char *GetMarkText(char *text)
+{
+	TextBlock *next;
+	char *block;
+	int len;
+	static int Acount = 0;
+	static int Bcount = 0;
+	static int Ccount = 0;
+	static int Dcount = 0;
+	static int Ecount = 0;
+	static int Fcount = 0;
+
+	if (!text)
+		return NULL;
+
+	len = strlen(text);
+
+	if (len < 7) {
+		if (!textA_start) {
+			textA_start = AlloBlock(512, 8);
+			Acount += 512;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 512 AText.  Total = %d\n",
+					Acount);
+#endif
+		}
+		/* Return top of A list */
+		next = textA_start;
+		textA_start = next->next;
+		block = (char *)next;
+		*block++ = 'A';
+		strcpy(block, text);
+	} else if (len < 15) {
+		if (!textB_start) {
+			textB_start = AlloBlock(128, 16);
+			Bcount += 128;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 128 BText.  Total = %d\n",
+					Bcount);
+#endif
+		}
+		/* Return top of B list */
+		next = textB_start;
+		textB_start = next->next;
+		block = (char *)next;
+		*block++ = 'B';
+		strcpy(block, text);
+	} else if (len < 31) {
+		if (!textC_start) {
+			textC_start = AlloBlock(128, 32);
+			Ccount += 128;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 128 CText.  Total = %d\n",
+					Ccount);
+#endif
+		}
+		/* Return top of C list */
+		next = textC_start;
+		textC_start = next->next;
+		block = (char *)next;
+		*block++ = 'C';
+		strcpy(block, text);
+	} else if (len < 63) {
+		if (!textD_start) {
+			textD_start = AlloBlock(256, 64);
+			Dcount += 256;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 256 DText.  Total = %d\n",
+					Dcount);
+#endif
+		}
+		/* Return top of D list */
+		next = textD_start;
+		textD_start = next->next;
+		block = (char *)next;
+		*block++ = 'D';
+		strcpy(block, text);
+	} else if (len < 127) {
+		if (!textE_start) {
+			textE_start = AlloBlock(128, 128);
+			Ecount += 128;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 128 EText.  Total = %d\n",
+					Ecount);
+#endif
+		}
+		/* Return top of E list */
+		next = textE_start;
+		textE_start = next->next;
+		block = (char *)next;
+		*block++ = 'E';
+		strcpy(block, text);
+	} else if (len < 255) {
+		if (!textF_start) {
+			textF_start = AlloBlock(64, 256);
+			Fcount += 64;
+#ifndef DISABLE_TRACE
+	                if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+			       		"Allocated 64 FText.  Total = %d\n",
+					Fcount);
+#endif
+		}
+		/* Return top of F list */
+		next = textF_start;
+		textF_start = next->next;
+		block = (char *)next;
+		*block++ = 'F';
+		strcpy(block, text);
+	} else {
+		static int lcount = 64;
+
+		block = malloc(len + 2);
+		*block++ = '0';
+		strcpy(block, text);
+		count_big++;
+#ifndef DISABLE_TRACE
+                if ((htmlwTrace || reportBugs) && (count_big == lcount)) {
+			fprintf(stderr, "Big text number = %d\n", count_big);
+			lcount += 64;
+		}
+#endif
+	}
+	return block;
 }
 
 /*
  * Passed in 2 element pointers, and element positions.
- * Function should return 1 if if start occurs before end.
+ * Function should return 1 if start occurs before end.
  * Otherwise return 0.
  */
 int ElementLessThan(ElemInfo *start, ElemInfo *end, int start_pos, int end_pos)
@@ -365,12 +636,10 @@ int ElementLessThan(ElemInfo *start, ElemInfo *end, int start_pos, int end_pos)
 	/*
 	 * Deal with start or end being NULL
 	 */
-	if (!start && !end)
+	if ((!start && !end) || (start && !end))
 		return(0);
 	if (!start && end)
 		return(1);
-	if (start && !end)
-		return(0);
 	/*
 	 * Deal with easy identical case
 	 */
@@ -379,7 +648,7 @@ int ElementLessThan(ElemInfo *start, ElemInfo *end, int start_pos, int end_pos)
 			return(1);
 		return(0);
 	}
-	/* We know element Ids are always equal or increasing within a list.*/
+	/* We know element Ids are always equal or increasing within a list. */
 	if (start->ele_id < end->ele_id)
 		return(1);
 	if (start->ele_id == end->ele_id) {
@@ -407,12 +676,10 @@ int ElementLessThan(ElemInfo *start, ElemInfo *end, int start_pos, int end_pos)
 int SwapElements(ElemInfo *start, ElemInfo *end, int start_pos, int end_pos)
 {
 	/* Deal with start or end being NULL */
-	if (!start && !end)
+	if ((!start && !end) || (start && !end))
 		return(0);
 	if (!start && end)
 		return(1);
-	if (start && !end)
-		return(0);
 	/* Deal with easy identical case */
 	if (start == end) {
 		if (start_pos > end_pos)

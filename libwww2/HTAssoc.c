@@ -1,4 +1,3 @@
-
 /* MODULE							HTAssoc.c
 **	    ASSOCIATION LIST FOR STORING NAME-VALUE PAIRS.
 **	    NAMES NOT CASE SENSITIVE, AND ONLY COMMON LENGTH
@@ -27,19 +26,19 @@
 extern int www2Trace;
 #endif
 
-PUBLIC HTAssocList *HTAssocList_new NOARGS
+PUBLIC HTAssocList *HTAssocList_new (void)
 {
     return HTList_new();
 }
 
 
-PUBLIC void HTAssocList_delete ARGS1(HTAssocList *, alist)
+PUBLIC void HTAssocList_delete (HTAssocList *alist)
 {
     if (alist) {
 	HTAssocList *cur = alist;
 	HTAssoc *assoc;
 
-	while (NULL != (assoc = (HTAssoc *)HTList_nextObject(cur))) {
+	while (assoc = (HTAssoc *)HTList_nextObject(cur)) {
 	    if (assoc->name)
 		free(assoc->name);
 	    if (assoc->value)
@@ -51,17 +50,19 @@ PUBLIC void HTAssocList_delete ARGS1(HTAssocList *, alist)
 }
 
 
-PUBLIC void HTAssocList_add ARGS3(HTAssocList *,	alist,
-				  WWW_CONST char *,	name,
-				  WWW_CONST char *,	value)
+PUBLIC void HTAssocList_add (HTAssocList *alist,
+			     WWW_CONST char *name,
+			     WWW_CONST char *value)
 {
     HTAssoc *assoc;
 
     if (alist) {
-	if (!(assoc = (HTAssoc *)malloc(sizeof(HTAssoc))))
+	if (!(assoc = (HTAssoc *)calloc(1, sizeof(HTAssoc))))
 	    outofmem(__FILE__, "HTAssoc_add");
+	/** calloc zeros
 	assoc->name = NULL;
 	assoc->value = NULL;
+	**/
 
 	if (name)
 	    StrAllocCopy(assoc->name, name);
@@ -77,16 +78,14 @@ PUBLIC void HTAssocList_add ARGS3(HTAssocList *,	alist,
 }
 
 
-PUBLIC char *HTAssocList_lookup ARGS2(HTAssocList *,	alist,
-				      WWW_CONST char *,	name)
+PUBLIC char *HTAssocList_lookup (HTAssocList *alist, WWW_CONST char *name)
 {
     HTAssocList *cur = alist;
     HTAssoc *assoc;
 
-    while (NULL != (assoc = (HTAssoc *)HTList_nextObject(cur))) {
+    while (assoc = (HTAssoc *)HTList_nextObject(cur)) {
 	if (!my_strncasecmp(assoc->name, name, strlen(name)))
 	    return assoc->value;
     }
     return NULL;
 }
-

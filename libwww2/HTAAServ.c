@@ -83,11 +83,11 @@ PRIVATE HTAAFailReasonType HTAAFailReason = HTAA_OK;	/* AA fail reason     */
 **	returns	a string containing the error message
 **		corresponding to internal HTAAFailReason.
 */
-PUBLIC char *HTAA_statusMessage NOARGS
+PUBLIC char *HTAA_statusMessage (void)
 {
     switch (HTAAFailReason) {
 
-    /* 401 cases */
+      /* 401 cases */
       case HTAA_NO_AUTH:
 	return "Unauthorized -- authentication failed";
 	break;
@@ -95,7 +95,7 @@ PUBLIC char *HTAA_statusMessage NOARGS
 	return "Unauthorized to access the document";
 	break;
 
-    /* 403 cases */
+      /* 403 cases */
       case HTAA_BY_RULE:
 	return "Forbidden -- by rule";
 	break;
@@ -110,29 +110,29 @@ PUBLIC char *HTAA_statusMessage NOARGS
 	return "Forbidden -- server protection setup error";
 	break;
 
-    /* 404 cases */
+      /* 404 cases */
       case HTAA_NOT_FOUND:
 	return "Not found -- file doesn't exist or is read protected";
 	break;
 
-    /* Success */
+      /* Success */
       case HTAA_OK:
 	return "AA: Access should be ok but something went wrong"; 
 	break;
 
-    /* Others */
+      /* Others */
       default:
 	return "Access denied -- unable to specify reason (bug)";
 
-    } /* switch */
+    }
 }
 
 
-PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
+PRIVATE char *status_name (HTAAFailReasonType reason)
 {
     switch (HTAAFailReason) {
 
-    /* 401 cases */
+      /* 401 cases */
       case HTAA_NO_AUTH:
 	return "NO-AUTHENTICATION";
 	break;
@@ -140,7 +140,7 @@ PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
 	return "NOT-AUTHORIZED";
 	break;
 
-    /* 403 cases */
+      /* 403 cases */
       case HTAA_BY_RULE:
 	return "FORB-RULE";
 	break;
@@ -157,20 +157,20 @@ PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
 	return "SETUP-ERROR";
 	break;
 
-    /* 404 cases */
+      /* 404 cases */
       case HTAA_NOT_FOUND:
 	return "NOT-FOUND";
 	break;
 
-    /* Success */
+      /* Success */
       case HTAA_OK:
 	return "OK";
 	break;
 
-    /* Others */
+      /* Others */
       default:
 	return "SERVER-BUG";
-    } /* switch */
+    }
 }
 
 
@@ -195,10 +195,10 @@ PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
 **	to avoid unnecessary overhead of opening the
 **	file twice).
 */
-PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname,
-						     HTAAMethod,    method,
-						     HTAAScheme,    scheme,
-						     char *, scheme_specifics)
+PRIVATE HTAAFailReasonType check_authorization (WWW_CONST char *pathname,
+						HTAAMethod method,
+						HTAAScheme scheme,
+						char *scheme_specifics)
 {
     HTAAFailReasonType reason;
     GroupDef *allowed_groups;
@@ -427,10 +427,10 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 **	file twice).
 **
 */
-PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
-					 WWW_CONST char *,	method_name,
-					 WWW_CONST char *,	scheme_name,
-                                         char *,	scheme_specifics)
+PUBLIC int HTAA_checkAuthorization (WWW_CONST char *url,
+				    WWW_CONST char *method_name,
+				    WWW_CONST char *scheme_name,
+                                    char *scheme_specifics)
 {
     static char *pathname = NULL;
     char *local_copy = NULL;
@@ -461,14 +461,12 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 
     HTAAFailReason = check_authorization(pathname, method,
 					 scheme, scheme_specifics);
-
     if (htaa_logfile) {
 	time(&theTime);
 	fprintf(htaa_logfile, "%24.24s %s %s %s %s %s\n",
 		ctime(&theTime),
 		HTClientHost ? HTClientHost : "local",
-		method_name,
-		url,
+		method_name, url,
 		status_name(HTAAFailReason),
 		htaa_user && htaa_user->username
 		? htaa_user->username : "");
@@ -478,8 +476,7 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 	    fprintf(stderr, "Log: %24.24s %s %s %s %s %s\n",
 		    ctime(&theTime),
 		    HTClientHost ? HTClientHost : "local",
-		    method_name,
-		    url,
+		    method_name, url,
 		    status_name(HTAAFailReason),
 		    htaa_user && htaa_user->username
 		    ? htaa_user->username : "");
@@ -511,7 +508,7 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 
       default:
 	return 500;
-    } /* switch */
+    }
 }
 
 
@@ -528,8 +525,7 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 **	returns		scheme specific parameters in an
 **			auto-freed string.
 */
-PRIVATE char *compose_scheme_specifics ARGS2(HTAAScheme,	scheme,
-					     HTAAProt *,	prot)
+PRIVATE char *compose_scheme_specifics (HTAAScheme scheme, HTAAProt *prot)
 {
     static char *result = NULL;
 
@@ -541,8 +537,7 @@ PRIVATE char *compose_scheme_specifics ARGS2(HTAAScheme,	scheme,
 	    char *realm = HTAssocList_lookup(prot->values, "server");
 
 	    result = (char*)malloc(60);
-	    sprintf(result, "realm=\"%s\"",
-		    (realm ? realm : "UNKNOWN"));
+	    sprintf(result, "realm=\"%s\"", realm ? realm : "UNKNOWN");
 	    return result;
 	}
 	break;
@@ -569,7 +564,7 @@ PRIVATE char *compose_scheme_specifics ARGS2(HTAAScheme,	scheme,
 **		the requested document.
 **
 */
-PUBLIC char *HTAA_composeAuthHeaders NOARGS
+PUBLIC char *HTAA_composeAuthHeaders (void)
 {
     static char *result = NULL;
     HTAAScheme scheme;
@@ -595,12 +590,12 @@ PUBLIC char *HTAA_composeAuthHeaders NOARGS
     FREE(result);	/* From previous call */
     if (!(result = (char*)malloc(4096)))	/* @@ */
 	outofmem(__FILE__, "HTAA_composeAuthHeaders");
-    *result = (char)0;
+    *result = '\0';
 
-    for (scheme=0; scheme < HTAA_MAX_SCHEMES; scheme++) {
-	if (-1 < HTList_indexOf(prot->valid_schemes, (void*)scheme)) {
+    for (scheme = 0; scheme < HTAA_MAX_SCHEMES; scheme++) {
+	if (-1 < HTList_indexOf(prot->valid_schemes, (void *)scheme)) {
 	    if ((scheme_name = HTAAScheme_name(scheme))) {
-		scheme_params = compose_scheme_specifics(scheme,prot);
+		scheme_params = compose_scheme_specifics(scheme, prot);
 		strcat(result, "WWW-Authenticate: ");
 		strcat(result, scheme_name);
 		if (scheme_params) {
@@ -614,9 +609,8 @@ PUBLIC char *HTAA_composeAuthHeaders NOARGS
 		fprintf(stderr, "HTAA_composeAuthHeaders: %s %d\n",
 		        "No name found for scheme number", scheme);
 #endif
-	} /* scheme valid for requested document */
-    } /* for every scheme */
-    
+	}  /* scheme valid for requested document */
+    }
     return result;
 }
 
@@ -627,8 +621,7 @@ PUBLIC char *HTAA_composeAuthHeaders NOARGS
 **	fp	is the open log file.
 **
 */
-PUBLIC void HTAA_startLogging ARGS1(FILE *, fp)
+PUBLIC void HTAA_startLogging (FILE *fp)
 {
     htaa_logfile = fp;
 }
-

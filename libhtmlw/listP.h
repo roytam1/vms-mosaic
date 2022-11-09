@@ -22,13 +22,13 @@ struct LISTINSTANCE {
 	char *value;
 	struct LISTINSTANCE *next;
 	struct LISTINSTANCE *prev;
-	};
+};
 
 struct LISTSTRUCT {
 	struct LISTINSTANCE  *head;
 	struct LISTINSTANCE  *tail;
 	struct LISTINSTANCE  *current;  
 	int listCount;
-	};
+};
 
 #endif

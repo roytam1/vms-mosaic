@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -95,7 +95,6 @@ int ReadBuffer(MCCIPort s, char *data, int numBytesToRead)
 		numRead = s->numInBuffer;
 		s->numInBuffer = 0;
 	}
-
 	numRead += NetRead(s, data, numBytesToRead);
 	return(numRead);
 }
@@ -107,7 +106,7 @@ int ReadBuffer(MCCIPort s, char *data, int numBytesToRead)
  * the buffersize.
  * 0 returned on error
  */
-char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
+char *NNTPGetLine(MCCIPort s)  /****** This routine needs an overhaul.... */
 {
 	int numBytes;
 	char buf2[PORTBUFFERSIZE + 1];
@@ -128,12 +127,10 @@ char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 /*
 			DisconnectFromServer(s);
 */
-
 #ifndef DISABLE_TRACE
 			if (srcTrace)
 				fprintf(stderr, "GetLine: End of Connection\n");
 #endif
-
 			return(0);
 		}
 		s->numInBuffer = numBytes;
@@ -154,13 +151,12 @@ char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 		}
 */
 /*
-		if (! NetIsThereInput(s)) {
+		if (!NetIsThereInput(s)) {
 #ifndef DISABLE_TRACE
 			if (srcTrace)
 				fprintf(stderr,
 					"GetLine: return 0 at point 4\n");
 #endif
-
 			return(0);
 		}
 */
@@ -176,7 +172,6 @@ char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 				fprintf(stderr,
 					"GetLine: return 0 at point 5\n");
 #endif
-
 			return(0);
 		}
 		memcpy(&(s->buffer[s->numInBuffer]), buf2, numBytes);
@@ -191,7 +186,6 @@ char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 				fprintf(stderr,
 					"GetLine: return NULL at point 6\n");
 #endif
-
 			return(NULL);
 		}
 	}
@@ -213,15 +207,13 @@ char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 	memcpy(s->buffer, ptr, s->numInBuffer);
 
 	return(returnLine);
-	
-} /* NNTPGetLine() */
+}  /* NNTPGetLine() */
 
 
 /* Return a word out of the text */
 void GetWordFromString(char *text, char **retStart, char **retEnd)
 {
-	char *start;
-	char *end;
+	char *start, *end;
 
 	if (!text) {
 		*retStart = *retEnd = text;
@@ -229,19 +221,17 @@ void GetWordFromString(char *text, char **retStart, char **retEnd)
 	}
 
 	start = text;
-	while ((*start) && isspace(*start)) {     /* Skip over leading space */
+	while (*start && isspace(*start))     /* Skip over leading space */
 		start++;
-	}
 
 	end = start;
-	while ((*end) && (!isspace(*end))) {      /* Find next space */
+	while (*end && (!isspace(*end)))      /* Find next space */
 		end++;
-	}
 
 	*retStart = start;
 	*retEnd = end;
 	return;
 }
 #else
-int ccidummy5; /* Shut the freaking stupid compiler up */
-#endif /* End ifdef CCI */
+int ccidummy5;  /* Shut the freaking stupid compiler up */
+#endif  /* End ifdef CCI */

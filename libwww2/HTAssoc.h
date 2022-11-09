@@ -7,15 +7,11 @@
 #ifndef HTASSOC_H
 #define HTASSOC_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"
+#endif
+#ifndef HTLIST_H
 #include "HTList.h"
-
-
-#ifdef SHORT_NAMES
-#define HTAL_new        HTAssocList_new
-#define HTAL_del        HTAssocList_delete
-#define HTAL_add        HTAssocList_add
-#define HTAL_lup        HTAssocList_lookup
 #endif
 
 typedef HTList HTAssocList;
@@ -25,16 +21,13 @@ typedef struct {
     char *value;
 } HTAssoc;
 
+PUBLIC HTAssocList *HTAssocList_new ();
+PUBLIC void HTAssocList_delete (HTAssocList *alist);
 
-PUBLIC HTAssocList *HTAssocList_new NOPARAMS;
-PUBLIC void HTAssocList_delete PARAMS((HTAssocList *alist));
+PUBLIC void HTAssocList_add (HTAssocList    *alist,
+                             WWW_CONST char *name,
+                             WWW_CONST char *value);
 
-PUBLIC void HTAssocList_add PARAMS((HTAssocList    *alist,
-                                    WWW_CONST char *name,
-                                    WWW_CONST char *value));
+PUBLIC char *HTAssocList_lookup (HTAssocList *alist, WWW_CONST char *name);
 
-PUBLIC char *HTAssocList_lookup PARAMS((HTAssocList    *alist,
-                                        WWW_CONST char *name));
-
-#endif /* not HTASSOC_H */
-
+#endif  /* HTASSOC_H */

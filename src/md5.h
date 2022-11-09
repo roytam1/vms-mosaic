@@ -56,8 +56,9 @@
 
 /* Author: DXP */
 
-/* most of this stuff was taken from the original code from RSA Data Security, Inc. 
-   The appropriate header comments will be included where appropriate */
+/* Most of this stuff was taken from the original code from RSA Data Security,
+ * Inc.  The appropriate header comments will be included where appropriate
+ */
 
 /**************************************************/
 /**************************************************/
@@ -67,9 +68,9 @@
  */
 
 /* PROTOTYPES should be set to one if and only if the compiler supports
-  function argument prototyping.
-The following makes PROTOTYPES default to 0 if it has not already
-  been defined with C compiler flags.
+ * function argument prototyping.
+ * The following makes PROTOTYPES default to 0 if it has not already
+ * been defined with C compiler flags.
  */
 #ifndef PROTOTYPES
 #define PROTOTYPES 1
@@ -85,8 +86,8 @@ typedef unsigned short int UINT2;
 typedef unsigned long int UINT4;
 
 /* PROTO_LIST is defined depending on how PROTOTYPES is defined above.
-If using PROTOTYPES, then PROTO_LIST returns the list, otherwise it
-  returns an empty list.
+ * If using PROTOTYPES, then PROTO_LIST returns the list, otherwise it
+ * returns an empty list.
  */
 #if PROTOTYPES
 #define PROTO_LIST(list) list
@@ -126,8 +127,8 @@ documentation and/or software.
 /* MD5 context. */
 typedef struct {
   UINT4 state[4];                                   /* state (ABCD) */
-  UINT4 count[2];        /* number of bits, modulo 2^64 (lsb first) */
-  unsigned char buffer[64];                         /* input buffer */
+  UINT4 count[2];        /* Number of bits, modulo 2^64 (lsb first) */
+  unsigned char buffer[64];                         /* Input buffer */
 } MD5_CTX;
 
 /**************************************************/

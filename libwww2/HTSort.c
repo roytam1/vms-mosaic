@@ -18,7 +18,6 @@ void HTSortInit(void)
       size_of_hunk = SIZE_OF_HUNK;
       hunk = (char **)malloc(size_of_hunk * sizeof(char *));
   }
-    
   return;
 }
 
@@ -49,7 +48,7 @@ static int dsortf(char **s1, char **s2)
 
 void HTSortSort(void)
 {
-  int (*dsortf_ptr)() = dsortf;
+  static int (*dsortf_ptr)() = dsortf;
 
   qsort((void *)hunk, count, sizeof(char *), dsortf_ptr);
 
@@ -63,9 +62,8 @@ int HTSortCurrentCount(void)
 
 char *HTSortFetch(int i)
 {
-  if (i < count) {
+  if (i < count)
     return hunk[i];
-  } else {
-    return NULL;
-  }
+
+  return NULL;
 }

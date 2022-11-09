@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include <stdio.h>
@@ -121,17 +121,16 @@ extern int errno;
 #endif
 
 #ifndef DISABLE_TRACE
+extern int reportBugs;
 int nutTrace = 0;
 #endif
 
 int sleep_interrupt = 0;
 
-
 #ifdef STANDALONE	/* For testing */
 
 #ifndef VMS /* Completely different tests needed under VMS. PGE */
 char *userPath = {"/bin:/usr/bin:/sbin:/usr/sbin"};
-
 
 int main(int argc, char **argv)
 {
@@ -147,7 +146,6 @@ int main(int argc, char **argv)
 		}
 		exit(0);
 	}
-
 	lpr = (char *)malloc(50);
 	strcpy(lpr, "dsfs/usr/ucb/lpr");
 
@@ -176,26 +174,19 @@ int main(int argc, char **argv)
 char *strdup(char *str) {
   char *dup;
 
-  if (!str)
+  if (!str || !(dup = (char *)malloc(strlen(str) + 1)))
     return NULL;
 
-  dup = (char *)malloc(strlen(str) + 1);
-  if (!dup)
-    return NULL;
-
-  dup = strcpy(dup, str);
-
-  return dup;
+  return(strcpy(dup, str));
 }
 #endif
 
 int main(int argc, char **argv)
 {
-   int    retValue;
+   int    retValue, argc2;
+   char **argv2;
    char  *home_dir;
    char   buffer[256];
-   char **argv2;
-   int    argc2;
 
    retValue = get_home(&home_dir);
    printf("Home = \"%s\"\n  retValue = %d\n\n", home_dir, retValue);
@@ -240,7 +231,7 @@ int main(int argc, char **argv)
 
    argv2 = buildArgv("abc def", &argc2);
    printf("\"abc def\" => argc %d, argv [0] \"%s\", argv [1] \"%s\"\n\n",
-           argc2, argv2 [0], argv2 [1]);
+          argc2, argv2[0], argv2[1]);
    free(*argv);
    free(argv);
 
@@ -254,7 +245,6 @@ int main(int argc, char **argv)
 			buffer, 256);
    retValue = my_system("delete/log/noconf sys$login:login.move;*",
 			buffer, 256);
-
    buffer[0] = '\0';
    retValue = my_move("sys$manager:sylogin.com", "sys$login:sylogin.move",
                       buffer, 256, TRUE);
@@ -266,7 +256,7 @@ int main(int argc, char **argv)
    retValue = my_system("delete/log/noconf sys$login:sylogin.move;*",
 			buffer, 256);
 }
-#endif /* !VMS */
+#endif /* VMS */
 
 #else
 
@@ -288,15 +278,14 @@ extern char *userPath;
  */
 static char *findProgram(char *pname, char *spath)
 {
-
-	char *start = NULL, *ptr = NULL, *endptr = NULL;
+	char *start = spath;
+	char *ptr, *endptr;
 	char tryit[BUFSIZ];
 	struct stat buf;
 
 	if (!spath || !*spath || !pname || !*pname)
 		return(NULL);
 
-	start = spath;
 	while (start && *start) {
 		ptr = start;
 		endptr = strchr(start, ':');
@@ -310,8 +299,6 @@ static char *findProgram(char *pname, char *spath)
 		if (!stat(tryit, &buf))
 			return(strdup(tryit));
 	}
-
-
 	return(NULL);
 }
 #endif
@@ -320,15 +307,15 @@ static char *findProgram(char *pname, char *spath)
 /*
  * Written by: Scott Powers and Brad Viviano
  *
- * Takes a string command, executes the command, returns the output of
+ * Takes a string command, executes the command and returns the output of
  *   the command (if any) in retBuf (passed in and pre-allocated).
  *
  * Returns one of the following:
- *   SYS_SUCCESS - The command executed without incident. Note, this does not
- *     necessarily mean the command was successful...e.g. some systems have
- *     a shell script for "lpr". In this case, the shell that runs "lpr" will
+ *   SYS_SUCCESS - The command executed without incident.  Note, this does not
+ *     necessarily mean the command was successful... e.g. some systems have
+ *     a shell script for "lpr".  In this case, the shell that runs "lpr" will
  *     execute fine, but the command "lp" which "lpr" calls may still fail.
- *   SYS_NO_COMMAND - There  was no command provided.
+ *   SYS_NO_COMMAND - There was no command provided.
  *   SYS_FORK_FAIL - The fork failed.
  *   SYS_PROGRAM_FAILED - The exec could not start the program.
  *   SYS_NO_RETBUF - There was no retBuf allocated.
@@ -338,11 +325,10 @@ static char *findProgram(char *pname, char *spath)
 int my_system(char *cmd, char *retBuf, int bufsize)
 {
 #ifndef VMS  /* PGE */
-
 	char **sys_argv = NULL;
 	int sys_argc;
 	pid_t pid;
-	int status,statusloc;
+	int status, statusloc;
 	int fds[2];
 	char buf[BUFSIZ];
 	char *path = NULL;
@@ -363,7 +349,6 @@ int my_system(char *cmd, char *retBuf, int bufsize)
 #endif
 		return(SYS_FCNTL_FAILED);
 	}
-
 	if ((pid = fork()) == -1) {
 		return(SYS_FORK_FAIL);
 	} else if (pid == 0) {
@@ -371,9 +356,9 @@ int my_system(char *cmd, char *retBuf, int bufsize)
 		sys_argv = buildArgv(cmd, &sys_argc);
 		dup2(fds[1], 1);
 		dup2(fds[1], 2);
-		if (sys_argv != NULL) {
+		if (sys_argv) {
 			if (sys_argv[0] && sys_argv[0][0] &&
-			    sys_argv[0][0]=='/') {
+			    sys_argv[0][0] == '/') {
 				path = strdup(sys_argv[0]);
 			} else {
 				path = findProgram(sys_argv[0], userPath);
@@ -392,13 +377,13 @@ int my_system(char *cmd, char *retBuf, int bufsize)
 					"Could not build argv for [%s].\n",cmd);
 #endif
 		}
-		exit(1); /* child */
+		exit(1);  /* child */
 	} else {
 		int n;
 
-		/* in parent */
+		/* In parent */
 		status = wait(&statusloc);
-		n = read(fds[0], retBuf, bufsize-1);
+		n = read(fds[0], retBuf, bufsize - 1);
 		if (n > 0) {
 			retBuf[n] = '\0';
 		} else {
@@ -441,9 +426,13 @@ int my_system(char *cmd, char *retBuf, int bufsize)
       retBuf_desc.dsc$a_pointer = retBuf;
 
       status = lib$spawn(&cmd_desc, 0, 0, 0, 0, 0, &completion_status);
-      if (status != 1)
+      if (status != 1) {
+#ifndef DISABLE_TRACE
+	 if (nutTrace || reportBugs)
+	    fprintf(stderr, "Spawn failed with status = %d\n", status);
+#endif
          return(SYS_FORK_FAIL);
-
+      }
       if ((completion_status & 1) != 1) {
          status = sys$getmsg(completion_status, &string_end, &retBuf_desc,
 		             15, 0);
@@ -460,14 +449,14 @@ int my_system(char *cmd, char *retBuf, int bufsize)
  * Written by: Scott Powers
  *
  * This will effectively get rid of the problem with using "/bin/mv" as it
- * first tries to use "rename". If that fails, it stores the error report
- * and then tries to actually copy the file. If that fails, it stores the
- * error report. If the copy fails then we return an error as well as copying
+ * first tries to use "rename".  If that fails, it stores the error report
+ * and then tries to actually copy the file.  If that fails, it stores the
+ * error report.  If the copy fails then we return an error as well as copying
  * both error reports into "retBuf" so they can be displayed to the user.
  *
  * If "overwrite" is true, the destination file will automatically be
- * overwritten. If it is false and the file exists, my_move will return
- * SYS_FILE_EXISTS. It is up to the programmer to tell the user this.
+ * overwritten.  If it is false and the file exists, my_move will return
+ * SYS_FILE_EXISTS.  It is up to the programmer to tell the user this.
  *
  * Return Values:
  *   SYS_NO_SRC_FILE -- There was no source filename specified.
@@ -483,8 +472,10 @@ int my_system(char *cmd, char *retBuf, int bufsize)
  */
 int my_move(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 {
-	int status, n_src = 1, n_dest = 1, fd_src, fd_dest, ret;
-	char *rename_error = NULL, *copy_error = NULL;
+	int status, fd_src, fd_dest, ret;
+	int n_src = 1;
+	int n_dest = 1;
+	char *rename_error, *copy_error;
 	struct stat dest_stat;
 
         if (!retBuf)
@@ -512,7 +503,6 @@ int my_move(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 			return(SYS_DEST_EXISTS);
 		}
 	}
-
 	if ((status = rename(src, dest)) == (-1)) {
 		/* Manual copy -- prolly across partitions */
 		rename_error = strdup(my_strerror(errno));
@@ -520,97 +510,6 @@ int my_move(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 			strcpy(retBuf,"There was no enough memory allocate.\n");
 			return(SYS_NO_MEMORY);
 		}
-
-#if 0
-		if ((fd_src = open(src, O_RDONLY)) == (-1)) {
-			copy_error = strdup(my_strerror(errno));
-			if (!copy_error) {
-				free(rename_error);
-				strcpy(retBuf,
-				    "There was not enough memory allocated.\n");
-				return(SYS_NO_MEMORY);
-			}
-
-			if (strlen(rename_error) > bufsize) {
-				fprintf(stderr, "%s\n", rename_error);
-			} else {
-				sprintf(retBuf,
-				     "Rename([%s] to [%s]) error:\n     %s\n\n",
-				     src, dest, rename_error);
-			}
-			free(rename_error);
-
-			if (strlen(copy_error) > (bufsize-strlen(retBuf))) {
-				fprintf(stderr, "%s\n", copy_error);
-			} else {
-				sprintf(retBuf,
-				     "%sCopy([%s] to [%s]) error:\n     %s\n\n",
-				     retBuf, src, dest, copy_error);
-			}
-			free(copy_error);
-
-			return(SYS_SRC_OPEN_FAIL);
-		}
-
-		if ((fd_dest = open(dest, O_WRONLY | O_CREAT, 0644)) == (-1)) {
-			copy_error = strdup(my_strerror(errno));
-			if (!copy_error) {
-				free(rename_error);
-				strcpy(retBuf,
-				      "There was no enough memory allocate.\n");
-				return(SYS_NO_MEMORY);
-			}
-
-			if (strlen(rename_error) > bufsize) {
-				fprintf(stderr, "%s\n", rename_error);
-			} else {
-				sprintf(retBuf,
-				     "Rename([%s] to [%s]) error:\n     %s\n\n",
-				      src, dest, rename_error);
-			}
-			free(rename_error);
-
-			if (strlen(copy_error) > (bufsize - strlen(retBuf))) {
-				fprintf(stderr, "%s\n", copy_error);
-			} else {
-				sprintf(retBuf,
-				     "%sCopy([%s] to [%s]) error:\n     %s\n\n",
-				     retBuf, src, dest, copy_error);
-			}
-			free(copy_error);
-
-			close(fd_src);
-
-			return(SYS_DEST_OPEN_FAIL);
-		}
-
-		/* both file open and ready */
-		while (n_src > 0) {
-			n_src = read(fd_src, buf, BUFSIZ - 1);
-			if (n_src > 0) {
-				n_dest = write(fd_dest, buf, n_src);
-				if (n_dest > 0)
-					continue;
-				close(fd_src);
-				close(fd_dest);
-				sprintf(retBuf,
-					"Write([%s]) error:\n     %s\n\n",
-					dest, my_strerror(errno));
-				return(SYS_WRITE_FAIL);
-			}
-			if (!n_src)
-				continue;
-			close(fd_src);
-			close(fd_dest);
-			sprintf(retBuf, "Read([%s]) error:\n     %s\n\n",
-				src, my_strerror(errno));
-			return(SYS_READ_FAIL);
-		}
-
-		close(fd_src);
-		close(fd_dest);
-#endif
-
 		if ((ret = my_copy(src, dest, retBuf, bufsize, overwrite)) ==
 		    SYS_SUCCESS) {
 			/* Now get rid of previous file */
@@ -620,7 +519,6 @@ int my_move(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 			remove(src);
 #endif /* VMS, GEC */
 		}
-
 		return(ret);
 	}
 
@@ -655,8 +553,8 @@ char *my_strerror(int errornum)
  *
  * Takes a 1d string and turns it into a 2d array of strings.
  *
- * Watch out for the frees! You must free(*argv) and then free(argv)! NOTHING
- *   ELSE!! Do _NOT_ free the individual args of argv.
+ * Watch out for the frees!  You must free(*argv) and then free(argv)!  NOTHING
+ *   ELSE!!  Do _NOT_ free the individual args of argv.
  */
 char **buildArgv(char *cmd, int *new_argc)
 {
@@ -671,12 +569,10 @@ char **buildArgv(char *cmd, int *new_argc)
 
 	for (tmp = cmd; isspace(*tmp); tmp++)
 		;
-	buf = strdup(tmp);
-	if (!buf) {
+	if (!(buf = strdup(tmp))) {
 		*new_argc = 0;
 		return(NULL);
 	}
-
 	tmp = buf;
 
 	new_argv = (char **)calloc(1, sizeof(char *));
@@ -685,27 +581,21 @@ char **buildArgv(char *cmd, int *new_argc)
 		*new_argc = 0;
 		return(NULL);
 	}
-
-	new_argv[0] = NULL;
-
 	while (*tmp) {
-		if (!isspace(*tmp)) { /* Found the beginning of a word */
+		if (!isspace(*tmp)) {  /* Found the beginning of a word */
 			new_argv[i] = tmp;
 			for (; *tmp && !isspace(*tmp); tmp++)
 				;
-			if (*tmp) {
-				*tmp = '\0';
-				tmp++;
-			}
+			if (*tmp)
+				*tmp++ = '\0';
 			i++;
 			new_argv = (char **)realloc(new_argv,
-				                    ((i + 1) * sizeof(char *)));
+				                    (i + 1) * sizeof(char *));
 			new_argv[i] = NULL;
 		} else {
 			tmp++;
 		}
 	}
-
 	*new_argc = i;
 
 	return(new_argv);
@@ -730,7 +620,6 @@ char **buildArgv(char *cmd, int *new_argc)
 int my_sleep(int length, int interrupt)
 {
 	int count = 0;
-
 #ifndef VMS  /* PGE */
 	struct timeval timeout;
 #else
@@ -740,7 +629,8 @@ int my_sleep(int length, int interrupt)
 
         string_interval.dsc$w_length = strlen(string_interval_data);
         string_interval.dsc$a_pointer = string_interval_data;
-  /* Convert string time into binary format. */
+
+	/* Convert string time into binary format. */
         sys$bintim(&string_interval, &interval);
 #endif
 
@@ -762,7 +652,6 @@ int my_sleep(int length, int interrupt)
 		if (interrupt && sleep_interrupt)
 			return(1);
 	}
-
 	return(0);
 }
 
@@ -774,19 +663,19 @@ int my_sleep(int length, int interrupt)
  *
  * Simple returns 1 or 0. 
  */
-int file_exists(char* name)
+int file_exists(char *name)
 {
   struct stat buf;
 
   if (!name)
-    return(0);
+      return(0);
 
 #if defined(MULTINET) && defined(__alpha)
   if (!decc$stat(name, &buf))
 #else
   if (!stat(name, &buf))
 #endif
-    return(1);
+      return(1);
 
   return(0);
 }
@@ -798,8 +687,8 @@ int file_exists(char* name)
  * and without erasing the source file. 
  *
  * If "overwrite" is true, the destination file will automatically be
- * overwritten. If it is false and the file exists, my_move will return
- * SYS_FILE_EXISTS. It is up to the programmer to tell the user this.
+ * overwritten.  If it is false and the file exists, my_move will return
+ * SYS_FILE_EXISTS.  It is up to the programmer to tell the user this.
  *
  * Return Values:
  *   SYS_NO_SRC_FILE -- There was no source filename specified.
@@ -812,8 +701,10 @@ int file_exists(char* name)
  */
 int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 {
-  int status, n_src = 1, n_dest = 1, fd_src, fd_dest;
-  char *copy_error = NULL;
+  int status, fd_src, fd_dest;
+  int n_src = 1;
+  int n_dest = 1;
+  char *copy_error;
   char buf[BUFSIZ];
   struct stat dest_stat;
   
@@ -824,7 +715,6 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
       strcpy(retBuf, "There was no source file specified.\n");
       return(SYS_NO_SRC_FILE);
   }
-
   if (!dest || !*dest) {
       strcpy(retBuf, "There was no destination file specified.\n");
       return(SYS_NO_DEST_FILE);
@@ -840,8 +730,8 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 #endif
 	  sprintf(retBuf, "Stat [%s] error:\n    File already exists.\n", dest);
 	  return(SYS_DEST_EXISTS);
-	}
-    }
+      }
+  }
   
 #ifndef VMS  /* Must copy file header as well as contents. PGE */
   if ((fd_src = open(src, O_RDONLY)) == -1) {
@@ -862,7 +752,6 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
       
       return(SYS_SRC_OPEN_FAIL);
   }
-  
   if ((fd_dest = open(dest, O_WRONLY | O_CREAT, 0644)) == -1) {
       copy_error = strdup(my_strerror(errno));
 
@@ -881,11 +770,11 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
       close(fd_src);
       
       return(SYS_DEST_OPEN_FAIL);
-    }
+  }
   
   /* Both files open and ready */
   while (n_src > 0) {
-      n_src = read(fd_src, buf, BUFSIZ-1);
+      n_src = read(fd_src, buf, BUFSIZ - 1);
       if (n_src > 0) {
 	  n_dest = write(fd_dest, buf, n_src);
 	  if (n_dest > 0) 
@@ -904,7 +793,6 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
       sprintf(retBuf, "Read([%s]) error:\n     %s\n\n", src,my_strerror(errno));
       return(SYS_READ_FAIL);
   }
-  
   close(fd_src);
   close(fd_dest);
   
@@ -929,7 +817,6 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 
   return status;
 #endif  /* VMS, PGE */
-
 } 
 
 
@@ -946,7 +833,7 @@ int my_copy(char *src, char *dest, char *retBuf, int bufsize, int overwrite)
 int get_home(char **ret)
 {
 #ifndef VMS
-  char *home = NULL;
+  char *home;
   struct passwd *pwdent;
   
   if (!(home = getenv("HOME"))) {
@@ -960,9 +847,8 @@ int get_home(char **ret)
   } else {
 	home = strdup(home);
   }
-
   if (home) {
-      *ret = home; /* He better free it */
+      *ret = home;  /* He better free it */
   } else {
       *ret = NULL;
       return(SYS_INTERNAL_FAIL);
@@ -1002,7 +888,7 @@ int get_home(char **ret)
   /* Translate SYS$LOGIN logical to DISK:[DIRECTORY] */
   status = sys$trnlnm (0, &logical_table, &home_logical, 0, item_list);
   if (status != 1) {
-    printf("Status = %d", status);
+    fprintf(stderr, "sys$trnlnm status = %d\n", status);
     return(SYS_INTERNAL_FAIL);
   }
 
@@ -1010,7 +896,7 @@ int get_home(char **ret)
   translated_home_data[translated_home_length] = '\0';
 
   *ret = strdup(translated_home_data);   /* He better free it */
-  if (!(*ret))
+  if (!*ret)
     return(SYS_NO_MEMORY);
 #endif /* VMS, PGE */
 

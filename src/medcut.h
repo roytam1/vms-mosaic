@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -60,7 +60,16 @@
  *
  */
 
+typedef struct color_rec {
+        int pixel[3];
+        int box_num;
+        struct color_rec *hash_next;
+        struct color_rec *next;
+} HashInfo;
+
 void MedianCut(unsigned char *data, int w, int h, XColor *colrs, int start_cnt,
 	       int end_cnt);
 unsigned char *MedianCut24BitTo8(unsigned char *data, int w, int h,
 				 XColor *colrs, int end_cnt, int max_cnt);
+void FreeHash();
+HashInfo *PixAddHash(int red, int green, int blue);

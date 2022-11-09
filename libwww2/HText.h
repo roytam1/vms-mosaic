@@ -1,33 +1,15 @@
 /*
-                                  RICH HYPERTEXT OBJECT
+ *                                RICH HYPERTEXT OBJECT
  */
 
 #ifndef HTEXT_H
 #define HTEXT_H
 
+#ifndef HTANCHOR_H
 #include "HTAnchor.h"
+#endif
+#ifndef HTSTREAM_H
 #include "HTStream.h"
-
-#ifdef SHORT_NAMES
-#define HTMainText                      HTMaText
-#define HText_new                       HTHTNew
-#define HText_free                      HTHTFree
-#define HText_beginAppend               HTHTBeAp
-#define HText_endAppend                 HTHTEnAp
-#define HText_appendCharacter           HTHTApCh
-#define HText_appendText                HTHTApTe
-#define HText_appendParagraph           HTHTApPa
-#define HText_beginAnchor               HTHTBeAn
-#define HText_endAnchor                 HTHTEnAn
-#define HText_dump                      HTHTDump
-#define HText_nodeAnchor                HTHTNoAn
-#define HText_select                    HTHTSele
-#define HText_selectAnchor              HTHTSeAn
-#define HText_replaceSel                HTHTRepl
-#define HText_applyToSimilar            HTHTApTo
-#define HText_unlinkSelection           HTHTUnSe
-#define HText_linkSelTo                 HTHTLiSe
-#define HText_referenceSelected         HTHTRefS
 #endif
 
 typedef struct _HText HText;
@@ -36,72 +18,47 @@ extern HText *HTMainText;              /* Pointer to current main text */
 
 /*                      Creation and deletion
 **
-**      Create hypertext object                                 HText_new
+**      Create hypertext object
 */
-extern HText *HText_new PARAMS(());
-
-/*      Free hypertext object                                   HText_free
-*/
-extern void   HText_free PARAMS((HText *me));
-
+extern HText *HText_new();
 
 /*                      Object Building methods
 **                      -----------------------
 **
-**      These are used by a parser to build the text in an object
+**      These are used by a parser to build the text in an object.
 **      HText_beginAppend must be called, then any combination of other
-**      append calls, then HText_endAppend. This allows optimised
+**      append calls, then HText_endAppend.  This allows optimised
 **      handling using buffers and caches which are flushed at the end.
 */
-extern void HText_beginAppend PARAMS((HText *text));
+extern void HText_beginAppend(HText *text);
 
-extern void HText_endAppend PARAMS((HText *text));
-extern void HText_doAbort PARAMS((HText *text));
-extern void HText_clearOutForNewContents PARAMS((HText *text));
+extern void HText_endAppend(HText *text);
+extern void HText_doAbort(HText *text);
+extern void HText_clearOutForNewContents(HText *text);
 
 /*      Add one character
 */
-extern void HText_appendCharacter PARAMS((HText *text, char ch));
+extern void HText_appendCharacter(HText *text, char ch);
 
 /*      Add a zero-terminated string
 */
-extern void HText_appendText PARAMS((HText *text, WWW_CONST char *str));
+extern void HText_appendText(HText *text, WWW_CONST char *str);
 
 /*      Add a block.
 */
-extern void HText_appendBlock PARAMS((HText *text, WWW_CONST char *str,
-				      int len));
-
-/*      New Paragraph
-*/
-extern void HText_appendParagraph PARAMS((HText *text));
+extern void HText_appendBlock(HText *text, WWW_CONST char *str, int len);
 
 /*      Start/end sensitive text
 **
 ** The anchor object is created and passed to HText_beginAnchor.
 ** The senstive text is added to the text object, and then HText_endAnchor
-** is called. Anchors may not be nested.
+** is called.  Anchors may not be nested.
 */
 
-extern void HText_beginAnchor PARAMS((HText *text, char *anc));
-extern void HText_endAnchor PARAMS((HText *text));
+extern void HText_beginAnchor(HText *text, char *anc);
+extern void HText_endAnchor(HText *text);
 
+extern char *HText_getText(HText *me);
+extern int HText_getTextLength(HText *me);
 
-/*      Dump diagnostics to stderr
-*/
-extern void HText_dump PARAMS((HText *me));
-
-extern char *HText_getText (HText *me);
-extern int HText_getTextLength (HText *me);
-extern char **HText_getPtrToText (HText *me);
-
-/*              Browsing functions
-**              ------------------
-*/
-
-/*      Bring to front and highlight it
-*/
-extern BOOL HText_select PARAMS((HText *text));
-
-
-#endif /* HTEXT_H */
+#endif  /* HTEXT_H */

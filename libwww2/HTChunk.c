@@ -10,17 +10,19 @@
 /*	Create a chunk with a certain allocation unit
 **	--------------
 */
-PUBLIC HTChunk *HTChunkCreate ARGS1 (int, growby)
+PUBLIC HTChunk *HTChunkCreate (int growby)
 {
-    HTChunk *ch = (HTChunk *) malloc(sizeof(HTChunk));
+    HTChunk *ch = (HTChunk *) calloc(1, sizeof(HTChunk));
 
-    if (ch == NULL)
+    if (!ch)
 	outofmem(__FILE__, "creation of chunk");
 
-    ch->data = 0;
     ch->growby = growby;
+    /** calloc zeros
+    ch->data = 0;
     ch->size = 0;
     ch->allocated = 0;
+    **/
     return ch;
 }
 
@@ -28,7 +30,7 @@ PUBLIC HTChunk *HTChunkCreate ARGS1 (int, growby)
 /*	Clear a chunk of all data
 **	--------------------------
 */
-PUBLIC void HTChunkClear ARGS1 (HTChunk *, ch)
+PUBLIC void HTChunkClear (HTChunk *ch)
 {
     if (ch->data) {
 	free(ch->data);
@@ -42,7 +44,7 @@ PUBLIC void HTChunkClear ARGS1 (HTChunk *, ch)
 /*	Free a chunk
 **	------------
 */
-PUBLIC void HTChunkFree ARGS1 (HTChunk *, ch)
+PUBLIC void HTChunkFree (HTChunk *ch)
 {
     if (ch->data)
 	free(ch->data);
@@ -53,12 +55,12 @@ PUBLIC void HTChunkFree ARGS1 (HTChunk *, ch)
 /*	Append a character
 **	------------------
 */
-PUBLIC void HTChunkPutc ARGS2 (HTChunk *, ch, char, c)
+PUBLIC void HTChunkPutc (HTChunk *ch, char c)
 {
     if (ch->size >= ch->allocated) {
 	ch->allocated = ch->allocated + ch->growby;
-        ch->data = ch->data ? (char *)realloc(ch->data, ch->allocated)
-			    : (char *)malloc(ch->allocated);
+        ch->data = ch->data ? (char *)realloc(ch->data, ch->allocated) :
+			      (char *)malloc(ch->allocated);
         if (!ch->data)
 	    outofmem(__FILE__, "HTChunkPutc");
     }
@@ -69,15 +71,15 @@ PUBLIC void HTChunkPutc ARGS2 (HTChunk *, ch, char, c)
 /*	Ensure a certain size
 **	---------------------
 */
-PUBLIC void HTChunkEnsure ARGS2 (HTChunk *, ch, int, needed)
+PUBLIC void HTChunkEnsure (HTChunk *ch, int needed)
 {
     if (needed <= ch->allocated)
 	return;
-    ch->allocated = needed-1 - ((needed-1) % ch->growby)
-    			     + ch->growby; /* Round up */
-    ch->data = ch->data ? (char *)realloc(ch->data, ch->allocated)
-			: (char *)malloc(ch->allocated);
-    if (ch->data == NULL)
+    							     /* Round up */
+    ch->allocated = needed - 1 - ((needed - 1) % ch->growby) + ch->growby;
+    ch->data = ch->data ? (char *)realloc(ch->data, ch->allocated) :
+			  (char *)malloc(ch->allocated);
+    if (!ch->data)
 	outofmem(__FILE__, "HTChunkEnsure");
 }
 
@@ -85,16 +87,16 @@ PUBLIC void HTChunkEnsure ARGS2 (HTChunk *, ch, int, needed)
 /*	Terminate a chunk
 **	-----------------
 */
-PUBLIC void HTChunkTerminate ARGS1 (HTChunk *, ch)
+PUBLIC void HTChunkTerminate (HTChunk *ch)
 {
-    HTChunkPutc(ch, (char)0);
+    HTChunkPutc(ch, '\0');
 }
 
 
 /*	Append a string
 **	---------------
 */
-PUBLIC void HTChunkPuts ARGS2 (HTChunk *, ch, WWW_CONST char *, str)
+PUBLIC void HTChunkPuts (HTChunk *ch, WWW_CONST char *str)
 {
     WWW_CONST char *p;
 

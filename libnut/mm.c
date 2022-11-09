@@ -99,7 +99,6 @@ void freeBlock(mem_block *block)
 		free(block);
 		block = NULL;
 	}
-
 	return;
 }
 
@@ -112,26 +111,19 @@ mem_block *allocateBlock(int type)
 	if (nutTrace)
 		fprintf(stderr, "allocateBlock: Called\n");
 #endif
+	if (type >= MEM_MAX_ENTRY) {
+#ifndef DISABLE_TRACE
+		if (nutTrace)
+			fprintf(stderr, "allocateBlock: Invalid type\n");
+#endif
+		return(NULL);
+	}
+
 	block = (mem_block *)calloc(1, sizeof(mem_block));
 	if (!block) {
 #ifndef DISABLE_TRACE
 		if (nutTrace)
 			perror("allocateBlock_block");
-#endif
-		return(NULL);
-	}
-
-#ifndef DISABLE_TRACE
-	if (nutTrace)
-		fprintf(stderr, "allocateBlock: block(%d)\n", sizeof(block));
-#endif
-
-	memset(block, 0, sizeof(mem_block));
-
-	if (type >= MEM_MAX_ENTRY) {
-#ifndef DISABLE_TRACE
-		if (nutTrace)
-			fprintf(stderr, "allocateBlock_type: Invalid type\n");
 #endif
 		return(NULL);
 	}
@@ -171,11 +163,8 @@ mem_block *allocateBlock(int type)
 	block->nextFree = 0;
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr, "allocateBlock: block->nextFree(%d)\n",
-			block->nextFree);
+	if (nutTrace)
 		fprintf(stderr, "allocateBlock: Leaving\n");
-	}
 #endif
 	return(block);
 }
@@ -328,5 +317,4 @@ int main()
 
 	exit(0);
 }
-
 #endif

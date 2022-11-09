@@ -35,7 +35,7 @@
 **		of the next record.
 **
 */
-PUBLIC void HTAAFile_nextRec ARGS1(FILE *, fp)
+PUBLIC void HTAAFile_nextRec (FILE *fp)
 {
     int ch = getc(fp);
 
@@ -77,10 +77,7 @@ PUBLIC void HTAAFile_nextRec ARGS1(FILE *, fp)
 **			are ignored.  However, contents is always
 **			null-terminated!
 */
-PRIVATE int read_item ARGS4(FILE *,	fp,
-			    char *,	contents,
-			    BOOL,	reading_list,
-			    int,	max_len)
+PRIVATE int read_item (FILE *fp, char *contents, BOOL reading_list, int max_len)
 {
     char *dest = contents;
     char *end = contents;
@@ -146,9 +143,7 @@ PRIVATE int read_item ARGS4(FILE *,	fp,
 **			are ignored.  However, contents is always
 **			null-terminated!
 */
-PUBLIC int HTAAFile_readField ARGS3(FILE *, fp,
-				    char *, contents,
-				    int,    max_len)
+PUBLIC int HTAAFile_readField (FILE *fp, char *contents, int max_len)
 {
     return read_item(fp, contents, NO, max_len);
 }
@@ -167,21 +162,19 @@ PUBLIC int HTAAFile_readField ARGS3(FILE *, fp,
 **	returns		the number of items read.
 **
 */
-PUBLIC int HTAAFile_readList ARGS3(FILE *,	fp,
-				   HTList *,	result,
-				   int,		max_len)
+PUBLIC int HTAAFile_readList (FILE *fp, HTList *result, int max_len)
 {
     char *item = NULL;
     char terminator;
     int cnt = 0;
 
     do {
-	if (!item  &&  !(item = (char*)malloc(max_len+1)))
+	if (!item && !(item = (char *)malloc(max_len + 1)))
 	    outofmem(__FILE__, "HTAAFile_readList");
 	terminator = read_item(fp, item, YES, max_len);
 	if (strlen(item) > 0) {
 	    cnt++;
-	    HTList_addObject(result, (void*)item);
+	    HTList_addObject(result, (void *)item);
 	    item = NULL;
 	}
     } while (terminator != FIELD_SEPARATOR  &&
@@ -192,4 +185,3 @@ PUBLIC int HTAAFile_readList ARGS3(FILE *,	fp,
 	free(item);	/* This was not needed */
     return cnt;
 }
-

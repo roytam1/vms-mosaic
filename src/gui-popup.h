@@ -77,8 +77,7 @@
 
 #define NEWS_NOANCHOR (E_TEXT | E_BULLET | E_LINEFEED | E_WIDGET | E_HRULE | E_TABLE)
 
-typedef enum _w_class
-{
+typedef enum _w_class {
   LastItem = 1,
   PushButton,
   Separator,
@@ -87,29 +86,27 @@ typedef enum _w_class
 } w_class;
 
 enum { I_Save, I_ViewExternal, I_ViewInternal, I_Reload,
-  M_ImageData, M_LinkData, M_FileData };
+       M_ImageData, M_LinkData, M_FileData };
 
-typedef struct act_struct 
-{
+typedef struct act_struct {
   int act_code;
   ElemInfo *eptr;
   void *str;
 } act_struct;
 
-typedef struct PopupItem
-{
+typedef struct PopupItem {
   /* The top half must be filled in if this is to appear in the popup */
-  w_class class;	/* this is a button, separator, label, cascade */
-  unsigned int types;   /* for which widget elements this button is to 
-			   popup for (the list of elements is below) */
-  int types_method;	/* if TIGHT use == if LOOSE use & */
-  unsigned int modes;	/* news, http, ftp, etc. */
-  int modes_method; 	/* if TIGHT use == if LOOSE use & */
+  w_class class;	   /* This is a button, separator, label, cascade */
+  unsigned int types;      /* For which widget elements this button is to 
+			    * popup for (the list of elements is below) */
+  int types_method;	   /* If TIGHT use == if LOOSE use & */
+  unsigned int modes;	   /* news, http, ftp, etc. */
+  int modes_method; 	   /* If TIGHT use == if LOOSE use & */
   char *label;
 
   /* These are needed for a button class */
-  struct act_struct acst; /* identifies the action */
-  void (*cbfp)();	  /* callback function takes act_struct as data */
+  struct act_struct acst;  /* Identifies the action */
+  void (*cbfp)();	   /* Callback function takes act_struct as data */
 
   /* These are optional */
   char mnemonic;
@@ -120,7 +117,7 @@ typedef struct PopupItem
   struct PopupItem *sub_items;	/* NULL if this isn't a pull_right */
 
   /* This is for internal use */
-  Widget _w;
+  Widget w;
   int startup;			/* Are we sensitive when we start */
 } PopupItem;
 
@@ -131,8 +128,8 @@ void mo_init_hotlist_menu(mo_hotlist *);
 void mo_reinit_hotlist_menu(mo_hotlist *);
 
 
-#ifdef GUI_POPUP_H /* this is set in gui-popup.c -- it prevents multiple 
-		      instances of the following variables */
+#ifdef GUI_POPUP_H  /* This is set in gui-popup.c -- it prevents multiple 
+		     * instances of the following variables */
 
 #include "gui-ftp.h"			/* ftp_rmbm_cb definition */
 #include "gui-menubar.h"		/* menubar_cb definition */
@@ -140,6 +137,7 @@ void mo_reinit_hotlist_menu(mo_hotlist *);
 
 static XmxCallback(copy_link_cb);
 static XmxCallback(image_cb);
+static XmxCallback(presentation_cb);
 static XmxCallback(load_link_to_disk_cb);
 static XmxCallback(metadata_cb);
 static XmxCallback(session_cb);
@@ -164,6 +162,7 @@ PopupItem image_menu[] = {
   { LastItem },
 };
 
+#ifdef NEED_THIS
 PopupItem pan_menu[] = {
 
   {PushButton, 0, 0, 0, 0, "Right", {0, NULL, NULL}, NULL, 0,
@@ -180,6 +179,7 @@ PopupItem pan_menu[] = {
 
   { LastItem },
 };
+#endif
 
 PopupItem file_menu[] = {
 
@@ -220,38 +220,39 @@ PopupItem popup_items[] = {
   {CascadeButton, ALL_TYPES, LOOSE, moMODE_ALL, LOOSE, "Session History", 
    {-2, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL, 1}, 
 
+  {ToggleButton, ALL_TYPES, LOOSE, moMODE_ALL, LOOSE, "Presentation Mode", 
+   {0, NULL, NULL}, presentation_cb, 0, NULL, NULL, NULL, NULL, 1}, 
+
   /*---------------------------------------------------------------
          Stuff if on a html page and not on a image or anchor
     ---------------------------------------------------------------*/
 
-  {Separator, (E_TEXT | E_BULLET | E_LINEFEED | E_WIDGET | E_HRULE |E_TABLE),
+  {Separator, E_TEXT | E_BULLET | E_LINEFEED | E_WIDGET | E_HRULE | E_TABLE,
    LOOSE, moMODE_ALL, LOOSE, "Separator", {0, NULL, NULL},
    NULL, 0, NULL, NULL, NULL, NULL, 1}, 
 
-  {CascadeButton, (E_TEXT | E_BULLET | E_LINEFEED | E_WIDGET | E_HRULE | 
-		   E_TABLE),LOOSE,  moMODE_ALL, LOOSE, "File",
-   {0, NULL, NULL}, NULL, 0, NULL, NULL, file_menu, NULL, 1},
+  {CascadeButton, E_TEXT | E_BULLET | E_LINEFEED | E_WIDGET | E_HRULE | E_TABLE,
+   LOOSE,  moMODE_ALL, LOOSE, "File", {0, NULL, NULL},
+   NULL, 0, NULL, NULL, file_menu, NULL, 1},
 
- /*---------------------------------------------------------------
+ /*----------------------------------------------------------------
          Stuff if on any page and an anchor (including image anchor)
-    ---------------------------------------------------------------*/
+   ----------------------------------------------------------------*/
 
-  {Separator, E_ANCHOR | E_IMAGE, LOOSE, moMODE_ALL, LOOSE, "Separator",  
+  {Separator, E_ANCHOR, LOOSE, moMODE_ALL, LOOSE, "Separator",  
    {0, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL, 1}, 
 
-  {PushButton, E_ANCHOR | E_IMAGE, LOOSE, moMODE_ALL, LOOSE, COPY_URL_LABEL, 
+  {PushButton, E_ANCHOR, LOOSE, moMODE_ALL, LOOSE, COPY_URL_LABEL, 
    {0, NULL, NULL}, copy_link_cb, 0, NULL, NULL, NULL, NULL, 1},
 
-  {PushButton, E_ANCHOR | E_IMAGE, LOOSE, moMODE_ALL, LOOSE,
-   "Load Link to Disk", 
+  {PushButton, E_ANCHOR, LOOSE, moMODE_ALL, LOOSE, "Load Link to Disk", 
    {0, NULL, NULL}, load_link_to_disk_cb, 0, NULL, NULL, NULL, NULL, 1},
 
-  {PushButton, E_ANCHOR | E_IMAGE, LOOSE, moMODE_ALL, LOOSE,
-   "Get Link Metadata", 
+  {PushButton, E_ANCHOR, LOOSE, moMODE_ALL, LOOSE, "Get Link Metadata", 
    {M_LinkData, NULL, NULL}, metadata_cb, 0, NULL, NULL, NULL, NULL, 1},
 
   /*---------------------------------------------------------------
-         Stuff if on any page and a image (not including image link)
+         Stuff if on any page and an image (not including image link)
     ---------------------------------------------------------------*/
 
   {Separator, E_IMAGE, TIGHT, moMODE_ALL, LOOSE, "Separator", 
@@ -274,7 +275,7 @@ PopupItem popup_items[] = {
 
  /*---------------------------------------------------------------
          Stuff if on any page and a image link
-    ---------------------------------------------------------------*/
+   ---------------------------------------------------------------*/
 
   {Separator, E_IMAGE | E_ANCHOR, TIGHT, moMODE_PLAIN, LOOSE, "Separator",  
    {0, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL, 1}, 
@@ -284,7 +285,7 @@ PopupItem popup_items[] = {
 
  /*---------------------------------------------------------------
          Stuff if on a ftp page 
-    ---------------------------------------------------------------*/
+   ---------------------------------------------------------------*/
 
   {Separator, ALL_TYPES, LOOSE, moMODE_FTP, TIGHT, "Separator", 
    {0, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL, 1}, 
@@ -300,7 +301,7 @@ PopupItem popup_items[] = {
 
  /*---------------------------------------------------------------
          Stuff if on a news page and not a link
-    ---------------------------------------------------------------*/
+   ---------------------------------------------------------------*/
 
   {Separator, ALL_TYPES, LOOSE, moMODE_NEWS, TIGHT, "Separator", 
    {0, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL, 1}, 

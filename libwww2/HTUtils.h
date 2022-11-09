@@ -1,8 +1,7 @@
-/* Utitlity macros for the W3 code library
-                                  MACROS FOR GENERAL USE
-                                             
-   See also: the system dependent file "tcp.h"
-   
+/* Utility macros for the W3 code library
+ *                                MACROS FOR GENERAL USE
+ *
+ *  See also: the system dependent file "tcp.h"
  */
 
 #ifndef HTUTILS_H
@@ -30,7 +29,7 @@
  */
 #ifdef vax
 #ifdef unix
-#define ultrix  /* Assume vax+unix=ultrix */
+#define ultrix  /* Assume vax + unix = ultrix */
 #endif
 #endif
 
@@ -45,11 +44,9 @@
 #else /* ultrix */
 #include <malloc.h>
 #include <memory.h>
-#include <stdio.h>
 #endif
 
 #else   /* VMS */
-#include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <lib$routines.h>
@@ -76,71 +73,16 @@
 #include <malloc.h>
 #endif
 
-
 /*
  * Macros for declarations
- *
  */
 #define PUBLIC                  /* Accessible outside this module     */
 #define PRIVATE static          /* Accessible only within this module */
 
-#if defined(__STDC__)
 #if 0
 #define WWW_CONST const             /* "const" only exists in STDC */
 #endif
 #define WWW_CONST
-#define NOPARAMS (void)
-#define PARAMS(parameter_list) parameter_list
-#define NOARGS (void)
-#define ARGS1(t,a) \
-                (t a)
-#define ARGS2(t,a,u,b) \
-                (t a, u b)
-#define ARGS3(t,a,u,b,v,c) \
-                (t a, u b, v c)
-#define ARGS4(t,a,u,b,v,c,w,d) \
-                (t a, u b, v c, w d)
-#define ARGS5(t,a,u,b,v,c,w,d,x,e) \
-                (t a, u b, v c, w d, x e)
-#define ARGS6(t,a,u,b,v,c,w,d,x,e,y,f) \
-                (t a, u b, v c, w d, x e, y f)
-#define ARGS7(t,a,u,b,v,c,w,d,x,e,y,f,z,g) \
-                (t a, u b, v c, w d, x e, y f, z g)
-#define ARGS8(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h) \
-                (t a, u b, v c, w d, x e, y f, z g, s h)
-#define ARGS9(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h,r,i) \
-                (t a, u b, v c, w d, x e, y f, z g, s h, r i)
-#define ARGS10(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h,r,i,q,j) \
-                (t a, u b, v c, w d, x e, y f, z g, s h, r i, q j)
-
-#else  /* not ANSI */
-
-#define WWW_CONST
-#define NOPARAMS ()
-#define PARAMS(parameter_list) ()
-#define NOARGS ()
-#define ARGS1(t,a) (a) \
-                t a;
-#define ARGS2(t,a,u,b) (a,b) \
-                t a; u b;
-#define ARGS3(t,a,u,b,v,c) (a,b,c) \
-                t a; u b; v c;
-#define ARGS4(t,a,u,b,v,c,w,d) (a,b,c,d) \
-                t a; u b; v c; w d;
-#define ARGS5(t,a,u,b,v,c,w,d,x,e) (a,b,c,d,e) \
-                t a; u b; v c; w d; x e;
-#define ARGS6(t,a,u,b,v,c,w,d,x,e,y,f) (a,b,c,d,e,f) \
-                t a; u b; v c; w d; x e; y f;
-#define ARGS7(t,a,u,b,v,c,w,d,x,e,y,f,z,g) (a,b,c,d,e,f,g) \
-                t a; u b; v c; w d; x e; y f; z g;
-#define ARGS8(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h) (a,b,c,d,e,f,g,h) \
-                t a; u b; v c; w d; x e; y f; z g; s h;
-#define ARGS9(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h,r,i) (a,b,c,d,e,f,g,h,i) \
-                t a; u b; v c; w d; x e; y f; z g; s h; r i;
-#define ARGS10(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h,r,i,q,j) (a,b,c,d,e,f,g,h,i,j) \
-                t a; u b; v c; w d; x e; y f; z g; s h; r i; q j;
-                
-#endif /* __STDC__ (ANSI) */
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -148,14 +90,14 @@
 
 /*
  * Booleans
- *
  */
 /* Note: GOOD and BAD are already defined (differently) on RS6000 aix */
 /* #define GOOD(status) ((status)38;1)   VMS style status: test bit 0       */
 /* #define BAD(status)  (!GOOD(status))  Bit 0 set if OK, otherwise clear   */
 
 #ifndef BOOLEAN_DEFINED
-        typedef char    BOOLEAN;                /* Logical value */
+typedef char    BOOLEAN;                /* Logical value */
+
 #ifndef TRUE
 #define TRUE    (BOOLEAN)1
 #define FALSE   (BOOLEAN)0
@@ -172,7 +114,7 @@
 #endif
 
 #ifndef min
-#define min(a,b) ((a) <= (b) ? (a) : (b))
+#define min(a, b) ((a) <= (b) ? (a) : (b))
 #endif
 
 #define TCP_PORT 80     /* Allocated to http by Jon Postel/ISI 24-Jan-92 */
@@ -198,7 +140,9 @@
 #define HT_INTERNAL     -12             /* Weird -- should never happen. */
 #define HT_BAD_EOF      -12             /* Premature EOF */
 
+#ifndef HTSTRING_H
 #include "HTString.h"   /* String utilities */
+#endif
 
 #if defined(__STDC__) && !defined(sun)
 #include <stdarg.h>
@@ -220,19 +164,19 @@
  { fprintf(stderr, "%s %s: out of memory.\nProgram aborted.\n", file, func); \
   exit(1);}
 #else
-extern void outofmem PARAMS((WWW_CONST char *fname, WWW_CONST char *func));
+extern void outofmem (WWW_CONST char *fname, WWW_CONST char *func);
 #endif /* VMS, BSN, GEC */
 
 /*
-
-Upper- and Lowercase macros
-
-   The problem here is that toupper(x) is not defined officially unless
-   isupper(x) is.  These macros are CERTAINLY needed on #if defined(pyr) ||
-   define(mips) or BDSI platforms.  For safefy, we make them mandatory.
-   
+ * Upper- and Lowercase macros
+ *
+ *  The problem here is that toupper(x) is not defined officially unless
+ *  isupper(x) is.  These macros are CERTAINLY needed on #if defined(pyr) ||
+ *  define(mips) or BDSI platforms.  For safefy, we make them mandatory.
  */
+#ifndef __CTYPE_LOADED
 #include <ctype.h>
+#endif
 
 #ifndef TOLOWER
   /* Pyramid and Mips can't uppercase non-alpha */
@@ -243,10 +187,4 @@ Upper- and Lowercase macros
 #define CR '\015'	/* Must be converted to ^M for transmission */
 #define LF '\012'	/* Must be converted to ^J for transmission */
 
-#if defined(SYSV) || defined(SVR4) || defined(__svr4__) || (defined(VMS) && (!defined(__DECC) && __VMS_VER < 70000000))
-#define bcopy(source, dest, count) memcpy(dest, source, count)
-#define bzero(b, len) memset(b, 0, len)
-#endif
-
-
-#endif /* HTUTILS_H */
+#endif  /* HTUTILS_H */

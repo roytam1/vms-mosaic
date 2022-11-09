@@ -15,6 +15,7 @@ Define	Verb		MOSAIC
 	Qualifier	GROUP, Negatable
 	Qualifier	HOME, Value(Required), Nonnegatable
 	Qualifier	VERSION, Negatable
+	Qualifier	IDENTIFICATION, Negatable
 	Qualifier	DELAY_IMAGE_LOADS, Negatable
 	Qualifier	GLOBAL_HISTORY, Negatable
 	Qualifier	IMAGE_CACHE_SIZE, Value(Required,Type=$NUMBER), Nonnegatable

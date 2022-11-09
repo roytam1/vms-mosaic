@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
  * The VMS Mosaic Project
  */
 
@@ -165,9 +165,12 @@ typedef char *caddr_t;
 #endif
 #include "toolbar.h"
 
-typedef enum
-{
-  mo_plaintext = 0, mo_formatted_text, mo_html, mo_latex, mo_postscript,
+typedef enum {
+  mo_plaintext = 0,
+  mo_formatted_text,
+  mo_html,
+  mo_latex,
+  mo_postscript,
   mo_mif
 } mo_format_token;
 
@@ -183,8 +186,8 @@ typedef enum
 /* -------------------------------- MACROS -------------------------------- */
 /* ------------------------------------------------------------------------ */
 
-#define MO_VERSION_STRING "4.0"
-#define MO_VERSION_STRING2 "4_0"  /* For file names */
+#define MO_VERSION_STRING "4.2"
+#define MO_VERSION_STRING2 "4_2"  /* For file names */
 #define MO_GO_NCSA_COUNT 0  /* Not the VMS style, AV */
 
 #define MO_HELP_ON_VERSION_DOCUMENT \
@@ -270,6 +273,13 @@ typedef enum
 #endif
 #ifndef PEOPLE_SEARCH_NAME
 #define PEOPLE_SEARCH_NAME "People - WhoWhere"
+#endif
+
+#ifndef ENCYCLOPEDIA_SEARCH_DEFAULT
+#define ENCYCLOPEDIA_SEARCH_DEFAULT "http://en.wikipedia.org"
+#endif
+#ifndef ENCYCLOPEDIA_SEARCH_NAME
+#define ENCYCLOPEDIA_SEARCH_NAME "Encyclopedia - Wikipedia"
 #endif
 
 #ifndef DOCUMENTS_MENU_SPECFILE
@@ -429,8 +439,7 @@ extern char *strdup();
 /* mo_window contains everything related to a single Document View
  * window, including subwindow details.
  */
-typedef struct mo_window
-{
+typedef struct mo_window {
   int id;
   Widget base;
   int mode;
@@ -464,7 +473,7 @@ typedef struct mo_window
   Widget mailto_form_win;
   Widget links_win;          /* Window with list of links */
   Widget links_list;         /* Widget holding the list itself */
-  XmString *links_items;
+  XmStringTable links_items;
   int links_count;
 
   Widget ftpput_win, ftpremove_win, ftpremove_text, ftpmkdir_win, ftpmkdir_text;
@@ -478,31 +487,31 @@ typedef struct mo_window
   Widget audio_annotate_win;
 #endif
 
-    /* USER INTERFACE BITS 'n PIECES */
-    struct toolbar tools[BTN_COUNT];
+  /* USER INTERFACE BITS 'n PIECES */
+  struct toolbar tools[BTN_COUNT];
 
-    Widget slab[7];
-    int slabpart[8];
-    int slabcount, biglogo, smalllogo, texttools;
+  Widget slab[7];
+  int slabpart[8];
+  int slabcount, haslogo, smalllogo, texttools;
 
-    XmxMenuRecord *menubar;
+  XmxMenuRecord *menubar;
 
-    Widget url_text;
-    Widget title_text;
-    Widget scrolled_win, view;
-    Widget rightform;
-    Widget tracker_label, logo, security, encrypt;
-    Widget tearbutton;
-    Widget button_rc, button2_rc;
-    Widget toolbarwin, topform;
-    int toolset;
-    int toolbardetached;
-    int toolbarorientation;
+  Widget url_text;
+  Widget title_text;
+  Widget scrolled_win, view;
+  Widget rightform;
+  Widget tracker_label, logo, security, encrypt;
+  Widget tearbutton;
+  Widget button_rc, button2_rc;
+  Widget toolbarwin, topform;
+  int has_toolbar;
+  int toolbardetached;
+  int toolbarorientation;
     
-    Widget meter, meter_frame;
-    int meter_level, meter_width, meter_height;
-    Pixel meter_fg, meter_bg, meter_font_fg, meter_font_bg;
-    char *meter_text;
+  Widget meter, meter_frame;
+  int meter_level, meter_width, meter_height;
+  Pixel meter_fg, meter_bg, meter_font_fg, meter_font_bg;
+  char *meter_text;
 
   Widget searchindex_button;   /* Pushbutton, says "Search Index" */
   Widget searchindex_win_label, searchindex_win_text;
@@ -651,6 +660,7 @@ typedef struct mo_window
   Boolean blink_text;
   Boolean frame_support;
   Boolean hotkeys;
+  Boolean multi_image_load;
 
   Widget subgroup;
   Widget unsubgroup;
@@ -689,6 +699,10 @@ typedef struct mo_window
 
   Pixel form_button_bg;
 
+  Boolean mo_back;
+  Boolean mo_forward;
+  int current_authType;
+  int presentation_mode;
 } mo_window;
 
 /* ------------------------------- mo_node -------------------------------- */
@@ -697,17 +711,16 @@ typedef struct mo_window
  * mo_node will never be effective across multiple mo_window's;
  * each window has its own linear history list.
  */
-typedef struct mo_node
-{
+typedef struct mo_node {
   char *title;
   char *url;
   char *last_modified;
   char *expires;
-  char *ref;  /* How the node was referred to from a previous anchor,
-                 if such an anchor existed. */
+  char *ref;	    /* How the node was referred to from a previous anchor,
+		     * if such an anchor existed. */
   char *text;
   char *texthead;   /* Head of the alloc'd text -- this should
-                       be freed, NOT text */
+		     * be freed, not text */
   /* Position in the list, starting at 1; last item is
    * effectively 0 (according to the XmList widget). */
   int position;
@@ -732,10 +745,15 @@ typedef struct mo_node
 
   /* Encryption cipher (if any) */
   char *cipher;
+  char *cipher_issuer;
   int cipher_bits;
+  int cipher_status;
 
   /* Character set (if any) */
   char *charset;
+
+  /* FTP server type (if any) */
+  char *ftp_type;
 
   /* Frame info */
   struct mo_frame *frames;
@@ -744,8 +762,7 @@ typedef struct mo_node
   struct mo_node *next;
 } mo_node;
 
-typedef struct mo_frame
-{
+typedef struct mo_frame {
   char *url;
   int docid;
   void *cached_widgets;
@@ -759,25 +776,25 @@ typedef struct mo_frame
 /* ------------------------------ MISC TYPES ------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-typedef enum
-{
-  mo_fail = 0, mo_succeed
+typedef enum {
+  mo_fail = 0,
+  mo_succeed
 } mo_status;
 
-typedef enum
-{
-  mo_annotation_public = 0, mo_annotation_workgroup, mo_annotation_private
+typedef enum {
+  mo_annotation_public = 0,
+  mo_annotation_workgroup,
+  mo_annotation_private
 } mo_pubpri_token;
 
 
-/* ---------------------------- a few globals ----------------------------- */
+/* ---------------------------- A few globals ----------------------------- */
 
 extern Display *dsp;
 
 /* ------------------------------- menubar -------------------------------- */
 
-typedef enum
-{
+typedef enum {
 #ifdef KRB4
   mo_kerberosv4_login,
 #endif
@@ -803,6 +820,7 @@ typedef enum
   mo_all_hotlist_to_rbm, mo_all_hotlist_from_rbm,
   mo_network_search, mo_usenet_search, mo_people_search, mo_meta_search,
   mo_internet_metaindex, mo_list_search, mo_map_search, mo_auction_search,
+  mo_encyclopedia_search,
   mo_large_fonts, mo_regular_fonts, mo_small_fonts,
   mo_large_helvetica, mo_regular_helvetica, mo_small_helvetica,
   mo_large_newcentury, mo_regular_newcentury, mo_small_newcentury,
@@ -838,7 +856,7 @@ typedef enum
   mo_re_init, mo_delay_image_loads, mo_table_support, mo_expand_images_current,
   mo_image_view_internal, mo_progressive_loads, mo_animate_images,
   mo_preferences, mo_save_preferences, mo_refresh_url, mo_blink_text,
-  mo_frame_support, mo_hotkeys, mo_tooltips, mo_verify_certs,
+  mo_frame_support, mo_hotkeys, mo_tooltips, mo_verify_certs, mo_multi_load,
 
   /* FTP */
   mo_ftp_put, mo_ftp_remove, mo_ftp_mkdir,
@@ -856,7 +874,6 @@ typedef enum
   /* NOTE!!!!!! THIS MUST ALWAYS BE LAST!!!!!! */
   mo_last_entry
 } mo_token;
-
 
 #include "prefs.h"
 

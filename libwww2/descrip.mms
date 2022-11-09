@@ -4,7 +4,7 @@
 ! Mosaic version 2.4 20-Aug-1994
 ! Mosaic version 2.6 1-Nov-1995, George Cook
 !
-! Copyright (C) 2005 - The VMS Mosaic Project
+! Copyright (C) 2005, 2006 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -103,7 +103,7 @@ OBJECTS = Odir:HTAABrow.obj Odir:HTAAUtil.obj Odir:HTAccess.obj \
   Odir:HTNews.obj Odir:HTParse.obj Odir:HTPlain.obj Odir:HTSort.obj \
   Odir:HTString.obj Odir:HTTCP.obj Odir:HTTelnet.obj Odir:HTTP.obj \
   Odir:HTUU.obj Odir:HTVMSUtils.obj Odir:HTWriter.obj Odir:HTWSRC.obj \
-  Odir:HTBtree.obj Odir:HTFinger.obj Odir:HTCookie.obj Odir:SGML.obj \
+  Odir:HTBTree.obj Odir:HTFinger.obj Odir:HTCookie.obj Odir:SGML.obj \
   $(WAISMODULES)
 
 $(LIBTARGET) : $(LIBTARGET)($(OBJECTS))
@@ -119,8 +119,9 @@ Odir:HTAAUtil.obj :     HTAAUtil.c htaautil.h htassoc.h htlist.h htstring.h \
 Odir:HTAccess.obj :     HTAccess.c htaccess.h htalert.h htanchor.h htatom.h \
                         htext.h htformat.h htlist.h html.h htmldtd.h htmime.h\
                         htparse.h htstream.h htstring.h htutils.h sgml.h \
-                        tcp.h [-.src]proxy.h [-.libnut]str-tools.h [-]config.h \
-			[-]config_$(WORK).h
+                        tcp.h htmultiload.h [-.src]proxy.h \
+			[-.libnut]str-tools.h [-]config.h [-]config_$(WORK).h \
+			[-]ssl_$(WORK).h
 Odir:HTAlert.obj :      HTAlert.c htalert.h htstring.h htutils.h tcp.h \
                         [-]config.h [-]config_$(WORK).h
 Odir:HTAnchor.obj :     HTAnchor.c htanchor.h htatom.h htformat.h htlist.h \
@@ -137,13 +138,11 @@ Odir:HTChunk.obj :      HTChunk.c htchunk.h htstring.h htutils.h [-]config.h \
 			[-]config_$(WORK).h
 Odir:HTCompressed.obj : HTCompressed.c htaccess.h htalert.h htanchor.h \
                         htatom.h htext.h htfile.h htformat.h htfwriter.h \
-                        htinit.h htlist.h html.h htmldtd.h htmlgen.h \
-                        htplain.h htstream.h htstring.h htutils.h sgml.h \
-                        htcompressed.h tcp.h [-.libnut]system.h [-]config.h \
-			[-]config_$(WORK).h
+                        htinit.h htstream.h htstring.h htutils.h htcompressed.h\
+			tcp.h [-.libnut]system.h [-]config.h [-]config_$(WORK).h
 Odir:HTCookie.obj :     HTCookie.c htcookie.h htaccess.h htalert.h htparse.h \
 			httcp.h htstring.h htutils.h htfile.h htbtree.h \
-			htlist.h [-.libxmx]xmx.h \
+			http.h htlist.h [-.libxmx]xmx.h \
 			[-.libnut]str-tools.h [-.libnut]system.h \
 			[-.src]mosaic.h [-.src]prefs.h [-]config.h \
 			[-]config_$(WORK).h
@@ -164,33 +163,33 @@ Odir:HTFormat.obj :     HTFormat.c htalert.h htanchor.h htatom.h htext.h \
 Odir:HTFTP.obj :        HTFTP.c htaautil.h htaccess.h htalert.h htanchor.h \
                         htatom.h htchunk.h htext.h htfile.h htformat.h \
                         htftp.h hticon.h htlist.h html.h htmldtd.h htparse.h \
-                        htsort.h htstream.h htstring.h httcp.h htutils.h \
-                        sgml.h tcp.h [-.libnut]str-tools.h [-]config.h \
+                        htstream.h htstring.h httcp.h htutils.h sgml.h tcp.h \
+                        tcp.h [-.libnut]str-tools.h [-]config.h \
 			[-]config_$(WORK).h
 Odir:HTFWriter.obj :    HTFWriter.c htaccess.h htalert.h htanchor.h htatom.h \
-                        htcompressed.h htext.h htfile.h htformat.h \
+                        htcompressed.h htext.h htfile.h htformat.h htmime.h\
                         htfwriter.h htlist.h html.h htmldtd.h htstream.h \
                         htstring.h htutils.h sgml.h tcp.h [-.libxmx]xmx.h \
                         [-.src]mosaic.h [-.src]prefs.h [-.src]prefs_defs.h \
                         [-.src]toolbar.h [-.src]child.h [-.src]mo-www.h\
 			[-]config.h [-]config_$(WORK).h
-Odir:HTGopher.obj :     HTGopher.c htaccess.h htanchor.h htatom.h htfile.h \
-                        htformat.h htgopher.h htlist.h html.h htmldtd.h \
-                        htparse.h htstream.h htstring.h httcp.h htutils.h \
-                        sgml.h tcp.h [-]config.h [-]config_$(WORK).h
+Odir:HTGopher.obj :     HTGopher.c htaccess.h htalert.h htanchor.h htatom.h \
+			htfile.h htformat.h htgopher.h htlist.h html.h \
+			htmldtd.h htparse.h htstream.h htstring.h httcp.h \
+			htutils.h sgml.h tcp.h [-]config.h [-]config_$(WORK).h
 Odir:HTIcon.obj :       HTIcon.c htaccess.h htanchor.h htatom.h htfile.h \
                         htformat.h htlist.h html.h htmldtd.h htstream.h \
                         hticon.h htstring.h htutils.h sgml.h tcp.h [-]config.h \
 			[-]config_$(WORK).h
 Odir:HTInit.obj :       HTInit.c htaccess.h htanchor.h htatom.h htfile.h \
-                        htformat.h htinit.h htlist.h htmime.h html.h \
-                        htmldtd.h htmlgen.h htmosaichtml.h htplain.h \
+                        htformat.h htfwriter.h htinit.h htlist.h htmime.h \
+			html.h htmldtd.h htmlgen.h htmosaichtml.h htplain.h \
                         htstream.h htstring.h htutils.h htwsrc.h sgml.h tcp.h \
                         [-]config.h [-]config_$(WORK).h
 Odir:HTList.obj :       HTList.c htlist.h htstring.h htutils.h [-]config.h \
 			[-]config_$(WORK).h
-Odir:HTMailto.obj :     HTMailto.c htaccess.h htanchor.h htatom.h htformat.h \
-                        htlist.h html.h htmldtd.h htstream.h \
+Odir:HTMailto.obj :     HTMailto.c htaccess.h htalert.h htanchor.h htatom.h \
+			htformat.h htlist.h html.h htmldtd.h htstream.h \
                         htstring.h htutils.h sgml.h\
                         [-.libnut]str-tools.h [-]config.h [-]config_$(WORK).h
 Odir:HTMIME.obj :       HTMIME.c htaautil.h htaccess.h htalert.h htanchor.h \
@@ -212,12 +211,12 @@ Odir:HTMosaicHTML.obj : HTMosaicHTML.c htaccess.h htanchor.h htatom.h \
                         html.h htmldtd.h htmosaichtml.h htstream.h htstring.h \
                         htutils.h sgml.h tcp.h [-]config.h [-]config_$(WORK).h
 Odir:HTNews.obj :       HTNews.c htaccess.h htanchor.h htatom.h htformat.h \
-                        htlist.h html.h htmldtd.h htnews.h htparse.h \
+                        htalert.h htlist.h html.h htmldtd.h htnews.h htparse.h \
                         htstream.h htstring.h htutils.h sgml.h tcp.h \
                         [-.src]mosaic.h [-.src]newsrc.h \
                         [-.src]prefs.h [-.src]prefs_defs.h [-.src]toolbar.h \
                         [-]config.h [-]config_$(WORK).h
-Odir:HTParse.obj :      HTParse.c htparse.h htstring.h htutils.h tcp.h \
+Odir:HTParse.obj :      HTParse.c htparse.h htstring.h htutils.h \
                         [-]config.h [-]config_$(WORK).h
 Odir:HTPlain.obj :      HTPlain.c htaccess.h htanchor.h htatom.h \
                         htcompressed.h htext.h htfile.h htformat.h htlist.h \
@@ -225,13 +224,13 @@ Odir:HTPlain.obj :      HTPlain.c htaccess.h htanchor.h htatom.h \
                         htutils.h sgml.h tcp.h [-]config.h [-]config_$(WORK).h
 Odir:HTSort.obj :       HTSort.c htstring.h htutils.h [-]config.h \
 			[-]config_$(WORK).h
-Odir:HTString.obj :     HTString.c htstring.h htutils.h tcp.h [-]config.h \
+Odir:HTString.obj :     HTString.c htstring.h htutils.h [-]config.h \
 			[-]config_$(WORK).h
 Odir:HTTCP.obj :        HTTCP.c htaccess.h htalert.h htanchor.h htatom.h \
                         htformat.h htlist.h htparse.h htstream.h htstring.h \
                         httcp.h htutils.h tcp.h [-]config.h [-]config_$(WORK).h
 Odir:HTTelnet.obj :     HTTelnet.c htaccess.h htalert.h htanchor.h htatom.h \
-                        htext.h htfile.h htformat.h htlist.h html.h htmldtd.h \
+                        htfile.h htformat.h htlist.h html.h htmldtd.h \
                         htparse.h htstream.h htstring.h httelnet.h http.h \
                         htutils.h sgml.h tcp.h [-.libnut]str-tools.h \
 			[-]config.h [-]config_$(WORK).h
@@ -239,13 +238,15 @@ Odir:HTTP.obj :         HTTP.c htaabrow.h htaautil.h htaccess.h htalert.h \
                         htanchor.h htatom.h htfile.h htformat.h htinit.h \
                         htlist.h htmime.h html.h htmldtd.h htparse.h \
                         htstream.h htstring.h httcp.h http.h htutils.h sgml.h \
-                        htcookie.h tcp.h [-]config.h [-]config_$(WORK).h \
-			[-]ssl_$(WORK).h
+                        htcookie.h htmultiload.h tcp.h [-.src]mosaic.h \
+			[-.libxmx]xmx.h [-]config.h [-]config_$(WORK).h \
+		        [-]ssl_$(WORK).h
 Odir:HTUU.obj :         HTUU.c htstring.h htutils.h htuu.h [-]config.h \
 			[-]config_$(WORK).h
-Odir:HTVMSUtils.obj :   HTVMSUtils.c htvmsutils.h htbtree.h htformat.h \
-			htanchor.h htfile.h htstream.h htutils.h tcp.h httcp.h\
-                        [-.libnut]str-tools.h [-]config.h [-]config_$(WORK).h
+Odir:HTVMSUtils.obj :   HTVMSUtils.c htvmsutils.h htalert.h htbtree.h \
+			htformat.h htanchor.h htfile.h htstream.h htutils.h \
+			tcp.h httcp.h [-.libnut]str-tools.h [-]config.h \
+			[-]config_$(WORK).h
 Odir:HTWAIS.obj :       HTWAIS.c htaccess.h htalert.h htanchor.h htatom.h \
                         htfile.h htformat.h htlist.h html.h htmldtd.h \
                         htparse.h htstream.h htstring.h httcp.h htutils.h \

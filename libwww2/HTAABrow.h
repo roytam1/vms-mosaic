@@ -12,7 +12,7 @@
    returned by these functions.
    
    Therefore also all the strings returned by this package are only valid
-   until the next call to the same function is made. This approach is
+   until the next call to the same function is made.  This approach is
    selected, because of the nature of access authorization: no string
    returned by the package needs to be valid longer than until the next call.
    
@@ -32,13 +32,11 @@
 #ifndef HTAABROW_H
 #define HTAABROW_H
 
-#include "HTUtils.h"            /* BOOL, PARAMS, ARGS */
+#ifndef HTUTILS_H
+#include "HTUtils.h"            /* BOOL */
+#endif
+#ifndef HTAAUTIL_H
 #include "HTAAUtil.h"           /* Common parts of AA */
-
-#ifdef SHORT_NAMES
-#define HTAAcoAu        HTAA_composeAuth
-#define HTAAsRWA        HTAA_shouldRetryWithAuth
-#define HTAA_TWA        HTAA_TryWithAuth
 #endif
 
 /*
@@ -84,10 +82,10 @@ Routines for Browser Side Recording of AA Info
 **
 **              As usual, this string is automatically freed.
 */
-PUBLIC char *HTAA_composeAuth PARAMS((WWW_CONST char *hostname,
-                                      WWW_CONST int   portnumber,
-                                      WWW_CONST char *docname,
-				      BOOL            IsProxy));
+PUBLIC char *HTAA_composeAuth (WWW_CONST char *hostname,
+                               WWW_CONST int   portnumber,
+                               WWW_CONST char *docname,
+			       BOOL            IsProxy);
 
 
 /* BROWSER PUBLIC                               HTAA_shouldRetryWithAuth()
@@ -98,7 +96,7 @@ PUBLIC char *HTAA_composeAuth PARAMS((WWW_CONST char *hostname,
 **              USERNAME AND/OR PASSWORD (IF MISSPELLED))
 ** ON ENTRY:
 **      start_of_headers is the first block already read from socket,
-**                      but status line skipped; i.e. points to the
+**                      but status line skipped; i.e., points to the
 **                      start of the header section.
 **      length          is the remaining length of the first block.
 **      soc             is the socket to read the rest of server reply.
@@ -118,10 +116,10 @@ PUBLIC char *HTAA_composeAuth PARAMS((WWW_CONST char *hostname,
 **                                field (in function HTAA_composeAuth()).
 **                      NO, otherwise.
 */
-PUBLIC BOOL HTAA_shouldRetryWithAuth PARAMS((char  *start_of_headers,
-                                             int    length,
-                                             int    soc,
-					     BOOL   IsProxy));
+PUBLIC BOOL HTAA_shouldRetryWithAuth (char  *start_of_headers,
+                                      int    length,
+                                      int    soc,
+				      BOOL   IsProxy);
 
 
 #ifdef PEM_AUTH
@@ -146,11 +144,9 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth PARAMS((char  *start_of_headers,
 **			NO
 **			     Client can't do this encryption type.
 */
-PUBLIC BOOL HTAA_TryWithAuth PARAMS((char *enctype,
-				     char *entity,
-				     char *action));
+PUBLIC BOOL HTAA_TryWithAuth (char *enctype, char *entity, char *action);
 
-PUBLIC void HTAA_ClearAuth NOPARAMS;
+PUBLIC void HTAA_ClearAuth ();
 
 /*
  * PUBLIC                                               HTAA_makecommand()
@@ -164,15 +160,14 @@ PUBLIC void HTAA_ClearAuth NOPARAMS;
  * ON EXIT:
  *      returns         the new HTTP request with PEM
  * 
- * Do not free this string. This function *requires* that the 
+ * Do not free this string.  This function *requires* that the 
  * HTAA_composeAuth function has been called prior to it.
  * 
  */
-PUBLIC char *HTAA_makecommand PARAMS((char *command, char **body, int *bl));
+PUBLIC char *HTAA_makecommand (char *command, char **body, int *bl);
 #endif /* PEM_AUTH */
 
 
 PUBLIC void HTAAServer_clear();
 
-#endif  /* NOT HTAABROW_H */
-
+#endif  /* HTAABROW_H */

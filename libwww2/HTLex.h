@@ -7,12 +7,6 @@
 
 #include "HTUtils.h"
 
-
-#ifdef SHORT_NAMES
-#define lex_verb        lex_verbose
-#endif /*SHORT_NAMES*/
-
-
 typedef enum {
     LEX_NONE,           /* Internally used      */
     LEX_EOF,            /* End of file          */
@@ -33,30 +27,24 @@ extern int lex_line;            /* Line number in source file   */
 
 Get Next Lexical Item
 
-   If returns LEX_ALPH_STR or LEX_TMPL_STR the string is in global buffer lex_buffer.
+   If returns LEX_ALPH_STR or LEX_TMPL_STR the string is in
+   global buffer lex_buffer.
    
  */
+PUBLIC LexItem lex (FILE * fp);
 
-PUBLIC LexItem lex PARAMS((FILE * fp));
 /*
 
 Push Back Latest Item
 
  */
+PUBLIC void unlex (LexItem lex_item);
 
-PUBLIC void unlex PARAMS((LexItem lex_item));
 /*
 
 Get the Name for Lexical Item
 
  */
+PUBLIC char *lex_verbose (LexItem lex_item);
 
-PUBLIC char *lex_verbose PARAMS((LexItem lex_item));
-/*
-
- */
-
-#endif /* not HTLEX_H */
-/*
-
-   End of file HTLex.h.  */
+#endif  /* HTLEX_H */

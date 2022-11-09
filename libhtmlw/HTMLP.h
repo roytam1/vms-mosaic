@@ -52,12 +52,15 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #ifndef HTMLP_H
 #define HTMLP_H
 
 #include "../libhtmlw/HTML.h"
+#include "../libwww2/HTBTree.h"
 
 #include <Xm/XmP.h>
 #ifdef MOTIF1_2
@@ -93,11 +96,11 @@ extern HTMLClassRec htmlClassRec;
 #define DEF_IMAGE_VSPACE	0
 #define D_INDENT_SPACES		40
 
-#define D_NONE          0
-#define D_TITLE         1
-#define D_TEXT          2
-#define D_OLIST         3
-#define D_ULIST         4
+#define D_NONE    0
+#define D_TITLE   1
+#define D_TEXT    2
+#define D_OLIST   3
+#define D_ULIST   4
 #define D_DESC_LIST_START 5
 
 /*
@@ -136,14 +139,13 @@ typedef struct float_rec {
 
 /* A struc to maintain current HTML formatting context */
 typedef struct _PhotoComposeContext {
-	int width_of_viewable_part; /* Never change during computation */
+	int width_of_viewable_part;  /* Never change during computation */
 	int right_margin;
 	int left_margin;
 	int eoffsetx;	      /* The element offset relative to View */
 	int cur_line_width;   /* WidthOfViewablePart-right_margin-left_margin */
-	int x;		      /* x, y relative to View, Where to put next */
-	int y;		      /* Element */
-
+	int x;		      /* x, y (relative to View) to put next element */
+	int y;
 	/* When cw_only we never create Element but compute 3 values:
 	 *    computed_min_x, computed_max_x, computed_maxmin_x
 	 * This part is for first pass of table to compute cell sizes
@@ -152,50 +154,50 @@ typedef struct _PhotoComposeContext {
 	int computed_min_x;	/* Minimum cell width for this line */
 	int computed_maxmin_x;	/* Max of all min_x in cell */
 	int computed_max_x;	/* Maximum cell width */
-
 	int margin_height;
-	int cur_baseline;	/* All objects in a line must have the same */
-				/* baseline.  If baseline changes then adjust */
-				/* the element's y and cur_line_height and */
-				/* the y or height of each element on line */
+	int cur_baseline;	/* All objects in a line must have the same
+				 * baseline.  If baseline changes then adjust
+				 * the element's y and cur_line_height and
+				 * the y or height of each element on line */
 	int cur_line_height;
 	int element_id;    	/* Unique number */
-	int is_bol;      	/* At begin of line if 1 */
-				/* Right after list bullet if 2 */
+	int is_bol;      	/* At begin of line if 1
+				 * Right after list bullet if 2 */
 	char have_space_after;  /* Word has a space after */
-	XFontStruct	*cur_font;
-	int		cur_font_size;
-	int		cur_font_base;
-	CurFontFamily	cur_font_family;
-	CurFontType	cur_font_type;
-	MarkInfo	*anchor_tag_ptr;     /* Anchor info */
-	int max_width_return;	/* Compute the MaxWidth of hyper text to */
-				/* adjust scrollbar */
-				/* Initial value is WidthOfViewablePart */
-	int	pf_lf_state; 	/* Linefeed state */
-	int	preformat;	/* In <PRE>? */
-	DivAlignType	div;	/* Current horizontal alignment */
-	AlignType	valign;	/* Current vertical alignment */
-	unsigned long	fg;	/* Current foreground */
-	unsigned long	bg;	/* Current background */
+	XFontStruct     *cur_font;
+	int	        cur_font_size;
+	int	        cur_font_base;
+	CurFontFamily   cur_font_family;
+	CurFontType     cur_font_type;
+	MarkInfo *anchor_tag_ptr;  /* Anchor info */
+	int max_width_return;	 /* Compute the MaxWidth of hyper text
+				  * to adjust scrollbar.
+				  * Initial value is WidthOfViewablePart */
+	int pf_lf_state; 	 /* Linefeed state */
+	int preformat;		 /* In <PRE>? */
+	DivAlignType	div;	 /* Current horizontal alignment */
+	AlignType	valign;	 /* Current vertical alignment */
+	unsigned long	fg;	 /* Current foreground */
+	unsigned long	bg;	 /* Current background */
 	unsigned long	cur_font_color;
 	int		underline_number;
 	int		in_underlined;
 	Boolean		dashed_underlines;
-	Boolean		underline_start; /* Indicate starting underlining */
-	FormInfo	*cur_form;	/* Current form */
-	Boolean		in_form;	/* In form? */
+	Boolean		underline_start;  /* Indicate starting underlining */
+	FormInfo	*cur_form;	  /* Current form */
+	Boolean		in_form;	  /* In form? */
 	int		widget_id;
-	int		aprog_id;
 	int		applet_id;
 	int		superscript;
 	int		subscript;
 	int		indent_level;
-	char		*text_area_buf;	 /* Buffer for Form TextArea */
-	char		*button_buf;	 /* Buffer for Form Button */
-	int		ignore;		 /* Ignore some tags when formating */
-	SelectInfo	*current_select; /* SELECT in FORM */
-	Boolean		in_select;	 /* A select? */
+	char		*text_area_buf;	  /* Buffer for Form TextArea */
+	char		*button_buf;	  /* Buffer for Form Button */
+	Boolean		button_has_text;  /* Form Button text? */
+	Boolean		button_has_image; /* Form Button image? */
+	int		ignore;		  /* Ignore some tags when formating */
+	SelectInfo	*current_select;  /* SELECT in FORM */
+	Boolean		in_select;	  /* A select? */
 	int		is_index;
 	int		Width;
 	Boolean		Strikeout;
@@ -205,13 +207,12 @@ typedef struct _PhotoComposeContext {
 	char		*TitleText;
 	Boolean		in_table;	/* In a table? */
 	int		in_paragraph;   /* In a paragraph? */
-	Boolean		in_script;	/* In a script? */
-	Boolean		in_style;	/* In a style sheet? */
 	Boolean		in_div_hidden;	/* Visibility:hidden in DIV? */
 	ElemInfo	*last_progressive_ele;	/* Last element displayed progressively */
 	Boolean		anchor_start;	/* Mark start of anchor in text */
 	Boolean		at_top;		/* At top of a page or cell? */
 	Boolean		in_anchor;	/* In an anchor? */
+	Boolean		fixed_anchor_color;  /* Fixed anchor color? */
 	Boolean		in_label;	/* In a label? */
 	char 		*label_id;	/* Label FOR=id */
 	FloatRec	*float_left;	/* Current float stacks */
@@ -327,6 +328,8 @@ typedef struct _HTMLPart {
 	XtCallbackList		frame_callback;
 	Boolean			is_frame;
 	FrameScrolling		scroll_bars;
+	Boolean			multi_image_load;
+	XtCallbackList		multi_load_callback;
 
 	/* Private */
 	Dimension		max_pre_width;
@@ -349,6 +352,10 @@ typedef struct _HTMLPart {
 	int			new_end_pos;
 	ElemInfo		*active_anchor;
 	GC			drawGC;
+	Pixel			cur_fg;
+	Pixel			cur_bg;
+	XFontStruct		*cur_font;
+	Display			*dsp;
 	int			press_x;
 	int			press_y;
 	Time			but_press_time;
@@ -358,6 +365,7 @@ typedef struct _HTMLPart {
 	MarkInfo		*html_footer_objects;
 	MarkInfo		*html_refresh_objects;
 	WidgetInfo		*widget_list;
+	WidgetInfo		*widget_focus;
 	FormInfo		*form_list;
 	MapInfo                 *map_list;
         Boolean 		drawing;
@@ -391,6 +399,7 @@ typedef struct _HTMLPart {
 	WorkInfo		*workprocdata;
 	int			allocation_index[256];
 	ElemInfo		*title_elem;
+	HTBTree			*image_src;
 
 	/* Frame resources */
 	FrameInfo	**frames;
@@ -407,4 +416,4 @@ typedef struct _HTMLRec {
 	HTMLPart		html;
 } HTMLRec;
 
-#endif /* HTMLP_H */
+#endif  /* HTMLP_H */

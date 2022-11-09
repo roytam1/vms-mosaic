@@ -1,6 +1,8 @@
-! MMS description file for libvms (VMS Library for NCSA Mosaic)
+! MMS description file for libvms (VMS Library for Mosaic)
 ! George E. Cook, WVNET, 12-May-1996
 ! Mosaic 2.7-4
+!
+! Copyright (C) 2007 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -85,7 +87,7 @@ default :       $(LIBTARGET) [-]mosaic.hlp
 $(LIBTARGET) : $(LIBTARGET)($(OBJECTS))
 	@ Write SYS$Output "Library libvms.olb built."
 
-Odir:cmdline.obj    : cmdline.c [-.src]mosaic.h [-]config.h \
+Odir:cmdline.obj    : cmdline.c cmdline.h [-.src]mosaic.h [-]config.h \
 		      [-]config_$(WORK).h [-]ssl_$(WORK).h
 Odir:mosaic_cld.obj : mosaic_cld.cld
 

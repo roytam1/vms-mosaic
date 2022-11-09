@@ -1,5 +1,5 @@
-/*          HTAccess:  Access manager  for libwww
-                                      ACCESS MANAGER
+/*          HTAccess:  Access manager for libwww
+                             ACCESS MANAGER
                                              
    This module keeps a list of valid protocol (naming scheme)
    specifiers with associated access code.  It allows documents to be
@@ -14,15 +14,17 @@
 
 /*      Definition uses:
 */
+#ifndef HTUTILS_H
 #include "HTUtils.h"
+#endif
+#ifndef TCP_H
 #include "tcp.h"
+#endif
+#ifndef HTANCHOR_H
 #include "HTAnchor.h"
+#endif
+#ifndef HTFORMAT_H
 #include "HTFormat.h"
-
-#ifdef SHORT_NAMES
-#define HTClientHost            HTClHost
-#define HTOutputStream          HTOuStre
-#define HTOutputFormat          HTOuForm
 #endif
 
 /*      Return codes from load routines:
@@ -32,15 +34,13 @@
 **      In general, positive codes are OK and negative ones are bad.
 */
 
-#define HT_NO_DATA -9999        /* return code: OK but no data was loaded */
+#define HT_NO_DATA -9999        /* Return code: OK but no data was loaded */
                                 /* Typically, other app started or forked */
 
 /*
- * Flags which may be set to control this module
+ * Flag which may be set to control this module
  */
-extern char * HTClientHost;             /* Name or number of telnetting host */
-extern HTStream *HTOutputStream;        /* For non-interactive, set this */
-extern HTFormat HTOutputFormat;         /* To convert on load, set this */
+extern char *HTClientHost;              /* Name or number of telnetting host */
 
 
 /*
@@ -55,9 +55,7 @@ Load a document from relative name
   NO                      Failure
                          
  */
-extern  BOOL HTLoadRelative PARAMS((
-                WWW_CONST char *relative_name,
-                HTParentAnchor *here));
+extern BOOL HTLoadRelative(WWW_CONST char *relative_name, HTParentAnchor *here);
 
 /*
 Load a document from absolute name
@@ -71,7 +69,7 @@ Load a document from absolute name
   NO                      Failure
                          
  */
-extern int HTLoadAbsolute PARAMS((WWW_CONST char *addr));
+extern int HTLoadAbsolute (WWW_CONST char *addr);
 
 
 /*
@@ -88,8 +86,7 @@ Load a document from absolute name to a stream
                          
    Note: This is equivalent to HTLoadDocument
  */
-extern BOOL HTLoadToStream PARAMS((WWW_CONST char *addr, BOOL filter,
-                                  HTStream *sink));
+extern BOOL HTLoadToStream (WWW_CONST char *addr, BOOL filter, HTStream *sink);
 
 /*
 Make a stream for Saving object back
@@ -100,7 +97,7 @@ Make a stream for Saving object back
  ON EXIT,
   returns                 0 if error else a stream to save the object to.
  */
-extern HTStream *HTSaveStream PARAMS((HTParentAnchor *anchor));
+extern HTStream *HTSaveStream (HTParentAnchor *anchor);
 
 
 /*
@@ -109,17 +106,13 @@ extern HTStream *HTSaveStream PARAMS((HTParentAnchor *anchor));
 
 typedef struct _HTProtocol {
         char *name;
-        
-        int (*load)PARAMS((
-                WWW_CONST char *full_address,
-                HTParentAnchor *anchor,
-                HTFormat        format_out,
-                HTStream       *sink));
-                
-        HTStream *(*saveStream)PARAMS((HTParentAnchor *anchor));
-
+        int (*load)(WWW_CONST char *full_address,
+                    HTParentAnchor *anchor,
+                    HTFormat        format_out,
+                    HTStream       *sink);
+        HTStream *(*saveStream)(HTParentAnchor *anchor);
 } HTProtocol;
 
-extern BOOL HTRegisterProtocol PARAMS((HTProtocol *protocol));
+extern BOOL HTRegisterProtocol (HTProtocol *protocol);
 
-#endif /* HTACCESS_H */
+#endif  /* HTACCESS_H */

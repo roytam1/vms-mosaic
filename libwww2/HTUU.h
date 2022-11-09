@@ -12,14 +12,8 @@
 #ifndef HTUU_H
 #define HTUU_H
 
-#include "HTUtils.h"
-
-PUBLIC int HTUU_encode PARAMS((unsigned char *bufin,
-                               unsigned int nbytes,
-                               char *bufcoded));
-
-PUBLIC int HTUU_decode PARAMS((char *bufcoded,
-                               unsigned char *bufplain,
-                               int outbufsize));
+PUBLIC int HTUU_encode(unsigned char *bufin, unsigned int nbytes,
+		       char *bufcoded);
+PUBLIC int HTUU_decode(char *bufcoded, unsigned char *bufplain, int outbufsize);
 
 #endif

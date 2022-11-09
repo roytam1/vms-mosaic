@@ -14,10 +14,9 @@ typedef enum _MarkType {
 	M_INIT_STATE = -2,
 	M_UNKNOWN = -1,		/* The first two must have this value */
 	M_NONE = 0,		/* for compatibility */
-/* See comment below before adding to list */
+    /* See comment below before adding to list */
 	M_ANCHOR,
 	M_APPLET,
-	M_APROG,
 	M_AREA,
 	M_BASE,
 	M_BASEFONT,
@@ -81,7 +80,7 @@ typedef enum _MarkType {
 	M_SUP,
 	M_UNDERLINED,
 	M_VARIABLE,
-/* Block elements below M_ADDRESS, text elements above */
+    /* Block elements below M_ADDRESS, text elements above */
 	M_ADDRESS,
 	M_BLOCKQUOTE,
 	M_CENTER,
@@ -116,14 +115,13 @@ typedef enum _MarkType {
 	M_TABLE_HEADER,
 	M_TABLE_ROW,
 	M_UNUM_LIST
-/* See comment above before adding to list */
+    /* See comment above before adding to list */
 } MarkType;
 
-/* syntax of Mark types */
+/* Syntax of Mark types */
 #define	MT_ANCHOR	"a"
 #define	MT_ADDRESS	"address"
 #define MT_APPLET	"applet"
-#define MT_APROG	"aprog"
 #define MT_AREA		"area"
 #define MT_BOLD		"b"
 #define MT_BASE		"base"
@@ -224,7 +222,6 @@ typedef enum _MarkType {
 /* Non blank space character */
 #define NBSP_CONST '\240'
 
-typedef struct _AprogRec	*AprogPtr;
 typedef struct _AppletRec	*AppletPtr;
 typedef struct _TableRec	*TablePtr;
 typedef struct image_rec	*ImageInfoPtr;
@@ -235,21 +232,18 @@ typedef struct mark_up {
 	char *start;
 	char *text;
 	int is_white_text;	/* Is text only with 'white-space' chars ? */
-	char *end;
 	struct mark_up *next;
-	AprogPtr s_aps;		/* aprog saved */
-	AppletPtr s_ats;	/* applet saved */
+	AppletPtr s_ats;	/* Applet saved */
 	ImageInfoPtr s_picd;	/* Saved image */
-	TablePtr t_p1;		/* First pass table */
+	TablePtr t_p1;		/* First table pass */
 	char *anc_name;
 	char *anc_href;
 	char *anc_title;
 	char *anc_target;
-	int preallo;
 } MarkInfo;
 
-extern int  caseless_equal(char *str1, char *str2);
+extern int caseless_equal(char *str1, char *str2);
 extern void clean_white_space(char *txt);
 extern char *ParseMarkTag(char *text, char *mtext, char *mtag);
 
-#endif /* HTML_PARSE_H */
+#endif  /* HTML_PARSE_H */

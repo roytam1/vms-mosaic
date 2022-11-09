@@ -1,16 +1,16 @@
 # Makefile for Independent JPEG Group's software
-
+#
 # This makefile is for use with MMS on Digital VMS systems.
 # Thanks to Rick Dyson (dyson@iowasp.physics.uiowa.edu)
 # and Tim Bell (tbell@netcom.com) for their help.
-
+#
 # Read installation instructions before saying "MMS" !!
-
+#
 # Generally, we recommend defining any configuration symbols in jconfig.h,
 # NOT via /Define switches here.
-
+#
 # Mosaic version 2.7 13-Mar-1996, George Cook
-# Only builds the library required for linking with Mosaic
+# Only builds the library required for linking with Mosaic.
 # This description file is intended to be invoked by the top level
 # description file.  It should not be invoked directly.
 

@@ -52,10 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
 
 #include "../config.h"
-
 #ifdef CCI
 
 #ifdef linux
@@ -175,16 +174,15 @@ int  ioctl (int d, int request, char *argp);
 #endif
 #endif
 
-#include "port.h"
+#include "cci.h"
 #include "accept.h"
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 #endif
 
-ListenAddress NetServerInitSocket(portNumber)
 /* Return -1 on error */
-int portNumber;
+ListenAddress NetServerInitSocket(int portNumber)
 {
 	ListenAddress socketFD;
 	struct sockaddr_in serverAddress;
@@ -240,16 +238,14 @@ int portNumber;
 	socket_ioctl(socketFD, FIONBIO, 0);
 #endif
 #endif
-
 	return(socketFD);
 }
 
 
-PortDescriptor *NetServerAccept(socketFD)
 /* Accept a connection off of a base socket */
 /* Do not block! */
 /* Return NULL if no connection else return PortDescriptor*  */
-ListenAddress socketFD;
+PortDescriptor *NetServerAccept(ListenAddress socketFD)
 {
 	int newSocketFD;
 	struct sockaddr_in clientAddress;
@@ -263,9 +259,9 @@ ListenAddress socketFD;
 	/* It's assumed that the socketFD has already been set to non block */
 	newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddress,
 #ifndef __GNUC__
-				&clientAddressLength);
+			     &clientAddressLength);
 #else
-				(int)&clientAddressLength);
+			     (int)&clientAddressLength);
 #endif /* GNU C, GEC */
 	if (newSocketFD < 0)
 		return(NULL);
@@ -280,12 +276,8 @@ ListenAddress socketFD;
 }
 
 
-int NetRead(c, buffer, bufferSize)
 /* Read input from port, return number of bytes read */
-
-PortDescriptor *c;
-char *buffer;
-int bufferSize;
+int NetRead(PortDescriptor *c, char *buffer, int bufferSize)
 {
 	int length;
 
@@ -298,11 +290,8 @@ int bufferSize;
 }
 
 
-int NetServerWrite(c, buffer, bufferSize)
 /* Send buffer, return number of bytes sent */
-PortDescriptor *c;
-char *buffer;
-int bufferSize;
+int NetServerWrite(PortDescriptor *c, char *buffer, int bufferSize)
 {
 	int length;
 
@@ -311,14 +300,12 @@ int bufferSize;
 #else
 	length = socket_write(c->socketFD, buffer, bufferSize);
 #endif
-
 	return(length);
 }
 
 
-void NetCloseConnection(c)
-/* close the connection */
-PortDescriptor *c;
+/* Close the connection */
+void NetCloseConnection(PortDescriptor *c)
 {
 #ifndef MULTINET
 	close(c->socketFD);
@@ -328,8 +315,7 @@ PortDescriptor *c;
 	return;
 }
 
-void NetCloseAcceptPort(s)
-int s;
+void NetCloseAcceptPort(int s)
 {
 #ifndef MULTINET
 	close(s);
@@ -340,11 +326,10 @@ int s;
 }
 
 
-int NetIsThereInput(p)
 /* Do a non block check on socket for input and return 1 for yes, 0 for no */
-PortDescriptor *p;
+int NetIsThereInput(PortDescriptor *p)
 {
-	static struct  timeval timeout = { 0L , 0L };
+	static struct timeval timeout = { 0L , 0L };
 	fd_set readfds;
 
 	FD_ZERO(&readfds);
@@ -358,14 +343,12 @@ PortDescriptor *p;
 	} else {
 		return(0);
 	}
-	
 }
 
-int NetIsThereAConnection(socketFD)
 /* Do a non block check on socket for input and return 1 for yes, 0 for no */
-int socketFD;
+int NetIsThereAConnection(int socketFD)
 {
-	static struct  timeval timeout = { 0L , 0L };
+	static struct timeval timeout = { 0L , 0L };
 	fd_set readfds;
 
 	FD_ZERO(&readfds);
@@ -380,13 +363,13 @@ int socketFD;
 		return(0);
 	}
 }
-int NetGetSocketDescriptor(s)
+
 /* Extract socket file descriptor from the Port structure */
-PortDescriptor *s;
+int NetGetSocketDescriptor(PortDescriptor *s)
 {
         return(s->socketFD);
 }
 
 #else
-int acceptdummy; /* Shut the freaking stupid compiler up */
+int acceptdummy;  /* Shut the freaking stupid compiler up */
 #endif /* CCI */

@@ -58,7 +58,7 @@ extern int www2Trace;
 PRIVATE int s;					/* Socket for FingerHost */
 
 struct _HTStructured {
-	WWW_CONST HTStructuredClass * isa;	/* For gopher streams */
+	WWW_CONST HTStructuredClass *isa;	/* For gopher streams */
 	/* ... */
 };
 
@@ -69,7 +69,7 @@ PRIVATE HTStructuredClass targetClass;		/* Copy of fn addresses */
 **	------------------------------
 */
 PRIVATE BOOL initialized = NO;
-PRIVATE BOOL initialize NOARGS
+PRIVATE BOOL initialize (void)
 {
     s = -1;		/* Disconnected */
     return YES;
@@ -79,7 +79,7 @@ PRIVATE BOOL initialize NOARGS
 /*	Start anchor element
 **	--------------------
 */
-PRIVATE void start_anchor ARGS1(WWW_CONST char *,  href)
+PRIVATE void start_anchor (WWW_CONST char *href)
 {
     BOOL present[HTML_A_ATTRIBUTES];
     WWW_CONST char *value[HTML_A_ATTRIBUTES];
@@ -103,21 +103,22 @@ PRIVATE void start_anchor ARGS1(WWW_CONST char *,  href)
 **	Negative status indicates transmission error, socket closed.
 **	Positive status is a Finger status.
 */
-PRIVATE int response ARGS5(
-	WWW_CONST char *,	command,
-	char *,			sitename,
-	HTParentAnchor *,	anAnchor,
-	HTFormat,		format_out,
-	HTStream*,		sink)
+PRIVATE int response (WWW_CONST char *command,
+		      char *sitename,
+		      HTParentAnchor *anAnchor,
+		      HTFormat format_out,
+		      HTStream *sink)
 {
-    int status;
     int length = strlen(command);
-    int ch, i;
-    char line[BIG], *l, *cmd = NULL;
-    char *p = line, *href = NULL;
+    int status, ch, i;
+    char line[BIG];
+    char *l;
+    char *cmd = NULL;
+    char *p = line;
+    char *href = NULL;
     extern int interrupted_in_htgetcharacter;
 
-    if (length == 0)
+    if (!length)
         return(-1);
 
     /* Set up buffering.
@@ -140,32 +141,27 @@ PRIVATE int response ARGS5(
         NETCLOSE(s);
         s = -1;
         return status;
-    } /* if bad status */
+    }
   
     /* Make a hypertext object with an anchor list.
     */
     target = HTML_new(anAnchor, format_out, sink);
-    targetClass = *target->isa;	/* Copy routine entry points */
+    targetClass = *target->isa;	 /* Copy routine entry points */
 
     /* Create the results report.
     */
 #ifndef DISABLE_TRACE
     if (www2Trace)
-	fprintf(stderr,"HTFinger: Reading finger information\n");
+	fprintf(stderr, "HTFinger: Reading finger information\n");
 #endif
     START(HTML_HTML);
-    PUTS("\n");
     START(HTML_HEAD);
-    PUTS("\n");
     START(HTML_TITLE);
     PUTS("Finger server on ");
     PUTS(sitename);
     END(HTML_TITLE);
-    PUTS("\n");
     END(HTML_HEAD);
-    PUTS("\n");
     START(HTML_BODY);
-    PUTS("\n");
     START(HTML_H1);
     PUTS("Finger server on ");
     START(HTML_EM);
@@ -177,7 +173,7 @@ PRIVATE int response ARGS5(
     } else {
         StrAllocCopy(cmd, "");
     }
-    for (i = (strlen(cmd) - 1); i >= 0; i--) {
+    for (i = strlen(cmd) - 1; i >= 0; i--) {
         if (cmd[i] == LF || cmd[i] == CR) {
 	    cmd[i] = '\0';
 	} else {
@@ -185,13 +181,11 @@ PRIVATE int response ARGS5(
 	}
     }
     PUTS(cmd);
-    FREE(cmd);
+    free(cmd);
     END(HTML_H1);
-    PUTS("\n");
     START(HTML_PRE);
 
     while ((ch = NEXT_CHAR) != (char)EOF) {
-
 	if (interrupted_in_htgetcharacter) {
 #ifndef DISABLE_TRACE
 	    if (www2Trace)
@@ -201,7 +195,6 @@ PRIVATE int response ARGS5(
 	    HTProgress("Connection interrupted.");
 	    goto end_html;
         }
-
 	if (ch != LF) {
 	    *p = ch;		/* Put character in line */
 	    if (p < &line[BIG - 1])
@@ -246,13 +239,10 @@ PRIVATE int response ARGS5(
     NETCLOSE(s);
     s = -1;
 
-end_html:
+ end_html:
     END(HTML_PRE);
-    PUTS("\n");
     END(HTML_BODY);
-    PUTS("\n");
     END(HTML_HTML);
-    PUTS("\n");
     FREE_TARGET;
     return(0);
 }
@@ -261,38 +251,34 @@ end_html:
 /*		Load by name					HTLoadFinger
 **		============
 */
-PUBLIC int HTLoadFinger ARGS4(
-	WWW_CONST char *,	arg,
-	HTParentAnchor *,	anAnchor,
-	HTFormat,		format_out,
-	HTStream*,		stream)
+PUBLIC int HTLoadFinger (WWW_CONST char *arg,
+			 HTParentAnchor *anAnchor,
+			 HTFormat format_out,
+			 HTStream *stream)
 {
     char *username, *sitename, *colon;	/* Fields extracted from URL */
     char *slash, *at_sign;		/* Fields extracted from URL */
     char *command, *str;		/* Buffers */
     int port;				/* Port number from URL */
     int status;				/* tcp return */
+    WWW_CONST char *p1 = arg;
+    BOOL IsGopherURL = FALSE;
   
 #ifndef DISABLE_TRACE
     if (www2Trace)
-        fprintf(stderr, "HTFinger: Looking for %s\n", (arg ? arg : "NULL"));
+        fprintf(stderr, "HTFinger: Looking for %s\n", arg ? arg : "NULL");
 #endif
   
     if (!(arg && *arg)) {
         HTAlert("Could not load data.");
 	return HT_NOT_LOADED;			/* Ignore if no name */
     }
-  
     if (!initialized) 
         initialized = initialize();
     if (!initialized) {
         HTAlert("Could not set up finger connection.");
-	return HT_NOT_LOADED;	/* FAIL */
+	return HT_NOT_LOADED;	/* Fail */
     }
-    
-  {
-    WWW_CONST char *p1 = arg;
-    BOOL IsGopherURL = FALSE;
     
     /*  Set up the host and command fields.
     */        
@@ -304,21 +290,21 @@ PUBLIC int HTLoadFinger ARGS4(
     }
     sitename = (char *)p1;
 
-    if ((slash = strchr(sitename, '/')) != NULL) {
+    if (slash = strchr(sitename, '/')) {
         *slash++ = '\0';
 	HTUnEscape(slash);
 	if (IsGopherURL) {
 	    if (*slash != '0') {
 	        HTAlert("Could not load data.");
-		return HT_NOT_LOADED;	/* FAIL */
+		return HT_NOT_LOADED;	/* Fail */
 	    }
 	    *slash++ = '\0';
 	}
     }
-    if ((at_sign = strchr(sitename, '@')) != NULL) {
+    if (at_sign = strchr(sitename, '@')) {
         if (IsGopherURL) {
             HTAlert("Could not load data.");
-	    return HT_NOT_LOADED;	/* FAIL */
+	    return HT_NOT_LOADED;	/* Fail */
 	}
         *at_sign++ = '\0';
         username = sitename;
@@ -329,13 +315,11 @@ PUBLIC int HTLoadFinger ARGS4(
     } else {
         username = "";
     }
-    
-    if (*sitename == '\0') {
+    if (!*sitename) {
         HTAlert("Could not load data (no sitename in finger URL)");
 	return HT_NOT_LOADED;		/* Ignore if no name */
     }
-
-    if ((colon = strchr(sitename, ':')) != NULL) {
+    if (colon = strchr(sitename, ':')) {
         *colon++ = '\0';
 	port = atoi(colon);
 	if (port != 79) {
@@ -344,52 +328,47 @@ PUBLIC int HTLoadFinger ARGS4(
 	}
     }
 
-    /* Load the string for making a connection/
-    */
-    str = (char *)calloc(1, (strlen(sitename) + 10));
-    if (str == NULL)
+    /* Load the string for making a connection */
+    if (!(str = (char *)malloc(strlen(sitename) + 10)))
         outofmem(__FILE__, "HTLoadFinger");
     sprintf(str, "lose://%s/", sitename);
     
     /* Load the command for the finger server.
     */
-    command = (char *)calloc(1, (strlen(username) + 10));
-    if (command == NULL)
+    if (!(command = (char *)malloc(strlen(username) + 10)))
         outofmem(__FILE__, "HTLoadFinger");
     if (at_sign && slash) {
         if (*slash == 'w' || *slash == 'W') {
-	    sprintf(command, "/w %s%c%c", username, CR, LF);
+	    sprintf(command, "/w %s\r\n", username);
 	} else {
-	    sprintf(command, "%s%c%c", username, CR, LF);
+	    sprintf(command, "%s\r\n", username);
 	}
     } else if (at_sign) {
-	sprintf(command, "%s%c%c", username, CR, LF);
+	sprintf(command, "%s\r\n", username);
     } else if (*username == '/') {
-        if ((slash = strchr((username+1), '/')) != NULL)
+        if (slash = strchr(username + 1, '/'))
 	    *slash = ' ';
-	sprintf(command, "%s%c%c", username, CR, LF);
+	sprintf(command, "%s\r\n", username);
     } else if ((*username == 'w' || *username == 'W') &&
-    	       *(username+1) == '/') {
-	if (*username+2 != '\0') {
-	    *(username+1) = ' ';
+    	       *(username + 1) == '/') {
+	if (*(username + 2)) {
+	    *(username + 1) = ' ';
 	} else {
-	    *(username+1) = '\0';
+	    *(username + 1) = '\0';
 	}
-	sprintf(command, "/%s%c%c", username, CR, LF);
-    } else if ((*username == 'w' || *username == 'W') &&
-    	       *(username+1) == '\0') {
-	sprintf(command, "/%s%c%c", username, CR, LF);
-    } else if ((slash = strchr(username, '/')) != NULL) {
+	sprintf(command, "/%s\r\n", username);
+    } else if ((*username == 'w' || *username == 'W') && !*(username + 1)) {
+	sprintf(command, "/%s\r\n", username);
+    } else if (slash = strchr(username, '/')) {
 	*slash++ = '\0';
 	if (*slash == 'w' || *slash == 'W') {
-	    sprintf(command, "/w %s%c%c", username, CR, LF);
+	    sprintf(command, "/w %s\r\n", username);
 	} else {
-	    sprintf(command, "%s%c%c", username, CR, LF);
+	    sprintf(command, "%s\r\n", username);
 	}
     } else {
-	sprintf(command, "%s%c%c", username, CR, LF);
+	sprintf(command, "%s\r\n", username);
     }
-  } /* scope of p1 */
   
     /* Now, let's get a stream setup up from the FingerHost:
     ** CONNECTING to finger host
@@ -411,9 +390,9 @@ PUBLIC int HTLoadFinger ARGS4(
 	    fprintf(stderr,
 	    	    "HTFinger: Interrupted on connect; recovering cleanly.\n");
 #endif
-	HTProgress ("Connection interrupted.");
-	FREE(str);
-	FREE(command);
+	HTProgress("Connection interrupted.");
+	free(str);
+	free(command);
 	return HT_NOT_LOADED;
     }
     if (status < 0) {
@@ -424,25 +403,24 @@ PUBLIC int HTLoadFinger ARGS4(
 	    fprintf(stderr, "HTFinger: Unable to connect to finger host.\n");
 #endif
         HTAlert("Could not access finger host.");
-	FREE(str);
-	FREE(command);
-	return HT_NOT_LOADED;	/* FAIL */
+	free(str);
+	free(command);
+	return HT_NOT_LOADED;	/* Fail */
     }
 #ifndef DISABLE_TRACE
     if (www2Trace)
         fprintf(stderr, "HTFinger: Connected to finger host '%s'.\n", str);
 #endif
-    FREE(str);
+    free(str);
 
     /* Send the command, and process response if successful.
     */
-    if (response(command, sitename, anAnchor, format_out, stream) != 0) {
+    if (response(command, sitename, anAnchor, format_out, stream)) {
         HTAlert("No response from finger server.");
-	FREE(command);
+	free(command);
 	return HT_NOT_LOADED;
     }
-
-    FREE(command);
+    free(command);
     return HT_LOADED;
 }
 

@@ -1,4 +1,6 @@
-/* Copyright (C) 1998, 1999, 2000, 2003, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2003, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include <stdio.h>
@@ -45,14 +47,15 @@ static long courier_mo14 = 0;
 static long courier_mo12 = 0;
 static long courier_mo10 = 0;
 
+static int err_count;
+
 void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	FontRec *FontStack = hw->html.fontstack;
 
 	while (FontStack && FontStack->next) {
-		FontRec *fptr;
+		FontRec *fptr = FontStack;
 
-		fptr = FontStack;
 		FontStack = FontStack->next;
 		free((char *)fptr);
 #ifndef DISABLE_TRACE
@@ -60,8 +63,7 @@ void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 			fprintf(stderr, "Popping previous font stack!\n");
 #endif
 	}
-	hw->html.pushfont_count = 0;
-	hw->html.font_save_count = 0;
+	hw->html.pushfont_count = hw->html.font_save_count = 0;
 	if (!FontStack)
 		FontStack = (FontRec *)malloc(sizeof(FontRec));
 	pcc->cur_font = FontStack->font = hw->html.font;
@@ -77,11 +79,10 @@ void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 
 FontRec *PushFont(HTMLWidget hw, PhotoComposeContext *pcc)
 {
-	FontRec *fptr;
+	FontRec *fptr = (FontRec *)malloc(sizeof(FontRec));
 
-	hw->html.pushfont_count++;
-	fptr = (FontRec *)malloc(sizeof(FontRec));
 	CHECK_OUT_OF_MEM(fptr);
+	hw->html.pushfont_count++;
 	fptr->font = pcc->cur_font;
 	fptr->size = pcc->cur_font_size;
 	fptr->type = pcc->cur_font_type;
@@ -97,7 +98,6 @@ XFontStruct *PopFont(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	FontRec *FontStack = hw->html.fontstack;
 	XFontStruct *font;
-	FontRec *fptr;
 
 	/* Don't pop it if at the save limit */
 	if (hw->html.font_save_count >= hw->html.pushfont_count) {
@@ -107,10 +107,10 @@ XFontStruct *PopFont(HTMLWidget hw, PhotoComposeContext *pcc)
 #endif
 		return(pcc->cur_font);
 	}
-
 	if (FontStack->next) {
+		FontRec *fptr = FontStack;
+
 		hw->html.pushfont_count--;
-		fptr = FontStack;
 		FontStack = FontStack->next;
 		font = fptr->font;
 		pcc->cur_font_size = fptr->size;
@@ -203,14 +203,16 @@ static XFontStruct *wrapError(char *name)
   char buf[BUFSIZ];
   XFontStruct *font = XLoadQueryFont(dsp, "fixed");
 
-  if (current_win) {
+  /* Only do popup display once per groups of fonts */
+  if (current_win && !err_count) {
       sprintf(buf, "Could not open font '%s'. Using fixed instead.", name);
-      XmxMakeErrorDialog(current_win->base, buf, "Load Font Error");
+      XmxMakeWarningDialog(current_win->base, buf, "Load Font Error");
   } else {
       fprintf(stderr, "Load Font Error\n");
       fprintf(stderr, "Could not open font '%s'.\n", name);
       fprintf(stderr, "     Using fixed instead.\n");
   }
+  err_count++;
 
   return(font);
 }
@@ -425,6 +427,7 @@ static void SetFixedFont(int size)
 void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 {
   Widget w = (Widget)hw;
+  int lucida_missing = 0;
   static long times_mr34 = 0;
   static long times_mr24 = 0;
   static long times_mr20 = 0;
@@ -600,6 +603,8 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
     hw->html.changing_font = 1;
   }
 
+  err_count = 0;
+
 #ifndef DISABLE_TRACE
   if (htmlwTrace)
     fprintf(stderr, "Setting font size = %d, family = %d\n",
@@ -642,7 +647,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br8);
       XmxSetArg(WbNaddressFont, times_mi10);
 
-      XmxSetValues(w);
       break;
     case 2:
       if (!times_mr14)
@@ -676,7 +680,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br8);
       XmxSetArg(WbNaddressFont, times_mi14);
 
-      XmxSetValues(w);
       break;
     case 3:
       if (!times_mr17)
@@ -714,7 +717,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br10);
       XmxSetArg(WbNaddressFont, times_mi17);
 
-      XmxSetValues(w);
       break;
     case 4:
       if (!times_mr18)
@@ -749,7 +751,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br12);
       XmxSetArg(WbNaddressFont, times_mi18);
 
-      XmxSetValues(w);
       break;
     case 5:
       if (!times_mr20)
@@ -788,7 +789,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br14);
       XmxSetArg(WbNaddressFont, times_mi20);
 
-      XmxSetValues(w);
       break;
     case 6:
       if (!times_mr24)
@@ -825,7 +825,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br17s);
       XmxSetArg(WbNaddressFont, times_mi24);
 
-      XmxSetValues(w);
       break;
     case 7:
       if (!times_mr34)
@@ -862,7 +861,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, times_br18);
       XmxSetArg(WbNaddressFont, times_mi34);
 
-      XmxSetValues(w);
       break;
    }
 
@@ -902,7 +900,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br8);
       XmxSetArg(WbNaddressFont, helvetica_mi10);
 
-      XmxSetValues(w);
       break;
     case 2:
       if (!helvetica_mr14)
@@ -936,7 +933,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br8);
       XmxSetArg(WbNaddressFont, helvetica_mi14);
 
-      XmxSetValues(w);
       break;
     case 3:
       if (!helvetica_mr17)
@@ -974,7 +970,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br10);
       XmxSetArg(WbNaddressFont, helvetica_mi17);
 
-      XmxSetValues(w);
       break;
     case 4:
       if (!helvetica_mr18)
@@ -1009,7 +1004,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br12);
       XmxSetArg(WbNaddressFont, helvetica_mi18);
 
-      XmxSetValues(w);
       break;
     case 5:
       if (!helvetica_mr20)
@@ -1048,7 +1042,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br14);
       XmxSetArg(WbNaddressFont, helvetica_mi20);
 
-      XmxSetValues(w);
       break;
     case 6:
       if (!helvetica_mr24)
@@ -1084,7 +1077,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br17s);
       XmxSetArg(WbNaddressFont, helvetica_mi24);
 
-      XmxSetValues(w);
       break;
     case 7:
       if (!helvetica_mr34)
@@ -1121,7 +1113,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, helvetica_br18);
       XmxSetArg(WbNaddressFont, helvetica_mi34);
 
-      XmxSetValues(w);
       break;
    }
 
@@ -1161,7 +1152,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br8);
       XmxSetArg(WbNaddressFont, newcentury_mi10);
 
-      XmxSetValues(w);
       break;
     case 2:
       if (!newcentury_mr14)
@@ -1195,7 +1185,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br8);
       XmxSetArg(WbNaddressFont, newcentury_mi14);
 
-      XmxSetValues(w);
       break;
     case 3:
       if (!newcentury_mr17)
@@ -1233,7 +1222,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br10);
       XmxSetArg(WbNaddressFont, newcentury_mi17);
 
-      XmxSetValues(w);
       break;
     case 4:
       if (!newcentury_mr18)
@@ -1268,7 +1256,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br12);
       XmxSetArg(WbNaddressFont, newcentury_mi18);
 
-      XmxSetValues(w);
       break;
     case 5:
       if (!newcentury_mr20)
@@ -1307,7 +1294,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br14);
       XmxSetArg(WbNaddressFont, newcentury_mi20);
 
-      XmxSetValues(w);
       break;
     case 6:
       if (!newcentury_mr24)
@@ -1343,7 +1329,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br17s);
       XmxSetArg(WbNaddressFont, newcentury_mi24);
 
-      XmxSetValues(w);
       break;
     case 7:
       if (!newcentury_mr34)
@@ -1380,7 +1365,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNheader6Font, newcentury_br18);
       XmxSetArg(WbNaddressFont, newcentury_mi34);
 
-      XmxSetValues(w);
       break;
    }
 
@@ -1433,7 +1417,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 	courier_mr8 = wrapFont("-adobe-courier-medium-r-normal-*-8-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr8);
 
-      XmxSetValues(w);
       break;
     case 2:
       if (!lucidabright_mr14)
@@ -1488,7 +1471,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 	courier_mr10 = wrapFont("-adobe-courier-medium-r-normal-*-10-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr10);
 
-      XmxSetValues(w);
       break;
     case 3:
       if (!lucidabright_mr17)
@@ -1550,7 +1532,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 	courier_mr12 = wrapFont("-adobe-courier-medium-r-normal-*-12-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr12);
 
-      XmxSetValues(w);
       break;
     case 4:
       if (!lucidabright_mr18)
@@ -1609,7 +1590,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 	courier_mr14 = wrapFont("-adobe-courier-medium-r-normal-*-14-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr14);
 
-      XmxSetValues(w);
       break;
     case 5:
       if (!lucidabright_mr20)
@@ -1673,7 +1653,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 				 "-adobe-courier-medium-r-normal-*-18-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr17);
 
-      XmxSetValues(w);
       break;
     case 6:
       if (!lucidabright_mr24)
@@ -1734,7 +1713,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 				 "-adobe-courier-medium-r-normal-*-18-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr20);
 
-      XmxSetValues(w);
       break;
     case 7:
       if (!lucidabright_mr34)
@@ -1796,9 +1774,10 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 				  "-adobe-courier-medium-r-normal-*-24-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, courier_mr20l);
 
-      XmxSetValues(w);
       break;
    }
+   if (err_count > 9)
+	lucida_missing = 1;
 
   } else if (pcc->cur_font_family == SYMBOL) {
    switch (pcc->cur_font_size) {
@@ -1835,7 +1814,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr10);
       XmxSetArg(WbNlistingFont, symbol_mr8);
 
-      XmxSetValues(w);
       break;
     case 2:
       if (!symbol_mr14)
@@ -1870,7 +1848,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr12);
       XmxSetArg(WbNlistingFont, symbol_mr10);
 
-      XmxSetValues(w);
       break;
     case 3:
       if (!symbol_mr17)
@@ -1906,7 +1883,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr14);
       XmxSetArg(WbNlistingFont, symbol_mr12);
 
-      XmxSetValues(w);
       break;
     case 4:
       if (!symbol_mr18)
@@ -1942,7 +1918,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr17);
       XmxSetArg(WbNlistingFont, symbol_mr14);
 
-      XmxSetValues(w);
       break;
     case 5:
       if (!symbol_mr20)
@@ -1979,7 +1954,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr18);
       XmxSetArg(WbNlistingFont, symbol_mr17);
 
-      XmxSetValues(w);
       break;
     case 6:
       if (!symbol_mr24)
@@ -2019,7 +1993,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
       XmxSetArg(WbNplainitalicFont, symbol_mr20l);
       XmxSetArg(WbNlistingFont, symbol_mr20);
 
-      XmxSetValues(w);
       break;
     case 7:
       if (!symbol_mr34)
@@ -2057,10 +2030,32 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
 				 "-adobe-symbol-medium-r-normal-*-24-*-*-*-*-*-*-*");
       XmxSetArg(WbNlistingFont, symbol_mr20l);
 
-      XmxSetValues(w);
       break;
    }
   }
+
+  XmxSetValues(w);
+
+  /* Must do after XmxSetValues */
+  if (lucida_missing) {
+    static int did_this = 0;
+
+    /* Only display message once */
+    if (did_this)
+      goto skip_it;
+    did_this = 1;
+
+    if (current_win) {
+      XmxMakeWarningDialog(current_win->base,
+			   "X server does not have Lucida font",
+			   "Load Font Error");
+    } else {
+      fprintf(stderr,
+	      "Load Font Error:  X Server does not have Lucida font.\n");
+      fprintf(stderr, "                  Using fixed instead.\n");
+    }
+  }
+ skip_it:
 
   switch (pcc->cur_font_type) {
     case FONT:
@@ -2117,7 +2112,6 @@ void SetFontSize(HTMLWidget hw, PhotoComposeContext *pcc, int refresh)
     case LISTING_FONT:
       pcc->cur_font = hw->html.listing_font;
   }
-
   hw->html.changing_font = 0;
   return;
 }

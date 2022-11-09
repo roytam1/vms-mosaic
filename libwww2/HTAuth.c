@@ -37,8 +37,7 @@ extern int www2Trace;
 **			(as always, this is automatically freed
 **			by AA package).
 */
-PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
-					      HTAAScheme,	scheme)
+PRIVATE HTAAUser *decompose_auth_string (char *authstring, HTAAScheme scheme)
 {
     static HTAAUser *user = NULL;
     static char *cleartext = NULL;
@@ -138,13 +137,13 @@ PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
 
 
 
-PRIVATE BOOL HTAA_checkTimeStamp ARGS1(WWW_CONST char *, timestamp)
+PRIVATE BOOL HTAA_checkTimeStamp (WWW_CONST char *timestamp)
 {
     return NO;		/* This is just a stub */
 }
 
 
-PRIVATE BOOL HTAA_checkInetAddress ARGS1(WWW_CONST char *, inet_addr)
+PRIVATE BOOL HTAA_checkInetAddress (WWW_CONST char *inet_addr)
 {
     return NO;		/* This is just a stub */
 }
@@ -165,12 +164,12 @@ PRIVATE BOOL HTAA_checkInetAddress ARGS1(WWW_CONST char *, inet_addr)
 **			representing authenticated user,
 **			which should not be freed.
 */
-PUBLIC HTAAUser *HTAA_authenticate ARGS3(HTAAScheme,	scheme,
-					 char *,	scheme_specifics,
-					 HTAAProt *,	prot)
+PUBLIC HTAAUser *HTAA_authenticate (HTAAScheme scheme,
+				    char *scheme_specifics,
+				    HTAAProt *prot)
 {
     if (HTAA_UNKNOWN == scheme || !prot ||
-	-1 == HTList_indexOf(prot->valid_schemes, (void*)scheme))
+	-1 == HTList_indexOf(prot->valid_schemes, (void *)scheme))
 	return NULL;
 
     switch (scheme) {
@@ -180,8 +179,7 @@ PUBLIC HTAAUser *HTAA_authenticate ARGS3(HTAAScheme,	scheme,
             /* Remember, user is auto-freed */
 
 	    if (user &&
-		HTAA_checkPassword(user->username,
-				   user->password,
+		HTAA_checkPassword(user->username, user->password,
 				   HTAssocList_lookup(prot->values, "passw")) &&
 		(HTAA_BASIC == scheme ||
 		 (HTAA_checkTimeStamp(user->timestamp) &&
@@ -196,4 +194,3 @@ PUBLIC HTAAUser *HTAA_authenticate ARGS3(HTAAScheme,	scheme,
 	return NULL;
     }
 }
-

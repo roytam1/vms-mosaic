@@ -87,8 +87,8 @@ char *prompt_for_password(char *questionstr);
 int prompt_for_yes_or_no(char *questionstr);
 Boolean mo_convert_newlines_to_spaces(char *str);
 char *mo_get_html_return(char **texthead);
-char *mo_escape_part(char *part);
 char *mo_unescape_part(char *str);
+char *mo_unescape_spaces(char *txt);
 char *mo_clean_and_escape_url(char *url, int free_it);
 int loadAgents(void);
 

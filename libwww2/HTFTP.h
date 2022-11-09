@@ -2,7 +2,7 @@
                                    FTP ACCESS FUNCTIONS
                                              
    This isn't really a valid protocol module -- it is lumped together
-   with HTFile . That could be changed easily.
+   with HTFile.  That could be changed easily.
    
    Author: Tim Berners-Lee.  Public Domain.
    
@@ -10,7 +10,6 @@
 #ifndef HTFTP_H
 #define HTFTP_H
 
-#include "HTUtils.h"
 #include "HTAnchor.h"
 #include "HTStream.h"
 #include "HTAlert.h"
@@ -20,13 +19,8 @@
  *
  *  returns                 Socket number for file if good.  <0 if bad.
  */
-extern int HTFTPLoad PARAMS
-((
-  char           *name,
-  HTParentAnchor *anchor,
-  HTFormat        format_out,
-  HTStream       *sink
-));
+extern int HTFTPLoad(char *name, HTParentAnchor *anchor, HTFormat format_out,
+		     HTStream *sink);
 
 /*
  * NLST parameters

@@ -52,11 +52,13 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 
-/* Moved libwww above mosaic.h to avoid VAXC compiler errors, PGE */
+/* Moved libwww2 above mosaic.h to avoid VAXC compiler errors, PGE */
 #include "../libwww2/htutils.h"
 #include "../libwww2/htstring.h"
 #ifdef MULTINET
@@ -70,7 +72,6 @@
 #include "../libwww2/htaccess.h"
 #include "../libwww2/html.h"
 #include "../libwww2/htext.h"
-#include "../libwww2/htlist.h"
 #include "../libwww2/htinit.h"
 #include "../libwww2/htmime.h"
 #include "../libnut/system.h"
@@ -112,6 +113,7 @@
 extern int cci_docommand;
 extern int cci_get;
 #endif
+
 #define __MAX_HOME_LEN__ 256
 #define __SRC__
 #include "../libwww2/htaautil.h"
@@ -140,32 +142,32 @@ char *saveFileName = NULL;
 
 /* Bare minimum. */
 struct _HText {
-  char *expandedAddress;
-  char *simpleAddress;
-
-  /* This is what we should parse and display; it is *not* safe to free. */
-  char *htmlSrc;
-  /* This is what we should free. */
-  char *htmlSrcHead;
-  int srcalloc;    /* Amount of space allocated */
-  int srclen;      /* Amount of space used */
+    char *expandedAddress;
+    char *simpleAddress;
+    /* This is what we should parse and display; it is *not* safe to free. */
+    char *htmlSrc;
+    /* This is what we should free. */
+    char *htmlSrcHead;
+    int srcalloc;    /* Amount of space allocated */
+    int srclen;      /* Amount of space used */
 };
 
-/* Mosaic does NOT use either the anchor or style sheet systems  of libwww. */
+/* Mosaic does NOT use either the anchor or style sheet systems of libwww2. */
 
-HText *HTMainText = 0;                  /* Equivalent of main window */
+HText *HTMainText = NULL;               /* Equivalent of main window */
 
-/* These are used in libwww */
+/* These are used in libwww2 */
 char *HTAppName = "VMS_Mosaic";
 char *HTAppVersion;  /* Now set this in gui.c -- mo_do_gui() */
 extern char *HTLibraryVersion;
 
 int force_dump_to_file = 0;             /* Hook to force dumping binary data
-                                           straight to file named by... */
+                                         * straight to file named by... */
 char *force_dump_filename = NULL;       /* this filename. */
 
 /* From gui-documents.c */
 extern int interrupted;
+extern int frames_interrupted;
 
 /* From HTAccess.c. */
 extern char *use_this_url_instead;
@@ -177,7 +179,10 @@ extern char *post_data;
 extern int do_put;
 extern int put_file_size;
 extern FILE *put_fp;
+
+#ifdef HAVE_SSL
 extern char *encrypt_cipher;
+#endif
 
 /* From HTMIME.c */
 extern MIMEInfo MIME_http;
@@ -186,6 +191,8 @@ extern MIMEInfo MIME_http;
 #define MAX_AGENTS 51
 char **agent;
 int selectedAgent = 0;
+
+extern int binary_transfer;
 
 #ifdef VMS
 static char *mail_fnam = NULL;
@@ -196,8 +203,7 @@ static char *mail_fnam = NULL;
  * purpose: Do really nasty things to a stream of HTML that just got
  *          pulled over from a server.
  * inputs:  
- *   - none (global HTMainText is assumed to contain current
- *           HText object)
+ *   - none (global HTMainText is assumed to contain current HText object)
  * returns: 
  *   - HTMainText->htmlSrc (char *)
  * remarks: 
@@ -210,13 +216,11 @@ static char *mail_fnam = NULL;
  *     - Same as above but for <HEAD> and <HTML>.
  *     - Filter out leading <! ... >
  *   We advance the character pointer HTMainText->htmlSrc by the
- *   appropriate remark to make adjustments, and keep the original
+ *   appropriate mark to make adjustments, and keep the original
  *   head of the allocated block of text in HTMainText->htmlSrcHead.
  ****************************************************************************/
 static char *hack_htmlsrc(void)
 {
-  char *loc;
-
   if (!HTMainText)
       return NULL;
 
@@ -229,36 +233,37 @@ static char *hack_htmlsrc(void)
   HTMainText->htmlSrcHead = HTMainText->htmlSrc;
   
   if (HTMainText->srclen > 30) {
+      char *loc;
+      int len;
       int count = 0;
 
       /* Remove any nulls, but give up if is garbage */
       while ((count++ < 100) &&
-	     strlen(HTMainText->htmlSrc) < (HTMainText->srclen - 1)) {
-	  loc = HTMainText->htmlSrc + strlen(HTMainText->htmlSrc);
+	     (len = strlen(HTMainText->htmlSrc)) < (HTMainText->srclen - 1)) {
+	  loc = HTMainText->htmlSrc + len;
 	  *loc = '\n';
       }
       if (!my_strncasecmp(HTMainText->htmlSrc, "<PLAINTEXT>", 11)) {
-          if (!my_strncasecmp(HTMainText->htmlSrc + 11, "<PLAINTEXT>", 11)) {
+	  char *ptr = HTMainText->htmlSrc + 11;
+
+          if (!my_strncasecmp(ptr, "<PLAINTEXT>", 11)) {
               HTMainText->htmlSrc += 11;
-          } else if (!my_strncasecmp(HTMainText->htmlSrc + 11,
-				     "\n<PLAINTEXT>", 12) ||
-		   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n<TITLE>", 8) ||
-		   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n<HEAD>", 7) ||
-                   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n<HTML>", 7) ||
-                   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n\n<HTML>", 8) ||
-                   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n<BASE",  6) ||
-                   !my_strncasecmp(HTMainText->htmlSrc + 11, "\n<!--",  5) ||
-	  	   !strncmp(HTMainText->htmlSrc + 11, "\n<!DOCTYPE HTML", 15)) {
+          } else if (!my_strncasecmp(ptr, "\n<PLAINTEXT>", 12) ||
+		     !my_strncasecmp(ptr, "\n<TITLE>", 8) ||
+		     !my_strncasecmp(ptr, "\n<HEAD>", 7) ||
+                     !my_strncasecmp(ptr, "\n<HTML>", 7) ||
+                     !my_strncasecmp(ptr, "\n\n<HTML>", 8) ||
+                     !my_strncasecmp(ptr, "\n<BASE",  6) ||
+                     !my_strncasecmp(ptr, "\n<!--",  5) ||
+	  	     !strncmp(ptr, "\n<!DOCTYPE HTML", 15)) {
               HTMainText->htmlSrc += 12;
           }
       }
       if (!strncmp(HTMainText->htmlSrc, 
-                   "<TITLE>Document</TITLE>\n<PLAINTEXT>", 35)) {
-          if (!my_strncasecmp(HTMainText->htmlSrc + 35, "\n<TITLE>", 8))
-              HTMainText->htmlSrc += 36;
-      }
+                   "<TITLE>Document</TITLE>\n<PLAINTEXT>", 35) &&
+          !my_strncasecmp(HTMainText->htmlSrc + 35, "\n<TITLE>", 8))
+          HTMainText->htmlSrc += 36;
   }
-
   return HTMainText->htmlSrc;
 }
 
@@ -285,8 +290,11 @@ static char *doit(char *url, char **texthead)
       free(HTMainText);
       HTMainText = NULL;
   }
-
-  XmxApplyPixmapToLabelWidget(win->logo, IconPix[0]);
+  if (mo_gui_check_icon(1) || frames_interrupted) {
+      interrupted = 1;
+      *texthead = NULL;
+      return NULL;
+  }
 
   is_uncompressed = 0;
 
@@ -307,39 +315,39 @@ static char *doit(char *url, char **texthead)
       return NULL;
   }
 
-   /*
-   ** Just because we errored out, doesn't mean there isn't markup to 
-   ** look at.  For example, an FTP site that doesn't let a user in because
-   ** the maximum number of users has been reached often has a message
-   ** telling about other mirror sites.  The failed FTP connection returns
-   ** a message that is taken care of below.  
-   */
-   if (HTMainText) {
-	char *txt = hack_htmlsrc();
+  /*
+  ** Just because we errored out, doesn't mean there isn't markup to 
+  ** look at.  For example, an FTP site that doesn't let a user in because
+  ** the maximum number of users has been reached often has a message
+  ** telling about other mirror sites.  The failed FTP connection returns
+  ** a message that is taken care of below.  
+  */
+  if (HTMainText) {
+      char *txt = hack_htmlsrc();
 
-	*texthead = HTMainText->htmlSrcHead;
-
+      *texthead = HTMainText->htmlSrcHead;
 #ifdef CCI
-	if (cci_get) {
-	    if (txt) {
-		return txt;
-	    } else {
-		/* Take care of failed local access */
-		txt = strdup("<H1>ERROR</H1>"); 
-	    }
-	}
+      if (cci_get) {
+	  if (txt) {
+	      return txt;
+	  } else {
+	      /* Take care of failed local access */
+	      txt = strdup("<H1>ERROR</H1>"); 
+	  }
+      }
 #endif
-	return txt;
-   }
+      return txt;
+  }
+
+  /* No markup returned at this point */
 
   /* Return proper error message if we experienced redirection. */
   if (use_this_url_instead)
       url = use_this_url_instead;
   msg = (char *)malloc((strlen(url) + 200) * sizeof(char));
   sprintf(msg,
-	"<H1>ERROR</H1> Requested document (URL %s) could not be accessed.<p>The information server either is not accessible or is refusing to serve the document to you.<p>",
-	url);
-   
+      "<H1>ERROR</H1> Requested document (URL %s) could not be accessed.<p>The information server either is not accessible or is refusing to serve the document to you.<p>",
+      url);
   *texthead = msg;
   securityType = HTAA_UNKNOWN;
   return msg;
@@ -360,7 +368,6 @@ static char *doit(char *url, char **texthead)
 char *mo_pull_er_over(char *url, char **texthead)
 {
   char *rtext;
-  extern int binary_transfer;
  
   /* Always reset the icon interrupt */
   mo_gui_clear_icon();
@@ -373,18 +380,20 @@ char *mo_pull_er_over(char *url, char **texthead)
       free(saveFileName);
   saveFileName = strdup(url);
 
+#ifdef HAVE_SSL
   if (encrypt_cipher) {
       free(encrypt_cipher);
       encrypt_cipher = NULL;
   }
+#endif
 
   rtext = doit(url, texthead);
 
   if (binary_transfer) {
       force_dump_to_file = 0;
+      free(force_dump_filename);
       force_dump_filename = NULL;
   }
-
   return rtext;
 }
 
@@ -393,7 +402,6 @@ char *mo_post_pull_er_over(char *url, char *content_type, char *data,
                            char **texthead)
 {
   char *rtext;
-  extern int binary_transfer;
 
   /* Always reset the icon interrupt */
   mo_gui_clear_icon();
@@ -411,9 +419,9 @@ char *mo_post_pull_er_over(char *url, char *content_type, char *data,
 
   if (binary_transfer) {
       force_dump_to_file = 0;
+      free(force_dump_filename);
       force_dump_filename = NULL;
   }
-
   do_post = 0;
 
   return rtext;
@@ -458,17 +466,13 @@ mo_status mo_pull_er_over_virgin(char *url, char *fnam)
 
   rv = HTLoadAbsolute(url);
 
+  force_dump_to_file = 0;
   if (rv == 1) {
-      force_dump_to_file = 0;
       return mo_succeed;
   } else if (rv == -1) {
-      force_dump_to_file = 0;
       interrupted = 1;
-      return mo_fail;
-  } else {
-      force_dump_to_file = 0;
-      return mo_fail;
   }
+  return mo_fail;
 }
 
 
@@ -482,33 +486,25 @@ mo_status mo_re_init_formats(void)
 
 HText *HText_new(void)
 {
-  HText *htObj = (HText *)malloc(sizeof(HText));
+  HText *htObj = (HText *)calloc(1, sizeof(HText));
 
+  /** calloc zeros
   htObj->expandedAddress = NULL;
   htObj->simpleAddress = NULL;
   htObj->htmlSrc = NULL;
   htObj->htmlSrcHead = NULL;
   htObj->srcalloc = 0;
   htObj->srclen = 0;
+  **/
 
   /* Free the struct but not the text, as it will be handled
-     by Mosaic proper -- apparently. */
+   * by Mosaic proper -- apparently. */
   if (HTMainText)
       free(HTMainText);
 
   HTMainText = htObj;
 
   return htObj;
-}
-
-void HText_free(HText *me)
-{
-  if (me) {
-      if (me->htmlSrcHead)
-          free(me->htmlSrcHead);
-      free(me);
-  }
-  return;
 }
 
 void HText_beginAppend(HText *text)
@@ -521,7 +517,6 @@ void HText_endAppend(HText *text)
 {
   if (text)
       HText_appendCharacter(text, '\0');
-
   HTMainText = text;
   return;
 }
@@ -529,8 +524,8 @@ void HText_endAppend(HText *text)
 void HText_doAbort(HText *text)
 {
   /* Clean up -- we want to free htmlSrc here because htmlSrcHead
-     doesn't get assigned until hack_htmlsrc, and by the time we
-     reach that, this should never be called. */
+   * doesn't get assigned until hack_htmlsrc, and by the time we
+   * reach that, this should never be called. */
   if (text) {
       if (text->htmlSrc)
           free(text->htmlSrc);
@@ -544,27 +539,18 @@ void HText_doAbort(HText *text)
 
 void HText_clearOutForNewContents(HText *text)
 {
-  if (text) {
-      if (text->htmlSrc)
-          free(text->htmlSrc);
-      text->htmlSrc = NULL;
-      text->htmlSrcHead = NULL;
-      text->srcalloc = 0;
-      text->srclen = 0;
-  }
-  return;
+  HText_doAbort(text);
 }
 
 static void new_chunk(HText *text)
 {
-  if (text->srcalloc == 0) {
+  if (!text->srcalloc) {
       text->htmlSrc = (char *)malloc(MO_BUFFER_SIZE);
-      text->htmlSrc[0] = '\0';
+      *text->htmlSrc = '\0';
   } else {
       text->htmlSrc = (char *)realloc(text->htmlSrc,
 				      text->srcalloc + MO_BUFFER_SIZE);
   }
-
   text->srcalloc += MO_BUFFER_SIZE;
 
   return;
@@ -577,7 +563,7 @@ void HText_appendCharacter(HText *text, char ch)
 
   if (text->srcalloc < text->srclen + 1)
       new_chunk(text);
-  
+
   text->htmlSrc[text->srclen++] = ch;
 
   return;
@@ -595,7 +581,7 @@ void HText_appendText(HText *text, char *str)
   while (text->srcalloc < text->srclen + len + 1)
       new_chunk(text);
 
-  memcpy((text->htmlSrc + text->srclen), str, len);
+  memcpy(text->htmlSrc + text->srclen, str, len);
 
   text->srclen += len;
   text->htmlSrc[text->srclen] = '\0';
@@ -611,20 +597,10 @@ void HText_appendBlock(HText *text, char *data, int len)
   while (text->srcalloc < text->srclen + len + 1)
       new_chunk(text);
 
-  memcpy((text->htmlSrc + text->srclen), data, len);
+  memcpy(text->htmlSrc + text->srclen, data, len);
 
   text->srclen += len;
   text->htmlSrc[text->srclen] = '\0';
-
-  return;
-}
-
-void HText_appendParagraph(HText *text)
-{
-  /* Boy, talk about a misnamed function. */
-  char *str = " <p> \n";
-
-  HText_appendText(text, str);
 
   return;
 }
@@ -643,24 +619,10 @@ void HText_endAnchor(HText *text)
   return;
 }
 
-void HText_dump(HText *me)
-{
-  return;
-}
-
 char *HText_getText(HText *me)
 {
   if (me) {
       return me->htmlSrc;
-  } else {
-      return NULL;
-  }
-}
-
-char **HText_getPtrToText(HText *me)
-{
-  if (me) {
-      return &(me->htmlSrc);
   } else {
       return NULL;
   }
@@ -678,9 +640,9 @@ int HText_getTextLength(HText *me)
 
 /****************************************************************************
  * name:    fileOrServer
- * purpose: Given a string, checks to see if it can stat it. If so, it is
- *   assumed the user expects to open the file, not a web site. If not, we
- *   assume it is supposed to be a server and prepend the default protocol.
+ * purpose: Given a string, checks to see if it can stat it.  If so, it is
+ *     assumed the user expects to open the file, not a web site.  If not, we
+ *     assume it is supposed to be a server and prepend the default protocol.
  * inputs:  
  *   - char    *url: URL to canonicalize.
  * returns: 
@@ -698,11 +660,6 @@ static char *fileOrServer(char *url)
 #define stat decc$stat
 #endif /* VMS MultiNet work around, GEC */
     char *xurl;
-#ifdef VMS
-    int fd;
-    char fname[256];
-    char *ptr;
-#endif
     static int init = 0;
     static char *defproto;
 
@@ -715,12 +672,16 @@ static char *fileOrServer(char *url)
      *   shire.ncsa.uiuc.edu[:PORT]/path/to/something
      * or is a VMS file spec 
      */
-    if (!stat(url, &buf)) {  /* It's a file and we have access */
+    if (!stat(url, &buf)) {  /* It's a file, and we have access */
 #ifdef VMS
 	/* Get file spec in UNIX syntax */
-	fd = open(url, O_RDONLY, 0);
+	int fd = open(url, O_RDONLY, 0);
+	char fname[256];
+
 	if (getname(fd, fname, 0)) {
 	    /* Strip off version, unless explicity given */
+	    char *ptr;
+
 	    if (!strchr(url, ';') && (ptr = strchr(fname, '.'))) {
 		if (ptr = strchr(++ptr, '.'))
 		    *ptr = '\0';
@@ -734,11 +695,10 @@ static char *fileOrServer(char *url)
 	xurl = mo_url_canonicalize_local(url);
 #endif
     } else if (!defproto || !*defproto) {
-	xurl = (char *)calloc(strlen(url) + 15, sizeof(char));
+	xurl = malloc(strlen(url) + 15);
 	sprintf(xurl, "http://%s", url);
     } else {
-	xurl = (char *)calloc(strlen(url) + strlen(defproto) + 10,
-			      sizeof(char));
+	xurl = malloc(strlen(url) + strlen(defproto) + 10);
 	sprintf(xurl, "%s://%s", defproto, url);
     }
 
@@ -759,17 +719,17 @@ static char *fileOrServer(char *url)
 char *mo_url_prepend_protocol(char *url)
 {
     char *xurl;
-    static int check1 = -1;
-    static int check2;
+    static int expand = -1;
+    static int nexpand;
 
     if (!url || !*url)
 	return(NULL);
 
-    if (check1 == -1) {     /* Avoid repeating routine call */
-	check1 = get_pref_boolean(eEXPAND_URLS);
-	check2 = get_pref_boolean(eEXPAND_URLS_WITH_NAME);
+    if (expand == -1) {     /* Avoid repeating routine call */
+	expand = get_pref_boolean(eEXPAND_URLS);
+	nexpand = get_pref_boolean(eEXPAND_URLS_WITH_NAME);
     }
-    if (!check1) {
+    if (!expand) {
 	if (!strchr(url, ':')) {
 	    /* No colon found, treat as file */
 	    xurl = mo_url_canonicalize_local(url);
@@ -782,7 +742,7 @@ char *mo_url_prepend_protocol(char *url)
 	       my_strncasecmp(url, "about:", 6) &&
 	       my_strncasecmp(url, "cookiejar:", 10) &&
 	       !strstr(url, "://")) {	/* No protocol specified, default */
-	if (check2) {
+	if (nexpand) {
 	    if (!my_strncasecmp(url, "www.", 4)) {
 		xurl = (char *)malloc(strlen(url) + (8 * sizeof(char)));
 		sprintf(xurl, "http://%s", url);
@@ -808,7 +768,6 @@ char *mo_url_prepend_protocol(char *url)
     } else {	/* Protocol was specified */
 	xurl = strdup(url);
     }
-
     return(xurl);
 }
 
@@ -848,17 +807,10 @@ char *mo_url_canonicalize(char *url, char *oldurl)
  ****************************************************************************/
 char *mo_url_canonicalize_keep_anchor(char *url, char *oldurl)
 {
-  char *newurl;
-
   /* We KEEP anchor information already present in url,
-   * but NOT in oldurl. */
-  oldurl = HTParse(oldurl, "", PARSE_ACCESS | PARSE_HOST | PARSE_PATH |
-                   PARSE_PUNCTUATION);
-  newurl = HTParse(url, oldurl, PARSE_ACCESS | PARSE_HOST | PARSE_PATH |
-                   PARSE_PUNCTUATION | PARSE_ANCHOR);
-  /* We made a new copy of oldurl, so free it. */
-  free(oldurl);
-  return newurl;
+   * but any anchor in oldurl is ignored. */
+  return HTParse(url, oldurl, PARSE_ACCESS | PARSE_HOST | PARSE_PATH |
+                 PARSE_PUNCTUATION | PARSE_ANCHOR);
 }
 
 
@@ -916,11 +868,15 @@ char *mo_url_canonicalize_local(char *url)
 #endif
   char *tmp;
 
-  if (!url)
+  if (!url) {
+#ifndef CONVEX
+      free(cwd);
+#endif
       return NULL;
+  }
 
-  tmp = (char *)malloc((strlen(url) + strlen(cwd) + 32));
-  if (url[0] == '/') {
+  tmp = (char *)malloc(strlen(url) + strlen(cwd) + 32);
+  if (*url == '/') {
       sprintf(tmp, "file://localhost%s", url);
   } else {
 #ifndef VMS
@@ -950,7 +906,7 @@ char *mo_url_canonicalize_local(char *url)
  * inputs:  
  *   none
  * returns: 
- *   The new temporary filename.
+ *   The new temporary filename in malloced memory with a litte extra room.
  * remarks: 
  *   We make up an unique filename and use the preference
  *   TMP_DIRECTORY, if it has a value, for the directory.
@@ -963,25 +919,29 @@ char *mo_tmpnam(char *url)
 #ifdef CCI
   extern void MoCCIAddFileURLToList(char *, char *);
 #endif
-  char *tmp = (char *)malloc(sizeof(char) * (L_tmpnam + 32));
-  static char *tmp_dir;
-  static char *unique;
+  char *tmp;
+  static int len, tdlen;
+  static char *tmp_dir, *unique;
   static int init = 0;
   static int count = 0;
-
-  if (!tmp) {
-      fprintf(stderr, "Unable to get storage for tmp name\n");
-      return NULL;
-  }
 
   /* Get unique string for this process */
   if (!init) {
       unique = strdup(tmpnam(NULL));
       unique += 3;
+      len = L_tmpnam + 32;
       tmp_dir = get_pref_string(eTMP_DIRECTORY);
+      if (tmp_dir)
+          tdlen = strlen(tmp_dir);
       init = 1;
   }
   count++;
+
+  tmp = (char *)malloc(sizeof(char) * len);
+  if (!tmp) {
+      fprintf(stderr, "Unable to get storage for tmp name\n");
+      return NULL;
+  }
 
   sprintf(tmp, "MOSAIC-TMP%d_%s", count, unique);
 
@@ -1015,23 +975,22 @@ char *mo_tmpnam(char *url)
 #endif
 
     found_it:
-      tmp = (char *)malloc(sizeof(char) * (strlen(tmp_dir) + 
-                                           strlen(&(oldtmp[i])) + 8));
+      tmp = (char *)malloc(sizeof(char) * (tdlen + strlen(&oldtmp[i]) + 20));
       if (!tmp) {
   	  fprintf(stderr, "Unable to get second storage for tmp name\n");
 	  return oldtmp;
       }
 #ifndef VMS
-      if (tmp_dir[strlen(tmp_dir) - 1] == '/') {
+      if (tmp_dir[tdlen - 1] == '/') {
           /* Trailing slash in tmp_directory spec. */
-          sprintf(tmp, "%s%s", tmp_dir, &(oldtmp[i]) + 1);
+          sprintf(tmp, "%s%s", tmp_dir, &oldtmp[i] + 1);
       } else {
           /* No trailing slash. */
-          sprintf(tmp, "%s%s", tmp_dir, &(oldtmp[i]));
+          sprintf(tmp, "%s%s", tmp_dir, &oldtmp[i]);
       }
 #else
-      if ((tmp_dir[strlen(tmp_dir) - 1] == ']') ||
-          (tmp_dir[strlen(tmp_dir) - 1] == ':')) {
+      if ((tmp_dir[tdlen - 1] == ']') ||
+          (tmp_dir[tdlen - 1] == ':')) {
           sprintf(tmp, "%s%s", tmp_dir, oldtmp);
       } else {
           sprintf(tmp, "%s:%s", tmp_dir, oldtmp);
@@ -1058,11 +1017,10 @@ char *strdup(char *str)
   if (!str)
       return NULL;
 
-  dup = (char *)malloc(strlen(str) + 1);
-  if (!dup)
+  if (!(dup = (char *)malloc(strlen(str) + 1)))
       return NULL;
 
-  dup = strcpy(dup, str);
+  strcpy(dup, str);
 
   return dup;
 }
@@ -1073,16 +1031,12 @@ char *strdup(char *str)
 void application_error(char *str, char *title)
 {
   XmxMakeErrorDialogWait(current_win->base, app_context, str, title, "OK");
-
-  return;
 }
 
 /* Warning from the library */
 void application_warning(char *str, char *title)
 {
   XmxMakeWarningDialogWait(current_win->base, app_context, str, title, "OK");
-
-  return;
 }
 
 /* Feedback from the library. */
@@ -1091,33 +1045,30 @@ void application_user_feedback(char *str)
   extern Widget toplevel;
 
   XmxMakeInfoDialog(toplevel, str, "VMS Mosaic: Application Feedback");
-  XmxManageRemanage(Xmx_w);
 }
 
 void application_user_info_wait(char *str)
 {
-
   XmxMakeInfoDialogWait(current_win->base, app_context, str,
 			"VMS Mosaic: Application Feedback", "OK");
 }
 
+/* Returned string must be freed with XtFree */
 char *prompt_for_string(char *questionstr)
 {
-
   return XmxModalPromptForString(current_win->base, app_context,
                                  questionstr, "OK", "Cancel");
 }
 
+/* Returned string must be freed */
 char *prompt_for_password(char *questionstr)
 {
-
   return XmxModalPromptForPassword(current_win->base, app_context,
                                    questionstr, "OK", "Cancel");
 }
 
 int prompt_for_yes_or_no(char *questionstr)
 {
-
   return XmxModalYesOrNo(current_win->base, app_context,
                          questionstr, "Yes", "No");
 }
@@ -1131,12 +1082,12 @@ char *mo_get_html_return(char **texthead)
 }
 
 
-/* Convert all newlines and CRs to spaces, and remove leading whitespace. */
-/* Returns True if converted any newlines. */
+/* Convert all newlines and CRs to spaces, and remove leading whitespace.
+ * Returns True if converted any newlines. */
 Boolean mo_convert_newlines_to_spaces(char *str)
 {
   int i;
-  char *tptr;
+  char *tptr = str;
   Boolean converted = False;
 
   if (!str)
@@ -1149,95 +1100,48 @@ Boolean mo_convert_newlines_to_spaces(char *str)
       }
   }
 
-  tptr = str;
-  while (*tptr && (isspace((int)(*tptr))))
+  while (*tptr && isspace((int)*tptr))
       tptr++;
 
   if (tptr != str)
-      memcpy(str, tptr, (strlen(tptr) + 1));
+      memcpy(str, tptr, strlen(tptr) + 1);
 
   return converted;
 }
 
 /* ---------------------------- escaping code ----------------------------- */
 
-static unsigned char isAcceptable[96] =
-/*   0 1 2 3 4 5 6 7 8 9 A B C D E F */
-{    0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,	/* 2x   !"#$%&'()*+,-./	 */
-     1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	/* 3x  0123456789:;<=>?	 */
-     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	/* 4x  @ABCDEFGHIJKLMNO  */
-     1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,	/* 5x  PQRSTUVWXYZ[\]^_	 */
-     0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	/* 6x  `abcdefghijklmno	 */
-     1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0 };	/* 7x  pqrstuvwxyz{\}~	DEL */
-
 #define MO_HEX(i) (i < 10 ? '0' + i : 'A' + i - 10)
 
-/* The string returned from here, if any, can be free'd by caller. */
-char *mo_escape_part(char *part)
-{
-  char *q;
-  char *p;		/* Pointers into keywords */
-  char *escaped;
-
-  if (!part)
-      return NULL;
-
-  escaped = (char *)malloc(strlen(part) * 3 + 1);
-  
-  for (q = escaped, p = part; *p != '\0'; p++) {
-      /*
-       * This makes sure that values 128 and over don't get
-       * converted to negative values.
-       */
-      int c = (int)((unsigned char)(*p));
-
-      if (*p == ' ') {
-          *q++ = '+';
-      } else if (c >= 32 && c <= 127 && isAcceptable[c - 32]) {
-          *q++ = *p;
-      } else {
-          *q++ = '%';
-          *q++ = MO_HEX(c / 16);
-          *q++ = MO_HEX(c % 16);
-      }
-  }
-  
-  *q = 0;
-  
-  return escaped;
-}
-
-
-/* Create new string with no LFs, CRs, tabs, leading and tailing spaces, */
-/* and with other spaces and controls escaped. */
+/* Create new string with no LFs, CRs, tabs, leading and tailing spaces,
+ * and with other spaces and controls escaped. */
 char *mo_clean_and_escape_url(char *url, int free_it)
 {
-  char *q;
-  char *p;
-  char *escaped;
+  char *q, *p, *escaped;
+  int len;
 
   if (!url)
       return NULL;
 
-  escaped = (char *)malloc((strlen(url) * 3) + 1);
+  len = strlen(url);
+  escaped = (char *)malloc((len * 3) + 1);
 
   /* Remove tailing spaces */
-  q = url + strlen(url) - 1;
+  q = url + len - 1;
   while ((q >= url) && (*q == ' '))
       *q-- = '\0';
 
   p = url;
-
   /* Skip over leading spaces */
   while (*p == ' ')
       p++;
 
-  for (q = escaped; *p != '\0'; p++) {
+  for (q = escaped; *p; p++) {
       /*
        * This makes sure that values 128 and over don't get
        * converted to negative values.
        */
-      int c = (int)((unsigned char)(*p));
+      int c = (int)((unsigned char)*p);
 
       if (c >= 33 && c <= 127) {
           *q++ = *p;
@@ -1248,14 +1152,37 @@ char *mo_clean_and_escape_url(char *url, int free_it)
       }
   }
   
-  *q = 0;
+  *q = '\0';
 
-  if (free_it)
+  if (free_it == 1) {
       free(url);
-  
+  } else if (free_it == 2) {
+      XtFree(url);
+  }
   return escaped;
 }
 
+/* Convert escaped spaces to real spaces */
+char *mo_unescape_spaces(char *txt)
+{
+    char *new, *p;
+
+    if (txt) {
+	p = new = malloc(strlen(txt) + 1);
+    } else {
+	return NULL;
+    }
+    while (*txt) {
+        if ((*txt == '%') && (*(txt + 1) == '2') && (*(txt + 2) == '0')) {
+             *p++ = ' ';
+             txt += 3;
+        } else {
+             *p++ = *txt++;
+        }
+    }
+    *p = '\0';
+    return new;
+}
 
 static char mo_from_hex(char c)
 {
@@ -1266,7 +1193,8 @@ static char mo_from_hex(char c)
 
 char *mo_unescape_part(char *str)
 {
-  char *p = str, *q = str;
+  char *p = str;
+  char *q = str;
 
   while (*p) {
       /* Plus's turn back into spaces. */
@@ -1274,8 +1202,7 @@ char *mo_unescape_part(char *str)
           *q++ = ' ';
           p++;
       } else if (*p == '%') {
-          p++;
-          if (*p) 
+          if (*++p) 
               *q = mo_from_hex(*p++) * 16;
           if (*p) 
               *q += mo_from_hex(*p++);
@@ -1284,8 +1211,7 @@ char *mo_unescape_part(char *str)
           *q++ = *p++; 
       }
   }
-  
-  *q++ = 0;
+  *q = '\0';
   return str;
 }
 
@@ -1303,7 +1229,7 @@ static int readAgents(int numAgents)
     char fname[BUFSIZ], buf[512];
     char *homedir, *ptr;
 
-    if ((get_home(&homedir) != 0) || !homedir) {
+    if (get_home(&homedir) || !homedir) {
 	fprintf(stderr, "Agents: Could not get your home directory.\n");
 	return numAgents;
     }
@@ -1337,8 +1263,7 @@ static int readAgents(int numAgents)
 	    } else {
 		continue;
 	    }
-	    numAgents++;
-	    if (numAgents == MAX_AGENTS) {	/* Limit reached */
+	    if (++numAgents == MAX_AGENTS) {	/* Limit reached */
 		fprintf(stderr,
 		        "WARNING: Hard limit reached for agent spoof file.\n");
 		break;
@@ -1354,10 +1279,10 @@ static int readAgents(int numAgents)
 int loadAgents(void)
 {
   char buf[512];
-  int numAgents;
+  int numAgents = 6;
 
   agent = (char **)calloc(MAX_AGENTS + 1, sizeof(char *));
-  sprintf(buf, "%s/%s  libwww/%s",
+  sprintf(buf, "%s/%s libwww/%s",
 	  HTAppName ? HTAppName : "unknown",
 	  HTAppVersion ? HTAppVersion : "0.0",
 	  HTLibraryVersion);
@@ -1370,7 +1295,6 @@ int loadAgents(void)
   agent[4] = strdup(
 	"Mozilla/5.0 (X11; U; OpenVMS Alpha; en-US; rv:1.7) Gecko/20040621)");
   agent[5] = strdup("Mozilla/4.0 (VMS Mosaic)");
-  numAgents = 6;
 
   numAgents = readAgents(numAgents);
 
@@ -1447,8 +1371,7 @@ static char *mo_put_er_over(char *url, char **texthead)
 
 static mo_status upload(mo_window *win, FILE *fp, char *fname)
 {
-    char *put_url, *xurl;
-    char *newtext;
+    char *put_url, *xurl, *newtext;
     char *newtexthead = NULL;
     int res = mo_fail;
 
@@ -1460,7 +1383,7 @@ static mo_status upload(mo_window *win, FILE *fp, char *fname)
 	return(res);
 
     xurl = mo_url_prepend_protocol(put_url);
-    free(put_url);
+    XtFree(put_url);
     put_url = xurl;
 
     fseek(fp, 0, SEEK_END);
@@ -1491,17 +1414,13 @@ static mo_status upload(mo_window *win, FILE *fp, char *fname)
 	    free(win->target_anchor);
 	win->target_anchor = NULL;
     }
-
-    if (newtext) {
+    if (newtext)
 	mo_do_window_text(win, put_url, newtext, newtexthead,
 			  1, NULL, MIME_http.last_modified,
 			  MIME_http.expires, MIME_http.charset);
-	HTMLTraverseTabGroups(win->view, XmTRAVERSE_HOME);
-    }
-
     if (win->current_node)
-	mo_gui_check_security_icon(win->current_node->authType);
-
+	mo_gui_check_win_security_icon(win->current_node->authType,
+				       current_win);
     free(put_url);
 
     mo_gui_done_with_icon();
@@ -1539,7 +1458,7 @@ mo_status mo_upload_window(mo_window *win, char *fname)
 	}
 	final_len = 30 + ((!efname || !*efname ? 3 : strlen(efname)) + 13) +
 		    15 + (strlen(buf) + 3);
-	final = (char *)calloc(final_len, sizeof(char));
+	final = (char *)malloc(final_len);
 
 	sprintf(final,
 	        "\nUnable to upload document:\n   %s\n\nUpload Error:\n   %s\n",
@@ -1547,10 +1466,8 @@ mo_status mo_upload_window(mo_window *win, char *fname)
 
 	application_error(final, "Upload Error");
 
-	if (final) {
+	if (final)
 	    free(final);
-	    final = NULL;
-	}
 	free(efname);
 
 	return(mo_fail);
@@ -1566,7 +1483,7 @@ mo_status mo_upload_window(mo_window *win, char *fname)
 
 static XmxCallback(upload_win_cb)
 {
-    char *fname = (char *)malloc(sizeof(char) * 128);
+    char *fname;
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
     XtUnmanageChild(win->upload_win);
@@ -1576,8 +1493,7 @@ static XmxCallback(upload_win_cb)
 
     mo_upload_window(win, fname);
 
-    free(fname);
-  
+    XtFree(fname);
     return;
 }
 

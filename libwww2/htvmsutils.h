@@ -32,8 +32,7 @@ extern BOOL HTVMSFileVersions;	/* Include version numbers in listing? */
 **
 **	
 */
-extern char *HTVMS_wwwName PARAMS((
-	char *vmsname));
+extern char *HTVMS_wwwName (char *vmsname);
 
 /* PUBLIC							HTVMS_name()
 **		CONVERTS WWW name into a VMS name
@@ -46,18 +45,13 @@ extern char *HTVMS_wwwName PARAMS((
 **
 ** Bug:	Returns pointer to static -- non-reentrant
 */
-extern char *HTVMS_name PARAMS((
-	WWW_CONST char *nn, 
-	WWW_CONST char *fn));
+extern char *HTVMS_name (WWW_CONST char *nn, WWW_CONST char *fn);
 
-extern int HTStat PARAMS((
-	WWW_CONST char *filename,
-        stat_t *info));
+extern int HTStat (WWW_CONST char *filename, stat_t *info);
 
-extern int HTVMSBrowseDir PARAMS((
-	WWW_CONST char *address,
-	HTParentAnchor *anchor,
-	HTFormat        format_out,
-	HTStream       *sink));
+extern int HTVMSBrowseDir (WWW_CONST char *address,
+			   HTParentAnchor *anchor,
+			   HTFormat        format_out,
+			   HTStream       *sink);
 
 #endif

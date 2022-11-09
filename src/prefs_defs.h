@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
  * The VMS Mosaic Project
  */
 
@@ -134,8 +134,6 @@ enum pref_item {
     eAUTO_PLACE_WINDOWS, 
     eINITIAL_WINDOW_ICONIC, 
     eTITLEISWINDOWTITLE, 
-    eUSEICONBAR, 
-    eUSETEXTBUTTONBAR, 
     eTWIRLING_TRANSFER_ICON, 
     eSECURITYICON, 
     eTWIRL_INCREMENT, 
@@ -298,5 +296,20 @@ enum pref_item {
     eCLUE_OVAL,
     eCLUE_ROUNDED,
     ePRINT_DUPLEX,
-    eMENUBAR_TEAROFF
+    eMENUBAR_TEAROFF,
+
+    /* 4.1 */
+    eTIFF_ERROR_MESSAGES,
+    ePNG_ERROR_MESSAGES,
+    eJPEG_ERROR_MESSAGES,
+
+    /* 4.2 */
+    eDETACHED_TOOLBAR,
+    eDETACHED_TOOLBAR_VERTICAL,
+    eTEXT_TOOLBAR,
+    eENCRYPTION_ICON,
+    ePRESENTATION_MODE_ON_RBM,
+    eMULTIPLE_IMAGE_LOAD,
+    eMULTIPLE_IMAGE_LIMIT,
+    eJPEG2000_ERROR_MESSAGES
 };

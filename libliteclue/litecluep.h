@@ -38,6 +38,7 @@ Initial
 */
 
 /* Modified for VMS Mosaic - 5-Mar-2006 */
+/* Copyright (C) 2006, 2007 - The VMS Mosaic Project */
 
 #ifndef _DEF_LiteClueP_h
 #define _DEF_LiteClueP_h
@@ -47,22 +48,18 @@ Initial
 #include "LiteClue.h"
     
 /* Doubly Linked List Processing */
-struct list_thread_str
-{
-	struct list_thread_str *forw;	/* next pointer */
-	struct list_thread_str *back;	/* prev pointer */
-};
-typedef struct list_thread_str  ListThread; 
+typedef struct list_thread_str {
+	struct list_thread_str *forw;	/* Next pointer */
+	struct list_thread_str *back;	/* Prev pointer */
+} ListThread;
 
-typedef struct _transform
-{
+typedef struct _transform {
         double  mx, bx;
         double  my, by;
 } Transform;
 
 /* Keep information for each widget we are tracking */
-struct liteClue_context_str
-{
+typedef struct liteClue_context_str {
 	ListThread next;	/* Next in list */
 	Widget watched_w;	/* The widget we are watching */
 	XcgLiteClueWidget cw;	/* Pointer back to the liteClue widget */
@@ -72,10 +69,10 @@ struct liteClue_context_str
 	Boolean at_mouse;	/* Popup at current mouse location? */
 	Position abs_x, abs_y;  /* Position to popup at */
 	short text_size;	/* Its size */
-};
+} liteClueContext;
 
 typedef struct {
-	int	nothing;	/* place holder */
+	int	nothing;	/* Place holder */
 } LiteClueClassPart;
 
 /* Full class record declaration */
@@ -91,22 +88,20 @@ extern LiteClueClassRec xcgLiteClueClassRec;
 
 /* New fields for the LiteClue widget record */
 typedef struct {
-	/* resources */
+	/* Resources */
 	Pixel foreground;
 
 #if XtSpecificationRelease < 5 || defined(NO_FONT_SET)
-	XFontStruct *fontset;	/* the font for text in box */
+	XFontStruct *fontset;	/* The font for text in box */
 #else
-	XFontSet fontset;	/* the font for text in box */
+	XFontSet fontset;	/* The font for text in box */
 #endif
-        int waitPeriod;		/* the delay resource - pointer must be
-				   in watched widget this long before
-				   help is poped - in millisecs
-				*/
-        int cancelWaitPeriod;	/* after help is popped-down - normal
-				   wait period is cancelled for this
-				   period - in millisecs
-				*/
+        int waitPeriod;		/* The delay resource - pointer must be
+				 * in watched widget this long before
+				 * help is poped - in millisecs */
+        int cancelWaitPeriod;	/* After help is popped-down - normal
+				 * wait period is cancelled for this
+				 * period - in millisecs */
 	int popdownDelay;	/* Popdown delay */
 	Boolean shaped;		/* Shaped balloon */
 	Boolean rounded;	/* Rounded balloon */
@@ -118,24 +113,24 @@ typedef struct {
 
 	Boolean transparent;
 
-	/* -------- private state --------- */
-	ListThread widget_list; /* list of widgets we are liteClue-ing */
-	Dimension font_width;	/* width of '1' character */
-	Dimension font_height;	/* height of font, rows are spaced using this */
-	Dimension font_baseline;/* relative displacement to baseline from top */
-	GC text_GC;		/* for drawing text */
-	GC shape_GC;		/* for drawing shape */
+	/* -------- Private state --------- */
+	ListThread widget_list; /* List of widgets we are liteClue-ing */
+	Dimension font_width;	/* Width of '1' character */
+	Dimension font_height;	/* Height of font, rows are spaced using this */
+	Dimension font_baseline;/* Relative displacement to baseline from top */
+	GC text_GC;		/* For drawing text */
+	GC shape_GC;		/* For drawing shape */
 	XtIntervalId interval_id; /* New field, holds timer id */
-	Boolean	HelpIsUp;	/* the help popup is up */
-	Time	HelpPopDownTime; /* time at which help popup was popped down */
-	Boolean HelpIsActive;   /* liteClue is active */
+	Boolean	HelpIsUp;	/* The help popup is up */
+	Time	HelpPopDownTime; /* Time at which help popup was popped down */
+	Boolean HelpIsActive;   /* LiteClue is active */
 	Transform t;
 	Transform maskt;
-	Pixmap shape_mask;	/* window shape */
-        int shape_width;        /* last shaped window width */
-        int shape_height;       /* last shaped window height */
+	Pixmap shape_mask;	/* Window shape */
+        int shape_width;        /* Last shaped window width */
+        int shape_height;       /* Last shaped window height */
 	XtIntervalId popdown_id; /* Popdown timeout id */
-	struct liteClue_context_str *once; /* One time only popup */
+	liteClueContext *once; /* One time only popup */
 	XtAppContext app_con;	/* Application context */
 } LiteCluePart;
 
@@ -151,4 +146,4 @@ typedef struct _LiteClueRec {
 	LiteCluePart	  liteClue;
 } LiteClueRec;
 
-#endif /* _DEF_LiteClueP_h */
+#endif

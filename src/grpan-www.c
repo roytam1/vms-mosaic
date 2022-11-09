@@ -53,9 +53,10 @@
  ****************************************************************************/
 #include "../config.h"
 #include "mosaic.h"
-#include "grpan-www.h"
 
 #if 0
+
+#include "grpan-www.h"
 
 /* For memcpy */
 #ifndef VMS
@@ -73,7 +74,6 @@ extern int srcTrace;
 #include "../libwww2/HTAnchor.h"
 #include "../libwww2/HTParse.h"
 
-static int HtLoadHTTPANN(char *arg, char *data, int len, char *com);
 
 /****************************************************************************
  * name:    HtLoadHTTPANN (PRIVATE)
@@ -88,8 +88,7 @@ static int HtLoadHTTPANN(char *arg, char *data, int len, char *com);
  * remarks: 
  *   
  ****************************************************************************/
-static int
-HtLoadHTTPANN(char *arg, char *data, int len, char *com)
+static int HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 {
 	int s;				/* Socket number for returned data */
 	char *command;			/* The whole command */
@@ -97,8 +96,7 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 	SockA soc_address;		/* Binary network address */
 	SockA *sin = &soc_address;
 	char *tptr;
-	int fmt, compressed;
-	int command_len;
+	int fmt, compressed, command_len;
 	HTParentAnchor *anchor;
 
 	/*
@@ -115,9 +113,8 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 	tptr = HTParse(arg, "", PARSE_HOST);
 	status = HTParseInet(sin, tptr);
 	free(tptr);
-	if (status) {
+	if (status)
 		return(status);
-	}
 
 	/*
 	 * Now, let's get a socket set up from the server for the data.
@@ -127,28 +124,26 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 #else
 	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 #endif
-	status = connect
-          (s, (struct sockaddr*)&soc_address, sizeof(soc_address));
-	if (status < 0) {
+	status = connect(s, (struct sockaddr *)&soc_address,
+			 sizeof(soc_address));
+	if (status < 0)
 		return(HTInetStatus("connect"));
-	}
 
         /* If there's an anchor at this point, leave it in. */
-	tptr = HTParse(arg, "", PARSE_PATH|PARSE_PUNCTUATION|PARSE_ANCHOR);
+	tptr = HTParse(arg, "", PARSE_PATH | PARSE_PUNCTUATION | PARSE_ANCHOR);
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
+	if (srcTrace)
 		fprintf(stderr, "HTParse(%s) returns:\n\t(%s)\n", arg, tptr);
-	}
 #endif
 	command_len = strlen(com) + strlen(tptr);
 	command = malloc(command_len + len + 1);
-	if (command == NULL) outofmem(__FILE__, "HTLoadHTTP");
+	if (!command)
+		outofmem(__FILE__, "HTLoadHTTPANN");
 	strcpy(command, com);
 	strcat(command, tptr);
-	if (len != 0) {
-		char *bptr;
+	if (len) {
+		char *bptr = (char *)(command + command_len);
 
-		bptr = (char *)(command + command_len);
 		memcpy(bptr, data, len);
 		command_len += len;
 	} else {
@@ -158,13 +153,11 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 
 	status = NETWRITE(s, command, command_len);
 	free(command);
-	if (status < 0) {
+	if (status < 0)
 		return(HTInetStatus("send"));
-	}
 
-	tptr = HTParse(arg, "",
-		  PARSE_ACCESS | PARSE_HOST | PARSE_PATH |
-		  PARSE_PUNCTUATION);
+	tptr = HTParse(arg, "", PARSE_ACCESS | PARSE_HOST | PARSE_PATH |
+		       PARSE_PUNCTUATION);
 #if 0
 	/* fmt = HTFileFormat (tptr, WWW_HTML, &compressed); */
         fmt = WWW_HTML;
@@ -180,8 +173,7 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 
 #endif /* 0 */
 
-char *
-grpan_doit(char *com, char *url, char *data, int len, char **texthead)
+char *grpan_doit(char *com, char *url, char *data, int len, char **texthead)
 {
 #if 0
 	char *txt;

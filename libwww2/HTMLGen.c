@@ -24,29 +24,29 @@
 
 #define PUTC(c) (*me->targetClass.put_character)(me->target, c)
 #define PUTS(s) (*me->targetClass.put_string)(me->target, s)
-#define PUTB(s,l) (*me->targetClass.put_block)(me->target, s, l)
+#define PUTB(s, l) (*me->targetClass.put_block)(me->target, s, l)
 
 /*		HTML Object
 **		-----------
 */
 
 struct _HTStream {
-	WWW_CONST HTStreamClass *		isa;	
-	HTStream * 			target;
-	HTStreamClass			targetClass;	/* COPY for speed */
+	WWW_CONST HTStreamClass *isa;
+	HTStream *target;
+	HTStreamClass targetClass;	/* COPY for speed */
 };
 
 struct _HTStructured {
-	WWW_CONST HTStructuredClass *	isa;
-	HTStream * 			target;
-	HTStreamClass			targetClass;	/* COPY for speed */
+	WWW_CONST HTStructuredClass *isa;
+	HTStream *target;
+	HTStreamClass targetClass;	/* COPY for speed */
 };
 
 
 /*	Character handling
 **	------------------
 */
-PRIVATE void HTMLGen_put_character ARGS2(HTStructured *, me, char, c)
+PRIVATE void HTMLGen_put_character (HTStructured *me, char c)
 {
     PUTC(c);
 }
@@ -56,12 +56,12 @@ PRIVATE void HTMLGen_put_character ARGS2(HTStructured *, me, char, c)
 /*	String handling
 **	---------------
 */
-PRIVATE void HTMLGen_put_string ARGS2(HTStructured *, me, WWW_CONST char*, s)
+PRIVATE void HTMLGen_put_string (HTStructured *me, WWW_CONST char *s)
 {
     PUTS(s);
 }
 
-PRIVATE void HTMLGen_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
+PRIVATE void HTMLGen_write (HTStructured *me, WWW_CONST char *s, int l)
 {
     PUTB(s, l);
 }
@@ -70,11 +70,10 @@ PRIVATE void HTMLGen_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
 /*	Start Element
 **	-------------
 */
-PRIVATE void HTMLGen_start_element ARGS4(
-	HTStructured *, 	me,
-	int,			element_number,
-	WWW_CONST BOOL *,	present,
-	WWW_CONST char **,	value)
+PRIVATE void HTMLGen_start_element (HTStructured *me,
+				    int element_number,
+				    WWW_CONST BOOL *present,
+				    WWW_CONST char **value)
 {
     int i;
     HTTag *tag = &HTML_dtd.tags[element_number];
@@ -107,8 +106,7 @@ PRIVATE void HTMLGen_start_element ARGS4(
 **	should be linked to the whole stack not just the top one.)
 **	TBL 921119
 */
-PRIVATE void HTMLGen_end_element ARGS2(HTStructured *, me,
-			int , element_number)
+PRIVATE void HTMLGen_end_element (HTStructured *me, int element_number)
 {
     PUTS("</");
     PUTS(HTML_dtd.tags[element_number].name);
@@ -121,7 +119,7 @@ PRIVATE void HTMLGen_end_element ARGS2(HTStructured *, me,
 **
 */
 
-PRIVATE void HTMLGen_put_entity ARGS2(HTStructured *, me, int, entity_number)
+PRIVATE void HTMLGen_put_entity (HTStructured *me, int entity_number)
 {
     PUTC('&');
     PUTS(HTML_dtd.entity_names[entity_number]);
@@ -136,7 +134,7 @@ PRIVATE void HTMLGen_put_entity ARGS2(HTStructured *, me, int, entity_number)
 **	Note that the SGML parsing context is freed, but the created object is not,
 **	as it takes on an existence of its own unless explicitly freed.
 */
-PRIVATE void HTMLGen_free ARGS1(HTStructured *, me)
+PRIVATE void HTMLGen_free (HTStructured *me)
 {
     (*me->targetClass.free)(me->target);	/* ripple through */
     free(me);
@@ -144,20 +142,20 @@ PRIVATE void HTMLGen_free ARGS1(HTStructured *, me)
 
 
 
-PRIVATE void HTMLGen_end_document ARGS1(HTStructured *, me)
+PRIVATE void HTMLGen_end_document (HTStructured *me)
 {
     PUTC('\n');		/* Make sure ends with newline for sed etc etc */
     (*me->targetClass.end_document)(me->target);
 }
 
 
-PRIVATE void HTMLGen_handle_interrupt ARGS1(HTStructured *, me)
+PRIVATE void HTMLGen_handle_interrupt (HTStructured *me)
 {
     (*me->targetClass.handle_interrupt)(me->target);
 }
 
 
-PRIVATE void PlainToHTML_end_document ARGS1(HTStructured *, me)
+PRIVATE void PlainToHTML_end_document (HTStructured *me)
 {
     PUTS("</PRE></BODY>\n");  /* Make sure ends with newline for sed etc etc */
     (*me->targetClass.end_document)(me->target);
@@ -183,7 +181,7 @@ PRIVATE WWW_CONST HTStructuredClass HTMLGeneration = /* As opposed to print etc 
 **	-------------------------
 */
 
-PUBLIC HTStructured * HTMLGenerator ARGS1(HTStream *, output)
+PUBLIC HTStructured *HTMLGenerator (HTStream *output)
 {
     HTStructured *me = (HTStructured*)malloc(sizeof(*me));
     if (me == NULL)
@@ -222,16 +220,15 @@ PRIVATE WWW_CONST HTStructuredClass PlainToHTMLConversion =
 **	------------------------------------------
 */
 
-PUBLIC HTStream* HTPlainToHTML ARGS5(
-	HTPresentation *,	pres,
-	HTParentAnchor *,	anchor,	
-	HTStream *,		sink,
-        HTFormat,               format_in,
-        int,                    compressed)
+PUBLIC HTStream *HTPlainToHTML (HTPresentation *pres,
+				HTParentAnchor *anchor,	
+				HTStream *sink,
+        			HTFormat format_in,
+        			int compressed)
 {
-    HTStream *me = (HTStream*)malloc(sizeof(*me));
-    me->isa = (HTStreamClass*) &PlainToHTMLConversion;       
+    HTStream *me = (HTStream *)malloc(sizeof(*me));
 
+    me->isa = (HTStreamClass *) &PlainToHTMLConversion;       
     me->target = sink;
     me->targetClass = *me->target->isa;
     	/* Copy pointers to routines for speed*/

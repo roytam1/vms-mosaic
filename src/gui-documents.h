@@ -63,8 +63,8 @@
 #ifndef __GUIDOCUMENTS_H__
 #define __GUIDOCUMENTS_H__
 
-mo_status mo_back_impossible (mo_window *win);
-mo_status mo_forward_impossible (mo_window *win);
+void mo_back_impossible (mo_window *win);
+void mo_forward_impossible (mo_window *win);
 mo_status mo_set_win_current_node (mo_window *, mo_node *);
 mo_status mo_reload_window_text (mo_window *, int);
 mo_status mo_reload_frame_text (mo_window *, mo_window *);

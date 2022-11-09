@@ -15,7 +15,7 @@
  *
  */
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -24,12 +24,12 @@
 #include "../libhtmlw/HTML.h"
 #include <X11/Xlib.h>
 
-#define CMAP_ABS(x)  (((x) < 0) ? (-(x)) : (x))
+#define CMAP_ABS(x)  ((x < 0) ? -(x) : x)
 
 /* 5 is 32K, 6 is 256K, 7 is 2M and 8 is 16M */
 #define CMAP_CACHE_BITS 6
 
-static unsigned short *cmap_cache = 0;
+static unsigned short *cmap_cache = NULL;
 static unsigned int cmap_cache_size;
 static unsigned int cmap_cache_rmask;
 static unsigned int cmap_cache_gmask;
@@ -47,53 +47,32 @@ static void CMAP_Cache_Init()
   cmap_cache = (unsigned short *)malloc(cmap_cache_size *
 				        sizeof(unsigned short));
   if (!cmap_cache)
-    fprintf(stderr, "CMAP_CACHE: malloc err");
+    fprintf(stderr, "CMAP_CACHE: malloc failure\n");
   cmap_cache_bmask = ((0x01 << CMAP_CACHE_BITS) - 1) << 8;
   cmap_cache_gmask = cmap_cache_bmask << CMAP_CACHE_BITS;
   cmap_cache_rmask = cmap_cache_gmask << CMAP_CACHE_BITS;
-  cmap_cache_image = 0;
+  cmap_cache_image = NULL;
 }
 
 
-/*
- * Set CMAP cache to all 0xffff's.  Since CMAP's are currently limited
- * to 256 in size, this is a non-valid value.
- */
-static void CMAP_Cache_Clear()
-{
-  register unsigned short *tp;
-  register unsigned int i;
-
-  tp = cmap_cache;
-  i = cmap_cache_size;
-  while (i--)
-    *tp++ = 0xffff;
-}
-
-
-/*
- *
- */
-static int CMAP_Find_Closest(t_cmap, csize, r, g, b)
-XColor *t_cmap;
-unsigned int csize;
-int r, g, b;
+static int CMAP_Find_Closest(XColor *t_cmap, unsigned int csize,
+			     int r, int g, int b)
 {
     static ColorReg find_cmap[256];
-    static XColor *cur_find_cmap = 0;
+    static XColor *cur_find_cmap = NULL;
     static unsigned int find_red[256], find_green[256], find_blue[256];
     register unsigned int i, min_diff;
     register int cmap_entry;
 
     if (cur_find_cmap != t_cmap) {
-      if (cur_find_cmap == 0) {
-        for (i=0; i < 256; i++) {
+      if (!cur_find_cmap) {
+        for (i = 0; i < 256; i++) {
 	  find_red[i]   = 11 * i * i; 
 	  find_green[i] = 16 * i * i;
 	  find_blue[i]  =  5 * i * i;
         }
       }
-      for (i=0; i < csize; i++) {  
+      for (i = 0; i < csize; i++) {  
 	find_cmap[i].red   = t_cmap[i].red   >> 8;
 	find_cmap[i].green = t_cmap[i].green >> 8;
 	find_cmap[i].blue  = t_cmap[i].blue  >> 8;
@@ -107,12 +86,12 @@ int r, g, b;
     g >>= 8;
     b >>= 8;
     cmap_entry = 0;
-    for (i=0; i < csize; i++) {
+    for (i = 0; i < csize; i++) {
       register unsigned int diff;
 
-      diff  = find_red[   CMAP_ABS(r - (int)(find_cmap[i].red))  ];
-      diff += find_green[ CMAP_ABS(g - (int)(find_cmap[i].green))];
-      diff += find_blue[  CMAP_ABS(b - (int)(find_cmap[i].blue)) ];
+      diff  = find_red[  CMAP_ABS(r - (int)(find_cmap[i].red))];
+      diff += find_green[CMAP_ABS(g - (int)(find_cmap[i].green))];
+      diff += find_blue[ CMAP_ABS(b - (int)(find_cmap[i].blue))];
       if (i == 0)
 	min_diff = diff;
   
@@ -135,33 +114,34 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
 {
   unsigned int width = image->width;
   unsigned int height = image->height;
-  unsigned char *in;
-  unsigned int flag;
+  unsigned int flag = 0;
   ColorReg *cmap_in;
   register unsigned int x, y;
-  unsigned int shift_r, shift_g, shift_b;
   short *err_buff0, *err_buff1, *e_ptr, *ne_ptr;
   short r_err, g_err, b_err;
-  unsigned char *o_ptr;
+  unsigned char *in, *o_ptr;
+  static unsigned int shift_r = 3 * CMAP_CACHE_BITS;
+  static unsigned int shift_g = 2 * CMAP_CACHE_BITS;
+  static unsigned int shift_b = CMAP_CACHE_BITS;
 
   if (!cmap_cache)
     CMAP_Cache_Init();
   if (image != cmap_cache_image) {
-    CMAP_Cache_Clear();
+    /*
+     * Set CMAP cache to all 0xffff's.  Since CMAP's are currently
+     * limited to 256 in size, this is a non-valid value.
+     */
+    memset(cmap_cache, 255, cmap_cache_size * sizeof(unsigned short));
     cmap_cache_image = image;
   }
-  shift_r = 3 * CMAP_CACHE_BITS;
-  shift_g = 2 * CMAP_CACHE_BITS;
-  shift_b = CMAP_CACHE_BITS;
   
   /* Allocate error buffer and set up pointers */
   e_ptr = err_buff1 = err_buff0 = (short *)malloc(6 * width * sizeof(short));
   if (!err_buff0) {
-    fprintf(stderr, "FSDither: malloc err\n");
+    fprintf(stderr, "FSDither: malloc failure\n");
     return;
   }
-  err_buff1 += (3 * width);
-  flag = 0;
+  err_buff1 += 3 * width;
 
   if (alpha_in) {
     in = alpha_in;
@@ -170,15 +150,15 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
   }
 
   {
-    register unsigned int i, msize;
+    register unsigned int i;
+    register unsigned int msize = image->num_colors;
 
-    msize = image->num_colors;
     cmap_in = (ColorReg *)malloc(msize * sizeof(ColorReg));
     if (!cmap_in) {
-      fprintf(stderr, "FSDITHER: cmap malloc err\n");
+      fprintf(stderr, "FSDITHER: cmap malloc failure\n");
       return;
     }
-    for (i=0; i < msize; i++) {
+    for (i = 0; i < msize; i++) {
       cmap_in[i].red   = image->colrs[i].red >> 8;
       cmap_in[i].green = image->colrs[i].green >> 8;
       cmap_in[i].blue  = image->colrs[i].blue >> 8;
@@ -187,7 +167,7 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
 
   {
     register unsigned char *i_ptr = (unsigned char *)(in + (width *
-				    (height - 1)));
+							    (height - 1)));
 
     x = width;
     while (x--) {
@@ -227,32 +207,31 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
 
     x = width;
     while (x--) {
-      unsigned int color_out;
-      unsigned int cache_i;
+      unsigned int color_out, cache_i;
       register short r, g, b;
 
-      r = (*e_ptr++) / 16;
+      r = *e_ptr++ / 16;
       if (r < 0) {
 	r = 0;
       } else if (r > 255) {
 	r = 255;
       }
-      g = (*e_ptr++) / 16;
+      g = *e_ptr++ / 16;
       if (g < 0) {
 	g = 0;
       } else if (g > 255) {
 	g = 255;
       }
-      b = (*e_ptr++) / 16;
+      b = *e_ptr++ / 16;
       if (b < 0) {
 	b = 0;
       } else if (b > 255) {
 	b = 255;
       }
 
-      cache_i = ( ((r << shift_r) & cmap_cache_rmask) |
-                  ((g << shift_g) & cmap_cache_gmask) |
-                  ((b << shift_b) & cmap_cache_bmask) ) >> 8;
+      cache_i = (((r << shift_r) & cmap_cache_rmask) |
+                 ((g << shift_g) & cmap_cache_gmask) |
+                 ((b << shift_b) & cmap_cache_bmask)) >> 8;
       if (cmap_cache[cache_i] == 0xffff) {
 	color_out = CMAP_Find_Closest(new_colors, num_colors, r, g, b);
 	cmap_cache[cache_i] = (short)color_out;
@@ -266,7 +245,7 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
       *o_ptr++ = (unsigned char)new_colors[color_out].pixel;
 
       if (x) {
-	*e_ptr   += 7 * r_err;
+	e_ptr[0] += 7 * r_err;
 	e_ptr[1] += 7 * g_err;
 	e_ptr[2] += 7 * b_err;
       }
@@ -276,7 +255,7 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
 	  *ne_ptr++ += 3 * g_err;
 	  *ne_ptr++ += 3 * b_err;
 	}
-        *ne_ptr   += 5 * r_err;
+        ne_ptr[0] += 5 * r_err;
         ne_ptr[1] += 5 * g_err;
         ne_ptr[2] += 5 * b_err;
         if (x) {
@@ -285,8 +264,8 @@ void FS_Dither(ImageInfo *image, unsigned char *image_out,
 	  ne_ptr[5] += b_err;
 	}
       }
-    } /* End of x */
-  } /* End of y */
+    }  /* End of x */
+  }  /* End of y */
 
   if (err_buff0)
     free(err_buff0);

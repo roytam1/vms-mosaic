@@ -37,17 +37,17 @@ typedef struct {
     HTAAProt *prot;
 } HTAAProtCache;
 
-PRIVATE HTList   *prot_cache	= NULL;	/* Protection setup cache.	*/
-PRIVATE HTAAProt *default_prot	= NULL;	/* Default protection.		*/
-PRIVATE HTAAProt *current_prot	= NULL;	/* Current protection mode	*/
-                                        /* which is set up by callbacks	*/
-                                        /* from the rule system when	*/
-                                        /* a "protect" rule is matched.	*/
+PRIVATE HTList   *prot_cache	= NULL;	 /* Protection setup cache.	 */
+PRIVATE HTAAProt *default_prot	= NULL;  /* Default protection.		 */
+PRIVATE HTAAProt *current_prot	= NULL;	 /* Current protection mode	 */
+                                         /* which is set up by callbacks */
+                                         /* from the rule system when	 */
+                                         /* a "protect" rule is matched. */
 
 /* PRIVATE							isNumber()
 **		DOES A CHARACTER STRING REPRESENT A NUMBER
 */
-PRIVATE BOOL isNumber ARGS1(WWW_CONST char *, s)
+PRIVATE BOOL isNumber (WWW_CONST char *s)
 {
     WWW_CONST char *cur = s;
 
@@ -72,7 +72,7 @@ PRIVATE BOOL isNumber ARGS1(WWW_CONST char *, s)
 **	returns	the uid number to give to setuid() system call.
 **		Default is 65534 (nobody).
 */
-PUBLIC int HTAA_getUid NOARGS
+PUBLIC int HTAA_getUid (void)
 {
     struct passwd *pw = NULL;
 
@@ -116,7 +116,7 @@ PUBLIC int HTAA_getUid NOARGS
 **	returns	the uid number to give to setgid() system call.
 **		Default is 65534 (nogroup).
 */
-PUBLIC int HTAA_getGid NOARGS
+PUBLIC int HTAA_getGid (void)
 {    
     struct group *gr = NULL;
     
@@ -160,8 +160,7 @@ PUBLIC int HTAA_getGid NOARGS
 ** ON EXIT:
 **	returns		nothing.
 */
-PRIVATE void HTAA_setIds ARGS2(HTAAProt *,	  prot,
-			       WWW_CONST char *,  ids)
+PRIVATE void HTAA_setIds (HTAAProt *prot, WWW_CONST char *ids)
 {
     if (ids) {
 	char *local_copy = NULL;
@@ -194,15 +193,13 @@ PRIVATE void HTAA_setIds ARGS2(HTAAProt *,	  prot,
 ** ON EXIT:
 **	returns		nothing.
 */
-PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
-				      FILE *,	  fp)
+PRIVATE void HTAA_parseProtFile (HTAAProt *prot, FILE *fp)
 {
     if (prot && fp) {
 	LexItem lex_item;
 	char *fieldname = NULL;
 
 	while (LEX_EOF != (lex_item = lex(fp))) {
-
 	    while (lex_item == LEX_REC_SEP)	/* Ignore empty lines */
 		lex_item = lex(fp);
 
@@ -254,7 +251,7 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 		    } /* while items in list */
 		} /* if "Authenticate" */
 
-		else if (0 == my_strncasecmp(fieldname, "mask", 4)) {
+		else if (!my_strncasecmp(fieldname, "mask", 4)) {
 		    prot->mask_group = HTAA_parseGroupDef(fp);
 		    lex_item = LEX_REC_SEP; /*groupdef parser got this already*/
 #ifndef DISABLE_TRACE
@@ -268,7 +265,7 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 			}
 		    }
 #endif
-		} /* if "Mask" */
+		}  /* If "Mask" */
 		else {	/* Just a name-value pair, put it to assoclist */
 		    if (LEX_ALPH_STR == (lex_item = lex(fp))) {
 			if (!prot->values)
@@ -282,9 +279,9 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 				    fieldname, lex_buffer);
 #endif
 		    }
-		} /* else name-value pair */
+		}  /* Else name-value pair */
 
-	    } /* if valid field */
+	    }  /* If valid field */
 
 	    if (lex_item != LEX_EOF  &&  lex_item != LEX_REC_SEP) {
 #ifndef DISABLE_TRACE
@@ -297,9 +294,9 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 		do {
 		    lex_item = lex(fp);
 		} while (lex_item != LEX_EOF && lex_item != LEX_REC_SEP);
-	    } /* if syntax error */
-	} /* while not end-of-file */
-    } /* if valid parameters */
+	    }
+	}
+    }
 }
 
 
@@ -329,9 +326,9 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 **			in cache), only sets uid_name and gid
 **			fields, and returns that.
 */
-PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
-				     WWW_CONST char *,	prot_filename,
-				     WWW_CONST char *,	ids)
+PRIVATE HTAAProt *HTAAProt_new (WWW_CONST char *cur_docname,
+				WWW_CONST char *prot_filename,
+				WWW_CONST char *ids)
 {
     HTList *cur = prot_cache;
     HTAAProtCache *cache_item;
@@ -341,7 +338,7 @@ PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
     if (!prot_cache)
 	prot_cache = HTList_new();
     
-    while (NULL != (cache_item = (HTAAProtCache *)HTList_nextObject(cur))) {
+    while (cache_item = (HTAAProtCache *)HTList_nextObject(cur)) {
 	if (!strcmp(cache_item->prot_filename, prot_filename))
 	    break;
     }
@@ -414,9 +411,9 @@ PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
 **	returns		nothing.
 **			Sets the module-wide variable default_prot.
 */
-PUBLIC void HTAA_setDefaultProtection ARGS3(WWW_CONST char *,	cur_docname,
-					    WWW_CONST char *,	prot_filename,
-					    WWW_CONST char *,	ids)
+PUBLIC void HTAA_setDefaultProtection (WWW_CONST char *cur_docname,
+				       WWW_CONST char *prot_filename,
+				       WWW_CONST char *ids)
 {
     default_prot = NULL;	/* Not free()'d because this is in cache */
 
@@ -451,9 +448,9 @@ PUBLIC void HTAA_setDefaultProtection ARGS3(WWW_CONST char *,	cur_docname,
 **	returns		nothing.
 **			Sets the module-wide variable current_prot.
 */
-PUBLIC void HTAA_setCurrentProtection ARGS3(WWW_CONST char *,	cur_docname,
-					    WWW_CONST char *,	prot_filename,
-					    WWW_CONST char *,	ids)
+PUBLIC void HTAA_setCurrentProtection (WWW_CONST char *cur_docname,
+				       WWW_CONST char *prot_filename,
+				       WWW_CONST char *ids)
 {
     current_prot = NULL;	/* Not free()'d because this is in cache */
 
@@ -496,7 +493,7 @@ PUBLIC void HTAA_setCurrentProtection ARGS3(WWW_CONST char *,	cur_docname,
 **		protection setup of the HTTranslate()'d file.
 **		This must not be free()'d.
 */
-PUBLIC HTAAProt *HTAA_getCurrentProtection NOARGS
+PUBLIC HTAAProt *HTAA_getCurrentProtection (void)
 {
     return current_prot;
 }
@@ -525,7 +522,7 @@ PUBLIC HTAAProt *HTAA_getCurrentProtection NOARGS
 **	the file is in fact protected and sets the current
 **	protection mode to default.
 */
-PUBLIC HTAAProt *HTAA_getDefaultProtection NOARGS
+PUBLIC HTAAProt *HTAA_getDefaultProtection (void)
 {
     if (!current_prot) {
 	current_prot = default_prot;
@@ -546,9 +543,8 @@ PUBLIC HTAAProt *HTAA_getDefaultProtection NOARGS
 **	returns	nothing.
 **		Frees the memory used by protection information.
 */
-PUBLIC void HTAA_clearProtections NOARGS
+PUBLIC void HTAA_clearProtections (void)
 {
     current_prot = NULL;	/* These are not freed because	*/
     default_prot = NULL;	/* they are actually in cache.	*/
 }
-

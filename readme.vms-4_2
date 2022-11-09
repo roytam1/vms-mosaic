@@ -1,0 +1,271 @@
+                        VMS Mosaic 4.2
+
+VMS Mosaic is supported on VAXes running OpenVMS V5.4-3 thru 7.3,
+on Alpha systems using OpenVMS V1.5 thru 8.3, and on IA64 systems
+running OpenVMS V8.1 thru 8.3.  Mosaic will work with UCX (TCP/IP
+Services), CMU, MultiNet, Pathway, TCPware or SOCKETSHR with NETLIB.
+CMU TCP/IP is supported via LIBCMUII or SOCKETSHR.  Mosaic has been
+compiled with VAX C, DEC C and GNU C (VAX version 2.7.1 only).
+Versions 1.1 thru 1.6 of DECwindows Motif are supported.  See the
+file CHANGES.VMS for a list of changes from previous releases.
+
+The file Mosaic4_2.zip contains the sources, documentation and
+build procedure.  Note that the file is a ZIP archive, so the
+UNZIP program is needed to unpack it.
+
+If you have any problems with installing or running VMS Mosaic,
+please ask for help via the VMS-MOSAIC mail list (see below).
+
+1. Before installation.
+
+ - Make sure that you have DECWindows Motif and the Miscellaneous
+   Utilities optional library.  The latter is an optional part of
+   the DECWindows Motif kit.  You can check if it is present with
+   SHOW LOGICAL XMU which should show something like
+       "XMU" = "SYS$SYSROOT:[DECW$INCLUDE.XMU]"
+   Check that the XMU directory contains a set of include files.
+   If you do not have this software, stop here.
+
+ - The installation account should have a large page file quota
+   (100,000 should be enough), otherwise the build procedure may
+   fail.
+ 
+ - First unpack the archive.  You need the UNZIP program for this.
+   You can find UNZIP at various locations including 
+	ftp://wvnvms.wvnet.edu/unzip/
+
+ - To include support for secure connections, HP SSL or OpenSSL
+   must be  installed on the system prior to building Mosaic.  For
+   information on building with OpenSSL see the file OPENSSL.README.
+   The build will automatically detect and build against HP SSL if
+   it is installed.  SSL certificate verification support requires
+   an appropriate CERT.PEM file in the SSL$CERTS (HP SSL) directory
+   or in the SSLCERTS (OpenSSL) directory.  The CERT.PEM provided
+   with Mosaic can be used for this purpose.  The file protection
+   on CERT.PEM should be set to world read access (i.e., W:RE).
+
+ - The sources have many defaults built in.  Mosaic uses auxiliary
+   programs for viewing, etc.  The default definitions for these
+   programs are in [.LIBWWW2]HTINIT.C.  There are many other
+   resources defined in [.SRC]XRESOURCES.H.  Six of these can be
+   defined in LOCAL.CONFIG.
+
+   1) You may want to define your own default home page for the
+   homeDocument resource by changing HOME_PAGE in LOCAL.CONFIG. 
+
+   2) Choose a print command appropriate to your site by changing
+   PRINT_COMMAND
+
+   3) If you intend to read News with Mosaic, you may define a
+   default news host by setting NEWS_HOST.  This default can be
+   overridden with the logical NNTPSERVER.
+
+   4) Finally you should choose an appropriate Mail prefix by changing
+   MAIL_PREFIX.  If you have PMDF or MX, this prefix should be "IN%" 
+   or "MX%".  Please note that the setting of Mosaic*prefixVMSMail in
+   MOSAIC.DAT overrides any setting made in LOCAL.CONFIG.
+
+   Other defaults that you might consider changing are:
+
+   1) Instead of DECterm you may want to use xterm or whatever you
+   have.  See [.SRC]XRESOURCES.H
+
+   2) You may want to change the default for file uncompressing.
+   Also in [.SRC]XRESOURCES.H
+
+   3) If you have installed ghostview and ghostscript, you can
+   use them instead of DECWindows VIEW as the PostScript Previewer.
+   This can be done by changing POSTSCRIPT_VIEWER in LOCAL.CONFIG.
+
+   4) You may want to put the file DOCUMENTS.MENU somewhere other
+   than in MOSAIC_DIR:.  See [.SRC]XRESOURCES.H
+
+   5) You may want to start DECsound differently.  See [.LIBWWW2]HTINIT.C
+
+   6) If you are using a VAXstation which is faster than a VS4000-VLC,
+   then you may want to increase MaxClipTransitions to 6144 (12288 can
+   be used for a VS4000 Model 90) in the file [.SRC]XRESOURCES.H.  The
+   value can safely be increased to 4096 on VS4000-VLC and VS3100/SPX
+   systems.  The default value of -1 in XRESOURCES.H causes the setting
+   to default to 2048 which is suitable for slower VAXstations.  Note
+   that this resource has no effect when the X server is not a VAX.
+
+
+2. Installation
+
+The build procedure, MAKE_MOSAIC.COM, will use MMS or MMK if either
+is available, otherwise it will do a complete in-line build.  It will
+also attempt to select the appropriate TCP/IP package to build with.
+The TCP/IP package may be specified in parameter P2 to force a build
+with a particular package.  (Note: the procedure uses the logical
+MMK_DIR to locate MMK as recommended by the MMK documentation.  The
+minimum version of MMK which will work with the Mosaic build is V3.4)
+
+Make any changes you might need in LOCAL.CONFIG (check the settings
+of HOME, PRINT_COMMAND, NEWSHOST, EDIT_COMMAND and MAIL_PREFIX) and
+then execute MAKE_MOSAIC.COM:
+
+   $ @MAKE_MOSAIC
+
+or
+
+   $ @MAKE_MOSAIC "" "" "/IGNORE=WARNING"
+
+in order to force an MMS or MMK build to ignore compilation warnings
+(this only has an effect if the build uses either MMS or MMK).
+
+This should build everything.  You should not get any errors but some
+configurations may get compilation informational messages.  For non-MMS
+builds, the following command can be used to delete unneeded object files
+and libraries after the build:
+
+   $ @MAKE_MOSAIC "" "" "" NOMMS CLEAN
+
+Once the build is finished, Mosaic can be invoked either by defining a
+foreign command symbol like:
+
+$ MOSAIC :== $device:[directory]MOSAIC
+
+or by adding MOSAIC.CLD to the system dcltables with the command:
+
+$ SET COMM/TAB=SYS$SHARE:DCLTABLES/OUT=SYS$COMMON:[SYSLIB]DCLTABLES MOSAIC.CLD
+
+and defining the logical MOSAIC_DIR to point to the directory containing
+MOSAIC.EXE.
+
+Help for Mosaic can optionally be added to the VMS help library with the
+following command: 
+
+$ LIBRARY/HELP/INSERT SYS$COMMON:[SYSHLP]HELPLIB.HLB MOSAIC.HLP
+
+If an earlier version of Mosaic help is already in the help library,
+then it can be replaced with the following command:
+
+$ LIBRARY/HELP/REPLACE SYS$COMMON:[SYSHLP]HELPLIB.HLB MOSAIC.HLP
+
+
+3. Post-installation.
+
+Mosaic, like most programs using X, needs an application resource
+file.  There are color and mono versions in MOSAIC.DAT_COLOR and
+MOSAIC.DAT_MONO.  Check these, and move the appropriate one to your
+"applications defaults" directory (normally SYS$COMMON:[DECW$DEFAULTS.USER])
+with world read access and the name MOSAIC.DAT.  However, you should
+make both files publicly available.  Users, who want to customize
+more, should copy the appropriate file to DECW$USER_DEFAULTS (normally
+SYS$LOGIN:) with name MOSAIC.DAT and modify it further there.
+
+The logical MOSAIC_DIR should be defined to point to the directory
+which will contain the proxy files (PROXY. and NO_PROXY.), if the
+proxy feature is used, and the file DOCUMENTS.MENU.  The logical
+MOSAIC_MAILCAP_DIR should be defined to point to the directory
+containing the optional files MAILCAP. and MIME.TYPES if you have
+and desire to use them for all users (personal copies of these files
+in SYS$LOGIN will override the ones pointed to by the logical).
+The use of these two logicals can be changed in [.SRC]XRESOURCES.H
+and [.SRC]MOSAIC.H, respectively.  Mosaic uses the file DOCUMENTS.MENU
+to configure one of the pull-down menus.  Check this file, and then
+copy it to MOSAIC_DIR: (or the location given in [.SRC]XRESOURCES.H
+if you changed it).
+
+The location of MAILCAP., MIME.TYPES, DOCUMENTS.MENU and the proxy
+files can also be specified using the following X resources in
+MOSAIC.DAT:
+
+Mosaic*DocumentsMenuSpecfile:   xxx:documents.menu
+Mosaic*ProxySpecfile:           xxx:proxy
+Mosaic*NoproxySpecfile:         xxx:no_proxy
+Mosaic*GlobalTypeMap:           xxx:mailcap.
+Mosaic*GlobalExtensionMap:      xxx:mime.types
+
+where xxx is any valid device and directory specification.  These
+X resources override the logicals MOSAIC_DIR and MOSAIC_MAILCAP_DIR.
+If using a preference file (SYS$LOGIN:MOSAIC.PREFERENCES), the location
+and names of these files must be modified in the preference file
+instead of in MOSAIC.DAT.
+
+
+4. Post post-installation.
+
+You may find that you need some auxiliary programs for uncompressing,
+viewing, etc.  You should be able to find most of what you need at
+http://www.process.com/openvms/ or on the VMS freeware CDs (online
+at http://h71000.www7.hp.com/openvms/freeware/).
+
+
+5. Some more hints.
+
+Some points that should be in a user's guide are:
+
+a) Mosaic automatically creates a preferences file (MOSAIC.PREFERENCES)
+  in SYS$LOGIN, but the values in it are not used unless preferences are
+  enabled and saved via the Options and File menus.
+
+b) To read News you must first define a News server.  This can be done
+  at compilation time (see above), or by defining a logical NNTPSERVER
+  as the host name of the server.
+
+c) Mosaic can be controlled remotely.  If you start the program with
+  the -mbx switch or the /REMOTE qualifier, it will act on commands sent
+  to a mailbox named MOSAIC_username.  The logical name for the mailbox
+  can also be set with an argument following the -mbx_name switch or
+  the /MAILBOX_NAME qualifier.  Finally, the mailbox name can be entered
+  in your group name table with the -mbx_grp switch or /GROUP qualifier,
+  provided you have GRPNAM priv.
+
+  The commands are defined and acted upon in the routine
+  mo_process_external_directive in [.SRC]GUI.C.  The possible commands
+  are:
+
+   goto|URL newwin|URL pagedown pageup scrolldown scrollup flushimagecache
+   backnode forwardnode reloaddocument reloadimages refresh iconify
+   deiconify raise move resize
+
+  The goto and newwin commands must be followed by a vertical bar and
+  then the URL of the page to display.  The move and resize commands
+  have the format "command|x|y" (e.g. move|200|400).
+
+d) The HTFTP.C routine understands "long" listings from "normal" UNIX
+  ftp servers, from Hunter Goatley's MadGoat ftp server and from MultiNet,
+  TCPware and UCX servers.
+
+  A URL starting with ftp://username:password@node can be used for
+  ftp-ing from non-anonymous accounts.  You must be extremely careful
+  if you use this feature!!  The password is displayed on your screen
+  since it is part of the URL.  It is also recorded in your
+  MOSAIC.X-HISTORY file!
+
+e) Mosaic may consume a lot of page file quota when expanding in-line
+  images or when using many fonts.  Make sure that your AUTHORIZE
+  pgflquo resource is at least 40000 pages.  If you have insufficient
+  page file quota, Mosaic will very likely crash sooner or later.
+
+And finally, if Mosaic crashes, please send mail describing how you
+used Mosaic just before the crash.  What pages did you (try to) look
+at?  Did you invoke Mosaic as a subprocess, as a detached process,
+or as a regular process?  Did you have any problems compiling and
+linking?  Give any other information you may find relevant.  Also
+include the configuration you were using including the versions of
+the compiler, VMS, TCP/IP package and Motif.  Bug reports should be
+sent to the VMS-MOSAIC mailing-list (see below).
+
+
+6. The VMS-MOSAIC mailing-list.
+
+A mailing-list, VMS-MOSAIC, has been setup to help support the use of
+MOSAIC on VMS.  Its welcome message, which includes information on how
+to subscribe, is attached below.
+
+All questions concerning the use of Mosaic on VMS and bug reports
+concerning this release should be sent to the list.  They will likely
+receive a faster response than if they are sent to me directly.
+
+
+7. The VMS Mosaic Comment Card
+
+Please complete the Comment Card on the Help pulldown menu.
+
+======================================================================
+George Cook, West Virginia Network (WVNET)
+2-Sep-2007
+Email address: cook@wvnet.edu

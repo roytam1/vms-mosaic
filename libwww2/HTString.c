@@ -9,51 +9,50 @@
 #include "../config.h"
 #include <ctype.h>
 #include "HTUtils.h"
-#include "tcp.h"
 
 PUBLIC WWW_CONST char *HTLibraryVersion = "2.12_Mosaic";
 
 /*
  *	Allocate a new copy of a string, and returns it
  */
-PUBLIC char *HTSACopy ARGS2(char **, dest, WWW_CONST char *, src)
+PUBLIC char *HTSACopy (char **dest, WWW_CONST char *src)
 {
-  if (!dest)
-    return NULL;
-  if (*dest)
-    free(*dest);
-  if (!src) {
-    *dest = NULL;
-  } else {
-    *dest = (char *) malloc(strlen(src) + 1);
-    if (!*dest)
-      outofmem(__FILE__, "HTSACopy");
-    strcpy(*dest, src);
-  }
-  return *dest;
+    if (!dest)
+        return NULL;
+    if (*dest)
+        free(*dest);
+    if (!src) {
+        *dest = NULL;
+    } else {
+        *dest = (char *) malloc(strlen(src) + 1);
+        if (!*dest)
+            outofmem(__FILE__, "HTSACopy");
+        strcpy(*dest, src);
+    }
+    return *dest;
 }
 
 /*
  *	String Allocate and Concatenate
  */
-PUBLIC char *HTSACat ARGS2(char **, dest, WWW_CONST char *, src)
+PUBLIC char *HTSACat (char **dest, WWW_CONST char *src)
 {
-  if (src && *src) {
-    if (*dest) {
-      int length = strlen(*dest);
+    if (src && *src) {
+        if (*dest) {
+            int length = strlen(*dest);
 
-      *dest = (char *) realloc(*dest, length + strlen(src) + 1);
-      if (!*dest)
-	outofmem(__FILE__, "HTSACat");
-      strcpy(*dest + length, src);
-    } else {
-      *dest = (char *) malloc(strlen(src) + 1);
-      if (!*dest)
-	outofmem(__FILE__, "HTSACat");
-      strcpy(*dest, src);
+            *dest = (char *) realloc(*dest, length + strlen(src) + 1);
+            if (!*dest)
+	        outofmem(__FILE__, "HTSACat");
+            strcpy(*dest + length, src);
+        } else {
+            *dest = (char *) malloc(strlen(src) + 1);
+            if (!*dest)
+	        outofmem(__FILE__, "HTSACat");
+            strcpy(*dest, src);
+        }
     }
-  }
-  return *dest;
+    return *dest;
 }
 
 
@@ -70,7 +69,7 @@ PUBLIC char *HTSACat ARGS2(char **, dest, WWW_CONST char *, src)
 **
 **	returns	a pointer to the first field
 */
-PUBLIC char *HTNextField ARGS1(char **, pstr)
+PUBLIC char *HTNextField (char **pstr)
 {
     char *p = *pstr;
     char *start;		/* Start of field */
@@ -82,19 +81,18 @@ PUBLIC char *HTNextField ARGS1(char **, pstr)
         return NULL;		/* No first field */
     }
     if (*p == '"') {		/* Quoted field */
-        p++;
-	start = p;
+	start = ++p;
 	for (; *p && *p != '"'; p++) {
 	    if (*p == '\\' && p[1])
-		p++;	/* Skip escaped chars */
+		p++;		/* Skip escaped chars */
 	}
     } else {
 	start = p;
 	while (*p && !WHITE(*p))
-	    p++;	/* Skip first field */
+	    p++;		/* Skip first field */
     }
     if (*p)
-	*p++ = 0;
+	*p++ = '\0';
     *pstr = p;
     return start;
 }

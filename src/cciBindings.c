@@ -98,7 +98,7 @@ int cci_docommand = 0;
 /***************************************************************************/
 /***************************************************************************/
 /*                                                                         */
-/* This module contains bindings between the new cci code and the browser  */
+/* This module contains bindings between the new cci code and the browser. */
 /* If you are retrofitting the cci on to your browser strip out everything */
 /* except the function headers and the return values and stick in the      */
 /* appropriate calls for your browser.                                     */
@@ -135,7 +135,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
   s = parameter;
 
-  /* got the window id here */
+  /* Got the window id here */
 
   if (!current_win) {
 	*retCode = MCCIR_DOCOMMAND_FAILED;
@@ -177,7 +177,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	while (w = mo_next_window(w))
 	  	mo_redisplay_window(w);
   } else if (!strcmp(command, MCCI_SAVEAS)) {
-	/* need to get format filename */
+	/* Need to get format filename */
 	char *format, *filename;
 	mo_status status;
 
@@ -185,7 +185,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	/* s is pointed pass the window id part */
 
 	GetWordFromString(s, &format, &end);  /* Get command */
-	if ((!format) || (format == end)) {
+	if (!format || (format == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify a format");
 		return;
@@ -197,7 +197,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 		*tmp_end = '\0';
 
 	GetWordFromString(s, &filename, &end);  /* Get command */
-	if ((!filename) || (filename == end)) {
+	if (!filename || (filename == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify a filename");
 		if (format)
@@ -205,7 +205,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 		return;
 	}
 	filename = strdup(filename);
-	sscanf(filename, "%s", filename); /* to get rid of /r/n */
+	sscanf(filename, "%s", filename);  /* To get rid of /r/n */
 	cci_docommand = 1;
 	if (!strcmp(format, MCCI_PLAINTEXT)) {
 		status = mo_save_window(win, filename, 0);
@@ -243,7 +243,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &s_string, &end);  /* Get command */
-	if ((!s_string) || (s_string == end)) {
+	if (!s_string || (s_string == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify a search string");
 		return;
@@ -255,7 +255,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 		*tmp_end = '\0';
 
 	GetWordFromString(s, &c, &end);  /* Get command */
-	if ((!c) || (c == end)) { 
+	if (!c || (c == end)) { 
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify CASE");
 		if (s_string)
@@ -282,7 +282,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	}
 	cci_docommand = 0;
 
-	/**** should I return a error when not found ****/
+	/**** Should I return a error when not found ****/
 	if (s_string)
 		free(s_string);
 	if (c)
@@ -295,7 +295,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &format, &end);  /* Get command */
-	if ((!format) || (format == end)) {
+	if (!format || (format == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify a print format");
 		return;
@@ -315,7 +315,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	}
 
 	printCommand = s;
-	while (isalnum((int) (*s)) || (*s == ' ') || (*s == '-'))
+	while (isalnum((int)*s) || (*s == ' ') || (*s == '-'))
 		s++;
 	if (s)
 		*s = '\0';
@@ -352,7 +352,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &on_off, &end);  /* Get command */
-	if ((!on_off) || (on_off == end)) {
+	if (!on_off || (on_off == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify ON|OFF");
 		return;
@@ -387,7 +387,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &on_off, &end);  /* Get command */
-	if ((!on_off) || (on_off == end)) {
+	if (!on_off || (on_off == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify ON|OFF");
 		return;
@@ -398,11 +398,11 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	if (!strcmp(on_off, MCCI_ON)) {
 		win->binary_transfer = 1;
 		XmxRSetToggleState(win->menubar, mo_binary_transfer,
-			(win->binary_transfer ? XmxSet : XmxNotSet));
+				   win->binary_transfer ? XmxSet : XmxNotSet);
 	} else if (!strcmp(on_off, MCCI_OFF)) {
 		win->binary_transfer = 0;
 		XmxRSetToggleState(win->menubar, mo_binary_transfer,
-			(win->binary_transfer ? XmxSet : XmxNotSet));
+				   win->binary_transfer ? XmxSet : XmxNotSet);
 	} else {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify ON|OFF");
@@ -418,7 +418,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &on_off, &end);  /* Get command */
-	if ((!on_off) || (on_off == end)) {
+	if (!on_off || (on_off == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify ON|OFF");
 		return;
@@ -429,13 +429,13 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 	if (!strcmp(on_off, MCCI_ON)) {
 		win->delay_image_loads = 1;
 		XmxRSetToggleState(win->menubar, mo_delay_image_loads,
-		       (win->delay_image_loads ? XmxSet : XmxNotSet));
+				   win->delay_image_loads ? XmxSet : XmxNotSet);
 		XmxRSetSensitive(win->menubar, mo_expand_images_current, 
 		       win->delay_image_loads ? XmxSensitive : XmxNotSensitive);
 	} else if (!strcmp(on_off, MCCI_OFF)) {
 		win->delay_image_loads = 0;
 		XmxRSetToggleState(win->menubar, mo_delay_image_loads,
-		       (win->delay_image_loads ? XmxSet : XmxNotSet));
+				   win->delay_image_loads ? XmxSet : XmxNotSet);
 		XmxRSetSensitive(win->menubar, mo_expand_images_current, 
 		       win->delay_image_loads ? XmxSensitive : XmxNotSensitive);
 	} else {
@@ -454,7 +454,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &fontname, &end);  /* Get command */
-	if ((!fontname) || (fontname == end)) {
+	if (!fontname || (fontname == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify fontname");
 		return;
@@ -500,7 +500,7 @@ void MCCIRequestDoCommand(int *retCode, char *retText, char *command,
 
 	/* s is pointed pass the window id part */
 	GetWordFromString(s, &level, &end);  /* Get command */
-	if ((!level) || (level == end)) {
+	if (!level || (level == end)) {
 		*retCode = MCCIR_DOCOMMAND_FAILED;
 		strcpy(retText, "You Need to Specify a level");
 		return;
@@ -540,6 +540,7 @@ void MCCIRequestGetURL(int *retCode, char *retText, char *url, int output,
 		       char *additionalHeader)
 {
 	mo_status moStatus;
+	int free_url = 0;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace) {
@@ -554,17 +555,18 @@ void MCCIRequestGetURL(int *retCode, char *retText, char *url, int output,
 	}
 #endif
 
-        if (!get_pref_int(eLOAD_LOCAL_FILE)) {
-	    if (!my_strncasecmp(url, "file:", 5)) {
+        if (!get_pref_int(eLOAD_LOCAL_FILE) &&
+	    !my_strncasecmp(url, "file:", 5)) {
 	        *retCode = MCCIR_GET_FAILED;
 	        strcpy(retText,
 		       " Can't get local file (for CCI security reasons)");
 	        return;
-	    }
 	}
-	/* do it */
-	if (!strchr(url, ':'))
+	/* Do it */
+	if (!strchr(url, ':')) {
 		url = mo_url_canonicalize_local(url);
+		free_url = 1;
+	}
 
 	switch (output) {
 	    case MCCI_OUTPUT_CURRENT:
@@ -579,7 +581,7 @@ void MCCIRequestGetURL(int *retCode, char *retText, char *url, int output,
 			*retCode = MCCIR_GET_FAILED;
 			sprintf(retText, "Couldn't get URL %s", url);
 		}
-		cci_get = 0;  	/* done with get, turn flag off */
+		cci_get = 0;  	/* Done with get, turn flag off */
 		break;
 
 	    case MCCI_OUTPUT_NEW:
@@ -592,7 +594,7 @@ void MCCIRequestGetURL(int *retCode, char *retText, char *url, int output,
 			*retCode = MCCIR_GET_OK;
 			strcpy(retText, "Got the URL");
 		}
-		cci_get = 0;  	/* done with get, turn flag off */
+		cci_get = 0;  	/* Done with get, turn flag off */
 		break;
 	    case MCCI_OUTPUT_NONE:
 		*retCode = MCCIR_GET_FAILED;
@@ -604,6 +606,8 @@ void MCCIRequestGetURL(int *retCode, char *retText, char *url, int output,
 		break;
 	}
 
+	if (free_url)
+		free(url);
 	return;
 }
 
@@ -617,9 +621,9 @@ void MCCIRequestForm(MCCIPort client, int *retCode, char *retText,
 	return;
 }
 
+/* Anchor replies may be sent back using MCCISendAnchorHistory(client, url) */
 void MCCIRequestSendAnchor(int *retCode, char *retText, MCCIPort client,
 			   int status)
-/* anchor replies may be sent back using MCCISendAnchorHistory(client, url) */
 {
 
 #ifndef DISABLE_TRACE
@@ -676,7 +680,6 @@ void MCCIRequestSendOutput(int *retCode, char *retText, MCCIPort client,
 void MCCIRequestSendEvent(int *retCode, char *retText, MCCIPort client,
 			  int on)
 {
-
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "MCCIRequestEvent(%d)\n", on);
@@ -698,7 +701,6 @@ void MCCIRequestSendEvent(int *retCode, char *retText, MCCIPort client,
 void MCCIRequestSendBrowserView(int *retCode, char *retText, MCCIPort client,
 				int on)
 {
-
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "MCCIRequestSendBrowserView(%d)\n", on);
@@ -720,8 +722,7 @@ void MCCIRequestPost(MCCIPort client, int *retCode, char *retText, char *url,
 		     char *contentType, char *postData, int dataLength,
 		     int output)
 {
-	char *textHead;
-	char *response;
+	char *textHead, *response;
 	char buff[256];
 	int length;
 
@@ -739,8 +740,8 @@ void MCCIRequestPost(MCCIPort client, int *retCode, char *retText, char *url,
 
 	switch(output) {
 		case MCCI_OUTPUT_NONE:
-			/* do not display output of post, but send the
-			   output back through the cci to the client */
+			/* Do not display output of post, but send the
+			 * output back through the cci to the client */
 			response = mo_post_pull_er_over(url, contentType,
 							postData, &textHead);
 			/* Send response back through cci */
@@ -761,22 +762,20 @@ void MCCIRequestPost(MCCIPort client, int *retCode, char *retText, char *url,
 					*retCode = MCCI_FAIL;
 				}
 			}
-			
 			break;
 		case MCCI_OUTPUT_NEW:
-			/* open a new window and display posting... */
+			/* Open a new window and display posting... */
 			/* ...not done yet...*/
 
-		case MCCI_DEFAULT: /* default to output current */
+		case MCCI_DEFAULT:  /* Default to output current */
 		case MCCI_OUTPUT_CURRENT:
 		default:
-			/* display in current window */
+			/* Display in current window */
 			response = mo_post_pull_er_over(url, contentType,
 							postData, &textHead);
-			/*mo_decode_internal_reference(url, response, url);*/
+			/* mo_decode_internal_reference(url, response, url); */
 			mo_do_window_text(current_win, url, response, response,
 					  1, url, NULL, NULL, NULL);
-			
 			break;
 	}
 
@@ -795,8 +794,7 @@ void MCCIRequestDisplay(MCCIPort client, int *retCode, char *retText, char *url,
 			char *contentType, char *displayData, int dataLength,
 			int output)
 {
-	char *ref;
-	char *new_url;
+	char *ref, *new_url;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace) {
@@ -815,14 +813,14 @@ void MCCIRequestDisplay(MCCIPort client, int *retCode, char *retText, char *url,
 			strcpy(retText, "OUTPUT NONE not support yet\n");
 			break;
 		case MCCI_OUTPUT_NEW:
-			/* open a new window and display... */
+			/* Open a new window and display... */
 			/* ...not done yet...*/
 			strcpy(retText, "OUTPUT NEW not support yet\n");
 
 		case MCCI_DEFAULT:  /* Default to output current */
 		case MCCI_OUTPUT_CURRENT:
 		default:
-			/* display in current window */
+			/* Display in current window */
 			ref = strdup(url);
 			new_url = strdup(url);
 			if (strcmp(contentType, "text/html") == 0) {
@@ -835,15 +833,14 @@ void MCCIRequestDisplay(MCCIPort client, int *retCode, char *retText, char *url,
 			}
 			break;
 		}
-
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "MCCIRequestDisplay(): returning now\n");
 #endif
 }
 
+/* Time to die */
 void MCCIRequestQuit()
-/* time to die */
 {
 	mo_exit();
 }
@@ -876,16 +873,15 @@ void MCCIRequestGetAnnotation(int *retCode, char *retText, char **retData,
 MCCIRequestPutAnnotation(int *retCode, char *retText, int type, char *url,
 			 char *annotation, int annotationLength)
 {
-  if (type == MCCI_PRIVATE_ANNOTATION)
-      *retCode = mo_new_pan(url, NULL, NULL, annotation);
+	if (type == MCCI_PRIVATE_ANNOTATION)
+		*retCode = mo_new_pan(url, NULL, NULL, annotation);
 }
 
 MCCIRequestFileToURL(int *retCode, char *retText, char *fileName)
 {
 	char *url;
 
-	url = MoReturnURLFromFileName(fileName);
-	if (url) {
+	if (url = MoReturnURLFromFileName(fileName)) {
 		strcpy(retText, url);
 		*retCode = MCCIR_FILE_TO_URL;
 	} else {
@@ -894,5 +890,5 @@ MCCIRequestFileToURL(int *retCode, char *retText, char *fileName)
 	}
 }
 #else
-int ccidummy1; /* Shut the freaking stupid compiler up */
+int ccidummy1;  /* Shut the freaking stupid compiler up */
 #endif /* CCI */

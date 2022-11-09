@@ -6,9 +6,11 @@
 **
 **	8-Aug-04:  Major changes including delete and search routines
 **		   by George Cook.
+**
+**	1-Jan-07:  Added HTBTree_add_new routine.  GEC
 */
 
-/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "HTUtils.h"
 #include "HTBTree.h"
@@ -19,31 +21,26 @@
 
 #define MAXIMUM(a, b) ((a) > (b) ? (a) : (b))
 
-#define FREE(x) if (x) {free(x); x = NULL;}
+PRIVATE Boolean add_only_new = False;
 
-
-PUBLIC HTBTree *HTBTree_new ARGS1(HTComparer, comp)
+PUBLIC HTBTree *HTBTree_new (HTComparer comp)
     /*********************************************************
     ** This function returns an HTBTree with memory allocated 
     ** for it when given a mean to compare things
     */
 {
-    HTBTree *tree = (HTBTree *)malloc(sizeof(HTBTree));
+    HTBTree *tree = (HTBTree *)calloc(1, sizeof(HTBTree));
 
     if (!tree)
 	outofmem(__FILE__, "HTBTree_new");
-
     tree->compare = comp;
-    tree->top = NULL;
-    tree->count = 0;
-
     return tree;
 }
 
 
-PRIVATE void HTBTElement_free ARGS1(HTBTElement *, element)
+PRIVATE void HTBTElement_free (HTBTElement *element)
     /**********************************************************
-    ** This void will free the memory allocated for one element
+    ** This void will free the memory allocated for a sub tree
     */
 {
     if (element) {
@@ -51,24 +48,26 @@ PRIVATE void HTBTElement_free ARGS1(HTBTElement *, element)
 	    HTBTElement_free(element->left);
 	if (element->right)
 	    HTBTElement_free(element->right);
-	FREE(element);
+	free(element);
     }
 }
 
 
-PUBLIC void HTBTree_free ARGS1(HTBTree *, tree)
+PUBLIC void HTBTree_free (HTBTree *tree)
     /**************************************************************
     ** This void will free the memory allocated for the whole tree
     */
 {
-    HTBTElement_free(tree->top);
-    FREE(tree);
+    if (tree) {
+	HTBTElement_free(tree->top);
+	free(tree);
+    }
 }
 
 
-PRIVATE void HTBTElementAndObject_free ARGS1(HTBTElement *, element)
+PRIVATE void HTBTElementAndObject_free (HTBTElement *element)
     /**********************************************************
-    ** This void will free the memory allocated for one element
+    ** This void will free the memory allocated for a sub tree
     */
 {
     if (element) {     /* Just in case nothing was in the tree anyway */
@@ -76,38 +75,34 @@ PRIVATE void HTBTElementAndObject_free ARGS1(HTBTElement *, element)
 	    HTBTElementAndObject_free(element->left);
 	if (element->right)    
 	    HTBTElementAndObject_free(element->right);
-	FREE(element->object);
-	FREE(element);
+	free(element->object);
+	free(element);
     }
 }
 
 
-PUBLIC void HTBTreeAndObject_free ARGS1(HTBTree *, tree)
+PUBLIC void HTBTreeAndObject_free (HTBTree *tree)
     /**************************************************************
     ** This void will free the memory allocated for the whole tree
     */
 {
-    HTBTElementAndObject_free(tree->top);
-    FREE(tree);
+    if (tree) {
+	HTBTElementAndObject_free(tree->top);
+	free(tree);
+    }
 }
 
 
-PUBLIC int HTBTree_count ARGS1(HTBTree *,  tree)
+PUBLIC int HTBTree_count (HTBTree *tree)
     /**********************************************************************
     ** Returns the number of tree elements.
     */
 {
-    if (!tree)
-	return 0;
-
-    return tree->count;
+    return (tree ? tree->count : 0);
 }
 
 
-PRIVATE void *HTBTree_subsearch ARGS3(
-		   HTBTree *,	   tree,
-		   HTBTElement *,  cur,
-		   void *,	   object)
+PRIVATE void *HTBTree_subsearch (HTBTree *tree, HTBTElement *cur, void *object)
     /**********************************************************************
     ** Returns a pointer to equivalent object in a sub tree or NULL if none.
     */
@@ -121,7 +116,7 @@ PRIVATE void *HTBTree_subsearch ARGS3(
 	    return cur->object;
 	} else if (res < 0) {
 	    cur = cur->left;
-	} else if (res > 0) {
+	} else {
 	    cur = cur->right;
 	}
     }
@@ -129,20 +124,13 @@ PRIVATE void *HTBTree_subsearch ARGS3(
 }
 
 
-PUBLIC void *HTBTree_search ARGS2(
-		   HTBTree *,  tree,
-		   void *,     object)
+PUBLIC void *HTBTree_search (HTBTree *tree, void *object)
     /**********************************************************************
     ** Returns a pointer to equivalent object in a tree or NULL if none.
     */
 {
-    HTBTElement *cur;
+    HTBTElement *cur = tree ? tree->top : NULL;
     int res;
-
-    if (!tree)
-	return NULL;
-
-    cur = tree->top;
 
     while (cur) {
 	res = tree->compare(object, cur->object);
@@ -151,7 +139,7 @@ PUBLIC void *HTBTree_search ARGS2(
 	    return cur->object;
 	} else if (res < 0) {
 	    cur = cur->left;
-	} else if (res > 0) {
+	} else {
 	    cur = cur->right;
 	}
     }
@@ -159,9 +147,7 @@ PUBLIC void *HTBTree_search ARGS2(
 }
 
 
-PRIVATE HTBTElement *HTBTree_ele_search ARGS2(
-		   HTBTree *,  tree,
-		   void *,     object)
+PRIVATE HTBTElement *HTBTree_ele_search (HTBTree *tree, void *object)
     /**********************************************************************
     ** Returns the element of equivalent object in a tree or NULL if none.
     */
@@ -176,7 +162,7 @@ PRIVATE HTBTElement *HTBTree_ele_search ARGS2(
 	    return cur;
 	} else if (res < 0) {
 	    cur = cur->left;
-	} else if (res > 0) {
+	} else {
 	    cur = cur->right;
 	}
     }
@@ -184,9 +170,8 @@ PRIVATE HTBTElement *HTBTree_ele_search ARGS2(
 }
 
 
-PRIVATE void HTBTree_recalc_depth ARGS2(
-		HTBTElement *, father_of_forefather,
-		HTBTElement *, forefather_of_element)
+PRIVATE void HTBTree_recalc_depth (HTBTElement *father_of_forefather,
+				   HTBTElement *forefather_of_element)
     /**********************************************************************
     ** Change all depths that need to be changed.
     */
@@ -213,9 +198,7 @@ PRIVATE void HTBTree_recalc_depth ARGS2(
 }
 
 
-PUBLIC void HTBTree_add ARGS2(
-		    HTBTree *,  tree,
-		    void *,     object)
+PUBLIC void HTBTree_add (HTBTree *tree, void *object)
     /**********************************************************************
     ** This routine is the core of HTBTree.c. It will
     **       1/ add a new element to the tree at the right place
@@ -224,11 +207,12 @@ PUBLIC void HTBTree_add ARGS2(
     */
 {
     HTBTElement *father_of_element;
-    HTBTElement *added_element;
-    HTBTElement *forefather_of_element;
-    HTBTElement *father_of_forefather;
-    BOOL father_found, top_found;
-    int depth, depth2, corrections;
+    HTBTElement *added_element = NULL;
+    HTBTElement *forefather_of_element = NULL;
+    HTBTElement *father_of_forefather = NULL;
+    BOOL father_found = YES;
+    BOOL top_found = YES;
+    int corrections = 0;
 
     /* father_of_element is a pointer to the structure that is the father of
     ** the new object "object".
@@ -256,22 +240,20 @@ PUBLIC void HTBTree_add ARGS2(
     ** 1/ Adding of the element to the binary tree
     */
 
-    if (tree->top == NULL) {
-        tree->top = (HTBTElement *)malloc(sizeof(HTBTElement));
+    if (!tree->top) {
+        tree->top = (HTBTElement *)calloc(1, sizeof(HTBTElement));
         if (!tree->top)
 	    outofmem(__FILE__, "HTBTree_add");
-        tree->top->up = NULL;
         tree->top->object = object;
+	/** calloc sets
+        tree->top->up = NULL;
         tree->top->left = NULL;
         tree->top->left_depth = 0;
         tree->top->right = NULL;
         tree->top->right_depth = 0;
-    } else {   
-        father_found = YES;
+        **/
+    } else {
         father_of_element = tree->top;
-        added_element = NULL;
-        father_of_forefather = NULL;
-        forefather_of_element = NULL;      
         while (father_found) {
 	    int res = tree->compare(object, father_of_element->object);
 
@@ -281,33 +263,42 @@ PUBLIC void HTBTree_add ARGS2(
                 } else {
                     father_found = NO;
                     father_of_element->left = 
-                        (HTBTElement *)malloc(sizeof(HTBTElement));
+                    		  (HTBTElement *)calloc(1, sizeof(HTBTElement));
                     if (!father_of_element->left) 
                         outofmem(__FILE__, "HTBTree_add");
                     added_element = father_of_element->left;
                     added_element->up = father_of_element;
                     added_element->object = object;
+		    /** calloc sets
                     added_element->left = NULL;
                     added_element->left_depth = 0;
                     added_element->right = NULL;
                     added_element->right_depth = 0;
+		    **/
                 }
    	    } else {		/* res >= 0 */
+		if (add_only_new && !res) {
+		    /* Already in the list */
+		    free(object);
+		    return;
+		}
                 if (father_of_element->right) {
                     father_of_element = father_of_element->right;
                  } else {  
                     father_found = NO;
                     father_of_element->right = 
-                        (HTBTElement *)malloc(sizeof(HTBTElement));
+                    		  (HTBTElement *)calloc(1, sizeof(HTBTElement));
                     if (!father_of_element->right) 
                         outofmem(__FILE__, "HTBTree_add");
                     added_element = father_of_element->right;
                     added_element->up = father_of_element;
                     added_element->object = object;
+		    /** calloc sets
                     added_element->left = NULL;
                     added_element->left_depth = 0;
                     added_element->right = NULL;
                     added_element->right_depth = 0;       
+		    **/
     	        }
             }
 	}
@@ -319,8 +310,6 @@ PUBLIC void HTBTree_add ARGS2(
         /*
          ** 2/ Balancing the binary tree, if necessary
          */
-        top_found = YES;
-        corrections = 0;
         while (top_found && (corrections < 7)) {
             if ((abs(father_of_element->left_depth -
                      father_of_element->right_depth)) < 2) {
@@ -330,8 +319,10 @@ PUBLIC void HTBTree_add ARGS2(
 		    top_found = NO;
 		}
 	    } else {
+		int depth, depth2;
+
 		/* We start the process of balancing */
-                corrections = corrections + 1;
+                corrections++;
                 /* 
                 ** corrections is an integer used to avoid infinite 
                 ** loops in cases such as:
@@ -344,17 +335,15 @@ PUBLIC void HTBTree_add ARGS2(
 		** But let's avoid these two exceptions anyhow 
 		** with the two following conditions (4 March 94 - AS)
                 */
-
-		if ((father_of_element->left == NULL) &&
-		    (father_of_element->right->right == NULL) &&
-		    (father_of_element->right->left->left == NULL) &&
-		    (father_of_element->right->left->right == NULL)) {
+		if (!father_of_element->left &&
+		    !father_of_element->right->right &&
+		    !father_of_element->right->left->left &&
+		    !father_of_element->right->left->right) {
 		    corrections = 7;
-		}
-		if ((father_of_element->right == NULL) &&
-		    (father_of_element->left->left == NULL) &&
-		    (father_of_element->left->right->right == NULL) &&
-		    (father_of_element->left->right->left == NULL)) {
+		} else if (!father_of_element->right &&
+		    !father_of_element->left->left &&
+		    !father_of_element->left->right->right &&
+		    !father_of_element->left->right->left) {
 		    corrections = 7;
 		}
                 if (father_of_element->left_depth >
@@ -366,11 +355,10 @@ PUBLIC void HTBTree_add ARGS2(
                                             father_of_element->left_depth);
                     if (father_of_element->up) {
 			/* Bug fixed in March 94  -  AS */
-			BOOL first_time;
+			BOOL first_time = YES;
 
                         father_of_forefather = father_of_element->up;
                         forefather_of_element = added_element;
-			first_time = YES;
                         do {
                             if (father_of_forefather->left ==
                                 forefather_of_element->up) {
@@ -448,9 +436,8 @@ PUBLIC void HTBTree_add ARGS2(
                         added_element->right = father_of_element;
 		    }
                     father_of_element->up = added_element;
-                    if (father_of_element->left) {
+                    if (father_of_element->left)
                         father_of_element->left->up = father_of_element;
-		    }
 	        } else {
                     added_element = father_of_element->right;
                     father_of_element->right_depth = added_element->left_depth;
@@ -459,11 +446,10 @@ PUBLIC void HTBTree_add ARGS2(
                                     father_of_element->left_depth);
                     if (father_of_element->up) {
 			/* Bug fixed in March 94  -  AS */
-			BOOL first_time;
+			BOOL first_time = YES;
 
                         father_of_forefather = father_of_element->up;
                         forefather_of_element = added_element;
-			first_time = YES;
                         do {
                             if (father_of_forefather->left ==
 				forefather_of_element->up) {
@@ -554,22 +540,28 @@ PUBLIC void HTBTree_add ARGS2(
     tree->count++;
 }
 
+PUBLIC void HTBTree_add_new (HTBTree *tree, void *object)
+    /*********************************************************
+    ** This function adds an element to the tree only if it
+    ** is not already in the tree.
+    */
+{
+    add_only_new = True;
+    HTBTree_add(tree, object);
+    add_only_new = False;
+}
 
-PRIVATE void HTBTree_addsubtree ARGS2(
-		    HTBTree *,	   tree,
-		    HTBTElement *, ele)
+PRIVATE void HTBTree_addsubtree (HTBTree *tree, HTBTElement *ele)
     /**********************************************************************
     ** Add a sub tree to the tree at the right place
     */
 {
-    HTBTElement *father_of_element;
-    BOOL father_found;
-
-    if (tree->top == NULL) {
+    if (!tree->top) {
 	tree->top = ele;
     } else {   
-        father_found = YES;
-        father_of_element = tree->top;
+	HTBTElement *father_of_element = tree->top;
+	BOOL father_found = YES;
+
         while (father_found) {
             if (tree->compare(ele->object, father_of_element->object) < 0) {
                 if (father_of_element->left) {
@@ -595,113 +587,124 @@ PRIVATE void HTBTree_addsubtree ARGS2(
 }
 
 
-PUBLIC void HTBTree_delete ARGS2(
-                   HTBTree *,  tree,
-		   void *,     object)
+PUBLIC void HTBTree_ele_delete (HTBTree *tree, HTBTElement *ele)
     /**************************************************************************
     ** This function deletes an element.
     */
 {
-    HTBTElement	*ele;
-    struct _HTBTree_element *up;
+    if (ele) {
+        HTBTElement *up = ele->up;
 
-    if (object) {
-	if (ele = HTBTree_ele_search(tree, object)) {
-	    tree->count--;
-	    up = ele->up;
-	    if (!ele->left && !ele->right) {
-		if (!up) {
-		    tree->top = NULL;
-		} else if (up->left == ele) {
-		    up->left = NULL;
-		} else {
-		    up->right = NULL;
-		}
-	    } else if (!ele->left) {
-		if (!up) {
+	tree->count--;
+	if (!ele->left && !ele->right) {
+	    if (!up) {
+		tree->top = NULL;
+	    } else if (up->left == ele) {
+		up->left = NULL;
+		up->left_depth = 0;
+		if (!up->right_depth && up->up)
+		    HTBTree_recalc_depth(up->up, up);
+	    } else {
+		up->right = NULL;
+		up->right_depth = 0;
+		if (!up->left_depth && up->up)
+		    HTBTree_recalc_depth(up->up, up);
+	    }
+	} else if (!ele->left) {
+	    if (!up) {
+		tree->top = ele->right;
+		ele->right->up = NULL;
+	    } else if (up->left == ele) {
+		up->left = ele->right;
+		ele->right->up = up;
+		HTBTree_recalc_depth(up, up->left);
+	    } else {
+		up->right = ele->right;
+		ele->right->up = up;
+		HTBTree_recalc_depth(up, up->right);
+	    }
+	} else if (!ele->right) {
+	    if (!up) {
+		tree->top = ele->left;
+		ele->left->up = NULL;
+	    } else if (up->left == ele) {
+		up->left = ele->left;
+		ele->left->up = up;
+		HTBTree_recalc_depth(up, up->left);
+	    } else {
+		up->right = ele->left;
+		ele->left->up = up;
+		HTBTree_recalc_depth(up, up->right);
+	    }
+	} else {
+	    if (!up) {
+		if (ele->right_depth > ele->left_depth) {
 		    tree->top = ele->right;
-		    ele->right->up = tree->top;
-		} else if (up->left == ele) {
+		    ele->right->up = NULL;
+		    HTBTree_addsubtree(tree, ele->left);
+		} else {
+		    tree->top = ele->left;
+		    ele->left->up = NULL;
+		    HTBTree_addsubtree(tree, ele->right);
+		}
+	    } else if (up->left == ele) {
+		if (ele->right_depth > ele->left_depth) {
 		    up->left = ele->right;
 		    ele->right->up = up;
 		    HTBTree_recalc_depth(up, up->left);
+		    HTBTree_addsubtree(tree, ele->left);
 		} else {
-		    up->right = ele->right;
-		    ele->right->up = up;
-		    HTBTree_recalc_depth(up, up->right);
-		}
-	    } else if (!ele->right) {
-		if (!up) {
-		    tree->top = ele->left;
-		    ele->left->up = tree->top;
-		} else if (up->left == ele) {
 		    up->left = ele->left;
 		    ele->left->up = up;
 		    HTBTree_recalc_depth(up, up->left);
+		    HTBTree_addsubtree(tree, ele->right);
+		}
+	    } else {
+		if (ele->right_depth > ele->left_depth) {
+		    up->right = ele->right;
+		    ele->right->up = up;
+		    HTBTree_recalc_depth(up, up->right);
+		    HTBTree_addsubtree(tree, ele->left);
 		} else {
 		    up->right = ele->left;
 		    ele->left->up = up;
 		    HTBTree_recalc_depth(up, up->right);
-		}
-	    } else {
-		if (!up) {
-		    if (ele->right_depth > ele->left_depth) {
-			tree->top = ele->right;
-			ele->right->up = tree->top;
-			HTBTree_addsubtree(tree, ele->left);
-		    } else {
-			tree->top = ele->left;
-			ele->left->up = tree->top;
-			HTBTree_addsubtree(tree, ele->right);
-		    }
-		} else if (up->left == ele) {
-		    if (ele->right_depth > ele->left_depth) {
-			up->left = ele->right;
-			ele->right->up = up;
-			HTBTree_recalc_depth(up, up->left);
-			HTBTree_addsubtree(tree, ele->left);
-		    } else {
-			up->left = ele->left;
-			ele->left->up = up;
-			HTBTree_recalc_depth(up, up->left);
-			HTBTree_addsubtree(tree, ele->right);
-		    }
-		} else {
-		    if (ele->right_depth > ele->left_depth) {
-			up->right = ele->right;
-			ele->right->up = up;
-			HTBTree_recalc_depth(up, up->right);
-			HTBTree_addsubtree(tree, ele->left);
-		    } else {
-			up->right = ele->left;
-			ele->left->up = up;
-			HTBTree_recalc_depth(up, up->right);
-			HTBTree_addsubtree(tree, ele->right);
-		    }
+		    HTBTree_addsubtree(tree, ele->right);
 		}
 	    }
-	    FREE(ele);
 	}
+	free(ele);
     }
 }
 
 
-PUBLIC HTBTElement *HTBTree_next ARGS2(
-                               HTBTree *,       tree,
-                               HTBTElement *,   ele)
+PUBLIC void HTBTree_delete (HTBTree *tree, void *object)
     /**************************************************************************
-    ** This function returns a pointer to the leftmost element if ele is NULL,
-    ** and to the next object to the right otherways.
+    ** This function deletes the element of an object.
+    */
+{
+    if (object) {
+	HTBTElement *ele = HTBTree_ele_search(tree, object);
+
+	if (ele)
+	    HTBTree_ele_delete(tree, ele);
+    }
+}
+
+
+PUBLIC HTBTElement *HTBTree_next (HTBTree *tree, HTBTElement *ele)
+    /******************************************************************
+    ** This function returns a pointer to the left most element if ele
+    ** is NULL, and to the next object to the right otherways.
     ** If no elements left, returns a pointer to NULL.
     */
 {
     HTBTElement *father_of_element;
-    HTBTElement *father_of_forefather;
 
     if (!tree)
 	return NULL;
 
-    if (ele == NULL) {
+    if (!ele) {
         father_of_element = tree->top;
         if (father_of_element) {
             while (father_of_element->left)
@@ -714,7 +717,8 @@ PUBLIC HTBTElement *HTBTree_next ARGS2(
             while (father_of_element->left)
                 father_of_element = father_of_element->left;
         } else {
-            father_of_forefather = father_of_element->up;
+            HTBTElement *father_of_forefather = father_of_element->up;
+
 	    while (father_of_forefather && 
 		   (father_of_forefather->right == father_of_element)) {
                 father_of_element = father_of_forefather;
@@ -728,29 +732,28 @@ PUBLIC HTBTElement *HTBTree_next ARGS2(
     if (father_of_element) {
         printf("\nObject = %s\t", (char *)father_of_element->object);
         if (father_of_element->up) {
-            printf("Objet du pere = %s\n",
+            printf("Object of father = %s\n",
 		   (char *)father_of_element->up->object);
         } else {
-	    printf("Pas de Pere\n");
+	    printf("No father\n");
 	}
         if (father_of_element->left) {
-            printf("Objet du fils gauche = %s\t",
+            printf("Object to left = %s\t",
 		   (char *)father_of_element->left->object); 
         } else {
-	    printf("Pas de fils gauche\t");
+	    printf("Nothing to left\t");
 	}
         if (father_of_element->right) {
-            printf("Objet du fils droit = %s\n",
+            printf("Objet to right = %s\n",
 		   (char *)father_of_element->right->object);
         } else {
-	    printf("Pas de fils droit\n");
+	    printf("Nothing to right\n");
 	}
-        printf("Profondeur gauche = %d\t", father_of_element->left_depth);
-        printf("Profondeur droite = %d\n", father_of_element->right_depth);
+        printf("Left depth = %d\t", father_of_element->left_depth);
+        printf("Right depth = %d\n", father_of_element->right_depth);
         printf("      **************\n");
     }
 #endif
-
     return father_of_element;
 }
 
@@ -761,10 +764,9 @@ main()
     ** This is just a test to show how to handle HTBTree.c
     */
 {
-    HTBTree *tree;
+    HTBTree *tree = HTBTree_new((HTComparer)strcasecomp);
     HTBTElement *next_element;
     
-    tree = HTBTree_new((HTComparer)strcasecomp);
     HTBTree_add(tree, "hypertext");
     HTBTree_add(tree, "Addressing");
     HTBTree_add(tree, "X11");

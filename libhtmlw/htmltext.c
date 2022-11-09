@@ -6,12 +6,12 @@
  * Author: Gilles Dauphin
  * Version 3.0 [Sep96]
  *
- * Most of code is rewrite from scratch.  Lot of code came from NCSA Mosaic
+ * Most of code is rewrite from scratch.  Lot of code came from NCSA Mosaic.
  */
 
 /*
  * Very heavily modified for VMS Mosaic 3.0.  1998 - George Cook
- * Copyright (C) 1998, 1999, 2000, 2005, 2006 - the VMS Mosaic Project
+ * Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007 - the VMS Mosaic Project
  */
 
 #include "../config.h"
@@ -29,9 +29,9 @@
 #endif /* VMS V7, VRH, GEC, MPJZ */
 extern char *strdup();
 
-#define SKIPWHITE(s)    while ((((unsigned char)*s) < 128) && (isspace(*s))) s++
+#define SKIPWHITE(s)    while ((((unsigned char)*s) < 128) && isspace(*s)) s++
 #define SKIPNONWHITE(s) while ((((unsigned char)*s) > 127) || \
-			       ((!isspace(*s))&&(*s))) s++
+			       (!isspace(*s) && *s)) s++
 #define COMP_LINE_BUF_LEN 1024
 
 void ConditionalLineFeed(HTMLWidget hw, int state, PhotoComposeContext *pcc)
@@ -59,8 +59,7 @@ void ConditionalLineFeed(HTMLWidget hw, int state, PhotoComposeContext *pcc)
 					      hw->html.percent_vert_space / 100;
 		LinefeedPlace(hw, pcc);
 	} else {
-		pcc->cur_line_height = 0;
-		pcc->cur_baseline = 0;
+		pcc->cur_line_height = pcc->cur_baseline = 0;
 	}
     }
 }
@@ -70,10 +69,7 @@ void ConditionalLineFeed(HTMLWidget hw, int state, PhotoComposeContext *pcc)
 void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	ElemInfo *eptr;
-	ElemInfo *septr;
 	int adjx = 0;
-	int orig_x;
-	unsigned long orig_bg;
 	FloatRec *tmp_float;
 
 	/* Reset these in all cases */
@@ -81,42 +77,32 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 	pcc->have_space_after = 0;
 	pcc->at_top = False;
 	pcc->max_line_ascent = 0;
-
 	/*
          * Manipulate linefeed state for special pre-formatted linefeed
-         * hack for broken HTMLs
+         * hack for broken HTMLs.
          */
 	if (pcc->preformat == 1) {
 		switch(pcc->pf_lf_state) {
 			/*
-			 * First soft linefeed
-			 */
-			case 0:
-				pcc->pf_lf_state = 1;
-				break;
-			/*
 			 * Collapse multiple soft linefeeds within a PRE
 			 */
 			case 1:
-				return;
 			/*
 			 * Ignore soft linefeeds after hard linefeeds
 			 * within a PRE
 			 */
 			case 2:
 				return;
+			/*
+			 * First soft linefeed
+			 */
+			case 0:
 			default:
 				pcc->pf_lf_state = 1;
 				break;
 		}
 	} else if (pcc->preformat == 2) {
 		switch(pcc->pf_lf_state) {
-			/*
-			 * First hard linefeed
-			 */
-			case 0:
-				pcc->pf_lf_state = 2;
-				break;
 			/*
 			 * Previous soft linefeed should have been ignored, so
 			 * ignore this hard linefeed, but set state like it
@@ -130,6 +116,10 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 			 */
 			case 2:
 				break;
+			/*
+			 * First hard linefeed
+			 */
+			case 0:
 			default:
 				pcc->pf_lf_state = 2;
 				break;
@@ -155,7 +145,7 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 			pcc->computed_maxmin_x = pcc->computed_min_x;
 		if (pcc->x > pcc->computed_max_x)
 			pcc->computed_max_x = pcc->x;
-		pcc->y = pcc->y + pcc->cur_line_height;
+		pcc->y += pcc->cur_line_height;
 
 		while (pcc->float_left && !pcc->ignore_float &&
 		       ((pcc->y >= pcc->float_left->y) ||
@@ -188,8 +178,7 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 		/* Reset for next line */
 		pcc->computed_min_x = pcc->left_margin + pcc->eoffsetx;
 		pcc->nobr_x = pcc->x = pcc->left_margin + pcc->eoffsetx;
-		pcc->cur_baseline = 0;
-		pcc->cur_line_height = 0;
+		pcc->cur_baseline = pcc->cur_line_height = 0;
 		return;
 	}
 
@@ -207,8 +196,11 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 		
 	/* We need to center or right adjust the elements here. */
 	if (adjx > 0) {
+		int orig_x;
+		unsigned long orig_bg;
+		ElemInfo *septr = eptr;
+
 		/* Back to the list until CR and adjust each x with the adjx */
-		septr = eptr;
 		while (septr &&
 		       ((septr->type != E_CR) && (septr->type != E_HRULE))) {
 			if ((septr->type != E_IMAGE) ||
@@ -267,45 +259,33 @@ void LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc)
 		free(tmp_float);
 	}
 	pcc->x = pcc->left_margin + pcc->eoffsetx;
-	pcc->cur_baseline = 0;
-	pcc->cur_line_height = 0;
+	pcc->cur_baseline = pcc->cur_line_height = 0;
 	/* CR is at begin of line */
-	eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y,
-			     0, pcc->cur_line_height, pcc->cur_baseline, pcc);
+	eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y, 0,
+			     pcc->cur_line_height, pcc->cur_baseline, pcc);
 }
 
-/* Refresh end of a line. */
-void LinefeedRefresh(HTMLWidget hw, ElemInfo *eptr)
-{
-	if (eptr->selected) {
-		XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->fg);
-	} else {
-		XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
-	}
-}
 
 /* Remove Blank, LF, CR, Tab */
 static char **split_in_word(char *text, unsigned int *nw, int *hsb4, int *hsa)
 {
-	unsigned int nword = 0;
-	char *fin;
-	char *deb;
-	int len;
 	char **words;
-	char *w_text;
-	int i;
-	char *pword;
+	char *w_text, *pword, *fin, *t;
+	char *deb = text;
+	unsigned int nword = 0;
+	unsigned int i;
 
-	len = strlen(text);
-	*hsb4 = 0;
-	*hsa = 0;
-	*nw = 0;
-	deb = text;
-	if ((((unsigned char)*text) < 128) && isspace(*text))
+	if ((((unsigned char)*text) < 128) && isspace(*text)) {
 		*hsb4 = 1;
-	fin = text + len - 1;
-	if ((((unsigned char)*fin) < 128) && isspace(*fin))
+	} else {
+		*hsb4 = 0;
+	}
+	fin = text + strlen(text) - 1;
+	if ((((unsigned char)*fin) < 128) && isspace(*fin)) {
 		*hsa = 1;
+	} else {
+		*hsa = 0;
+	}
 	/* Count the number of words */
 	while (*deb) {
 		SKIPWHITE(deb);
@@ -314,44 +294,33 @@ static char **split_in_word(char *text, unsigned int *nw, int *hsb4, int *hsa)
 		SKIPNONWHITE(deb);
 		nword++;
 	}
+	*nw = nword;
 	if (!nword)
 		return NULL;
-	*nw = nword;
 	words = (char **) malloc(nword * sizeof(char *));
-	w_text = strdup(text);
-	deb = w_text;
+	deb = w_text = GetMarkText(text);
 	for (i = 0; i < nword; i++) {
 		SKIPWHITE(deb);
 		pword = deb;
 		SKIPNONWHITE(deb);
-		*deb = '\0';
-		deb++;
-		words[i] = strdup(pword);
-	}
-
-	/* Set NBSP to white */
-	for (i = 0; i < nword; i++) {
-		char *t = words[i];
-
+		*deb++ = '\0';
+		t = words[i] = GetMarkText(pword);
+		/* Set NBSP to white */
 		while (*t) {
 			if (*t == NBSP_CONST)
 				*t = ' ';
 			t++;
 		}
 	}
-	free(w_text);
+	FreeMarkText(w_text);
 	return words;
 }
 
 static void Set_E_TEXT_Element(HTMLWidget hw, ElemInfo *eptr, char *text,
 			       PhotoComposeContext *pcc)
 {
-	int len;
-
-	len = strlen(text) + 1;
-	eptr->edata = strdup(text);
-	CHECK_OUT_OF_MEM(eptr);
-	eptr->edata_len = len;
+	eptr->edata = GetMarkText(text);
+	eptr->edata_len = strlen(text) + 1;
 
 	/* If this is an anchor, attach its href and name
 	 * values to the element. */
@@ -366,58 +335,54 @@ static void Set_E_TEXT_Element(HTMLWidget hw, ElemInfo *eptr, char *text,
  
 /* Format and place a piece of text.
  * The context is given by pcc:
- *	pcc->x, pcc->y : This is where to place the text inside of the view.
- *	pcc->width_of_viewable_part	: the width of viewable part (view)
+ *	pcc->x, pcc->y :  this is where to place the text inside of the view.
+ *	pcc->width_of_viewable_part:  the width of viewable part (view)
  *
- *	pcc->cur_line_width	: # of pixels for the composed line
- *	pcc->eoffsetx + pcc->left_margin : where to go when new line.  Relative
- *				  to view.
- *	pcc->right_margin : right margin
+ *	pcc->cur_line_width :  # of pixels for the composed line
+ *	pcc->eoffsetx + pcc->left_margin :  where to go when new line.
+ *				  	    Relative to view.
+ *	pcc->right_margin :  right margin
  *
  * Place the text (mptr->text) at [pcc->x, pcc->y]
  *
  */
 void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 {
-	char *text;
-	int have_space_b4 = 0;
-	char **words;
-	unsigned int nword;
-	int have_space_after = 0;
-	char *composed_line;
-	int composed_line_width;
-	char *the_word;
-	int word_width, font_height;
-	int i, extra;
 	ElemInfo *eptr;
-	int baseline;
-	int do_space = 0;
-	int do_underline = 0;
-
-	text = strdup(mptr->text);	/* Save text */
+	char *text = mptr->text;
+	char **words;
+	char *composed_line, *the_word;
+	unsigned int nword;
+	int composed_line_width, word_width, font_height;
+	int i, baseline, len;
+	int have_space_b4 = 0;
+	int have_space_after = 0;
 
 	words = split_in_word(text, &nword, &have_space_b4, &have_space_after);
-	if (nword == 0) {
+	if (!nword) {
 		pcc->have_space_after = have_space_after;
-		free(text);
 		return;
 	}
-	if (pcc->have_space_after && !have_space_b4)
+	if (pcc->have_space_after && !pcc->is_bol) {
 		have_space_b4 = 1;
-	if (pcc->is_bol)	/* If we are at the beginning of line */
+	} else if (pcc->is_bol)	{
+		/* If we are at the beginning of line */
 		have_space_b4 = 0;
-
+	}
+	len = strlen(text) + (nword * 3) + 1;
 	/* Alloc enough space to compose a line */
-	composed_line = (char *) malloc(strlen(text) + nword*3 + 1);
-	composed_line[0] = '\0';
+	composed_line = (char *) malloc(len);
+	*composed_line = '\0';
 	composed_line_width = 0;	/* In pixels */
-	the_word = (char *) malloc(strlen(text) + (nword * 3) + 1);
-	the_word[0] = '\0';
+	the_word = (char *) malloc(len);
 
 	font_height = pcc->cur_font->ascent + pcc->cur_font->descent;
 	baseline = pcc->cur_font->ascent;
 
 	if (!pcc->cw_only && have_space_b4) {
+		int do_space = 0;
+		int do_underline = 0;
+
 		/* Space before anchor or underlining is separate element */
 		if ((pcc->anchor_start && !pcc->in_underlined) ||
 		    (pcc->underline_start && !pcc->in_anchor)) {
@@ -425,25 +390,30 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		} else if (pcc->in_underlined || pcc->in_anchor) {
 			do_underline = 1;
 		}
-
 		/* Space before strike out is separate element */
 		if (pcc->strikeout_start)
 			do_space = 1;
-	}
+		if (do_space) {
+			static XFontStruct *prev_font = NULL;
+			static space_width;
 
-	if (do_space) {
-		word_width = XTextWidth(pcc->cur_font, " ", 1);
-		eptr = CreateElement(hw, E_TEXT, pcc->cur_font,
-				     pcc->x, pcc->y, word_width,
-				     font_height, baseline, pcc);
-		Set_E_TEXT_Element(hw, eptr, " ", pcc);
-		AdjustBaseLine(eptr, pcc);
-		pcc->x += word_width;
-		if (!do_underline)
-			eptr->underline_number = 0;
-		if (pcc->strikeout_start)
-			eptr->strikeout = 0;
-		have_space_b4 = 0;
+			if (pcc->cur_font != prev_font) {
+				space_width = XTextWidth(pcc->cur_font, " ", 1);
+				prev_font = pcc->cur_font;
+			}
+			word_width = space_width;
+			eptr = CreateElement(hw, E_TEXT, pcc->cur_font,
+					     pcc->x, pcc->y, word_width,
+					     font_height, baseline, pcc);
+			Set_E_TEXT_Element(hw, eptr, " ", pcc);
+			AdjustBaseLine(eptr, pcc);
+			pcc->x += word_width;
+			if (!do_underline)
+				eptr->underline_number = 0;
+			if (pcc->strikeout_start)
+				eptr->strikeout = 0;
+			have_space_b4 = 0;
+		}
 	}
 	pcc->anchor_start = pcc->underline_start = pcc->strikeout_start = 0;
 
@@ -457,18 +427,17 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		strcat(the_word, words[i]);
 		word_width = XTextWidth(pcc->cur_font, the_word,
 					strlen(the_word));
-		if (pcc->cw_only &&
-		    (pcc->computed_min_x < 
-		     (word_width + pcc->eoffsetx + pcc->left_margin)))
-			pcc->computed_min_x = word_width + pcc->eoffsetx + 
-					      pcc->left_margin;
-
-		if (pcc->cw_only && pcc->nobr &&
-		    (pcc->computed_min_x <
-		     (word_width + pcc->nobr_x + composed_line_width)))
-			pcc->computed_min_x = word_width + pcc->nobr_x +
-					      composed_line_width;
-
+		if (pcc->cw_only) {
+			if (pcc->computed_min_x < 
+			    (word_width + pcc->eoffsetx + pcc->left_margin))
+				pcc->computed_min_x = word_width +
+					       pcc->eoffsetx + pcc->left_margin;
+			if (pcc->nobr &&
+			    (pcc->computed_min_x <
+			     (word_width + pcc->nobr_x + composed_line_width)))
+				pcc->computed_min_x = word_width + pcc->nobr_x +
+						      composed_line_width;
+		}
 		/* Several possible cases */
 		if (pcc->is_bol && (word_width > pcc->cur_line_width)) {
 			/* The word is larger than the line */
@@ -477,16 +446,13 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 						    pcc->x, pcc->y, word_width,
 						    font_height, baseline, pcc);
 				Set_E_TEXT_Element(hw, eptr, the_word, pcc);
+				/* Align the elements on their baseline */
 				AdjustBaseLine(eptr, pcc);
-						   /* Align the elements on */
-						   /* their baseline */
 			} else if (pcc->cur_line_height < font_height) {
                        		pcc->cur_line_height = font_height;
         		}
-
 			pcc->pf_lf_state = 0;
 			have_space_b4 = 0;
-			the_word[0] = '\0';
 			pcc->x += word_width;
 			LinefeedPlace(hw, pcc);
 			composed_line_width = 0;
@@ -495,10 +461,10 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		if (!composed_line_width && !pcc->is_bol &&
 		    ((pcc->x - pcc->eoffsetx - pcc->left_margin + word_width) >
 		     pcc->cur_line_width)) {
-				/* Current position + the word: it's too large
-				 * and we haven't composed anything yet!
-				 * This happens when there are font tags
-				 * to interpret */
+			/* Current position + the word: it's too large
+			 * and we haven't composed anything yet!
+			 * This happens when there are font tags
+			 * to interpret */
 			if (!pcc->cw_only) {
 				AdjustBaseLine(hw->html.last_formatted_elem,
 					       pcc);
@@ -508,7 +474,6 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 
 			/* Just linefeed */
 			pcc->pf_lf_state = 0;
-			the_word[0] = '\0';
 			LinefeedPlace(hw, pcc);
 			composed_line_width = 0;
 			have_space_b4 = 0;
@@ -517,7 +482,7 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		}
 		if (!pcc->is_bol && (pcc->x - pcc->eoffsetx - pcc->left_margin +
 				     composed_line_width + word_width) > 
-		    pcc->cur_line_width) {
+		    		    pcc->cur_line_width) {
 			/* Current position + the word + the line: */
 			/* it's too big, we flush the line */
 			if (!pcc->cw_only) {
@@ -530,9 +495,8 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			} else if (pcc->cur_line_height < font_height) {
                                 pcc->cur_line_height = font_height;
                         } 
-			composed_line[0] = '\0';
+			*composed_line = '\0';
                         pcc->pf_lf_state = 0;
-                        the_word[0] = '\0';
 			pcc->x += composed_line_width;
 			LinefeedPlace(hw, pcc);
 			composed_line_width = 0;
@@ -545,9 +509,10 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		have_space_b4 = 1;		/* For the next word */
 		composed_line_width += word_width;
 		pcc->is_bol = 0;
-		the_word[0] = '\0';
 	}
-	if (composed_line_width) { /* There are things to flush */
+	if (composed_line_width) {  /* There are things to flush */
+		int extra = 0;
+
 		/* Hack to fix Italic font overlap problem */
 		if (((pcc->cur_font_family == HELVETICA) ||
 		     (pcc->cur_font_family == LUCIDA)) &&
@@ -558,8 +523,6 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			} else {
 				extra = 2;
 			}
-		} else {
-			extra = 0;
 		}
 		if (!pcc->cw_only) {
 			eptr = CreateElement(hw, E_TEXT, pcc->cur_font, 
@@ -577,16 +540,15 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		pcc->is_bol = 0;
 		pcc->pf_lf_state = 0;
 	}
-	if (pcc->x > pcc->computed_max_x)
+	if (pcc->cw_only && (pcc->x > pcc->computed_max_x))
 		pcc->computed_max_x = pcc->x;
 	pcc->have_space_after = have_space_after;
 
 	for (i = 0; i < nword; i++)
-		free(words[i]);
+		FreeMarkText(words[i]);
 	free(words);
 	free(the_word);
 	free(composed_line);
-	free(text);
 }
 
 /*
@@ -594,66 +556,58 @@ void PartOfTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
  */
 void PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 {
-	char *end;
 	ElemInfo *eptr;
-	int ntab, char_cnt;
-	char *line;
-	int tmp_cnt = 0;
-	int cur_char_in_line = 0;
-	int line_str_len;
-	int i;
-	int font_height;
+	int ntab, i;
+	int line_str_len = COMP_LINE_BUF_LEN;
 	int line_width = 0;
+	int char_cnt = 0;
+	int cur_char_in_line = 0;
+	int tmp_cnt = 0;
+	int font_height = pcc->cur_font->ascent + pcc->cur_font->descent;
+	char *end = mptr->text;
+        char *line = (char *) malloc(COMP_LINE_BUF_LEN);
 
-	font_height = pcc->cur_font->ascent + pcc->cur_font->descent;
-	line = (char *) malloc(COMP_LINE_BUF_LEN);
-	line_str_len = COMP_LINE_BUF_LEN;
-	line[0] = '\0';
-	end = mptr->text;
-	char_cnt = 0;
+	*line = '\0';
 	while (*end) {
-		if (*end == '\f') { /* Throw out FF */
-			end++;
-			continue;
+		if (*end == '\f') {  /* Throw out FF */
+		    end++;
+		    continue;
 		} 
-		if (*end == '\r') { /* Throw out CR unless no LF */
-			end++;
-			if (*end != '\n') {
-				end--;
-				*end = '\n';
-			}
+		if (*end == '\r') {  /* Throw out CR unless no LF */
+		    if (*++end != '\n')
+			*--end = '\n';
 		} 
-		if (*end == '\n') {	/* line break */
-			if (line[0] != '\0') {
-			    line_width = XTextWidth(pcc->cur_font,
-						    line, strlen(line));
+		if (*end == '\n') {
+		    if (*line) {
+			line_width = XTextWidth(pcc->cur_font, line,
+						strlen(line));
+			if (pcc->cw_only) {
 			    if (pcc->computed_min_x < 
-		                (line_width + pcc->eoffsetx+pcc->left_margin)) {
-			        pcc->computed_min_x = line_width +
+				(line_width + pcc->eoffsetx + pcc->left_margin))
+			    	pcc->computed_min_x = line_width +
 					       pcc->eoffsetx + pcc->left_margin;
-			    }
-			    if (!pcc->cw_only) {
-				eptr = CreateElement(hw, E_TEXT, pcc->cur_font,
-                               			    pcc->x, pcc->y, line_width,
-						    font_height,
-						    pcc->cur_font->ascent, pcc);
-				Set_E_TEXT_Element(hw, eptr, line, pcc);
-				AdjustBaseLine(eptr, pcc);
-			    } else if (pcc->cur_line_height < font_height) {
-                                pcc->cur_line_height = font_height;
-                            } 
-			    pcc->pf_lf_state = 0;
-			}
-			end++;
-			pcc->x += line_width;
-			/* Do a hard linefeed */
-			pcc->preformat = 2;
-			LinefeedPlace(hw, pcc);
-			pcc->preformat = 1;
-			char_cnt = 0;
-			line[0] = '\0';
-			cur_char_in_line = 0;
-			continue;
+			    if (pcc->cur_line_height < font_height)
+                		pcc->cur_line_height = font_height;
+			} else {
+			    eptr = CreateElement(hw, E_TEXT, pcc->cur_font,
+                               			 pcc->x, pcc->y, line_width,
+						 font_height,
+						 pcc->cur_font->ascent, pcc);
+			    Set_E_TEXT_Element(hw, eptr, line, pcc);
+			    AdjustBaseLine(eptr, pcc);
+                        } 
+			pcc->pf_lf_state = 0;
+		    }
+		    end++;
+		    pcc->x += line_width;
+		    /* Do a hard linefeed */
+		    pcc->preformat = 2;
+		    LinefeedPlace(hw, pcc);
+		    pcc->preformat = 1;
+		    char_cnt = 0;
+		    *line = '\0';
+		    cur_char_in_line = 0;
+		    continue;
 		}
 		/*
 		 * Should be only spaces and tabs here, so if it
@@ -661,7 +615,7 @@ void PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		 * Break on linefeeds, they must be done separately
 		 */
 		if (*end == '\t') {
-			tmp_cnt= ((char_cnt / 8) + 1) * 8;
+			tmp_cnt = ((char_cnt / 8) + 1) * 8;
 			ntab = tmp_cnt - char_cnt;
 			char_cnt += ntab;
 			if (char_cnt + 1 > line_str_len) {
@@ -677,16 +631,14 @@ void PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			end++;
 			continue;
 		}
-		if (char_cnt + 1 > line_str_len) {
-			line_str_len += char_cnt + 1;
+		if (++char_cnt > line_str_len) {
+			line_str_len += char_cnt;
 			line = (char *)realloc(line, line_str_len);
 		}
-		line[cur_char_in_line++] = *end;
+		line[cur_char_in_line++] = *end++;
 		line[cur_char_in_line] = '\0';
-		char_cnt++;
-		end++;
 	}
-	if (line[0] != '\0') {
+	if (*line) {
 		line_width = XTextWidth(pcc->cur_font, line, strlen(line));
 		if (!pcc->cw_only) {
 			eptr = CreateElement(hw, E_TEXT, pcc->cur_font,
@@ -702,7 +654,7 @@ void PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		pcc->is_bol = 0;
 		pcc->pf_lf_state = 0;
 	}
-	if (pcc->x > pcc->computed_max_x)
+	if (pcc->cw_only && (pcc->x > pcc->computed_max_x))
 		pcc->computed_max_x = pcc->x;
 	pcc->have_space_after = 0;
 	free(line);
@@ -713,37 +665,40 @@ void PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
  */
 static void PartialRefresh(HTMLWidget hw, ElemInfo *eptr,
 			   int start_pos, int end_pos, unsigned long fg,
-			   unsigned long bg)
+			   unsigned long bg, Boolean background)
 {
 	char *tdata;
-	int tlen;
-	int x, y, width;
-	int partial, descent;
-	int dir, nascent, ndescent;
+	int tlen, width;
+	int dir, descent, nascent, ndescent;
+	int partial = 0;
+	int x = eptr->x;
+	int y = eptr->y;
+	int height = eptr->height;
 	XCharStruct all;
-	int height;
+	Display *dsp = hw->html.dsp;
+	Window win = XtWindow(hw->html.view);
+	GC gc = hw->html.drawGC;
 
-	XSetFont(XtDisplay(hw), hw->html.drawGC, eptr->font->fid);
-	partial = 0;
-
-	x = eptr->x;
-	tdata = (char *)eptr->edata;
-
+	if (eptr->font != hw->html.cur_font) {
+		XSetFont(dsp, gc, eptr->font->fid);
+		hw->html.cur_font = eptr->font;
+	}
 	if (start_pos) {
-		XTextExtents(eptr->font, (char *)eptr->edata,
-			     start_pos, &dir, &nascent, &descent, &all);
-		x = eptr->x + all.width;
+		XTextExtents(eptr->font, (char *)eptr->edata, start_pos,
+			     &dir, &nascent, &descent, &all);
+		x += all.width;
 		tdata = (char *)(eptr->edata + start_pos);
 		partial = 1;
+	} else {
+		tdata = (char *)eptr->edata;
 	}
-
-	tlen = eptr->edata_len - start_pos - 1;
 	if (end_pos != (eptr->edata_len - 2)) {
 		tlen = end_pos - start_pos + 1;
 		partial = 1;
+	} else {
+		tlen = eptr->edata_len - start_pos - 1;
 	}
 
-	y = eptr->y;
 	x -= hw->html.scroll_x;
 	y -= hw->html.scroll_y;
 
@@ -754,45 +709,50 @@ static void PartialRefresh(HTMLWidget hw, ElemInfo *eptr,
 	if (!partial && eptr->width) {
 		all.width = eptr->width;
 	} else {
-		XTextExtents(eptr->font, (char *)tdata,
-			     tlen, &dir, &nascent, &ndescent, &all);
+		XTextExtents(eptr->font, tdata, tlen, &dir, &nascent,
+			     &ndescent, &all);
 	}
-
-	height = eptr->height;
 	width = all.width;
 
-	XSetBackground(XtDisplay(hw), hw->html.drawGC, bg);
-
-	if ((bg != hw->html.view->core.background_pixel) ||
-	    hw->html.table_cell_has_bg || !hw->html.body_images ||
-	    !hw->html.bg_image) {
-		XSetForeground(XtDisplay(hw), hw->html.drawGC, bg);
-		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view),
-			       hw->html.drawGC,
-			       x, y, width, height);
-		XSetForeground(XtDisplay(hw), hw->html.drawGC, fg);
-	} else {
-		XSetForeground(XtDisplay(hw), hw->html.drawGC, fg);
-		HTMLDrawBackgroundImage((Widget)hw,
-					(x < 0 ? 0 : x), (y < 0 ? 0 : y),
-					(x < 0 ? (width + x) : width),
-					(y < 0 ? (height + y) : height));
+	/* Do background if blinked out or background changed (e.g. selected) */
+	if (background || eptr->selected) {
+		if ((hw->html.cur_bg != bg) || hw->html.table_cell_has_bg ||
+		    !hw->html.body_images || !hw->html.bg_image) {
+			if (hw->html.cur_fg != bg)
+				XSetForeground(dsp, gc, bg);
+			XFillRectangle(dsp, win, gc, x, y, width, height);
+			XSetForeground(dsp, gc, fg);
+			if (hw->html.cur_fg != fg)
+				hw->html.cur_fg = fg;
+		} else {
+			if (hw->html.cur_fg != fg) {
+				XSetForeground(dsp, gc, fg);
+				hw->html.cur_fg = fg;
+			}
+			HTMLDrawBackgroundImage((Widget)hw,
+						x < 0 ? 0 : x, y < 0 ? 0 : y,
+						x < 0 ? (width + x) : width,
+						y < 0 ? (height + y) : height);
+		}
+		if (eptr->blink)
+			return;
+	} else if (hw->html.cur_fg != fg) {
+		XSetForeground(dsp, gc, fg);
+		hw->html.cur_fg = fg;
 	}
-	if (!eptr->blink)
-		XDrawString(XtDisplay(hw), XtWindow(hw->html.view),
-			    hw->html.drawGC,
-			    x, y + eptr->baseline,
-			    (char *)tdata, tlen);
-	if (eptr->underline_number && !eptr->blink) {
-		int i, ly;
+
+	XDrawString(dsp, win, gc, x, y + eptr->baseline, tdata, tlen);
+
+	if (eptr->underline_number) {
+		int i, ly, line_style;
 
 		if (eptr->dashed_underline) {
-			XSetLineAttributes(XtDisplay(hw), hw->html.drawGC, 1,
-					   LineOnOffDash, CapButt, JoinBevel);
+			line_style = LineOnOffDash; 
 		} else {
-			XSetLineAttributes(XtDisplay(hw), hw->html.drawGC, 1,
-					   LineSolid, CapButt, JoinBevel);
+			line_style = LineSolid;
 		}
+		XSetLineAttributes(dsp, gc, 1, line_style, CapButt, JoinBevel);
+
 		/* Compute it first time refreshed */
 		if (eptr->underline_yoffset == -1) {
 			if (hw->html.underline_yoffset != -1) {
@@ -807,46 +767,44 @@ static void PartialRefresh(HTMLWidget hw, ElemInfo *eptr,
 		}
 		ly += y + eptr->baseline;
 		for (i = 0; i < eptr->underline_number; i++) {
-			XDrawLine(XtDisplay(hw), XtWindow(hw->html.view), 
-				  hw->html.drawGC, x, ly, (int)(x + width), ly);
+			XDrawLine(dsp, win, gc, x, ly, (int)(x + width), ly);
 			ly -= 2;
 		}
 	}
-	if (eptr->strikeout && !eptr->blink) {
-		int ly;
+	if (eptr->strikeout) {
+		int ly = (int)(y + eptr->height / 2);
 
-		XSetLineAttributes(XtDisplay(hw), hw->html.drawGC, 1,
-				   LineSolid, CapButt, JoinBevel);
-		ly = (int)(y + eptr->height / 2);
-		XDrawLine(XtDisplay(hw), XtWindow(hw->html.view),
-			  hw->html.drawGC, x, ly, (int)(x + width), ly);
+		XSetLineAttributes(dsp, gc, 1, LineSolid, CapButt, JoinBevel);
+		XDrawLine(dsp, win, gc, x, ly, (int)(x + width), ly);
 	}
 }
 
 /* Redraw a formatted text element */
-void TextRefresh(HTMLWidget hw, ElemInfo *eptr, int start_pos, int end_pos)
+void TextRefresh(HTMLWidget hw, ElemInfo *eptr, int start_pos, int end_pos,
+		 Boolean background)
 {
-	if (eptr->selected == False) {
+	if (!eptr->selected) {
 		PartialRefresh(hw, eptr, start_pos, end_pos,
-			       eptr->fg, eptr->bg);
+			       eptr->fg, eptr->bg, background);
 		return;
 	}
 	if ((start_pos >= eptr->start_pos) && (end_pos <= eptr->end_pos)) {
 		PartialRefresh(hw, eptr, start_pos, end_pos,
-			       eptr->bg, eptr->fg);
+			       eptr->bg, eptr->fg, background);
 		return;
 	}
 	if (start_pos < eptr->start_pos) {
 		PartialRefresh(hw, eptr, start_pos, eptr->start_pos - 1,
-			       eptr->fg, eptr->bg);
+			       eptr->fg, eptr->bg, background);
 		start_pos = eptr->start_pos;
 	}
 	if (end_pos > eptr->end_pos) {
 		PartialRefresh(hw, eptr, eptr->end_pos + 1, end_pos,
-			       eptr->fg, eptr->bg);
+			       eptr->fg, eptr->bg, background);
 		end_pos = eptr->end_pos;
 	}
-	PartialRefresh(hw, eptr, start_pos, end_pos, eptr->bg, eptr->fg);
+	PartialRefresh(hw, eptr, start_pos, end_pos,
+		       eptr->bg, eptr->fg, background);
 }
 
 /* Place a horizontal rule across the page.
@@ -855,7 +813,6 @@ void TextRefresh(HTMLWidget hw, ElemInfo *eptr, int start_pos, int end_pos)
 void HRulePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 {
 	char *tptr;
-	ElemInfo *eptr;
 	int width, top;
 	int size = 1;
 	int shade = 1;
@@ -870,19 +827,16 @@ void HRulePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	} else {
 		width = pcc->cur_line_width;
 	}
-
 	if (tptr = ParseMarkTag(mptr->start, MT_HRULE, "NOSHADE")) {
 		shade = 0;
 		free(tptr);
 	}
-
 	if (tptr = ParseMarkTag(mptr->start, MT_HRULE, "SIZE")) {
 		size = atoi(tptr);	/* Size wanted by user */
+		if (size < 1)
+			size = 1;
 		free(tptr);
 	}
-	if (size < 1)
-		size = 1;
-
 	if (pcc->div == DIV_ALIGN_NONE) {
 		alignment = DIV_ALIGN_CENTER;
 	} else {
@@ -899,7 +853,7 @@ void HRulePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		free(tptr);
 	}
 	if ((alignment == DIV_ALIGN_CENTER) || (alignment == DIV_ALIGN_RIGHT)) {
-		adjx = (pcc->cur_line_width - width);
+		adjx = pcc->cur_line_width - width;
 		if (alignment == DIV_ALIGN_CENTER)
 			adjx = adjx / 2;
 	}
@@ -907,9 +861,11 @@ void HRulePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 
 	top = ((pcc->cur_font->ascent + pcc->cur_font->descent) / 2) - 1;
 	if (!pcc->cw_only) {
+		ElemInfo *eptr;
+
 		eptr = CreateElement(hw, E_HRULE, pcc->cur_font, pcc->x,
 				     pcc->y + top, width, size, size, pcc);
-		eptr->underline_number = 0; /* Rules can't be underlined! */
+		eptr->underline_number = 0;  /* Rules can't be underlined! */
 		eptr->bwidth = shade;
 	} else {
 		if (pcc->computed_min_x <
@@ -931,56 +887,52 @@ void HRulePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 void HRuleRefresh(HTMLWidget hw, ElemInfo *eptr)
 {
 	static GC NoShadeGC = NULL;
-	static char shadowpm_bits[] = {0x02, 0x01};
-	int width, height;
-	int x1, y1;
-	Display *dsp = XtDisplay(hw);
+	int width = eptr->width;
+	int height = eptr->height;
+	int x1 = eptr->x;
+	int y1 = eptr->y;
+	Display *dsp = hw->html.dsp;
+	Window win = XtWindow(hw->html.view);
 
-	width = eptr->width;
 	if (width < 0)
 		width = 0;
-	x1 = eptr->x;
-	y1 = eptr->y;
 	x1 -= hw->html.scroll_x;
 	y1 -= hw->html.scroll_y;
-	height = eptr->height;
 
 	if (!eptr->bwidth && !NoShadeGC) {
-		unsigned long valuemask;   
+		static char shadowpm_bits[] = { 0x02, 0x01 };
+		unsigned long valuemask = GCFillStyle | GCStipple;
 		XGCValues values;
-		Screen *scn = XtScreen(hw);
 
 		values.stipple = XCreateBitmapFromData(dsp,
-					 RootWindowOfScreen(scn), shadowpm_bits,
-					 shadowpm_width, shadowpm_height);
+					       RootWindowOfScreen(XtScreen(hw)),
+					       shadowpm_bits,
+					       shadowpm_width, shadowpm_height);
 		values.fill_style = FillStippled;
-		valuemask = GCFillStyle | GCStipple;
 		NoShadeGC = XCreateGC(dsp, RootWindow(dsp, DefaultScreen(dsp)),
 				      valuemask, &values);
 	}
 	if (eptr->bwidth) {
 		/* Draw shadowed line */
-		XSetForeground(dsp, hw->html.drawGC, eptr->bg);
 		if (height > 2) {
+			if (hw->html.cur_fg != eptr->bg) {
+				XSetForeground(dsp, hw->html.drawGC, eptr->bg);
+				hw->html.cur_fg = eptr->bg;
+			}
 			/* Blank out area */
-			XFillRectangle(dsp, XtWindow(hw->html.view),
-				       hw->html.drawGC, x1, y1,
+			XFillRectangle(dsp, win, hw->html.drawGC, x1, y1,
 				       width, height - 2);
 		} else {
 			height = 2;
 		}
-		XDrawLine(dsp, XtWindow(hw->html.view),
-			  hw->manager.bottom_shadow_GC,
+		XDrawLine(dsp, win, hw->manager.bottom_shadow_GC,
 			  x1, y1 - 1, (int)(x1 + width), y1 - 1);
-		XDrawLine(dsp, XtWindow(hw->html.view),
-			  hw->manager.bottom_shadow_GC,
+		XDrawLine(dsp, win, hw->manager.bottom_shadow_GC,
 			  x1, y1 - 1, x1, y1 + height - 2);
-		XDrawLine(dsp, XtWindow(hw->html.view),
-			  hw->manager.top_shadow_GC,
+		XDrawLine(dsp, win, hw->manager.top_shadow_GC,
 			  x1, y1 + height - 2, (int)(x1 + width),
 			  y1 + height - 2);
-		XDrawLine(dsp, XtWindow(hw->html.view),
-			  hw->manager.top_shadow_GC,
+		XDrawLine(dsp, win, hw->manager.top_shadow_GC,
 			  (int)(x1 + width), y1 - 1, (int)(x1 + width),
 			  y1 + height - 2);
 	} else {
@@ -988,8 +940,7 @@ void HRuleRefresh(HTMLWidget hw, ElemInfo *eptr)
 		XSetForeground(dsp, NoShadeGC, eptr->fg);
 		XSetLineAttributes(dsp, NoShadeGC, height,
 				   LineSolid, CapButt, JoinBevel);
-		XDrawLine(dsp, XtWindow(hw->html.view), NoShadeGC,
-			  x1, y1 + (height / 2),
+		XDrawLine(dsp, win, NoShadeGC, x1, y1 + (height / 2),
 			  (int)(x1 + width), y1 + (height / 2));
 	}
 }
@@ -1000,95 +951,89 @@ void HRuleRefresh(HTMLWidget hw, ElemInfo *eptr)
  */
 void BulletPlace(HTMLWidget hw, PhotoComposeContext *pcc, int list)
 {
-	ElemInfo *eptr;
-	int width = pcc->cur_font->max_bounds.width;
+	int width = pcc->cur_font->max_bounds.width / 2;
+	int x = pcc->x;
+	int swidth;
 
-        pcc->have_space_after = 0;
-	if (pcc->computed_min_x < (width + pcc->eoffsetx + pcc->left_margin))
-		pcc->computed_min_x = width + pcc->eoffsetx + pcc->left_margin;
-	if (pcc->x + width > pcc->computed_max_x)
-		pcc->computed_max_x = pcc->x + width;
-	if (!list)
-		pcc->x += width;
+	if (!list) {
+		swidth = (pcc->cur_font->max_bounds.rbearing -
+			  pcc->cur_font->max_bounds.lbearing) / 2;
+		pcc->x += width + pcc->cur_font->max_bounds.lbearing;
+		if (pcc->have_space_after) {
+			/* Space in front of it */
+			pcc->x += swidth;
+			x += swidth;
+		}
+	} else {
+		/* Out in front of current location */
+		x -= pcc->cur_font->max_bounds.width;
+		pcc->is_bol = 2;
+        }
 	if (!pcc->cw_only) {
-		eptr = CreateElement(hw, E_BULLET, pcc->cur_font, 
-			         pcc->x, pcc->y, width, 
+		ElemInfo *eptr= CreateElement(hw, E_BULLET, pcc->cur_font, 
+			         x, pcc->y, width, 
 			         pcc->cur_font->ascent + pcc->cur_font->descent,
 			         pcc->cur_font->ascent, pcc);
-		eptr->underline_number = 0; /* Bullets can't be underlined! */
+
+		eptr->underline_number = 0;  /* Bullets can't be underlined! */
 		AdjustBaseLine(eptr, pcc);
-	}
-	/* Is this a list bullet? */
-	if (list) {
-		pcc->is_bol = 2;
+		if (!list)
+			eptr->indent_level = 1;
 	} else {
-		/* Solid round bullet */
-		eptr->indent_level = 1;
+		if (!list && pcc->have_space_after)
+			width += pcc->cur_font->max_bounds.lbearing + swidth;
+		if (pcc->computed_min_x <
+		    (width + pcc->eoffsetx + pcc->left_margin))
+			pcc->computed_min_x = width + pcc->eoffsetx +
+					      pcc->left_margin;
+		if (pcc->x > pcc->computed_max_x)
+			pcc->computed_max_x = pcc->x;
 	}
+        pcc->have_space_after = 0;
 }
 
 /* Redraw a formatted bullet element */
 void BulletRefresh(HTMLWidget hw, ElemInfo *eptr)
 {
-	int width;
-	int x1, y1;
+	int width = eptr->width;
+	int x1 = eptr->x;
+	int y1 = eptr->y;
+	Window win = XtWindow(hw->html.view);
+	Display *dsp = hw->html.dsp;
+	GC gc = hw->html.drawGC;
 
-	width = eptr->width;
-	x1 = eptr->x;
-	y1 = eptr->y + eptr->baseline - (width / 2) - (eptr->font->descent / 2);
 	x1 -= hw->html.scroll_x;
+	y1 += eptr->baseline - width - (eptr->font->descent / 2);
 	y1 -= hw->html.scroll_y;
-	XSetFont(XtDisplay(hw), hw->html.drawGC, eptr->font->fid);
-	XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->fg);
-	XSetBackground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
 
+	if (eptr->font != hw->html.cur_font) {
+		XSetFont(dsp, gc, eptr->font->fid);
+		hw->html.cur_font = eptr->font;
+	}
+	if (hw->html.cur_fg != eptr->fg) {
+		XSetForeground(dsp, gc, eptr->fg);
+		hw->html.cur_fg = eptr->fg;
+	}
+	if (hw->html.cur_bg != eptr->bg) {
+		XSetBackground(dsp, gc, eptr->bg);
+		hw->html.cur_bg = eptr->bg;
+	}
 	/*
 	 * Rewritten to alternate circle, square and those pairs alternate
 	 * filled and not filled.
 	 */
-	if (eptr->indent_level && (eptr->indent_level % 2)) { /* Odd & !0 */
-		XSetLineAttributes(XtDisplay(hw), hw->html.drawGC, 1,
-				   LineSolid, CapButt, JoinBevel);
+	XSetLineAttributes(dsp, gc, 1, LineSolid, CapButt, JoinBevel);
+	if (eptr->indent_level && (eptr->indent_level % 2)) {  /* Odd & !0 */
 		if (eptr->indent_level == 1 || (eptr->indent_level % 4) == 1) {
-			XFillArc(XtDisplay(hw),
-				 XtWindow(hw->html.view),
-				 hw->html.drawGC,
-				 (x1 - width),
-				 y1,
-				 (width / 2),
-				 (width / 2),
-				 0,
-				 23040);
+			XFillArc(dsp, win, gc, x1, y1, width, width, 0, 23040);
 		} else {
-			XDrawArc(XtDisplay(hw),
-				 XtWindow(hw->html.view),
-				 hw->html.drawGC,
-				 (x1 - width),
-				 y1,
-				 (width / 2),
-				 (width / 2),
-				 0,
-				 23040);
+			XDrawArc(dsp, win, gc, x1, y1, width, width, 0, 23040);
 		}
-	} else { /* Even */
-		XSetLineAttributes(XtDisplay(hw), hw->html.drawGC, 1,
-				   LineSolid, CapButt, JoinBevel);
+	} else {  /* Even */
 		if (eptr->indent_level == 0 || (eptr->indent_level % 4) == 2) {
-			XFillRectangle(XtDisplay(hw),
-				       XtWindow(hw->html.view),
-				       hw->html.drawGC,
-				       (x1 - width),
-				       y1,
-				       (width / 2),
-				       (width / 2));
+			XFillRectangle(dsp, win, gc, x1, y1, width, width);
 		} else {
-			XDrawRectangle(XtDisplay(hw),
-				       XtWindow(hw->html.view),
-				       hw->html.drawGC,
-				       (x1 - width),
-				       y1,
-				       (width / 2),
-				       (width / 2));
+			XDrawRectangle(dsp, win, gc, x1, y1, width, width);
 		}
 	}
 }
@@ -1103,26 +1048,20 @@ static char *UppercaseA_OL_String(int seqnum)
 {
     static char OLstring[8];
 
-    if (seqnum <= 1 ) {
+    if (seqnum <= 1) {
 	strcpy(OLstring, " A.");
-	return OLstring;
+    } else if (seqnum < 27) {
+	sprintf(OLstring, " %c.", seqnum + 64);
+    } else if (seqnum < 703) {
+	sprintf(OLstring, "%c%c.", (seqnum - 1) / 26 + 64,
+		seqnum - ((seqnum - 1) / 26) * 26 + 64);
+    } else if (seqnum < 18279) {
+	sprintf(OLstring, "%c%c%c.", (seqnum - 27) / 676 + 64,
+		((seqnum - ((seqnum - 27) / 676) * 676) - 1) / 26 + 64,
+		seqnum - ((seqnum - 1) / 26) * 26 + 64);
+    } else {
+    	strcpy(OLstring, "ZZZ.");
     }
-    if (seqnum < 27) {
-	sprintf(OLstring, " %c.", (seqnum + 64));
-	return OLstring;
-    }
-    if (seqnum < 703) {
-	sprintf(OLstring, "%c%c.", ((seqnum - 1) / 26 + 64),
-		(seqnum - ((seqnum - 1) / 26) * 26 + 64));
-	return OLstring;
-    }
-    if (seqnum < 18279) {
-	sprintf(OLstring, "%c%c%c.", ((seqnum - 27) / 676 + 64),
-		(((seqnum - ((seqnum - 27) / 676) * 676) - 1) / 26 + 64),
-		(seqnum - ((seqnum - 1) / 26) * 26 + 64));
-	return OLstring;
-    }
-    strcpy(OLstring, "ZZZ.");
     return OLstring;
 }
 
@@ -1134,26 +1073,20 @@ static char *LowercaseA_OL_String(int seqnum)
 {
     static char OLstring[8];
 
-    if (seqnum <= 1 ) {
+    if (seqnum <= 1) {
 	strcpy(OLstring, " a.");
-	return OLstring;
+    } else if (seqnum < 27) {
+	sprintf(OLstring, " %c.", seqnum + 96);
+    } else if (seqnum < 703) {
+	sprintf(OLstring, "%c%c.", (seqnum - 1) / 26 + 96,
+		seqnum - ((seqnum - 1) / 26) * 26 + 96);
+    } else if (seqnum < 18279) {
+	sprintf(OLstring, "%c%c%c.", (seqnum - 27) / 676 + 96,
+		((seqnum - ((seqnum - 27) / 676) * 676) - 1) / 26 + 96,
+		seqnum - ((seqnum - 1) / 26) * 26 + 96);
+    } else {
+	strcpy(OLstring, "zzz.");
     }
-    if (seqnum < 27) {
-	sprintf(OLstring, " %c.", (seqnum + 96));
-	return OLstring;
-    }
-    if (seqnum < 703) {
-	sprintf(OLstring, "%c%c.", ((seqnum - 1) / 26 + 96),
-		(seqnum - ((seqnum - 1) / 26) * 26 + 96));
-	return OLstring;
-    }
-    if (seqnum < 18279) {
-	sprintf(OLstring, "%c%c%c.", ((seqnum-27)/676 + 96),
-		(((seqnum - ((seqnum - 27) / 676) * 676) - 1) / 26 + 96),
-		(seqnum - ((seqnum - 1) / 26) * 26 + 96));
-	return OLstring;
-    }
-    strcpy(OLstring, "zzz.");
     return OLstring;
 }
 
@@ -1177,12 +1110,10 @@ static char *UppercaseI_OL_String(int seqnum)
 	strcat(OLstring, "M");
 	Arabic -= 1000;
     }
-
     if (Arabic >= 900) {
 	strcat(OLstring, "CM");
 	Arabic -= 900;
     }
-
     if (Arabic >= 500) {
 	strcat(OLstring, "D");
 	Arabic -= 500;
@@ -1191,22 +1122,18 @@ static char *UppercaseI_OL_String(int seqnum)
 	    Arabic -= 10;
 	}
     }
-
     if (Arabic >= 400) {
 	strcat(OLstring, "CD");
 	Arabic -= 400;
     }
-
     while (Arabic >= 100) {
 	strcat(OLstring, "C");
 	Arabic -= 100;
     }
-
     if (Arabic >= 90) {
 	strcat(OLstring, "XC");
 	Arabic -= 90;
     }
-
     if (Arabic >= 50) {
 	strcat(OLstring, "L");
 	Arabic -= 50;
@@ -1215,53 +1142,50 @@ static char *UppercaseI_OL_String(int seqnum)
 	    Arabic -= 10;
 	}
     }
-
     if (Arabic >= 40) {
 	strcat(OLstring, "XL");
 	Arabic -= 40;
     }
-
     while (Arabic > 10) {
 	strcat(OLstring, "X");
 	Arabic -= 10;
     }
 
     switch (Arabic) {
-    case 1:
+      case 1:
 	strcat(OLstring, "I.");
 	break;
-    case 2:
+      case 2:
 	strcat(OLstring, "II.");
 	break;
-    case 3:
+      case 3:
 	strcat(OLstring, "III.");
 	break;
-    case 4:
+      case 4:
 	strcat(OLstring, "IV.");
 	break;
-    case 5:
+      case 5:
 	strcat(OLstring, "V.");
 	break;
-    case 6:
+      case 6:
 	strcat(OLstring, "VI.");
 	break;
-    case 7:
+      case 7:
 	strcat(OLstring, "VII.");
 	break;
-    case 8:
+      case 8:
 	strcat(OLstring, "VIII.");
 	break;
-    case 9:
+      case 9:
 	strcat(OLstring, "IX.");
 	break;
-    case 10:
+      case 10:
 	strcat(OLstring, "X.");
 	break;
-    default:
+      default:
 	strcat(OLstring, ".");
 	break;
     }
-
     return OLstring;
 }
 
@@ -1285,12 +1209,10 @@ static char *LowercaseI_OL_String(int seqnum)
 	strcat(OLstring, "m");
 	Arabic -= 1000;
     }
-
     if (Arabic >= 900) {
 	strcat(OLstring, "cm");
 	Arabic -= 900;
     }
-
     if (Arabic >= 500) {
 	strcat(OLstring, "d");
 	Arabic -= 500;
@@ -1299,22 +1221,18 @@ static char *LowercaseI_OL_String(int seqnum)
 	    Arabic -= 10;
 	}
     }
-
     if (Arabic >= 400) {
 	strcat(OLstring, "cd");
 	Arabic -= 400;
     }
-
     while (Arabic >= 100) {
 	strcat(OLstring, "c");
 	Arabic -= 100;
     }
-
     if (Arabic >= 90) {
 	strcat(OLstring, "xc");
 	Arabic -= 90;
     }
-
     if (Arabic >= 50) {
 	strcat(OLstring, "l");
 	Arabic -= 50;
@@ -1323,53 +1241,50 @@ static char *LowercaseI_OL_String(int seqnum)
 	    Arabic -= 10;
 	}
     }
-
     if (Arabic >= 40) {
 	strcat(OLstring, "xl");
 	Arabic -= 40;
     }
-
     while (Arabic > 10) {
 	strcat(OLstring, "x");
 	Arabic -= 10;
     }
 
     switch (Arabic) {
-    case 1:
+      case 1:
 	strcat(OLstring, "i.");
 	break;
-    case 2:
+      case 2:
 	strcat(OLstring, "ii.");
 	break;
-    case 3:
+      case 3:
 	strcat(OLstring, "iii.");
 	break;
-    case 4:
+      case 4:
 	strcat(OLstring, "iv.");
 	break;
-    case 5:
+      case 5:
 	strcat(OLstring, "v.");
 	break;
-    case 6:
+      case 6:
 	strcat(OLstring, "vi.");
 	break;
-    case 7:
+      case 7:
 	strcat(OLstring, "vii.");
 	break;
-    case 8:
+      case 8:
 	strcat(OLstring, "viii.");
 	break;
-    case 9:
+      case 9:
 	strcat(OLstring, "ix.");
 	break;
-    case 10:
+      case 10:
 	strcat(OLstring, "x.");
 	break;
-    default:
+      default:
 	strcat(OLstring, ".");
 	break;
     }
-
     return OLstring;
 }
 
@@ -1377,16 +1292,13 @@ static char *LowercaseI_OL_String(int seqnum)
  * list item.  Create and add the element record for it.
  */
 void ListNumberPlace(HTMLWidget hw, PhotoComposeContext *pcc, int val,
-	char type)
+		     char type)
 {
-	int width;
-	int dir, ascent, descent;
 	XCharStruct all;
 	char buf[20];
 	int x = pcc->x;
-	ElemInfo *eptr;
-	int font_height;
-	int baseline;
+	int font_height = pcc->cur_font->ascent + pcc->cur_font->descent;
+	int width, dir, ascent, descent;
 
 	if (type == 'A') {
 		sprintf(buf, UppercaseA_OL_String(val));
@@ -1407,12 +1319,13 @@ void ListNumberPlace(HTMLWidget hw, PhotoComposeContext *pcc, int val,
 	} else {
 		x -= width;
 	}
-	font_height = pcc->cur_font->ascent + pcc->cur_font->descent;
-	baseline = pcc->cur_font->ascent;
 
 	if (!pcc->cw_only) {
+		ElemInfo *eptr;
+
 		eptr = CreateElement(hw, E_TEXT, pcc->cur_font, x, pcc->y,
-				     width, font_height, baseline, pcc);
+				     width, font_height,
+				     pcc->cur_font->ascent, pcc);
         	Set_E_TEXT_Element(hw, eptr, buf, pcc);
 		AdjustBaseLine(eptr, pcc);
 	} else if (pcc->cur_line_height < font_height) {

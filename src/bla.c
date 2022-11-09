@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
 
 /*		CCI redirect object 
 **		=================
@@ -84,11 +84,9 @@ extern int srcTrace;
 
 struct _HTStream {
 	WWW_CONST HTStreamClass *isa;
-
 	HTAtom *dataType;
-	char *fileName; /* name of temp file... kept for unlink()ing*/
+	char *fileName;  /* Name of temp file... kept for unlink()ing */
 	FILE *fp; 
-   
         int compressed;
 };
 
@@ -112,7 +110,6 @@ PRIVATE void CCI_put_character ARGS2(HTStream *, me, char, c)
 */
 PRIVATE void CCI_put_string ARGS2(HTStream *, me, WWW_CONST char *, s)
 {
-
 	fwrite(s, 1, strlen(s), me->fp);
 }
 
@@ -131,23 +128,22 @@ PRIVATE void CCI_write ARGS3(HTStream *, me, WWW_CONST char *, s, int, l)
 */
 PRIVATE void CCI_free ARGS1(HTStream *, me)
 {
-
 #ifndef DISABLE_TRACE
   if (srcTrace)
       fprintf(stderr, "CCI_free()\n");
 #endif
 
-/*
+ /*
   if (me->compressed != COMPRESSED_NOT) {
 #ifndef DISABLE_TRACE
       if (cciTrace)
-        fprintf(stderr, "[CCI_free] OK, we're going to decompress HText\n");
+          fprintf(stderr, "[CCI_free] OK, we're going to decompress HText\n");
 #endif
       HTCompressedHText(me->text, me->compressed, 1);
   }
 
   free(me);
-*/
+ */
 }
 
 /*	End writing
@@ -155,15 +151,14 @@ PRIVATE void CCI_free ARGS1(HTStream *, me)
 
 PRIVATE void CCI_end_document ARGS1(HTStream *, me)
 {
-
 	fclose(me->fp);
-	/* ship it */
+	/* Ship it */
 	if (me->compressed != COMPRESSED_NOT)
 	    HTCompressedFileToFile(me->fileName, me->compressed);	
 	MoCCISendOutputToClient(HTAtom_name(me->dataType), me->fileName);
-/*
+ /*
 	unlink(me->fileName);
-*/
+ */
 }
 
 PRIVATE void CCI_handle_interrupt ARGS1(HTStream *, me)
@@ -177,12 +172,10 @@ PRIVATE void CCI_handle_interrupt ARGS1(HTStream *, me)
 }
 
 
-
 /*		Structured Object Class
 **		-----------------------
 */
-PUBLIC WWW_CONST HTStreamClass CCIout =
-{		
+PUBLIC WWW_CONST HTStreamClass CCIout = {		
 	"CCIout",
 	CCI_free,
 	CCI_end_document,
@@ -201,25 +194,25 @@ PUBLIC HTStream *CCIPresent ARGS5(
         HTFormat,               format_in,
         int,                    compressed)
 {
-HTStream *me = (HTStream *)malloc(sizeof(HTStream));
+	HTStream *me = (HTStream *)malloc(sizeof(HTStream));
 
 	me->isa = &CCIout;       
 
 	me->fileName = (char *)mo_tmpnam(NULL);
-	if (!(me->fp = fopen(me->fileName,"w"))) {
+	if (!(me->fp = fopen(me->fileName, "w"))) {
 	    /* Error, can't open tmp file */
 	    return(sink);
 	}
 	me->dataType = pres->rep;
 	me->compressed = compressed;
 
-/*
+ /*
 	if (me->compressed == COMPRESSED_NOT)
 	    HText_appendText(me->text, "<PLAINTEXT>\n");
-*/
-
-  return (HTStream *)me;
+ */
+	return (HTStream *)me;
 }
+
 #else
-int ccidummy4; /* Shut the freaking stupid compiler up */
+int ccidummy4;  /* Shut the freaking stupid compiler up */
 #endif /* CCI */

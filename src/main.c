@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2003, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2003, 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 /* SOCKS mods by:
  * Ying-Da Lee, <ylee@syl.dl.nec.com>
@@ -60,7 +60,6 @@
  * C&C Software Technology Center
  */
 #include "../config.h"
-#include "../libwww2/htlist.h"
 #include "../libwww2/htcookie.h"
 #include "mosaic.h"
 #include "main.h"
@@ -98,11 +97,13 @@ char *ident_ver = IDENT_VER;
 static int has_mbx = 0;
 static short mbx_channel;
 static char mbx_buf[200];
-unsigned long mbx_event_flag = 23; /* Must be a flag in first cluster ( < 32) */
+unsigned long mbx_event_flag = 23;  /* Must be flag in first cluster ( < 32) */
 unsigned short mbx_iosb[4];
 #endif /* VMS, BSN, GEC */
 
+#ifndef VMS
 char *userPath = NULL;
+#endif
 
 extern mo_root_hotlist *default_hotlist;
 
@@ -110,12 +111,13 @@ extern mo_root_hotlist *default_hotlist;
 void mo_exit(void)
 {
   if (default_hotlist->modified)
-    mo_write_default_hotlist();
+      mo_write_default_hotlist();
   if (get_pref_boolean(eUSE_COOKIE_FILE))
-    HTStoreCookies(get_pref_string(eCOOKIE_FILE), get_pref_string(ePERM_FILE));
+      HTStoreCookies(get_pref_string(eCOOKIE_FILE),
+		     get_pref_string(ePERM_FILE));
   newsrc_kill();
   if (get_pref_boolean(eUSE_GLOBAL_HISTORY))
-    mo_write_global_history();
+      mo_write_global_history();
   mo_write_pan_list();
 
   /* preferences_armegeddon(); */
@@ -127,7 +129,8 @@ void mo_exit(void)
 MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective(MO_SIGHANDLER_ARGS)
 {
   char filename[64];
-  char line[MO_LINE_LENGTH], *status, *directive, *url;
+  char line[MO_LINE_LENGTH];
+  char *status, *directive, *url;
   FILE *fp;
 
   signal(SIGUSR1, SIG_IGN);
@@ -135,29 +138,27 @@ MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective(MO_SIGHANDLER_ARGS)
   /* Construct filename from our pid. */
   sprintf(filename, "/tmp/Mosaic.%d", getpid());
 
-  fp = fopen(filename, "r");
-  if (!fp)
-    goto done;
+  if (!(fp = fopen(filename, "r")))
+      goto done;
 
   status = fgets(line, MO_LINE_LENGTH, fp);
   if (!status || !*line) {
-    fclose(fp);
-    goto done;
+      fclose(fp);
+      goto done;
   }
   directive = strdup(line);
 
   /* We now allow URL to not exist, since some directives don't need it. */
   status = fgets(line, MO_LINE_LENGTH, fp);
-  if (!status || !(*line)) {
-    url = strdup("dummy");
+  if (!status || !*line) {
+      url = strdup("dummy");
   } else {
-    url = strdup(line);
+      url = strdup(line);
   }
   mo_process_external_directive(directive, url);
 
   free(directive);
   free(url);
-
   fclose(fp);
 
  done:
@@ -171,119 +172,112 @@ void InitExternalDirective(int grp_mbx, char *mbx_name_in)
 {
   char mbx_name[64], mbx_dev[64];
 
-  if (has_mbx == 0) {
-    int retl;
-    $DESCRIPTOR (mbx_desc, NULL);
-    $DESCRIPTOR (tab_desc, "LNM$PROCESS_DIRECTORY");
-    $DESCRIPTOR (log_desc, "LNM$TEMPORARY_MAILBOX");    
-    struct itm3 {
-      short bfl, code;
-      char *bufadr;
-      int *retlen;
-      int term;
-    } itm;
-    long promsk = 0xff00;
+  if (!has_mbx) {
+      int retl;
+      $DESCRIPTOR(mbx_desc, NULL);
+      $DESCRIPTOR(tab_desc, "LNM$PROCESS_DIRECTORY");
+      $DESCRIPTOR(log_desc, "LNM$TEMPORARY_MAILBOX");    
+      struct itm3 {
+          short bfl, code;
+          char *bufadr;
+          int *retlen;
+          int term;
+      } itm;
+      long promsk = 0xff00;
 
-    mbx_desc.dsc$a_pointer = mbx_name;
-    if ((mbx_name_in == NULL) || (mbx_name_in[0] == '\0')) {
-      strcpy(mbx_name, "MOSAIC_");
-      strcat(mbx_name, getenv("USER"));
-    } else {
-      strcpy(mbx_name, mbx_name_in);
-    }
-    mbx_desc.dsc$w_length = strlen(mbx_name);
-    /*
-     * Create a mailbox named from -mbx_name name command line option,
-     * or default MOSAIC_<userid>. Only owner and system can access it
-     * unless grp_mbx is set.
-     */
-    if (grp_mbx) {
-      promsk = 0xf000;
-      itm.bfl = 9;
-      itm.code = LNM$_STRING;
-      itm.bufadr = (char *)&"LNM$GROUP";
-      itm.retlen = &retl;
-      itm.term = 0;      
+      mbx_desc.dsc$a_pointer = mbx_name;
+      if (!mbx_name_in || !*mbx_name_in) {
+          strcpy(mbx_name, "MOSAIC_");
+          strcat(mbx_name, getenv("USER"));
+      } else {
+          strcpy(mbx_name, mbx_name_in);
+      }
+      mbx_desc.dsc$w_length = strlen(mbx_name);
       /*
-       * Define/Table=LNM$PROCESS_DIRECTORY LNM$TEMPORARY_MAILBOX LNM$GROUP
-       * to enter mailbox name in group name table.
+       * Create a mailbox named from -mbx_name name command line option,
+       * or default MOSAIC_<userid>.  Only owner and system can access it
+       * unless grp_mbx is set.
        */
-      if (!(sys$crelnm(0, &tab_desc, &log_desc, 0, &itm) & 1)) {
-        char *str;
+      if (grp_mbx) {
+          promsk = 0xf000;
+          itm.bfl = 9;
+          itm.code = LNM$_STRING;
+          itm.bufadr = (char *)&"LNM$GROUP";
+          itm.retlen = &retl;
+          itm.term = 0;      
+          /*
+           * Define/Table=LNM$PROCESS_DIRECTORY LNM$TEMPORARY_MAILBOX LNM$GROUP
+           * to enter mailbox name in group name table.
+           */
+          if (!(sys$crelnm(0, &tab_desc, &log_desc, 0, &itm) & 1)) {
+              char str[256];
 
-        str = (char *) malloc(256 * sizeof(char));
-        sprintf(str,
-	    "Could not enter the mailbox name in the group table.\nError: %s\0",
-            strerror(errno, vaxc$errno));
-        application_user_feedback(str);
-        free(str);
+              sprintf(str,
+	            "Could not enter mailbox name in group table.\nError: %s",
+                    strerror(errno, vaxc$errno));
+              application_user_feedback(str);
+          }
       }
-    }
-    if (!(sys$crembx(0, &mbx_channel, 0, 0, promsk, 0, &mbx_desc, 0, 0) & 1)) {
-      char *str;
+      if (!(sys$crembx(0, &mbx_channel, 0, 0, promsk, 0, &mbx_desc, 0, 0) & 1)){
+          char str[256];
 
-      str = (char *) malloc(256 * sizeof(char));
-      sprintf(str, "Could not open mailbox %s\nError: %s\0", mbx_name,
-              strerror(errno, vaxc$errno));
+          sprintf(str, "Could not open mailbox %s\nError: %s\0", mbx_name,
+                  strerror(errno, vaxc$errno));
+          if (grp_mbx)
+	      strcat(str,
+                  "\nCheck your Mosaic process privileges (GRPNAM is needed for a group mailbox).");
+          application_user_feedback(str);  
+          has_mbx = -1;
+      } else {
+          has_mbx = 1;
+          itm.bfl = sizeof(mbx_dev);
+          itm.code = DVI$_DEVNAM;
+          itm.bufadr = mbx_dev;
+          itm.retlen = &retl;
+          itm.term = 0;
+          if (sys$getdvi(0, mbx_channel, 0, &itm, 0, 0, 0, 0) & 1) {
+              char str[256];
+              char *home = getenv("HOME");
+	      char *fnam;
+              FILE *fp;
+
+              sprintf(str,
+                  "Mailbox for external directive processing is device %s\nName: %s\n\0",
+                  mbx_dev, mbx_name);
+              if (grp_mbx) {
+                  strcat(str, "Name is in the group logical table.");
+              } else {
+                  strcat(str, "Name is in the process logical table only.");
+	      }
+              fnam = (char *)malloc(strlen(home) + 32);
+              sprintf(fnam, "%smosaic.mbx", home);
+              remove(fnam);
+              if (fp = fopen(fnam, "w")) {
+                  fprintf(fp, "%s %s\n", mbx_dev, mbx_name);
+                  fclose(fp);
+              }
+              application_user_feedback(str);
+              free(fnam);
+          }
+      }
+      /*
+       * Deassign LNM$TEMPORARY_MAILBOX (LNM$GROUP) from LNM$PROCESS_DIRECTORY
+       */
       if (grp_mbx)
-	strcat(str,
-         "\nCheck your Mosaic process privileges (GRPNAM is needed for a group mailbox).\0");
-      application_user_feedback(str);  
-      free(str);
-      has_mbx = -1;
-    } else {
-      char *home = getenv("HOME"), *fnam, *str;
-      FILE *fp;
-
-      has_mbx = 1;
-      itm.bfl = sizeof(mbx_dev);
-      itm.code = DVI$_DEVNAM;
-      itm.bufadr = mbx_dev;
-      itm.retlen = &retl;
-      itm.term = 0;
-      if ((sys$getdvi(0, mbx_channel, 0, &itm, 0, 0, 0, 0) & 1)) {
-        str = (char *) malloc(256 * sizeof(char));
-        sprintf(str,
-         "Mailbox for external directive processing is device %s\nName: %s\n\0",
-         mbx_dev, mbx_name);
-        if (grp_mbx) {
-          strcat(str, "The name is in the group logical table.\0");
-        } else {
-          strcat(str, "The name is in the process logical table only.\0");
-	}
-        fnam = (char *)malloc(strlen(home) + 32);
-        sprintf(fnam, "%smosaic.mbx", home);
-        remove(fnam);
-        fp = fopen(fnam, "w");
-        if (fp) {
-          fprintf(fp, "%s %s\n", mbx_dev, mbx_name);
-          fclose(fp);
-        }
-        application_user_feedback(str);
-        free(fnam);
-        free(str);
-      }
-    }
-    /*
-     * Deassign LNM$TEMPORARY_MAILBOX (LNM$GROUP) from LNM$PROCESS_DIRECTORY
-     */
-    if (grp_mbx)
-      sys$dellnm(&tab_desc, &log_desc, 0);
+          sys$dellnm(&tab_desc, &log_desc, 0);
   }
   /*
    * Start to listen to the mailbox.
    */
   if (has_mbx == 1) {
-    if (!(sys$qio(mbx_event_flag, mbx_channel, IO$_READVBLK, mbx_iosb, 0, 0,
-                  mbx_buf, sizeof(mbx_buf), 0, 0, 0, 0) & 1)) {
-      char *str;
+      if (!(sys$qio(mbx_event_flag, mbx_channel, IO$_READVBLK, mbx_iosb, 0, 0,
+                    mbx_buf, sizeof(mbx_buf), 0, 0, 0, 0) & 1)) {
+          char str[256];
 
-      str = (char *) malloc(256 * sizeof(char));
-      sprintf(str, "Could not init read on mailbox %s\nError: %s\0",
-	      mbx_name, strerror(errno, vaxc$errno));
-      application_user_feedback(str);
-      free(str);
-    }
+          sprintf(str, "Could not init read on mailbox %s\nError: %s",
+	          mbx_name, strerror(errno, vaxc$errno));
+          application_user_feedback(str);
+      }
   }
 }
 
@@ -292,27 +286,24 @@ void ProcessExternalDirective(XtPointer cd, int *s, XtInputId *id)
   char *status, *directive, *url;
   int free_url = 0;
 
-  if (!(mbx_iosb[0] & 1))
-    goto done;
-  if (mbx_iosb[1] == 0)
-    goto done;
+  if (!(mbx_iosb[0] & 1) || (mbx_iosb[1] == 0))
+      goto done;
   mbx_buf[mbx_iosb[1]] = '\0';
   directive = mbx_buf;
 
   /* We now allow URL to not exist, since some directives don't need it. */
-  if ((status = strchr(mbx_buf, '|')) != NULL) {
-    *status = '\0';
-    status++;
-    url = status;
+  if (status = strchr(mbx_buf, '|')) {
+      *status++ = '\0';
+      url = status;
   } else {
-    url = strdup("No URL specified.");
-    free_url = 1;
-  } /* Need something in URL to prevent crashes */
+      url = strdup("No URL specified.");
+      free_url = 1;
+  }  /* Need something in URL to prevent crashes */
   
   mo_process_external_directive(directive, url);
 
   if (free_url)
-    free(url);
+      free(url);
 
  done:
   InitExternalDirective(0, 0);
@@ -374,7 +365,8 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
   int syi_version = SYI$_VERSION;
   int jpi_pagfilcnt = JPI$_PAGFILCNT;
   int jpi_pgflquota = JPI$_PGFLQUOTA;
-  char hardware[32], VMS_version[16], *cp;
+  char hardware[32], VMS_version[16];
+  char *cp;
   int status, pagfilcnt, pgflquota;
   unsigned short l_hardware, l_version;
 
@@ -383,8 +375,8 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
     unsigned char   dsc$b_dtype;
     unsigned char   dsc$b_class;
     char            *dsc$a_pointer;
-  } hardware_desc = {sizeof(hardware), 14, 1, NULL},
-    VMS_version_desc = {sizeof(VMS_version), 14, 1, NULL};
+  } hardware_desc = { sizeof(hardware), 14, 1, NULL },
+    VMS_version_desc = { sizeof(VMS_version), 14, 1, NULL };
 
   hardware_desc.dsc$a_pointer = hardware;
   VMS_version_desc.dsc$a_pointer = VMS_version;
@@ -398,11 +390,11 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
   fprintf(stderr, "\nRemaining page file quota %d (page file quota = %d)\n",
 	  pagfilcnt, pgflquota);
   if (pagfilcnt < 1000) {
-    fprintf(stderr,
+      fprintf(stderr,
 	"You have probably run out of page file quota.  An absolute minimum for Mosaic\n");
-    fprintf(stderr,
+      fprintf(stderr,
 	"is 40000 pages, but more will help.  Your systems person should increase the\n");
-    fprintf(stderr,
+      fprintf(stderr,
 	"Authorize parameter pgflquo for your account. But read on...\n");
   }
 
@@ -423,9 +415,9 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
   hardware[l_hardware] = '\0';
   VMS_version[l_version] = '\0';
   for (cp = &VMS_version[l_version - 1]; VMS_version; cp--) {
-    if (*cp != ' ')
-      break;
-    *cp = '\0';
+      if (*cp != ' ')
+          break;
+      *cp = '\0';
   }
   fprintf(stderr, "Your VMS version appears to be %s running on a %s.\n",
 	  VMS_version, hardware);
@@ -442,6 +434,10 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
 #endif
 
   fprintf(stderr, "Your Mosaic executable was generated using Motif ");
+#ifdef MOTIF1_6
+  fprintf(stderr, "1.6\n");
+#else
+
 #ifdef MOTIF1_5
   fprintf(stderr, "1.5\n");
 #else
@@ -496,6 +492,7 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
 #endif
 #endif
 #endif
+#endif
 
   fprintf(stderr, "and was built on %s with image Ident %s\n", built_time,
 	  ident_ver);
@@ -519,15 +516,15 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
 #endif
   cp = getenv("SYS$LOGIN");
   if (!cp) {
-    fprintf(stderr, "The logical SYS$LOGIN is undefined.\n");
+      fprintf(stderr, "The logical SYS$LOGIN is undefined.\n");
   } else {
-    fprintf(stderr, "The logical SYS$LOGIN points to %s\n", cp);
+      fprintf(stderr, "The logical SYS$LOGIN points to %s\n", cp);
   }
   cp = getenv("SYS$SCRATCH");
   if (!cp) {
-    fprintf(stderr, "The logical SYS$SCRATCH is undefined.\n");
+      fprintf(stderr, "The logical SYS$SCRATCH is undefined.\n");
   } else {
-    fprintf(stderr, "The logical SYS$SCRATCH points to %s\n", cp);
+      fprintf(stderr, "The logical SYS$SCRATCH points to %s\n", cp);
   }
 #endif /* VMS, BSN */
   fprintf(stderr, "...exiting VMS Mosaic now.\n\n");
@@ -538,16 +535,15 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
 
 main(int argc, char **argv, char **envp)
 {
-#ifndef VMS
+#ifdef SunOS
   struct utsname u;
-  FILE *fp;
-#endif /* VMS, GEC */
+#endif
 
 #ifndef VMS
   userPath = getenv("PATH");
 
-/*
-  if (getenv("XKEYSYMDB") == NULL)
+#ifdef SunOS
+  if (!getenv("XKEYSYMDB"))
       fprintf(stderr,
 	"If you have key binding problems, set the environment variable XKEYSYMDB\nto the location of the correct XKeysymDB file on your system.\n");
   if (uname(&u) < 0) {
@@ -560,10 +556,11 @@ main(int argc, char **argv, char **envp)
 	   !strcmp(u.release, "5.3") ||
 	   !strcmp(u.release, "5.4") ||
 	   !strcmp(u.release, "5.5"))) {
-          if (getenv("XKEYSYMDB") == NULL) {
+          if (!getenv("XKEYSYMDB")) {
+	      FILE *fp;
+
               if (!(fp = fopen("/usr/openwin/lib/X11/XKeysymDB", "r"))) {
-		  if (!(fp = fopen("/usr/openwin/lib/XKeysymDB", "r"))) {
-		  } else {
+		  if (fp = fopen("/usr/openwin/lib/XKeysymDB", "r")) {
 		      fclose(fp);
 		      putenv("XKEYSYMDB=/usr/openwin/lib/XKeysymDB");
 		  }
@@ -574,7 +571,7 @@ main(int argc, char **argv, char **envp)
           }
       }
   }
-*/
+#endif
 #endif /* VMS, GEC */
 
 #ifndef DEBUGVMS

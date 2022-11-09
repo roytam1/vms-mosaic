@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #ifndef __CCI_H__
 #define __CCI_H__
@@ -61,7 +61,6 @@
 
 #define MCCI_VERSION		"1.0"
 
-
 /* Return codes from cci api */
 #define MCCI_OK			0
 #define MCCI_FAIL		1
@@ -69,7 +68,7 @@
 #define MCCI_REQUEST_FAIL	3
 #define MCCI_NETWORK_ERROR	4
 
-/* cci interface tokens used with api */
+/* CCI interface tokens used with API */
 #define MCCI_DEFAULT		0
 #define MCCI_OUTPUT_NONE	100
 #define MCCI_OUTPUT_CURRENT	101
@@ -86,7 +85,7 @@
 #define MCCI_SEND_HANDLER       230     /* ADC ZZZ */
 
 
-/* protocol token strings */
+/* Protocol token strings */
 #define MCCI_S_GET		"GET"
 #define MCCI_S_DISPLAY		"DISPLAY"
 #define MCCI_S_DISCONNECT	"DISCONNECT"
@@ -144,7 +143,7 @@
 #define MCCI_NEWCENTURY_REGULAR	"NEWCENTURY_REGULAR"
 #define MCCI_LUCIDABRIGHT_LARGE	"LUCIDABRIGHT_LARGE"
 #define MCCI_LUCIDABRIGHT_SMALL	"LUCIDABRIGHT_SMALL"
-#define MCCI_LUCIDABRIGHT_REGULAR	"LUCIDABRIGHT_REGULAR"
+#define MCCI_LUCIDABRIGHT_REGULAR "LUCIDABRIGHT_REGULAR"
 
 #define MCCI_PLAINTEXT		"PLAINTEXT"
 #define MCCI_FORMATTEDTEXT	"FORMATTEDTEXT"
@@ -196,7 +195,7 @@
 #define MCCIR_BROWSERVIEW_OK		219
 #define MCCIR_BROWSERVIEW_STOP_OK	220
 #define MCCIR_ANNOTATION_REQ_OK		221
-#define MCCIR_NO_ANNOTATION		222  /* no annotation for url */
+#define MCCIR_NO_ANNOTATION		222  /* No annotation for url */
 #define MCCIR_FILE_TO_URL		223
 #define MCCIR_FORM_OK			224
 #define MCCIR_SEND_EVENT_OK		225
@@ -230,31 +229,30 @@
 #define MCCIR_SEND_ANCH_HAN_OTHR_OK     270  /*  ADC ZZZ */
 
 /* Additional data follows repsonse code */
-#define MCCIR_ANCHOR_INFO	301 /* anchor visited information */
-#define MCCIR_SEND_DATA_OUTPUT	302 /* output from Send Output protocol */
-#define MCCIR_SEND_BROWSERVIEW	303 /* output from Send Browserview proto */
-#define MCCIR_POST_OUTPUT	304 /* output from post */
-#define MCCIR_PUBLIC_ANNOTATION 305 /* public annotation reply */
-#define MCCIR_GROUP_ANNOTATION  306 /* group annotation reply */
-#define MCCIR_PRIVATE_ANNOTATION 307 /* private annotation  reply */
-#define MCCIR_FORM_RESPONSE	308 /* form submission reply */
-#define MCCIR_SEND_EVENT	309 /* output form send event protocol */
-#define MCCIR_SEND_MOUSE_ANCHOR 310 /* output from Send Mouse Anchor */
+#define MCCIR_ANCHOR_INFO	301  /* Anchor visited information */
+#define MCCIR_SEND_DATA_OUTPUT	302  /* Output from Send Output protocol */
+#define MCCIR_SEND_BROWSERVIEW	303  /* Output from Send Browserview proto */
+#define MCCIR_POST_OUTPUT	304  /* Output from post */
+#define MCCIR_PUBLIC_ANNOTATION 305  /* Public annotation reply */
+#define MCCIR_GROUP_ANNOTATION  306  /* Group annotation reply */
+#define MCCIR_PRIVATE_ANNOTATION 307 /* Private annotation  reply */
+#define MCCIR_FORM_RESPONSE	308  /* Form submission reply */
+#define MCCIR_SEND_EVENT	309  /* Output form send event protocol */
+#define MCCIR_SEND_MOUSE_ANCHOR 310  /* Output from Send Mouse Anchor */
 
 /* Problem response codes... client problems */
-#define MCCIR_UNRECOGNIZED	401  /* what's this? */
-#define MCCIR_ERROR		402  /* does not follow protocol */
+#define MCCIR_UNRECOGNIZED	401  /* What's this? */
+#define MCCIR_ERROR		402  /* Does not follow protocol */
 
-/* Problem response codes... broswer problems */
-#define MCCIR_REQ_FAILED	500  /* request failed */
-#define MCCIR_GET_FAILED	501  /* request failed */
+/* Problem response codes... browser problems */
+#define MCCIR_REQ_FAILED	500  /* Request failed */
+#define MCCIR_GET_FAILED	501  /* Request failed */
 #define MCCIR_MAX_CONNECTIONS   502  /* Max number of connections exceeded */
-#define MCCIR_NO_URL_FOR_FILE	503  /* couldn't translate filename to url */
-#define MCCIR_DOCOMMAND_FAILED	504  /* command not implemented yet */
+#define MCCIR_NO_URL_FOR_FILE	503  /* Couldn't translate filename to url */
+#define MCCIR_DOCOMMAND_FAILED	504  /* Command not implemented yet */
 
 /* All possible events on the Web browser */
 typedef enum {
-
 	/* Selected from menu */
 	MOSAIC_NEW, MOSAIC_CLONE, MOSAIC_OPEN_URL, FILE_OPEN_LOCAL, 
   	MOSAIC_RELOAD_CURRENT,
@@ -283,6 +281,7 @@ typedef enum {
 	NAVIGATE_LIST_SEARCH, 
 	NAVIGATE_MAP_SEARCH, 
 	NAVIGATE_AUCTION_SEARCH, 
+	NAVIGATE_ENCYCLOPEDIA_SEARCH, 
 	NAVIGATE_INTERNET_RESOURCES_META_INDEX,
 	ANNOTATE_ANNOTATE, ANNOTATE_AUDIO_ANNOTATE,
 	ANNOTATE_EDIT_THIS_ANNOTATION, 
@@ -290,12 +289,12 @@ typedef enum {
 	NEWS_NEXT, NEWS_PREV, NEWS_NEXT_THREAD, NEWS_PREV_THREAD, NEWS_INDEX,
 	NEWS_LIST_GROUPS, NEWS_POST, NEWS_FOLLOW_UP, NEWS_FORMAT_TV,
 	NEWS_FORMAT_GV,
-	/* When user click on globe */
+	/* When user clicks on globe */
 	MOSAIC_GLOBE,
 	AUTHENTICATION_BUTTON,
 	ENCRYPT_BUTTON,
 
-	/* When user submit a form, has to be valid */
+	/* When user submits a form, has to be valid */
 	FORM_SUBMIT,
 
 	/* When user edits the url text field in mosaic window and hit return */
@@ -318,12 +317,27 @@ typedef enum {
 	HELP_ON_VMS_VERSION, OPEN_COOKIEJAR,
 	OPTIONS_VERIFY_CERTS_ON, OPTIONS_VERIFY_CERTS_OFF
 
-	} CCI_events;
+} CCI_events;
 
 
+/*****************************************************************
+ * Used to be in port.h
+ *****************************************************************/
+#define PORTBUFFERSIZE 1024
+
+typedef struct {
+	int socketFD;
+	char *serverAddress;
+	int serverTCPPort;
+	int connected;
+	int numInBuffer;
+	char buffer[PORTBUFFERSIZE * 2 + 2];
+	/* callBack(void *callBackData) */
+	void (*callBack) ();  /* Called when connection dropped */
+	void *callBackData;
+} PortDescriptor;
 /*****************************************************************/
 
-#include "port.h"
 typedef PortDescriptor *MCCIPort;
 
 #endif

@@ -9,7 +9,7 @@
  *
  * VMS version 3.0 by George Cook [Mar 98]
  *
- * Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006 
+ * Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007
  * The VMS Mosaic Project
  */
 
@@ -47,25 +47,19 @@ extern DescRec *DescType;
 
 static void FreeColList(ColumnList *col_list)
 {
-	ColumnList *cl;
-
-	cl = col_list;
-	if (cl->cells)
-		free(cl->cells);
-	free(cl);
+	if (col_list->cells)
+		free(col_list->cells);
+	free(col_list);
 }
 
 static void FreeRowlist(RowList *row_list)
 {
-	RowList *rl;
 	int i;
 
-	rl = row_list;
-	for (i = 0; i < rl->row_count; i++)
-		free(rl->cells_lines[i]);
-	
-	free(rl->cells_lines);
-	free(rl);
+	for (i = 0; i < row_list->row_count; i++)
+		free(row_list->cells_lines[i]);
+	free(row_list->cells_lines);
+	free(row_list);
 }
 
 void _FreeTableStruct(TableInfo *t)
@@ -84,9 +78,9 @@ void _FreeTableStruct(TableInfo *t)
 static AlignType get_halign(char *tag, char *type)
 {
 	AlignType align = ALIGN_NONE;
-	char *val;
+	char *val = ParseMarkTag(tag, type, "ALIGN");
 
-	if (val = ParseMarkTag(tag, type, "ALIGN")) {
+	if (val) {
 	    if (caseless_equal(val, "LEFT")) {
 		align = HALIGN_LEFT;
 	    } else if (caseless_equal(val, "CENTER") ||
@@ -103,9 +97,9 @@ static AlignType get_halign(char *tag, char *type)
 static AlignType get_valign(char *tag, char *type)
 {
 	AlignType align = ALIGN_NONE;
-	char *val;
+	char *val = ParseMarkTag(tag, type, "VALIGN");
 
-	if (val = ParseMarkTag(tag, type, "VALIGN")) {
+	if (val) {
 	    if (caseless_equal(val, "TOP")) {
 		align = VALIGN_TOP;
 	    } else if (caseless_equal(val, "CENTER") ||
@@ -122,43 +116,40 @@ static AlignType get_valign(char *tag, char *type)
 static void test_colinfo_col(MarkInfo *sm, int *nr_cols)
 {
 	int span = 1;
-	char *val;
+	char *val = ParseMarkTag(sm->start, MT_COL, "SPAN");
 
-	val = ParseMarkTag(sm->start, MT_COL, "SPAN");
 	if (val) {
 	    span = atoi(val);
 	    free(val);
-   	}
+	}
 	*nr_cols += span;
 }
 
 static void handle_colinfo_col(MarkInfo *sm, ColElemInfo *info,
 			       ColElemInfo *ginfo, int *nr_cols, int group)
 {
-	int pos, span, abs_w, rel_w, prop_w;
+	int pos = *nr_cols;
+	int span = 1;
+	int abs_w = 0;
+	int rel_w = 0;
+	int prop_w = 0;
 	AlignType halign, valign;
 	char *val;
 
-	pos = *nr_cols;
-	abs_w = rel_w = prop_w = 0;
-	span = 1;	/* DEFAULT value */
-
-	val = ParseMarkTag(sm->start, MT_COL, "SPAN");
-	if (val) {
+	if (val = ParseMarkTag(sm->start, MT_COL, "SPAN")) {
 	    span = atoi(val);
 	    free(val);
-        }
-	val = ParseMarkTag(sm->start, MT_COL, "WIDTH");
-	if (val) {
+	}
+	if (val = ParseMarkTag(sm->start, MT_COL, "WIDTH")) {
 	    abs_w = atoi(val);
 	    if (abs_w < 0) 
 	        abs_w = 0;
-	    if (strchr(val,'%') != NULL) {
+	    if (strchr(val, '%')) {
 		rel_w = abs_w;
 		abs_w = 0;
 		if (rel_w > 100)
 	  	    rel_w = 100;
-	    } else if (strchr(val, '*') != NULL) {
+	    } else if (strchr(val, '*')) {
 		prop_w = abs_w;
 		abs_w = 0;
 	    }
@@ -167,7 +158,7 @@ static void handle_colinfo_col(MarkInfo *sm, ColElemInfo *info,
 	halign = get_halign(sm->start, MT_COL);
 	valign = get_valign(sm->start, MT_COL);
 
-	/* INHERIT */
+	/* Inherit */
 	if (ginfo) {
 	    if (abs_w == 0)
 		abs_w = ginfo->abs_width;
@@ -195,16 +186,15 @@ static void handle_colinfo_col(MarkInfo *sm, ColElemInfo *info,
 
 static struct mark_up *test_colinfo_group(MarkInfo *sm, int *nr_cols)
 {
-	char *val;
-	int gspan, cspan;
-	gspan = 1;	/* DEFAULT value */
-	cspan = 0;
+	char *val = ParseMarkTag(sm->start, MT_COLGROUP, "SPAN");
+	int gspan = 1;
+	int cspan = 0;
 
-	val = ParseMarkTag(sm->start, MT_COLGROUP, "SPAN");
 	if (val) {
 	    gspan = atoi(val);
 	    free(val);
-   	}
+	}
+
 	do {
 	    sm = sm->next;
 	    while (sm && sm->is_end)
@@ -224,45 +214,43 @@ static struct mark_up *test_colinfo_group(MarkInfo *sm, int *nr_cols)
 static struct mark_up *handle_colinfo_group(MarkInfo *sm, ColElemInfo *info,
 					    int *nr_cols, int group)
 {
-	int pos, abs_w, rel_w, prop_w, gspan, cspan;
+	int pos = *nr_cols;
+	int cspan = *nr_cols;
+	int abs_w = 0;
+	int rel_w = 0;
+	int prop_w = 0;
+	int gspan = 1;
 	AlignType halign, valign;
 	char *val;
 	ColElemInfo ginfo;
 
 	memset(&ginfo, 0, sizeof(ColElemInfo));
-	cspan = pos = *nr_cols;
-	abs_w = rel_w = prop_w = 0;
-	gspan = 1;
 
-	val = ParseMarkTag(sm->start, MT_COLGROUP, "SPAN");
-	if (val) {
+	if (val = ParseMarkTag(sm->start, MT_COLGROUP, "SPAN")) {
 	    gspan = atoi(val);
 	    free(val);
-        }
-	val = ParseMarkTag(sm->start, MT_COLGROUP, "WIDTH");
-	if (val) {
+	}
+	if (val = ParseMarkTag(sm->start, MT_COLGROUP, "WIDTH")) {
 	    abs_w = atoi(val);
 	    if (abs_w < 0)
 		abs_w = 0;
-	    if (strchr(val,'%') != NULL)  {
+	    if (strchr(val, '%'))  {
 		rel_w = abs_w;
 		abs_w = 0;
 		if (rel_w > 100)
 	  	    rel_w = 100;
-	    } else if (strchr(val, '*') != NULL) {
+	    } else if (strchr(val, '*')) {
 		prop_w = abs_w;
 		abs_w = 0;
   	    }
 	    free(val);
    	}
-	halign = get_halign(sm->start, MT_COLGROUP);
-	valign = get_valign(sm->start, MT_COLGROUP);
+	ginfo.halign = halign = get_halign(sm->start, MT_COLGROUP);
+	ginfo.valign = valign = get_valign(sm->start, MT_COLGROUP);
 
 	ginfo.abs_width = abs_w;
 	ginfo.rel_width = rel_w;
 	ginfo.prop_width = prop_w;
-	ginfo.halign = halign;
-	ginfo.valign = valign;
 	ginfo.group = group;
 
 	do {
@@ -278,10 +266,8 @@ static struct mark_up *handle_colinfo_group(MarkInfo *sm, ColElemInfo *info,
 	if (cspan > pos) {
 	    pos = cspan;
 	} else {
-	    while (--gspan >= 0) {
-		info[pos] = ginfo;
-		++pos;
-	    }
+	    while (--gspan >= 0)
+		info[pos++] = ginfo;
 	}
 	*nr_cols = pos;
 	return sm;
@@ -290,13 +276,12 @@ static struct mark_up *handle_colinfo_group(MarkInfo *sm, ColElemInfo *info,
 #ifndef DISABLE_TRACE
 static void show_colinfo(TableInfo *table)
 {
-	int i;
-	ColElemInfo *info;
+	int i = -1;
+	ColElemInfo *info = table->col_info;
 
 	fprintf(stderr, "\n----- COL/COLGROUP -----\n");
-	if ((info = table->col_info) == NULL)
+	if (!info)
 	    return;
-	i = -1;
 	while (++i < table->num_col) {
 	    fprintf(stderr, "\n[%d]abs_w %3d rel_w %3d%% group %d", i,
 		    info[i].abs_width, info[i].rel_width, info[i].group);
@@ -309,15 +294,15 @@ static void show_colinfo(TableInfo *table)
 
 static void apply_colinfo(MarkInfo *start, TableInfo *table)
 {
-	MarkInfo *sm;
+	MarkInfo *sm = start;
 	ColElemInfo *Elem_info;
-	int Row, Col, Nr_cols, Nr_rows, Pos, Max_pos, Type;
+	CellStruct **T_lines;
+	CellStruct *T_cells;
+	int Row, Col, Nr_rows, Pos, Max_pos, Type;
 	int Abs_w, Rel_w, W, Nr_abs, Nr_rel;
-	CellStruct **T_lines, *T_cells;
+	int Nr_cols = 0;
 	int group = 0;
 
-	Nr_cols = 0;
-	sm = start;
 	do {
 	    switch(sm->type) {
 		case M_COL:
@@ -339,7 +324,7 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 #ifndef DISABLE_TRACE
 	    if (tableTrace || reportBugs)
 	        fprintf(stderr,
-		        "<%s>\n\tTABLE cols %d vs. COL/COLGROUP cols %d",
+		        "<%s>\n\tTABLE cols %d vs. COL/COLGROUP cols %d\n",
 	    	        table->tb_start_mark->start, table->num_col, Nr_cols);
 #endif
 	    return;
@@ -356,8 +341,7 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 		    sm = sm->next;
 		    break;
 		case M_COLGROUP:
-		    sm = handle_colinfo_group(sm, Elem_info, &Col, group);
-		    group++;
+		    sm = handle_colinfo_group(sm, Elem_info, &Col, group++);
 		    break;
 		default:
 		    sm = sm->next;
@@ -368,9 +352,9 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 	} while(sm);
 
 	/*
-	 * if all values are applied here, one could free the vector
-	 * at the end of this routine
-	 */	
+	 * If all values are applied here, one could free the vector
+	 * at the end of this routine.
+	 */
 	table->col_info = Elem_info;
 
 	T_lines = table->row_list->cells_lines;
@@ -397,7 +381,6 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 		} else if (Rel_w) {
 		    T_cells[Col].relative_width = Rel_w;
 		}
-
 		if (Elem_info[Col].halign != ALIGN_NONE)
 	  	    T_cells[Col].halignment = Elem_info[Col].halign;
 		if (Elem_info[Col].valign != ALIGN_NONE)
@@ -411,11 +394,11 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 	while (++Col < Nr_cols) {
 	    W = Elem_info[Col].abs_width;
 	    if (W)
-		++Nr_abs;
+		Nr_abs++;
 	    Abs_w += W;
 	    W = Elem_info[Col].rel_width;
 	    if (W)
-		++Nr_rel;
+		Nr_rel++;
 	    Rel_w += W;
 	}
 	if (Nr_abs == Nr_cols) {
@@ -434,20 +417,16 @@ static void UpdateColList(ColumnList **col_list, int td_count,
 			  int awidth, int rwidth, int height, int nowrap,
 			  MarkInfo *tr_start_mark)
 {
-	ColumnList *cl;
-	int cell_count;
-	int cur_cell_num;
+	ColumnList *cl = *col_list;
 	CellStruct *cells;
-	int nspan;
-	int i;
-	int ns;
+	int cell_count, cur_cell_num, i, nspan, ns;
 
-	cl = *col_list;
-
-	if (!cl) { /* Create one structure */
-		cl = (ColumnList *) malloc(sizeof(ColumnList));
+	if (!cl) {  /* Create one structure */
+		cl = (ColumnList *) calloc(1, sizeof(ColumnList));
+		/*** set by calloc
 		cl->cell_count = 0;
 		cl->cells = NULL;
+		***/
 		cl->max_row_span = 1;
 	}
 	cur_cell_num = cell_count = cl->cell_count;
@@ -513,46 +492,48 @@ static void UpdateColList(ColumnList **col_list, int td_count,
 static void AddPadAtEndColList(ColumnList **cl, int toadd)
 {
 	int i;
+	ColumnList *coll = *cl;
 
-	(*cl)->cells = (CellStruct *)realloc((*cl)->cells,
-			      sizeof(CellStruct) * ((*cl)->cell_count + toadd));
-	for (i = (*cl)->cell_count; i < ((*cl)->cell_count + toadd); i++)
-		(*cl)->cells[i].cell_type = M_TD_CELL_PROPAGATE;
-	(*cl)->cell_count += toadd;
+	coll->cells = (CellStruct *)realloc(coll->cells,
+			       sizeof(CellStruct) * (coll->cell_count + toadd));
+	for (i = coll->cell_count; i < (coll->cell_count + toadd); i++)
+		coll->cells[i].cell_type = M_TD_CELL_PROPAGATE;
+	coll->cell_count += toadd;
 }
 
 static void AddFreeAtEndColList(ColumnList **cl, int toadd)
 {
 	int i;
+	ColumnList *coll = *cl;
 
-	(*cl)->cells = (CellStruct *)realloc((*cl)->cells,
-			      sizeof(CellStruct) * ((*cl)->cell_count + toadd));
-	for (i = (*cl)->cell_count; i < ((*cl)->cell_count + toadd); i++) {
-		(*cl)->cells[i].td_count = 0;
-		(*cl)->cells[i].colspan = 1;
-		(*cl)->cells[i].rowspan = 1;
-		(*cl)->cells[i].back_cs = 0;
-		(*cl)->cells[i].back_rs = 0;
-		(*cl)->cells[i].td_start = NULL;
-		(*cl)->cells[i].td_end = NULL;
-		(*cl)->cells[i].height = 0;
-		(*cl)->cells[i].width = 0;
-		(*cl)->cells[i].cell_type = M_TD_CELL_FREE;
-		(*cl)->cells[i].relative_width = 0;
-		(*cl)->cells[i].absolute_width = 0;
-		(*cl)->cells[i].req_height = 0;
-		(*cl)->cells[i].nowrap = 0;
-		(*cl)->cells[i].line_bottom = 0;
+	coll->cells = (CellStruct *)realloc(coll->cells,
+			       sizeof(CellStruct) * (coll->cell_count + toadd));
+	for (i = coll->cell_count; i < (coll->cell_count + toadd); i++) {
+		coll->cells[i].td_count = 0;
+		coll->cells[i].colspan = 1;
+		coll->cells[i].rowspan = 1;
+		coll->cells[i].back_cs = 0;
+		coll->cells[i].back_rs = 0;
+		coll->cells[i].td_start = NULL;
+		coll->cells[i].td_end = NULL;
+		coll->cells[i].height = 0;
+		coll->cells[i].width = 0;
+		coll->cells[i].cell_type = M_TD_CELL_FREE;
+		coll->cells[i].relative_width = 0;
+		coll->cells[i].absolute_width = 0;
+		coll->cells[i].req_height = 0;
+		coll->cells[i].nowrap = 0;
+		coll->cells[i].line_bottom = 0;
 	}
-	(*cl)->cell_count += toadd;
+	coll->cell_count += toadd;
 }
 
 /* Add # of cells at end of line */
 static void AddPadAtEndRowList(RowList *rl, int toadd)
 {
-	int i, j;
+	int i, j, bcs;
 
-	for (i = 0; i < rl->row_count; i++) { /* Add more cells in each line */
+	for (i = 0; i < rl->row_count; i++) {  /* Add more cells in each line */
 		if (!rl->cells_lines[i]) {
 			rl->cells_lines[i] = (CellStruct *)calloc(
 					rl->max_cell_count_in_line + toadd,
@@ -565,8 +546,6 @@ static void AddPadAtEndRowList(RowList *rl, int toadd)
 	}
 	/* Add PAD */
 	for (i = 0; i < rl->low_cur_line_num; i++) {
-		int bcs;
-
 		bcs = rl->cells_lines[i]
 		      [rl->max_cell_count_in_line - 1].back_cs + 1;
 		for (j = rl->max_cell_count_in_line;
@@ -625,24 +604,26 @@ static void AddFreeLineToRow(RowList *rl, int toadd)
 				sizeof(CellStruct *) * (rl->row_count + toadd));
 	}
  	for (j = 0; j < toadd; j++) {
-		ncl = (CellStruct *)malloc(sizeof(CellStruct) *
+		ncl = (CellStruct *)calloc(1, sizeof(CellStruct) *
 					   rl->max_cell_count_in_line);
 		for (i = 0; i < rl->max_cell_count_in_line; i++) {
+			/** Zeroed by calloc
 			ncl[i].td_count = 0;
-			ncl[i].colspan = 1;
-			ncl[i].rowspan = 1;
 			ncl[i].back_cs = 0;
 			ncl[i].back_rs = 0;
 			ncl[i].td_start = NULL;
 			ncl[i].td_end = NULL;
 			ncl[i].height = 0;
 			ncl[i].width = 0;
-			ncl[i].cell_type = M_TD_CELL_FREE;
 			ncl[i].relative_width = 0;
 			ncl[i].absolute_width = 0;
 			ncl[i].req_height = 0;
 			ncl[i].nowrap = 0;
 			ncl[i].line_bottom = 0;
+			**/
+			ncl[i].colspan = 1;
+			ncl[i].rowspan = 1;
+			ncl[i].cell_type = M_TD_CELL_FREE;
 		}
 		rl->cells_lines[rl->row_count] = ncl;
 		rl->row_count++;
@@ -651,23 +632,15 @@ static void AddFreeLineToRow(RowList *rl, int toadd)
 
 static void UpdateRowList(RowList **row_list, int tr_count, ColumnList **cl)
 {
-	RowList *rl;
-	CellStruct work_cell;
-	CellStruct ref_cell;
+	RowList *rl = *row_list;
+	CellStruct work_cell, ref_cell;
 	CellStruct *rcl;
 	CellStruct *this_line = NULL;
-	int ncell_for_this_cl;
-	int nrow_for_this_cl;
-	int low_cur_line_num;
-	int i, j;
-	int jc, nr;
-	int next_low_cur_line_num;
-	int free_cell_found;
-	int n_rl_free_cell;
-
-	rl = *row_list;
-	ncell_for_this_cl = (*cl)->cell_count;
-	nrow_for_this_cl = (*cl)->max_row_span;
+	int low_cur_line_num, next_low_cur_line_num;
+	int free_cell_found, n_rl_free_cell;
+	int i, j, jc, nr;
+	int ncell_for_this_cl = (*cl)->cell_count;
+	int nrow_for_this_cl = (*cl)->max_row_span;
 
 	/* Create Row List */
 	if (!rl) {
@@ -766,7 +739,7 @@ static void UpdateRowList(RowList **row_list, int tr_count, ColumnList **cl)
 	rcl = rl->cells_lines[low_cur_line_num];
 	nrow_for_this_cl = (*cl)->max_row_span;
 
-	/* If nrow_for_this_cl + low_cur_line_num > row_count,
+	/* If nrow_for_this_cl + low_cur_line_num > row_count, then
 	 * extend the table, increase the number of lines, all set to FREE */
 	if ((nrow_for_this_cl + low_cur_line_num) > rl->row_count)
 		AddFreeLineToRow(rl,
@@ -798,7 +771,7 @@ static void UpdateRowList(RowList **row_list, int tr_count, ColumnList **cl)
 				work_cell.td_end = NULL;
 				work_cell.cell_type = M_TD_CELL_PAD;
 				rl->cells_lines[low_cur_line_num + nr][i] =
-					work_cell;
+								      work_cell;
 			}
 			rcl[i] = ref_cell;
 			jc++;
@@ -824,76 +797,42 @@ static void UpdateRowList(RowList **row_list, int tr_count, ColumnList **cl)
 static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				 PhotoComposeContext *pcc)
 {
-	char *val;
-	char *tptr;
 	TableInfo *t;
 	TableInfo lt;
-	MarkInfo *sm;
 	MarkInfo *tb_start_mark;    /* Save the marker <TABLE> */
 	MarkInfo *tb_end_mark = NULL;
 	MarkInfo *start_other_mark; /* Is mark between TABLE and TR */
-				    /* or CAPTION ? */
-	MarkInfo *end_other_mark;
+				    /* or CAPTION? */
+	MarkInfo *end_other_mark, *caption_end_mark, *caption_start_mark;
+	MarkInfo *tr_start_mark, *td_start_mark, *td_end_mark;
+	MarkInfo *sm, *psm, *mark, *start_col_info, *end_col_info;
+	MarkType m_cell_type = M_TD_CELL_PAD;
 	ColumnList *col_list;
 	RowList *row_list;
-	int td_count;
-	int tr_count;
+	AlignType tmp, align, row_align, valign, row_valign, save_align;
+	char *val, *tptr;
+	char *mt_cell_type = NULL;
+	int tr_found, caption_found, end_caption_found;
+	int awidth, rwidth, height,nowrap, i, j;
+	int td_count = 0;
+	int tr_count = 0;
 	int tr_start_found = 0;
 	int td_start_found = 0;
-	MarkInfo *caption_end_mark;
-	MarkInfo *caption_start_mark;
-	int caption_found;
-	int end_caption_found;
-	int tr_found;
-	MarkInfo *tr_start_mark;
-	MarkInfo *td_start_mark;
-	MarkInfo *td_end_mark;
-	MarkInfo *psm;
-	MarkInfo *mark;
-	MarkInfo *start_col_info, *end_col_info;
-	MarkType m_cell_type = M_TD_CELL_PAD;
-	char *mt_cell_type = NULL;
 	int colspan = 0;
 	int rowspan = 0;
-	AlignType tmp, align, row_align, valign, row_valign, save_align;
-	int awidth, rwidth;
-	int height;
-	int nowrap;
 	int table_nowrap = 0;
-	int i, j;
-	int in_script = 0;
 
 	/* mptr is on <TABLE> */
 	tb_start_mark = mptr;
 	sm = mptr->next;
 	/* 'sm' points just after <TABLE> */
 
-	td_count = 0;
-	tr_count = 0;
-	lt.num_col = 0;
-	lt.num_row = 0;
-	lt.caption_start_mark = NULL;
-	lt.caption_end_mark = NULL;
-	lt.start_other_mark = NULL;
-	lt.end_other_mark = NULL;
-	lt.other_before_caption = 0;
-	lt.relative_width = 0;
-	lt.absolute_width = 0;
-	lt.borders = 0;
-	lt.outer_border = 0;
+	memset(&lt, 0, sizeof(TableInfo));
 	lt.frame = VOID;
 	lt.rules = NONE;
-	lt.row_list = NULL;
-	lt.width = 0;
-	lt.height = 0;
-	lt.min_width = 0;
-	lt.max_width = 0;
 	lt.align = pcc->div;
-	lt.align_adjx = 0;
-	lt.valign_adjx = 0;
 	lt.cellpadding = DEFAULT_TABLE_CELLPADDING;
 	lt.cellspacing = DEFAULT_TABLE_CELLSPACING;
-	lt.col_info = NULL;
 
 	if (tptr = ParseMarkTag(mptr->start, MT_TABLE, "BORDER")) {
 		if (*tptr) {
@@ -998,25 +937,13 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 	}
 
 	/* Find the first TR or CAPTION */
-	caption_found = 0;
-	tr_found = 0;
-	start_other_mark = NULL;
-	end_other_mark = NULL;
-	caption_end_mark = NULL;
+	caption_found = tr_found = 0;
+	start_other_mark = end_other_mark = caption_end_mark = NULL;
 	while (sm) {
-		/* Ignore scripts */
-		if (sm->type == M_SCRIPT) {
-			if (!sm->is_end) {
-				sm = sm->next;
-				in_script = 1;
-				continue;
-			} else {
-				sm = sm->next;
-				in_script = 0;
-				continue;
-			}
-		}
-		if (in_script) {
+		/* Ignore scripts and style sheets */
+		if ((sm->type == M_SCRIPT) || (sm->type == M_STYLE)) {
+			/* Script and style contents removed by htmlparse,
+			 * so only start and end tags remain. */
 			sm = sm->next;
 			continue;
 		}
@@ -1082,8 +1009,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 #endif
 		return NULL;
 	}
-
-	if (caption_found) { /* Find CAPTION end */
+	if (caption_found) {  /* Find CAPTION end */
 		end_caption_found = 0;
 		caption_end_mark = caption_start_mark;
 		while (caption_end_mark) {
@@ -1114,7 +1040,6 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			sm = GetMarkRec();
 			sm->type = M_CAPTION;
 			sm->is_end = 1;
-			sm->end = strdup("/CAPTION");
 			/* Link it into markup list */
 			sm->next = caption_end_mark;
 			psm->next = sm;
@@ -1238,7 +1163,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 		tr_start_mark = GetMarkRec();
 		tr_start_mark->type = M_TABLE_DATA;
 		tr_start_mark->is_end = 0;
-		tr_start_mark->start = strdup("TD");
+		tr_start_mark->start = GetMarkText("TD");
 		/* Link it into markup list */
 		tr_start_mark->next = start_other_mark;
 		psm->next = tr_start_mark;
@@ -1247,25 +1172,15 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 
 	psm = NULL;
 	sm = lt.first_tr_mark = tr_start_mark;
-	td_start_mark = NULL;
-	td_end_mark = NULL;
-	tb_end_mark = NULL;
-	td_count = 0;
-	tr_count = 0;
+	td_start_mark = td_end_mark = tb_end_mark = NULL;
+	td_count = tr_count = 0;
 	row_list = NULL;
 	col_list = NULL;
-	tr_start_found = 0;
-	td_start_found = 0;
+	tr_start_found = td_start_found = 0;
 	align = row_align = ALIGN_NONE;
 	row_valign = VALIGN_MIDDLE;
 
 	while (sm) {
-		/* Ignore table tags in scripts */
-		if (pcc->in_script && (sm->type != M_SCRIPT)) {
-			psm = sm;
-			sm = sm->next;
-			continue;
-		}
 		/* Handle <TD> or <TH> or text outside table tags */
 		if (((sm->type == M_TABLE_DATA) ||
 		     (sm->type == M_TABLE_HEADER) ||
@@ -1281,7 +1196,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				/* Let's play pretend */
 				tr_start_found = 1;	/* Imagine a <TR> */
 			}
-			if (td_start_found) { /* This is the end of previous */
+			if (td_start_found) {  /* This is the end of previous */
 				td_count++;
 				td_end_mark = psm;
 				UpdateColList(&col_list, td_count, m_cell_type,
@@ -1298,7 +1213,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				mark = GetMarkRec();
 				mark->type = M_TABLE_DATA;
 				mark->is_end = 0;
-				mark->start = strdup("TD");
+				mark->start = GetMarkText("TD");
 				/* Link it into markup list */
 				mark->next = sm;
 				psm->next = mark;
@@ -1314,7 +1229,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			td_start_found = 1;
 			td_start_mark = sm;
 
-			colspan = 1;
+			colspan = rowspan = 1;
 			val = ParseMarkTag(sm->start, mt_cell_type, "colspan");
 			if (val) {
 				if (*val)
@@ -1323,8 +1238,6 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			}
 			if (colspan <= 0) 
 				colspan = 1;
-
-			rowspan = 1;
 			val = ParseMarkTag(sm->start, mt_cell_type, "rowspan");
 			if (val) {
 				if (*val)
@@ -1341,8 +1254,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			if (valign == ALIGN_NONE)
 				valign = row_valign;
 
-			rwidth = 0;
-			awidth = 0;
+			rwidth = awidth = 0;
 			/* Don't know how to handle width spanning columns */
 			if (colspan < 2) {
 				val = ParseMarkTag(sm->start, mt_cell_type,
@@ -1350,23 +1262,24 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			} else {
 				val = NULL;
 			}
-			if (val && *val) {
-				awidth = atoi(val);
-				if (strchr(val, '%')) { /* Relative value */
-					rwidth = awidth;
-					awidth = 0;
+			if (val) {
+				if (*val) {
+					awidth = atoi(val);
+					if (strchr(val, '%')) { 
+						/* Relative value */
+						rwidth = awidth;
+						awidth = 0;
+					}
 				}
-			}
-			if (val)
 				free(val);
-
+			}
 			height = 0;
 			val = ParseMarkTag(sm->start, mt_cell_type, "HEIGHT");
-			if (val && *val)
-				height = atoi(val);
-			if (val)
+			if (val) {
+				if (*val)
+					height = atoi(val);
 				free(val);
-
+			}
 			val = ParseMarkTag(sm->start, mt_cell_type, "NOWRAP");
 			if (val) {
 				nowrap = 1;
@@ -1374,7 +1287,6 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			} else {
 				nowrap = table_nowrap;
 			}
-
 			psm = sm;
 			sm = sm->next;
 			continue;
@@ -1387,7 +1299,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 #ifndef DISABLE_TRACE
 				if (tableTrace || reportBugs)
 	                        	fprintf(stderr,
-					     "</TD>/</TH> is outside a <TR>\n");
+					       "</TD>/</TH> is outside <TR>\n");
 #endif
 				psm = sm;
 				sm = sm->next;
@@ -1434,16 +1346,13 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 					FreeColList(col_list);
 					col_list = NULL;
 					td_count = 0;
-				} else {
 #ifndef DISABLE_TRACE
-					if (tableTrace || reportBugs)
-						fprintf(stderr,
-							"<TR> without <TD>\n");
+				} else if (tableTrace || reportBugs) {
+					fprintf(stderr,	"<TR> without <TD>\n");
 #endif
 				}
 			}
 			row_align = get_halign(sm->start, MT_TABLE_ROW);
-
 			row_valign = get_valign(sm->start, MT_TABLE_ROW);
 			if (row_valign == ALIGN_NONE)
 				row_valign = VALIGN_MIDDLE;
@@ -1492,7 +1401,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				mark = GetMarkRec();
 				mark->type = M_TABLE_DATA;
 				mark->is_end = 0;
-				mark->start = strdup("TD");
+				mark->start = GetMarkText("TD");
 				/* Link it into markup list */
 				mark->next = tr_start_mark->next;
 				tr_start_mark->next = mark;
@@ -1534,7 +1443,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 					mark = GetMarkRec();
 					mark->type = M_TABLE_DATA;
 					mark->is_end = 0;
-					mark->start = strdup("TD");
+					mark->start = GetMarkText("TD");
 					/* Link it into markup list */
 					mark->next = tr_start_mark->next;
 					tr_start_mark->next = mark;
@@ -1542,7 +1451,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 					continue;
 				}
 			}
-			if (tr_count == 0)
+			if (!tr_count)
 				break;
 			tb_end_mark = sm;
 			/* UpdateTableInfo */
@@ -1571,7 +1480,6 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				mark = GetMarkRec();
 				mark->type = M_TABLE;
 				mark->is_end = 1;
-				mark->end = strdup("/TABLE");
 				/* Link it into markup list */
 				mark->next = sm;
 				psm->next = mark;
@@ -1588,7 +1496,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				mark = GetMarkRec();
 				mark->type = M_TABLE_DATA;
 				mark->is_end = 0;
-				mark->start = strdup("TD");
+				mark->start = GetMarkText("TD");
 				/* Link it into markup list */
 				mark->next = sm;
 				psm->next = mark;
@@ -1605,7 +1513,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			} else if (align == HALIGN_LEFT) {
 				pcc->div = DIV_ALIGN_LEFT;
 			}
-			tt = FirstPassTable(hw, sm, pcc); /* Be recursive */
+			tt = FirstPassTable(hw, sm, pcc);  /* Be recursive */
 
 			pcc->div = save_align;
 			if (!tt) {
@@ -1623,16 +1531,6 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 				continue;
 			}
 		}
-
-		/* Deal with scripts */
-		if (sm->type == M_SCRIPT) {
-			if (!sm->is_end) {
-				pcc->in_script = 1;
-			} else {
-				pcc->in_script = 0;
-			}
-		}
-
 		psm = sm;
 		sm = sm->next;
 	}
@@ -1654,18 +1552,15 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 	 *  </TABLE>
 	 */
 	for (i = 0; i < lt.num_row; i++) {
-		for (j = 0; j < lt.num_col; j++) {
-			if ((lt.row_list->cells_lines[i][j].colspan + j) >
-			    lt.num_col) {
-				lt.row_list->cells_lines[i][j].colspan =
-					lt.num_col - j;
+	    for (j = 0; j < lt.num_col; j++) {
+		if ((lt.row_list->cells_lines[i][j].colspan + j) > lt.num_col) {
+		    lt.row_list->cells_lines[i][j].colspan = lt.num_col - j;
 #ifndef DISABLE_TRACE
-				if (tableTrace || reportBugs)
-					fprintf(stderr,
-						"Cell colspan reduced.\n");
+		    if (tableTrace || reportBugs)
+			fprintf(stderr,	"Cell colspan reduced.\n");
 #endif
-			}
 		}
+	    }
 	}
 	t = (TableInfo *) calloc(1, sizeof(TableInfo));
 	CHECK_OUT_OF_MEM(t);
@@ -1688,19 +1583,15 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				PhotoComposeContext *orig_pcc)
 {
-	PhotoComposeContext deb_pcc;
-	PhotoComposeContext fin_pcc;
+	PhotoComposeContext deb_pcc, fin_pcc;
 	MarkInfo *extra, *last_extra;
-	int i, j, k, l, min_x, max_x;
-	CellStruct *line;
+	CellStruct *line, *cptr;
 	CellStruct cell;
-	CellStruct *cptr;
-	int line_min_w;
-	int line_max_w;
-	int estimate_height;
+	int i, j, k, l, it, min_x, max_x;
+	int line_min_w, line_max_w;
+	int estimate_height = 0;
+	int form_is_cw = 0;
 	int h_row = 0;
-	int it;
-	int form_is_cw;
 	WidgetInfo *save_wptr = hw->html.widget_list;
 	DescRec *save_DescType;
 
@@ -1709,15 +1600,11 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 
 	/* Save form status for hack */
 	if (orig_pcc->in_form && orig_pcc->cur_form &&
-	    orig_pcc->cur_form->cw_only) {
+	    orig_pcc->cur_form->cw_only)
 		form_is_cw = 1;
-	} else {
-		form_is_cw = 0;
-	}
 	deb_pcc = *orig_pcc;
 	deb_pcc.cw_only = True;
-	deb_pcc.x = 0;
-	estimate_height = deb_pcc.y = 0;
+	deb_pcc.x = deb_pcc.y = 0;
 	deb_pcc.is_bol = 1;
 	deb_pcc.pf_lf_state = 1;
 	deb_pcc.nobr = 0;
@@ -1743,18 +1630,20 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 	}
 	if (t->relative_width)
 		deb_pcc.cur_line_width =
-			(t->relative_width * orig_pcc->cur_line_width) / 100;
+			   (t->relative_width * orig_pcc->cur_line_width) / 100;
 
-	t->col_max_w = (int *) malloc(t->num_col * sizeof(int));
+	t->col_max_w = (int *) calloc(t->num_col, sizeof(int));
 	CHECK_OUT_OF_MEM(t->col_max_w);
-	t->col_min_w = (int *) malloc(t->num_col * sizeof(int));
+	t->col_min_w = (int *) calloc(t->num_col, sizeof(int));
 	CHECK_OUT_OF_MEM(t->col_min_w);
-	t->col_w = (int *) malloc(t->num_col * sizeof(int));
+	t->col_w = (int *) calloc(t->num_col, sizeof(int));
 	CHECK_OUT_OF_MEM(t->col_w);
-	t->col_req_w = (int *) malloc(t->num_col * sizeof(int));
+	t->col_req_w = (int *) calloc(t->num_col, sizeof(int));
 	CHECK_OUT_OF_MEM(t->col_req_w);
-	t->col_abs_w = (int *) malloc(t->num_col * sizeof(int));
+	t->col_abs_w = (int *) calloc(t->num_col, sizeof(int));
 	CHECK_OUT_OF_MEM(t->col_abs_w);
+
+	/** Done by calloc
 	for (i = 0; i < t->num_col; i++) {
 		t->col_max_w[i] = 0;
      		t->col_min_w[i] = 0;
@@ -1762,6 +1651,8 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 		t->col_req_w[i] = 0;
 		t->col_abs_w[i] = 0;
 	}
+	**/
+
 	extra = t->first_tr_mark;
      
 	/* Execute HTML between <TABLE> and first <TR> or <CAPTION> */
@@ -1771,8 +1662,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 		deb_pcc.cur_line_height = 0;
 		deb_pcc.is_bol = 1;
 		deb_pcc.pf_lf_state = 1;
-		deb_pcc.x = 0;
-		deb_pcc.y = 0;
+		deb_pcc.x = deb_pcc.y = 0;
 	}
 	/* Do caption to get approximate height */
         if (t->caption_start_mark) {
@@ -1787,7 +1677,6 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				    t->caption_end_mark, &deb_pcc);
 			ConditionalLineFeed(hw, 1, &deb_pcc);
 		} else {
-
 	               	ConditionalLineFeed(hw, 1, &deb_pcc);
                 	FormatChunk(hw, t->caption_start_mark,
                 		    t->caption_end_mark, &deb_pcc);
@@ -1801,14 +1690,12 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 		deb_pcc.cur_line_height = 0;
 		deb_pcc.is_bol = 1;
 		deb_pcc.pf_lf_state = 1;
-		deb_pcc.x = 0;
-		deb_pcc.y = 0;
+		deb_pcc.x = deb_pcc.y = 0;
 	}
 
 	/* Caption and other mark stuff may give them values */
-	deb_pcc.computed_min_x = 0;
+	deb_pcc.computed_min_x = deb_pcc.computed_max_x = 0;
 	deb_pcc.computed_maxmin_x = 0;
-	deb_pcc.computed_max_x = 0;
 
 	for (i = 0; i < t->num_row; i++) {
 		line = t->row_list->cells_lines[i];
@@ -1822,8 +1709,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 			    deb_pcc.cur_line_height = 0;
 			    deb_pcc.is_bol = 1;
 			    deb_pcc.pf_lf_state = 1;
-			    deb_pcc.x = 0;
-			    deb_pcc.y = 0;
+			    deb_pcc.x = deb_pcc.y = 0;
 			    extra = cell.td_end->next;
 			    last_extra = cell.td_end;
 			}
@@ -1880,8 +1766,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 			    }
 			}
 			if (cell.colspan > 1) {
-			    min_x = 0;
-			    max_x = 0;
+			    min_x = max_x = 0;
 			} else {
 			    min_x = fin_pcc.computed_min_x;
 			    max_x = fin_pcc.computed_max_x;
@@ -1959,7 +1844,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				cptr = &t->row_list->cells_lines[k][0];
 				if (cptr->req_height > cptr->height) {
 					estimate_height += cptr->req_height -
-						cptr->height;
+								   cptr->height;
 					cptr->height = cptr->req_height;
 				}
 			}
@@ -1972,22 +1857,21 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 			 * but not for all cells? */
 			if (j && (j != t->num_row)) {
 				add_h = wanted_h / (t->num_row - j);
-				if (add_h == 0)
+				if (!add_h)
 					add_h = 1;
 				for (i = 0; i < t->num_row; i++) {
 					cptr = &t->row_list->cells_lines[i][0];
 					if (!cptr->req_height)
 						cptr->treq_height =
-							cptr->height + add_h;
+							   cptr->height + add_h;
 				}
 			} else {
 				add_h = wanted_h / t->num_row;
-				if (add_h == 0)
+				if (!add_h)
 					add_h = 1;
 				for (i = 0; i < t->num_row; i++) {
 					cptr = &t->row_list->cells_lines[i][0];
-					cptr->treq_height = cptr->height +
-						add_h;
+					cptr->treq_height = cptr->height +add_h;
 				}
 			}
 		}
@@ -2002,8 +1886,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				int ncol = 0;
 				int tmp_w = 0;
 				int tmp_maxw = 0;
-				int tmp_a;
-				int jk;
+				int tmp_a, jk;
 
 				for (k = 0; k < line[j].colspan; k++) {
 				    jk = j + k;
@@ -2013,11 +1896,11 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 					ncol++;
 				}
 				tmp_w += (line[j].colspan - 1) *
-					((2 * (t->cellpadding + t->borders)) +
-					t->cellspacing);
+					  ((2 * (t->cellpadding + t->borders)) +
+					  t->cellspacing);
 				tmp_maxw += (line[j].colspan - 1) *
-					((2 * (t->cellpadding + t->borders)) +
-					t->cellspacing);
+					  ((2 * (t->cellpadding + t->borders)) +
+					  t->cellspacing);
 				/* First bring minimums up to absolutes */
 				if (tmp_w < line[j].min_width) {
 				    tmp_a = line[j].min_width - tmp_w;
@@ -2028,7 +1911,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 					if (l > 0) {
 					    if (l < tmp_a) {
 						t->col_min_w[jk] =
-						    t->col_abs_w[jk];
+							       t->col_abs_w[jk];
 						tmp_a -= l;
 						tmp_w += l;
 					    } else {
@@ -2042,8 +1925,8 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				/* Don't add to columns with absolute width */
 				if (ncol) {
 				    if (tmp_w < line[j].min_width) {
-					tmp_a = tmp_w = line[j].min_width -
-					    tmp_w;
+					tmp_w = line[j].min_width - tmp_w;
+					tmp_a = tmp_w;
 					tmp_w = tmp_w / ncol;
 					/* Get remainder, if any */
 					tmp_a = tmp_a - (tmp_w * ncol);
@@ -2070,12 +1953,11 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 				/* unless we absolutely have to */
 				} else {
 				    if (tmp_w < line[j].min_width) {
-					tmp_a = tmp_w = line[j].min_width -
-					    tmp_w;
+					tmp_w = line[j].min_width - tmp_w;
+					tmp_a = tmp_w;
 					tmp_w = tmp_w / line[j].colspan;
 					/* Get remainder, if any */
-					tmp_a = tmp_a -
-					    (tmp_w * line[j].colspan);
+					tmp_a -= tmp_w * line[j].colspan;
 					for (k = 0; k < line[j].colspan; k++) {
 					    jk = j + k;
 					    t->col_min_w[jk] += tmp_w;
@@ -2086,14 +1968,14 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 					    }
 					    if (t->col_req_w[jk] == -1)
 						t->col_abs_w[jk] =
-						    t->col_min_w[jk];
+							       t->col_min_w[jk];
 					}
 				    }
 				    if (tmp_maxw < line[j].max_width) {
 					tmp_maxw = line[j].max_width - tmp_maxw;
 					tmp_maxw = tmp_maxw / line[j].colspan;
 					for (k = 0; k < line[j].colspan; k++)
-					    t->col_max_w[j+k] += tmp_maxw;
+					    t->col_max_w[j + k] += tmp_maxw;
 				    }
 				}
 			}
@@ -2105,11 +1987,11 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 		}
 	}
 
-	line_min_w = 0;
-	line_max_w = 0;
+	line_min_w = line_max_w = 0;
+	j = 2 * t->cellpadding;
 	for (i = 0; i < t->num_col; i++) {
-		line_min_w += t->col_min_w[i] + (2 * t->cellpadding);
-		line_max_w += t->col_max_w[i] + (2 * t->cellpadding);
+		line_min_w += t->col_min_w[i] + j;
+		line_max_w += t->col_max_w[i] + j;
 	}
 
 	line_min_w += (t->num_col * 2 * t->borders) + (2 * t->outer_border);
@@ -2133,37 +2015,27 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 {
 	MarkInfo *sm, *mark, *extra, *last_extra;
 	TableInfo *t;
-	CellStruct *line;
+	CellStruct *line, *cptr;
 	CellStruct cell;
-	CellStruct *cptr;
-	int i, j, k;
-	PhotoComposeContext line_pcc, work_pcc, tbl_pcc;
-	int w_table;
-	int h_table;
-	int max_line_bot;
-	int delta;
 	ElemInfo *eptr;
-	int w_in_cell;
-	int to_add_col;
-	int wanted_w, w;
-	int adjx = 0;
-	int save_x, save_y;
-	int cell_has_bg, row_has_bg, table_has_bg;
-	int left, wanted;
-	unsigned long save_bg;
+	PhotoComposeContext line_pcc, work_pcc, tbl_pcc;
 	char *tptr;
-	DescRec *save_DescType;
+	int i, j, k;
+	int w_table, h_table, max_line_bot, delta;
+	int w_in_cell, to_add_col, wanted_w, w;
+	int cell_has_bg, row_has_bg, table_has_bg;
+	int save_x, save_y, left, wanted;
+	int need_start_LF, cell_offset, add_offset;
+	int border_pad, x2border_pad;
+	int adjx = 0;
 	int save_cur_line_width = pcc->cur_line_width;
 	int save_cur_baseline = pcc->cur_baseline;
 	int save_cur_line_height = pcc->cur_line_height;
 	int ori_y = pcc->y;
-	int need_start_LF;
 	int in_table = pcc->in_table;
-	int border_pad;
-	int x2border_pad;
-	int cell_offset;
-	int add_offset;
+	unsigned long save_bg;
 	FloatRec *tmp_float;
+	DescRec *save_DescType;
 
 	/* Point sm to <TABLE> */
 	sm = *mptr;			/* Leave mptr alone til done */
@@ -2172,7 +2044,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	 * to get various table settings.
 	 */
 	if (!sm->t_p1) {
-		t = FirstPassTable(hw, sm, pcc);
+		sm->t_p1 = t = FirstPassTable(hw, sm, pcc);
 		if (!t) {
 #ifndef DISABLE_TRACE
 			if (tableTrace || reportBugs) 
@@ -2180,9 +2052,9 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 #endif
 			return;
 		}
-		sm->t_p1= t;
+	} else {
+		t = sm->t_p1;
 	}
-	t = sm->t_p1;
 
 	/* Remove extra leading space if there is a left aligned table */
 	if (pcc->float_left && pcc->float_left->type == 2) {
@@ -2220,7 +2092,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		if (pcc->computed_min_x < (pcc->left_margin + pcc->eoffsetx +
 		    t->min_width))
 			pcc->computed_min_x = pcc->left_margin + pcc->eoffsetx +
-				t->min_width;
+								   t->min_width;
 		if (pcc->computed_max_x < pcc->x + t->max_width)
 			pcc->computed_max_x = pcc->x + t->max_width;
 
@@ -2248,8 +2120,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			}
 		}
 	}
-/*******
-3 cases:
+  /*******
+   3 cases:
 
 	1. t->min_width >= viewable area or is a requested size ====>
 	   allocate the minimum for each column
@@ -2265,7 +2137,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	width has been specified.
 
 	Now, calculate t->col_w[i] according to those 3 cases.
-*******/
+   *******/
+
 	/* case 1 */
 	if ((t->min_width >= pcc->cur_line_width) || wanted_w) {
 		for (i = 0; i < t->num_col; i++)
@@ -2359,7 +2232,6 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 				}
 		 	}
 		}
-
 		/* If room left, maximize each column with no requested width
 		 * as needed */
 		if (left) {
@@ -2367,7 +2239,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 				if (!t->col_req_w[i] &&
 				    (t->col_w[i] < t->col_max_w[i]))
 					max_left += t->col_max_w[i] -
-						t->col_w[i];
+								    t->col_w[i];
 			}
 			if (max_left && (max_left <= left)) {
 				w_table += max_left;
@@ -2382,8 +2254,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 					if (!t->col_req_w[i] &&
 					    (t->col_w[i] < t->col_max_w[i])) {
 						j = (t->col_max_w[i] -
-							t->col_w[i]) *
-							max_percent;
+						     t->col_w[i]) * max_percent;
 						w_table += j;
 						t->col_w[i] += j;
 					}
@@ -2400,8 +2271,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			to_add_col = (wanted_w - w_table) / (ncol ? ncol : 1);
 			for (i = 0; i < t->num_col; i++) {
 				if (!t->col_req_w[i]) {
-					t->col_w[i] = t->col_w[i] + to_add_col;
-					w_table = w_table + to_add_col;
+					t->col_w[i] += to_add_col;
+					w_table += to_add_col;
 				}
 			}
 		}
@@ -2415,8 +2286,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			to_add_col = (wanted_w - w_table) / (ncol ? ncol : 1);
 			for (i = 0; i < t->num_col; i++) {
 				if (t->col_abs_w[i]) {
-					t->col_w[i] = t->col_w[i] + to_add_col;
-					w_table = w_table + to_add_col;
+					t->col_w[i] += to_add_col;
+					w_table += to_add_col;
 				}
 			}
 		}
@@ -2424,8 +2295,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		if (wanted_w > w_table) {
 			to_add_col = (wanted_w - w_table) / t->num_col;
 			for (i = 0; i < t->num_col; i++) {
-				t->col_w[i] = t->col_w[i] + to_add_col;
-				w_table = w_table + to_add_col;
+				t->col_w[i] += to_add_col;
+				w_table += to_add_col;
 			}
 		}
 	}
@@ -2451,7 +2322,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		for (i = 0; i < t->num_col; i++) {
 			if (t->col_req_w[i] > 0) {
 				wanted = ((totcolwidth * t->col_req_w[i])/100) -
-					 t->col_w[i];
+					 			    t->col_w[i];
 				if (wanted > 0) {
 					k = 1;
 					if (left <= wanted) {
@@ -2467,7 +2338,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 				}
 			}
 		}
-		if (!k || !left) /* Nothing left to adjust or no percentages */
+		if (!k || !left)  /* Nothing left to adjust or no percentages */
 			break;
 		j++;
 #ifndef DISABLE_TRACE
@@ -2569,7 +2440,6 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			}
 		}
 	}
-
 	pcc->in_table = 1;		/* In table */
 	tbl_pcc = *pcc;
 	
@@ -2583,8 +2453,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 	/* Now create the table */
 
-	tbl_pcc.x = tbl_pcc.x + t->outer_border;
-	tbl_pcc.y = tbl_pcc.y + t->outer_border + t->cellspacing;
+	tbl_pcc.x += t->outer_border;
+	tbl_pcc.y += t->outer_border + t->cellspacing;
 	tbl_pcc.eoffsetx = tbl_pcc.x;
 	tbl_pcc.cur_line_height = 0;
 	tbl_pcc.cur_baseline = 0;
@@ -2606,7 +2476,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	    cell_offset = t->cellspacing;
 	    /* Do row background color */
 	    row_has_bg = 0;
-	    for (j = 0; j < t->num_col; j++) { /* Skip over M_TD_CELL_FREE */
+	    for (j = 0; j < t->num_col; j++) {  /* Skip over M_TD_CELL_FREE */
 		if ((line[j].cell_type == M_TABLE_DATA) ||
 		    (line[j].cell_type == M_TABLE_HEADER))
 		    break;
@@ -2620,7 +2490,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		    row_has_bg = 1;
 		}
 	    }
-	    for (j = 0; j < t->num_col; j++) { /* For each cell */
+	    for (j = 0; j < t->num_col; j++) {  /* For each cell */
 		w_in_cell = t->col_w[j]; 
 		cell = line[j];		/* Get a cell */
 		/* Do crap between table cells */
@@ -2633,7 +2503,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		    line_pcc.widget_id = work_pcc.widget_id;
 		    line_pcc.element_id = work_pcc.element_id;
 		    line_pcc.last_progressive_ele =
-			work_pcc.last_progressive_ele;
+						  work_pcc.last_progressive_ele;
 		    extra = cell.td_end->next;
 		    last_extra = cell.td_end;
 		}
@@ -2650,9 +2520,10 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			/* Propagate height and line_bottom from
 			 * starting cell span */
 			cell.line_bottom =
-			    t->row_list->cells_lines[i-cell.back_rs][j-cell.back_cs].line_bottom;
-			cell.height =
-			    t->row_list->cells_lines[i-cell.back_rs][j-cell.back_cs].height;
+				      t->row_list->cells_lines[i - cell.back_rs]
+						 [j - cell.back_cs].line_bottom;
+			cell.height = t->row_list->cells_lines[i - cell.back_rs]
+						      [j - cell.back_cs].height;
 			break;
 		    case M_TD_CELL_FREE:
 		    case M_TD_CELL_PROPAGATE:
@@ -2664,8 +2535,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			    w_in_cell += t->col_w[j + k];
 
 			/* Adjust if spans columns */
-			w_in_cell += ((cell.colspan - 1) *
-			    (x2border_pad + t->cellspacing));
+			w_in_cell += (cell.colspan - 1) *
+			    	     (x2border_pad + t->cellspacing);
 			work_pcc.left_margin = border_pad;
 			work_pcc.right_margin = t->cellpadding;
 			work_pcc.cur_line_width = w_in_cell;
@@ -2718,7 +2589,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 						     0, 0, 0, &work_pcc);
 				eptr->table_data = t;
 				eptr->cell_data =
-				    &t->row_list->cells_lines[i][j];
+						&t->row_list->cells_lines[i][j];
 				if (!cell_has_bg)
 				    /* Inherited the bg */
 				    cell_has_bg = 2;
@@ -2792,8 +2663,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			      t->outer_border + cell.content_height) <
 			     t->height)) {
 			    int hdiff = t->height - (h_table + t->cellspacing +
-					border_pad + t->outer_border +
-					cell.content_height);
+					          border_pad + t->outer_border +
+					          cell.content_height);
 
 			    if (hdiff >= (cell.treq_height -
 				          cell.content_height)) {
@@ -2814,10 +2685,9 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			}
 			line_pcc.widget_id = work_pcc.widget_id;
 			line_pcc.element_id = work_pcc.element_id;
-			line_pcc.aprog_id = work_pcc.aprog_id;
 			line_pcc.applet_id = work_pcc.applet_id;
 			line_pcc.last_progressive_ele =
-			    work_pcc.last_progressive_ele;
+			    			  work_pcc.last_progressive_ele;
 			line_pcc.cur_form = work_pcc.cur_form;
 			line_pcc.in_form = work_pcc.in_form;
 			line_pcc.max_width_return = work_pcc.max_width_return;
@@ -2844,7 +2714,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		if ((line[j].colspan == 1) && (line[j].rowspan == 1)) {
 		    /* Adjust the cell height according to max_line_bot */
 		    cptr = &t->row_list->cells_lines
-			    [i - line[j].back_rs][j - line[j].back_cs];
+			    	     [i - line[j].back_rs][j - line[j].back_cs];
 		    delta = max_line_bot - cptr->line_bottom;
 		    if (delta > 0 ) {
 			cptr->height += delta;
@@ -2857,7 +2727,6 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	    tbl_pcc.y = max_line_bot + t->cellspacing;
 	    tbl_pcc.widget_id = line_pcc.widget_id;
 	    tbl_pcc.element_id = line_pcc.element_id;
-	    tbl_pcc.aprog_id = line_pcc.aprog_id;
 	    tbl_pcc.applet_id = line_pcc.applet_id;
 	    tbl_pcc.last_progressive_ele = line_pcc.last_progressive_ele;
 	    tbl_pcc.cur_form = line_pcc.cur_form;
@@ -2896,16 +2765,13 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			while (eptr && (eptr != cptr->end_elem)) {
 				eptr->y += delta;
 				if (eptr->type == E_WIDGET) {
-					int orig_x;
-					int orig_y;
-					unsigned long orig_bg;
+					int orig_x = pcc->x;
+					int orig_y = pcc->y;
+					unsigned long orig_bg = pcc->bg;
 
 					/* Already there so don't need markup */
-					orig_x = pcc->x;
-					orig_y = pcc->y;
 					pcc->x = eptr->x;
 					pcc->y = eptr->y;
-					orig_bg = pcc->bg;
 					pcc->bg = eptr->bg;
 					MakeWidget(hw, NULL, pcc,
 						   eptr->widget_data->id);
@@ -2931,7 +2797,6 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 	pcc->widget_id = tbl_pcc.widget_id;
 	pcc->element_id = tbl_pcc.element_id;
-	pcc->aprog_id =	tbl_pcc.aprog_id;
 	pcc->applet_id = tbl_pcc.applet_id;
 	pcc->last_progressive_ele = tbl_pcc.last_progressive_ele;
 	pcc->cur_form = tbl_pcc.cur_form;
@@ -2946,7 +2811,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	eptr = CreateElement(hw, E_TABLE, pcc->cur_font,
 			     pcc->x, pcc->y, w_table, h_table, h_table, pcc); 
 
-	eptr->underline_number = 0; /* Table's can't be underlined */
+	eptr->underline_number = 0;  /* Tables can't be underlined */
 	eptr->table_data = t;
 
 	/* Advance mark pointer to end of table */
@@ -3016,16 +2881,13 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		if (adjx > 0) {
 			eptr->x += adjx;
 			if (eptr->type == E_WIDGET) {
-				int orig_x;
-				int orig_y;
-				unsigned long orig_bg;
+				int orig_x = pcc->x;
+				int orig_y = pcc->y;
+				unsigned long orig_bg = pcc->bg;
 
 				/* It is already there so don't need markup */
-				orig_x = pcc->x;
-				orig_y = pcc->y;
 				pcc->x = eptr->x;
 				pcc->y = eptr->y;
-				orig_bg = pcc->bg;
 				pcc->bg = eptr->bg;
 				MakeWidget(hw, NULL, pcc,
 					   eptr->widget_data->id);
@@ -3109,7 +2971,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			fprintf(stderr, "Float left started in TablePlace\n");
 #endif
 	} else if ((t->align == HALIGN_RIGHT) && ((pcc->x + w_table) <
-	     (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
+	            (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
 		tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 		tmp_float->next = pcc->float_right;
 		pcc->float_right = tmp_float;
@@ -3132,7 +2994,6 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			fprintf(stderr, "Float right started in TablePlace\n");
 #endif
 	}
-
 #ifndef DISABLE_TRACE
      	if (tableTrace || htmlwTrace)
 		TableDump(t);
@@ -3149,25 +3010,20 @@ static char shadowpm_bits[] = {0x02, 0x01};
 /* Display table borders */
 void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 {
-	int x, y;
-	TableInfo *t;
+	TableInfo *t = eptr->table_data;
 	CellStruct cell;
 	CellStruct **cells_lines;
-	int i, j;
 	XPoint pt[6];
-	Display *dsp = XtDisplay(hw);
+	Display *dsp = hw->html.dsp;
 	Screen *scn = XtScreen(hw);
 	GC ltopGC, lbotGC;
 	XSegment segT[MAX_SEG], segB[MAX_SEG];
-	int iseg;
-	int cw1, ch1, cx, cy;  
-	int ax, ay;
-	int group, do_group;
+	int x, y, i, j, iseg, group, do_group;
+	int cw1, ch1, cx, cy, ax, ay;
 	FrameType ft;
 	RulesType rules;
 
 	/* Trace the border of the table, if any */
- 	t = eptr->table_data;
 	if (!t->borders)
 		return;
 	x = eptr->x - hw->html.scroll_x;
@@ -3182,27 +3038,25 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 
 	if (!ttopGC) {
 		char dash_list[2];
-		unsigned long valuemask;
+		unsigned long valuemask = GCFillStyle | GCStipple;
 		XGCValues values;
 
 		values.stipple = XCreateBitmapFromData(dsp,
 					 RootWindowOfScreen(scn), shadowpm_bits,
 					 shadowpm_width, shadowpm_height);
 		values.fill_style = FillSolid;
-		valuemask = GCFillStyle | GCStipple;
 		ttopGC = XCreateGC(dsp, RootWindow(dsp, DefaultScreen(dsp)),
 				   valuemask, &values);
 		tbotGC = XCreateGC(dsp, RootWindow(dsp, DefaultScreen(dsp)),
 				   valuemask, &values);
-
 		XSetLineAttributes(dsp, ttopGC, 1, LineOnOffDash,
-				   CapNotLast, JoinMiter); 
+				   CapNotLast, JoinMiter);
 		XSetForeground(dsp, ttopGC,
 			       WhitePixel(dsp, DefaultScreen(dsp)));
 		XSetLineAttributes(dsp, tbotGC, 0, LineOnOffDash,
-				   CapNotLast, JoinMiter); 
-		XSetForeground(dsp, tbotGC, BlackPixel(dsp,
-			       DefaultScreen(dsp)));                  
+				   CapNotLast, JoinMiter);
+		XSetForeground(dsp, tbotGC,
+			       BlackPixel(dsp, DefaultScreen(dsp)));
 		dash_list[0] = '\1';
 		dash_list[1] = '\1';
 		XSetDashes(dsp, ttopGC, 1, dash_list, 2);
@@ -3219,7 +3073,8 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 		lbotGC = hw->manager.bottom_shadow_GC;
 	}
 	if (t->outer_border == 1) {
-		int y0, y1;
+		int y1;
+		int y0 = 0;
 		int xw = x + eptr->width - 1;
 
 		/* Top */
@@ -3228,8 +3083,6 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 				XDrawLine(dsp, XtWindow(hw->html.view),
 					  ltopGC, x, y, xw, y);
 			y0 = y;
-		} else {
-			y0 = 0;
 		}
 		if (y + eptr->height <=  hw->html.view_height) {
 			y1 = y + eptr->height - 1;
@@ -3249,8 +3102,7 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 				  xw, y0, xw, y1);
 	} else if (t->outer_border > 1) {
 		int pts = 4;
-		int bx, by;
-		int bw, bh;
+		int bx, by, bw, bh;
 
 		if (hw->html.bg_image) {
 			XSetFillStyle(dsp, ltopGC, FillStippled);
@@ -3360,7 +3212,6 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 			XFillRectangle(dsp, XtWindow(hw->html.view),
 				       lbotGC, bx, by, bw, bh);
 		}
-
 		if (hw->html.bg_image) {
 			XSetFillStyle(dsp, ltopGC, FillSolid);
 			XSetFillStyle(dsp, lbotGC, FillSolid);
@@ -3375,12 +3226,10 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 
 	for (i = 0; i < t->num_row; i++) {
 		group = 0;
-
 		for (j = 0; j < t->num_col; j++) {
 			cell = cells_lines[i][j];
 			cx = cell.x + ax;
 			cy = cell.y + ay;
-
 			if ((rules == GROUPS) && (cell.group > group) &&
 			    (cell.back_rs == 0) && (cell.back_cs == 0)) {
 				group = cell.group;
@@ -3388,7 +3237,6 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 			} else {
 				do_group = 0;
 			}
-
 			cw1 = cell.width;
 			if (rules != ROWS) {
  				cw1--;
@@ -3397,7 +3245,6 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 				cx--;
 				cw1++;
 			}
-
 			ch1 = cell.height;
 			if ((rules != COLS) && !do_group) {
 				ch1--;
@@ -3482,12 +3329,9 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 ElemInfo *CellRefresh(HTMLWidget hw, ElemInfo *eptr)
 {
 	ElemInfo *tptr;
-	int height;
-	int right_x, bot_y;
-	int left_x, top_y;
-	int celly;
-	unsigned long save_bg;
+	int height, celly, right_x, bot_y, left_x, top_y;
 	int save_cell_has_bg = hw->html.table_cell_has_bg;
+	unsigned long save_bg;
 	TableInfo *t = eptr->table_data;
 	CellStruct *cell = eptr->cell_data;
 
@@ -3521,8 +3365,11 @@ ElemInfo *CellRefresh(HTMLWidget hw, ElemInfo *eptr)
 				 ((celly + t->borders) - hw->html.redisplay_y);
 		}
 	}
-	XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
-	XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view), hw->html.drawGC,
+	if (hw->html.cur_fg != eptr->bg) {
+		XSetForeground(hw->html.dsp, hw->html.drawGC, eptr->bg);
+		hw->html.cur_fg = eptr->bg;
+	}
+	XFillRectangle(hw->html.dsp, XtWindow(hw->html.view), hw->html.drawGC,
 		       cell->x + t->align_adjx + t->borders - hw->html.scroll_x,
 		       top_y, cell->width - t->borders, height);
 
@@ -3572,20 +3419,19 @@ static void TableDump(TableInfo *t)
 		t->height, t->num_col, t->num_row);
 	fprintf(stderr, "-------------------------------------------\n");
 	for (y = 0; y < t->num_row; y++) {
-		for (x = 0; x < t->num_col; x++) {
-			fprintf(stderr, "W=%d,H=%d ",
-				t->row_list->cells_lines[y][x].width,
-				t->row_list->cells_lines[y][x].height);
-			if (t->row_list->cells_lines[y][x].cell_type ==
-			    M_TD_CELL_PAD) {
-				fprintf(stderr, "Pad ");
-			} else if (t->row_list->cells_lines[y][x].cell_type ==
-				   M_TD_CELL_FREE) {
-				fprintf(stderr, "Free ");
-			}
-			fprintf(stderr, "| ");
+	    for (x = 0; x < t->num_col; x++) {
+		fprintf(stderr, "W=%d,H=%d ",
+			t->row_list->cells_lines[y][x].width,
+			t->row_list->cells_lines[y][x].height);
+		if (t->row_list->cells_lines[y][x].cell_type == M_TD_CELL_PAD) {
+		    fprintf(stderr, "Pad ");
+		} else if (t->row_list->cells_lines[y][x].cell_type ==
+			   M_TD_CELL_FREE) {
+		    fprintf(stderr, "Free ");
 		}
-		fprintf(stderr, "\n----------------------------------\n");
+		fprintf(stderr, "| ");
+	    }
+	    fprintf(stderr, "\n----------------------------------\n");
 	}
 }
 #endif

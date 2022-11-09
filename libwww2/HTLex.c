@@ -33,13 +33,13 @@ PRIVATE LexItem lex_pushed_back = LEX_NONE;
 PRIVATE FILE *cache = NULL;
 
 
-PUBLIC void unlex ARGS1(LexItem, lex_item)
+PUBLIC void unlex (LexItem lex_item)
 {
     lex_pushed_back = lex_item;
 }
 
 
-PUBLIC LexItem lex ARGS1(FILE *, fp)
+PUBLIC LexItem lex (FILE *fp)
 {
     int ch;
 
@@ -105,15 +105,15 @@ PUBLIC LexItem lex ARGS1(FILE *, fp)
 	    break;
 	  default:
 	    lex_buffer[lex_cnt++] = ch;
-	    lex_buffer[lex_cnt] = (char)0;
+	    lex_buffer[lex_cnt] = '\0';
 	    if ('*' == ch)
 		lex_template = YES;
-	} /* switch ch */
-    } /* forever */
+	}
+    }
 }
 
 
-PUBLIC char *lex_verbose ARGS1(LexItem, lex_item)
+PUBLIC char *lex_verbose (LexItem lex_item)
 {
     static char msg[100];
 
@@ -155,4 +155,3 @@ PUBLIC char *lex_verbose ARGS1(LexItem, lex_item)
 	break;
     }
 }
-

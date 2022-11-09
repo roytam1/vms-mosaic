@@ -63,13 +63,12 @@
 #ifndef __GLOBALHIST_H__
 #define __GLOBALHIST_H__
 
-typedef enum _mo_cache_type
-{
-    mo_cache_image, mo_cache_frame
+typedef enum _mo_cache_type {
+    mo_cache_image,
+    mo_cache_frame
 } mo_cache_type;
 
-typedef struct _cached_frame_data
-{
+typedef struct _cached_frame_data {
     char *text;
     char *last_modified;
     char *expires;

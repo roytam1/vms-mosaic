@@ -3,7 +3,7 @@
  * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */ 
 
-/* Copyright (C) 1998, 1999, 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include <Xm/TextF.h>
@@ -61,11 +61,7 @@ void BeginForm(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	pcc->cur_form->end = -1;
 	pcc->cur_form->button_pressed = NULL;
 	pcc->in_form = True;
-	if (pcc->cw_only) {
-		pcc->cur_form->cw_only = 1;
-	} else {
-		pcc->cur_form->cw_only = 0;
-	}
+	pcc->cur_form->cw_only = pcc->cw_only;
 }
 
 /* </FORM> */
@@ -75,8 +71,8 @@ void EndForm(HTMLWidget hw, PhotoComposeContext *pcc)
 		return;
 
 	if (pcc->cw_only) {
-		pcc->in_form = False; /* Always put False on end Form */
-				      /* because form cannot be nested */
+		pcc->in_form = False;  /* Always put False on end Form
+				        * because form cannot be nested */
 		if (pcc->cur_form->cw_only) {
 			if (pcc->cur_form->action)
 				free(pcc->cur_form->action);
@@ -96,7 +92,7 @@ void EndForm(HTMLWidget hw, PhotoComposeContext *pcc)
 	pcc->cur_form->end = pcc->widget_id;
 	AddNewForm(hw, pcc->cur_form);
 	pcc->cur_form = NULL;
-	pcc->in_form = False; /* Always put False on end Form */
+	pcc->in_form = False;  /* Always put False on end Form */
 }
 
 /* <INPUT>
@@ -105,28 +101,24 @@ void EndForm(HTMLWidget hw, PhotoComposeContext *pcc)
 void FormInputField(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 {
 	MarkInfo *mark = *mptr;
-	char *tptr2, *tptr, *sptr;
-	char *text;
+	char *tptr;
 
 	/* Do not check if in form, so we can display example fields
 	 * outside of forms.
 	 */
 
-	text = mark->start;
-	tptr = ParseMarkTag(text, MT_INPUT, "TYPE");
-
-	if (!tptr) {
+	if (!(tptr = ParseMarkTag(mark->start, MT_INPUT, "TYPE"))) {
 		WidgetPlace(hw, *mptr, pcc);
 		return;
 	} else if (caseless_equal(tptr, "image")) {
+		char *tptr2;
+
+		free(tptr);
 		if (pcc->cw_only) {
 			/* Get width and height of image */
 			ImagePlace(hw, *mptr, pcc);
-			free(tptr);
 			return;
 		}
-		sptr = ParseMarkTag(text, MT_INPUT, "NAME");
-		free(tptr);
 		tptr = (char *)malloc(strlen(mark->start) +
 				      strlen(" ISMAP") + strlen(MT_IMAGE) -
 				      strlen(MT_INPUT) + 1);
@@ -137,9 +129,6 @@ void FormInputField(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		mark->start = tptr;
 		ImagePlace(hw, *mptr, pcc);
 		mark->start = tptr2;
-		/* Save the NAME value so we know which image is which */
-		if (sptr && mark->s_picd)
-			mark->s_picd->text = sptr;
 	} else if (caseless_equal(tptr, "hidden")) {
 		/* Hidden inputs have no element associated with them,
 		 * just a widget record. */
@@ -180,7 +169,6 @@ void FormTextAreaBegin(MarkInfo **mptr, PhotoComposeContext *pcc)
 void FormTextAreaEnd(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 {
 	MarkInfo *mark = *mptr;
-	char *start;
 	char *buf;
 
 	if (!pcc->text_area_buf)
@@ -190,16 +178,15 @@ void FormTextAreaEnd(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	buf = (char *)malloc(strlen(pcc->text_area_buf) + 2); 
 	strcpy(buf, pcc->text_area_buf);
 	strcat(buf, "\"");
-	/* Stick the fake in, saving the real one. */
-	start = mark->start;
+	/* Stick the fake in. */
 	mark->start = buf;
 	GetTitle(mark, pcc);
 	mark->is_end = 0;
 	WidgetPlace(hw, mark, pcc);
-	/* Free the fake, put the original back */
+	/* Free the fake */
 	free(buf);
 	free(pcc->text_area_buf);
-	mark->start = start;
+	mark->start = NULL;	/* Always NULL for end tag. */
 	mark->is_end = 1;
 	pcc->text_area_buf = NULL;
 }
@@ -217,33 +204,40 @@ static void ProcessOption(SelectInfo *sptr)
 		sptr->options = (char **)malloc(1024 * sizeof(char *));
 		sptr->returns = (char **)malloc(1024 * sizeof(char *));
 		sptr->labels = (char **)malloc(1024 * sizeof(char *));
-	}
-        cnt = ++sptr->option_cnt;
-	if (cnt > 1024)
+	} else if (sptr->option_cnt == 1023) {
+		sptr->options = (char **)realloc(sptr->options,
+						 2048 * sizeof(char *));
+		sptr->returns = (char **)realloc(sptr->returns,
+						 2048 * sizeof(char *));
+		sptr->labels = (char **)realloc(sptr->labels,
+						2048 * sizeof(char *));
+	} else if (sptr->option_cnt == 2047) {
 		return;
+	}
+        cnt = sptr->option_cnt++;
 
 	if (sptr->option_buf)
 	        clean_white_space(sptr->option_buf);
-        sptr->options[cnt - 1] = sptr->option_buf;
+        sptr->options[cnt] = sptr->option_buf;
 
 	/* Use text string if no VALUE specified */
 	if (sptr->retval_buf) {
-	        sptr->returns[cnt - 1] = sptr->retval_buf;
+	        sptr->returns[cnt] = sptr->retval_buf;
 	} else if (sptr->option_buf) {
-		sptr->returns[cnt - 1] = strdup(sptr->option_buf);
+		sptr->returns[cnt] = strdup(sptr->option_buf);
 	} else {
-		sptr->returns[cnt - 1] = NULL;
+		sptr->returns[cnt] = NULL;
 	}
-        sptr->labels[cnt - 1] = sptr->label_buf;
+        sptr->labels[cnt] = sptr->label_buf;
 
         if (sptr->is_value) {
-                cnt = ++sptr->value_cnt;
+                cnt = sptr->value_cnt++;
                 sptr->value = (char **)realloc(sptr->value,
-					       cnt * sizeof(char *));
+					      sptr->value_cnt * sizeof(char *));
 		if (sptr->option_buf) {
-	                sptr->value[cnt - 1] = strdup(sptr->option_buf);
+	                sptr->value[cnt] = strdup(sptr->option_buf);
 		} else {
-	                sptr->value[cnt - 1] = NULL;
+	                sptr->value[cnt] = NULL;
 		}
         }       
 }        
@@ -251,34 +245,27 @@ static void ProcessOption(SelectInfo *sptr)
 /* <OPTION>  Can only be inside a SELECT tag. */
 void FormSelectOptionField(MarkInfo **mptr, PhotoComposeContext *pcc)
 {
-	MarkInfo *mark = *mptr;
-	char *tptr;
+	if (pcc->in_select && pcc->current_select) {
+		MarkInfo *mark = *mptr;
+		char *tptr;
 
-	if (!pcc->in_select)	/* Error */
-		return;
-
-	if (pcc->current_select) {
 		if (pcc->current_select->option_buf)
 			ProcessOption(pcc->current_select);
-		pcc->current_select->option_buf = (char *)malloc(1);
-		strcpy(pcc->current_select->option_buf, "");
+		pcc->current_select->option_buf = (char *)calloc(1, 1);
 		/* Check if this option starts selected */
-		tptr = ParseMarkTag(mark->start, MT_OPTION, "SELECTED");
-		if (tptr) {
+		if (tptr = ParseMarkTag(mark->start, MT_OPTION, "SELECTED")) {
 			pcc->current_select->is_value = 1;
 			free(tptr);
 		} else {
 			pcc->current_select->is_value = 0;
 		}       
 		/* Check if this option has a different return value field. */
-		tptr = ParseMarkTag(mark->start, MT_OPTION, "VALUE");
-		if (tptr) {
+		if (tptr = ParseMarkTag(mark->start, MT_OPTION, "VALUE")) {
 			pcc->current_select->retval_buf = tptr;
 		} else {       
 			pcc->current_select->retval_buf = NULL;
 		}              
-		tptr = ParseMarkTag(mark->start, MT_OPTION, "LABEL");
-		if (tptr) {
+		if (tptr = ParseMarkTag(mark->start, MT_OPTION, "LABEL")) {
 			pcc->current_select->label_buf = tptr;
 		} else {       
 			pcc->current_select->label_buf = NULL;
@@ -289,18 +276,14 @@ void FormSelectOptionField(MarkInfo **mptr, PhotoComposeContext *pcc)
 /* <OPTGROUP> Can only be inside a SELECT tag. */
 void FormSelectOptgroup(MarkInfo **mptr, PhotoComposeContext *pcc)
 {
-	MarkInfo *mark = *mptr;
-	char *tptr;
+	if (pcc->in_select && pcc->current_select) {
+		MarkInfo *mark = *mptr;
+		char *tptr;
 
-	if (!pcc->in_select)	/* Error */
-		return;
-
-	if (pcc->current_select) {
 		if (pcc->current_select->option_buf)
 			ProcessOption(pcc->current_select);
 		pcc->current_select->option_buf = strdup("MOSAIC_OPTGROUP");
-		tptr = ParseMarkTag(mark->start, MT_OPTGROUP, "LABEL");
-		if (tptr) {
+		if (tptr = ParseMarkTag(mark->start, MT_OPTGROUP, "LABEL")) {
 			pcc->current_select->label_buf = tptr;
 		} else {       
 			pcc->current_select->label_buf = strdup(" ");
@@ -324,9 +307,11 @@ void FormSelectBegin(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	 */
 
 	if (!pcc->current_select) {
-		pcc->current_select = (SelectInfo *)malloc(sizeof(SelectInfo));
+		pcc->current_select = (SelectInfo *)calloc(1,
+							    sizeof(SelectInfo));
 		pcc->current_select->hw = (Widget)hw;
 		pcc->current_select->mptr = *mptr;
+		/** calloc sets them
 		pcc->current_select->option_cnt = 0;
 		pcc->current_select->returns = NULL;
 		pcc->current_select->retval_buf = NULL;
@@ -336,6 +321,7 @@ void FormSelectBegin(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		pcc->current_select->label_buf = NULL;
 		pcc->current_select->value_cnt = 0;
 		pcc->current_select->value = NULL;
+		**/
 		pcc->current_select->is_value = -1;
 		pcc->ignore = 1;
 	}                      
@@ -344,10 +330,8 @@ void FormSelectBegin(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 void FormSelectEnd(HTMLWidget hw, PhotoComposeContext *pcc)
 {
-	char *start;
 	int len;  
-	char *buf;  
-	char *options, *returns, *labels, *value;
+	char *start, *buf, *options, *returns, *labels, *value;
 
 	if (!pcc->current_select)
 		return;
@@ -374,9 +358,9 @@ void FormSelectEnd(HTMLWidget hw, PhotoComposeContext *pcc)
 		      pcc->current_select->value_cnt);
 	/* Construct a fake INPUT tag. */
 	len = strlen(MT_INPUT) + strlen(options) +
-		strlen(returns) + strlen(value) + strlen(labels) + 
-		strlen(" type=select options=\"\" returns=\"\" value=\"\"") +
-		strlen(" labels=\"\"");
+		   strlen(returns) + strlen(value) + strlen(labels) +
+		   strlen(" type=select options=\"\" returns=\"\" value=\"\"") +
+		   strlen(" labels=\"\"");
 	buf = (char *)malloc(len + strlen(pcc->current_select->mptr->start) +1);
 	strcpy(buf, MT_INPUT);
 	strcat(buf, " type=select options=\"");
@@ -410,53 +394,66 @@ void FormSelectEnd(HTMLWidget hw, PhotoComposeContext *pcc)
 /* <BUTTON> */
 void FormButtonBegin(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 {
-	char *buf;
 	int len;        
 	MarkInfo *mark = *mptr;
+	char *type, *buf;
 
-	if (!pcc->button_buf) {
-		char *type = ParseMarkTag(mark->start, MT_BUTTON, "TYPE");
+	if (pcc->button_buf)
+		return;
 
-		/* Construct the start of a fake INPUT tag. */
-		len = strlen(MT_INPUT) +
-			strlen(" type=submit ISBUTTON text=\"\"");
-		buf = (char *)malloc(len + strlen(mark->start) + 1);
-		strcpy(buf, MT_INPUT);
-		if (!type || !*type)
-			/* Give it the default type */
-			strcat(buf, " type=submit");
-		if (type)
-			free(type);
-		strcat(buf, (char *) (mark->start + strlen(MT_BUTTON)));
-		strcat(buf, " ISBUTTON text=\"");
-		pcc->button_buf = buf;  
-	}
+	type = ParseMarkTag(mark->start, MT_BUTTON, "TYPE");
+	/* Construct the start of a fake INPUT tag. */
+	len = strlen(MT_INPUT) + strlen(" type=submit ISBUTTON text=\"\"");
+	buf = (char *)malloc(len + strlen(mark->start) + 1);
+	strcpy(buf, MT_INPUT);
+	if (!type || !*type)
+		/* Give it the default type */
+		strcat(buf, " type=submit");
+	if (type)
+		free(type);
+	strcat(buf, (char *) (mark->start + strlen(MT_BUTTON)));
+	strcat(buf, " ISBUTTON text=\"");
+	pcc->button_buf = buf;  
+	pcc->button_has_text = False;
+	pcc->button_has_image = False;
 }
 
 /* </BUTTON> */
 void FormButtonEnd(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 {
 	MarkInfo *mark = *mptr;
-	char *start;
 	char *buf;
 
 	if (!pcc->button_buf)
 		return;
 
-	/* Finish fake INPUT tag. */
-	buf = (char *)malloc(strlen(pcc->button_buf) + 2); 
-	strcpy(buf, pcc->button_buf);
-	strcat(buf, "\"");
-	/* Stick the fake in, saving the real one. */
-	start = mark->start;
-	mark->start = buf;
-	GetTitle(mark, pcc);
-	mark->is_end = 0;
-	WidgetPlace(hw, mark, pcc);
-	/* Free the fake, put the original back */
-	free(buf);
-	mark->start = start;
-	mark->is_end = 1;
+	if (pcc->button_has_text || !pcc->button_has_image) {
+		/* Finish fake INPUT tag. */
+		buf = (char *)malloc(strlen(pcc->button_buf) + 8); 
+		strcpy(buf, pcc->button_buf);
+		if (!pcc->button_has_text) {
+			char *tptr = ParseMarkTag(buf, MT_INPUT, "TYPE");
+
+			if (tptr) {
+				if (!my_strcasecmp(tptr, "reset")) {
+					strcat(buf, "Reset");
+				} else {
+					strcat(buf, "Submit");
+				}
+				free(tptr);
+			}
+		}
+		strcat(buf, "\"");
+		/* Stick the fake in. */
+		mark->start = buf;
+		GetTitle(mark, pcc);
+		mark->is_end = 0;
+		WidgetPlace(hw, mark, pcc);
+		/* Free the fake. */
+		free(buf);
+		mark->start = NULL;	/* Always NULL for end tag. */
+		mark->is_end = 1;
+	}
 	free(pcc->button_buf);
 	pcc->button_buf = NULL;
 }

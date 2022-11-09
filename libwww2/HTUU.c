@@ -36,7 +36,6 @@
 #include "HTUtils.h"
 #include "HTUU.h"
 
-
 PRIVATE char six2pr[64] = {
     'A','B','C','D','E','F','G','H','I','J','K','L','M',
     'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
@@ -65,14 +64,13 @@ PRIVATE unsigned char pr2six[256];
  *
  *    Exit     bufcoded contains the coded line.  The first 4*nbytes/3 bytes
  *                      contain printing ASCII characters representing
- *                      those binary bytes. This may include one or
+ *                      those binary bytes.  This may include one or
  *                      two '=' characters used as padding at the end.
  *                      The last byte is a zero byte.
  *             Returns the number of ASCII characters in "bufcoded".
  */
-PUBLIC int HTUU_encode ARGS3(unsigned char *,	bufin,
-			     unsigned int,	nbytes,
-			     char *,		bufcoded)
+PUBLIC int HTUU_encode (unsigned char *bufin, unsigned int nbytes,
+			char *bufcoded)
 {
    register char *outptr = bufcoded;
    unsigned int i;
@@ -125,9 +123,7 @@ PUBLIC int HTUU_encode ARGS3(unsigned char *,	bufin,
  *    Exit     Returns the number of binary bytes decoded.
  *             bufplain    contains these bytes.
  */
-PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
-			     unsigned char *,	bufplain,
-			     int,		outbufsize)
+PUBLIC int HTUU_decode (char *bufcoded, unsigned char *bufplain, int outbufsize)
 {
    static int first = 1;
    int nbytesdecoded, j;
@@ -165,8 +161,7 @@ PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
    }
 
    /* Strip leading whitespace. */
-
-   while(*bufcoded==' ' || *bufcoded == '\t')
+   while(*bufcoded == ' ' || *bufcoded == '\t')
       bufcoded++;
 
    /* Figure out how many characters are in the input buffer.
@@ -201,4 +196,3 @@ PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
 
    return(nbytesdecoded);
 }
-

@@ -17,7 +17,7 @@
 # desire. 
 # 
 # For a substring you pick "kill" for, all the images on any site with
-# the specified substring will be replaced by a little 8x8 pixel transparent
+# the specified substring will be replaced by a little 1x1 pixel transparent
 # image (i.e., you won't see the "delayed-image" icon).
 # 
 # This can be handy for getting rid of the graphics on any page which 

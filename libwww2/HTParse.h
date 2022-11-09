@@ -6,7 +6,6 @@
 
 #ifndef HTPARSE_H
 #define HTPARSE_H
-#include "HTUtils.h"
 
 /*
  * The following are flag bits which may be ORed together to form a number
@@ -39,7 +38,7 @@ HTParse:  Parse a URL relative to another URL
   returns                 A pointer to a malloc'd string which MUST BE FREED
                          
  */
-extern char *HTParse PARAMS((char *aName, char *relatedName, int wanted));
+extern char *HTParse(char *aName, char *relatedName, int wanted);
 
 
 /*
@@ -61,7 +60,7 @@ extern char *HTStrip(char *s);
 HTSimplify: Simplify a UTL
 
    A URL is allowed to contain the seqeunce xxx/../ which may be replaced by
-   "" , and the seqeunce "/./" which may be replaced by "/".  Simplification
+   "", and the seqeunce "/./" which may be replaced by "/".  Simplification
    helps us recognize duplicate filenames.  It doesn't deal with soft links,
    though.  The new (shorter) filename overwrites the old.
    
@@ -105,7 +104,7 @@ HTEscape:  Encode unacceptable characters in string
    two hex digits.
    
  */
-extern char *HTEscape PARAMS((char *str));
+extern char *HTEscape(char *str);
 
 
 /*
@@ -117,8 +116,8 @@ HTUnEscape: Decode %xx escaped characters
    The string is converted in place, as it will never grow.
    
  */
-extern char *HTUnEscape PARAMS((char *str));
+extern char *HTUnEscape(char *str);
 
-extern char from_hex PARAMS((char c));
+extern char from_hex(char c);
 
 #endif  /* HTPARSE_H */

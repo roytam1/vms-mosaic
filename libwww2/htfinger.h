@@ -11,10 +11,9 @@
 
 extern HTProtocol HTFinger;
 
-extern int HTLoadFinger PARAMS((
-	WWW_CONST char *arg,
-	HTParentAnchor *anAnchor,
-	HTFormat       format_out,
-	HTStream       *stream));
+extern int HTLoadFinger (WWW_CONST char *arg,
+			 HTParentAnchor *anAnchor,
+			 HTFormat        format_out,
+			 HTStream       *stream);
 
-#endif /* HTFINGER_H */
+#endif  /* HTFINGER_H */

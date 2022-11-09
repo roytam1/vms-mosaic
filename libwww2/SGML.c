@@ -259,12 +259,12 @@ PRIVATE void start_element(HTStream *context)
 **		NULL		tag not found
 **		else		address of tag structure in dtd
 */
-PRIVATE HTTag *find_tag ARGS2(WWW_CONST SGML_dtd *, dtd, char *, string)
+PRIVATE HTTag *find_tag (WWW_CONST SGML_dtd *dtd, char *string)
 {
     int high, low, i, diff;
 
     for (low = 0, high = dtd->number_of_tags; high > low;
-		diff < 0 ? (low = i+1) : (high = i)) {    /* Binary serach */
+		diff < 0 ? (low = i + 1) : (high = i)) {  /* Binary search */
 	i = (low + (high - low) / 2);
 	diff = my_strcasecmp(dtd->tags[i].name, string);  /* Case insensitive */
 	if (diff == 0)			/* success: found it */
@@ -278,7 +278,7 @@ PRIVATE HTTag *find_tag ARGS2(WWW_CONST SGML_dtd *, dtd, char *, string)
 */
 
 
-PUBLIC void SGML_end ARGS1(HTStream *, context)
+PUBLIC void SGML_end (HTStream *context)
 {
 /*	Could check that we are back to bottom of stack! @@  */
 
@@ -286,7 +286,7 @@ PUBLIC void SGML_end ARGS1(HTStream *, context)
 }
 
 
-PUBLIC void SGML_free ARGS1(HTStream *, context)
+PUBLIC void SGML_free (HTStream *context)
 {
     (*context->actions->free)(context->target);
     HTChunkFree(context->string);
@@ -303,18 +303,18 @@ PUBLIC void SGML_free ARGS1(HTStream *, context)
 */
 
 #ifdef CALLERDATA		  
-PUBLIC void *SGML_callerData ARGS1(HTStream *, context)
+PUBLIC void *SGML_callerData (HTStream *context)
 {
     return context->callerData;
 }
 
-PUBLIC void SGML_setCallerData ARGS2(HTStream *, context, void*, data)
+PUBLIC void SGML_setCallerData (HTStream *context, void *data)
 {
     context->callerData = data;
 }
 #endif
 
-PUBLIC void SGML_character ARGS2(HTStream *, context, char,c)
+PUBLIC void SGML_character (HTStream *context, char c)
 
 {
     WWW_CONST SGML_dtd	*dtd	=	context->dtd;
@@ -613,7 +613,7 @@ PUBLIC void SGML_character ARGS2(HTStream *, context, char,c)
 }  /* SGML_character */
 
 
-PUBLIC void SGML_string ARGS2(HTStream *, context, WWW_CONST char *, str)
+PUBLIC void SGML_string (HTStream *context, WWW_CONST char *str)
 {
     WWW_CONST char *p;
 
@@ -622,7 +622,7 @@ PUBLIC void SGML_string ARGS2(HTStream *, context, WWW_CONST char *, str)
 }
 
 
-PUBLIC void SGML_write ARGS3(HTStream *, context, WWW_CONST char *, str, int, l)
+PUBLIC void SGML_write (HTStream *context, WWW_CONST char *str, int l)
 {
     WWW_CONST char *p;
     WWW_CONST char *e = str + l;
@@ -634,7 +634,7 @@ PUBLIC void SGML_write ARGS3(HTStream *, context, WWW_CONST char *, str, int, l)
 /*_______________________________________________________________________
 */
 
-PRIVATE void SGML_handle_interrupt ARGS1(HTStream *, context)
+PRIVATE void SGML_handle_interrupt (HTStream *context)
 {
 }
 
@@ -659,9 +659,7 @@ PUBLIC WWW_CONST HTStreamClass SGMLParser =
 **
 */
 
-PUBLIC HTStream *SGML_new ARGS2(
-	WWW_CONST SGML_dtd *,	dtd,
-	HTStructured *,		target)
+PUBLIC HTStream *SGML_new (WWW_CONST SGML_dtd *dtd, HTStructured *target)
 {
     int i;
     HTStream *context = (HTStream *) malloc(sizeof(*context));
@@ -673,16 +671,15 @@ PUBLIC HTStream *SGML_new ARGS2(
     context->string = HTChunkCreate(128);	/* Grow by this much */
     context->dtd = dtd;
     context->target = target;
-    context->actions = (HTStructuredClass*)(((HTStream*)target)->isa);
+    context->actions = (HTStructuredClass *)(((HTStream *)target)->isa);
     					/* Ugh: no OO */
     context->state = S_text;
     context->element_stack = 0;			/* empty */
 #ifdef CALLERDATA		  
     context->callerData = (void *)callerData;
 #endif    
-    for (i=0; i < MAX_ATTRIBUTES; i++)
+    for (i = 0; i < MAX_ATTRIBUTES; i++)
 	context->value[i] = 0;
 
     return context;
 }
-

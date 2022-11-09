@@ -5,14 +5,11 @@
 #ifndef HTPASSWD_H
 #define HTPASSWD_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"
+#endif
+#ifndef HTLIST_H
 #include "HTList.h"
-
-#ifdef SHORT_NAMES
-#define HTAAenPw        HTAA_encryptPasswd
-#define HTAApwMa        HTAA_passwdMatch
-#define HTAAFrPR        HTAAFile_readPasswdRec
-#define HTAAchPw        HTAA_checkPasswd
 #endif
 
 /*
@@ -44,9 +41,9 @@ User Authentication
 **      returns         YES, if the username-password pair was correct.
 **                      NO, otherwise; also, if open fails.
 */
-PUBLIC BOOL HTAA_checkPassword PARAMS((WWW_CONST char *username,
-                                       WWW_CONST char *password,
-                                       WWW_CONST char *filename));
+PUBLIC BOOL HTAA_checkPassword (WWW_CONST char *username,
+                                WWW_CONST char *password,
+                                WWW_CONST char *filename);
 
 /*
  * Password File Maintenance Routines
@@ -64,14 +61,14 @@ PUBLIC BOOL HTAA_checkPassword PARAMS((WWW_CONST char *username,
 ** NOTE:
 **      Uses currently the C library function crypt(), which
 **      only accepts at most 8 characters long strings and produces
-**      always 13 characters long strings. This function is
+**      always 13 characters long strings.  This function is
 **      called repeatedly so that longer strings can be encrypted.
 **      This is of course not as safe as encrypting the entire
 **      string at once, but then again, we are not that paranoid
 **      about the security inside the machine.
 **
 */
-PUBLIC char *HTAA_encryptPasswd PARAMS((WWW_CONST char *password));
+PUBLIC char *HTAA_encryptPasswd (WWW_CONST char *password);
 
 
 /* PUBLIC                                               HTAA_passwdMatch()
@@ -88,8 +85,8 @@ PUBLIC char *HTAA_encryptPasswd PARAMS((WWW_CONST char *password));
 **      returns         YES, if password matches the encrypted one.
 **                      NO, if not, or if either parameter is NULL.
 */
-PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char *password,
-                                     WWW_CONST char *encrypted));
+PUBLIC BOOL HTAA_passwdMatch (WWW_CONST char *password,
+                              WWW_CONST char *encrypted);
 
 
 /* PUBLIC                                               HTAAFile_readPasswdRec()
@@ -103,7 +100,7 @@ PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char *password,
 ** ON EXIT:
 **      returns         EOF on end of file,
 **                      otherwise the number of read fields
-**                      (i.e. in a correct case returns 2).
+**                      (i.e., in a correct case returns 2).
 **      out_username    contains the null-terminated read username.
 **      out_password    contains the null-terminated read password.
 **
@@ -114,8 +111,8 @@ PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char *password,
 **      There may be whitespace (blanks or tabs) in the beginning and
 **      the end of each field. They are ignored.
 */
-PUBLIC int HTAAFile_readPasswdRec PARAMS((FILE *fp,
-                                          char *out_username,
-                                          char *out_password));
+PUBLIC int HTAAFile_readPasswdRec (FILE *fp,
+				   char *out_username,
+				   char *out_password);
 
-#endif /* not HTPASSWD_H */
+#endif  /* HTPASSWD_H */

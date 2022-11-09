@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -63,56 +63,53 @@
 #include "../libhtmlw/HTMLputil.h"
 
 /* The new file format provides support for nested hotlists of interesting
-   documents within the browser.
-   It uses a subset of HTML.
+   documents within the browser.  It uses a subset of HTML.
    Here is a simplified BNF for this format:
 
-<hotlist-file> ::= <start-html-tag><hotlist-document><end-html-tag>|
-		<hotlist-document>
+   <hotlist-file> ::= <start-html-tag><hotlist-document><end-html-tag> |
+		      <hotlist-document>
 
-<hotlist-document> ::= <head><body>|<body>
-<head> ::= <start-head-tag><title element><end-head-tag>|<title element>
-<body> ::= <start-body-tag><list><end-body-tag>|<list>
+   <hotlist-document> ::= <head><body> | <body>
+   <head> ::= <start-head-tag><title element><end-head-tag> | <title element>
+   <body> ::= <start-body-tag><list><end-body-tag> | <list>
 
-<list> ::= <structured-list>|<flat-list>
+   <list> ::= <structured-list> | <flat-list>
 
-<structured-list> ::= <title-part><ul-list>|<ul-list>
+   <structured-list> ::= <title-part><ul-list> | <ul-list>
 
-<title-part> ::= <title-of-list>|<header-element>
-<header-element> ::= <start-header-tag><title-of-list><end-header-tag>
+   <title-part> ::= <title-of-list> | <header-element>
+   <header-element> ::= <start-header-tag><title-of-list><end-header-tag>
 
-<ul-list> ::=  <start-ul-tag><list-of-items><end-ul-tag>|
-		<start-ul-tag><end-ul-tag>
-<list-of-items> ::= <list-item> | <list-item><list-of-items>
-<list-item> ::= <li-tag><item>
-<item> ::= <structured-list>|<url-item>
+   <ul-list> ::=  <start-ul-tag><list-of-items><end-ul-tag> |
+		  <start-ul-tag><end-ul-tag>
+   <list-of-items> ::= <list-item> | <list-item><list-of-items>
+   <list-item> ::= <li-tag><item>
+   <item> ::= <structured-list> | <url-item>
 
-<url-item> ::= <start-anchor-tag><title><end-anchor-tag>
-<start-anchor-tag> ::= '<'<anchor-name><space><anchor-attrs>'>'
-<anchor-attrs> ::= <href-attr>|<title-attr><space><href-attr>|
-		<href-attr><space><title-attr>
+   <url-item> ::= <start-anchor-tag><title><end-anchor-tag>
+   <start-anchor-tag> ::= '<'<anchor-name><space><anchor-attrs>'>'
+   <anchor-attrs> ::= <href-attr> | <title-attr><space><href-attr> |
+		      <href-attr><space><title-attr>
 
-<href-attr> ::= <href-keyword>'='<url-val>
-<url-val> ::= <double-quote><url><double-quote>|
-		<single-quote><url><single-quote>
+   <href-attr> ::= <href-keyword>'='<url-val>
+   <url-val> ::= <double-quote><url><double-quote> |
+		 <single-quote><url><single-quote>
 
-<title-attr> ::= <title-keyword>'='<title-val>
-<title-val> ::= <double-quote><title><double-quote>|
-		<single-quote><title><single-quote>
+   <title-attr> ::= <title-keyword>'='<title-val>
+   <title-val> ::= <double-quote><title><double-quote> |
+		   <single-quote><title><single-quote>
 
-<flat-list> ::= <url-item>|<url-item><flat-list>
+   <flat-list> ::= <url-item> | <url-item><flat-list>
 */
 
 
 static int notSpacesOrNewLine(char *s)
 {
-  int retc = 0;
-
-  for (; *s && !retc; s++) {
+  for (; *s; s++) {
       if (!isspace(*s))
-          retc = 1;
+          return 1;
   }
-  return retc;
+  return 0;
 }
 
 /*
@@ -123,24 +120,32 @@ static char *mo_extract_anchors(mo_hotlist *list, MarkInfo *mptr)
   mo_hotnode *node;
   char *name = NULL;
   char *last_text = NULL;
-  char *url = NULL, *title = NULL, *rbm = NULL;
+  char *url = NULL;
+  char *title = NULL;
+  char *rbm = NULL;
 
   for (; mptr; mptr = mptr->next) {
     switch (mptr->type) {
-      case M_TITLE:		/* title tag */
+      case M_TITLE:		/* Title tag */
 	if (mptr->is_end && last_text) {
 	    /* If this is the end tag, take the last text as name */
 	    name = strdup(last_text);
 	    mo_convert_newlines_to_spaces(name);
 	}
 	break;
-      case M_NONE:		/* text, not tag */
+      case M_NONE:		/* Text, not tag */
 	if (notSpacesOrNewLine(mptr->text))
 	    last_text = mptr->text;
 	break;
       case M_ANCHOR:
 	if (!mptr->is_end) {		/* Start anchor tag */
 	    last_text = NULL;
+	    if (url)
+		free(url);
+	    if (title)
+		free(title);
+	    if (rbm)
+		free(rbm);
 	    url = ParseMarkTag(mptr->start, MT_ANCHOR, AT_HREF);
 	    title = ParseMarkTag(mptr->start, MT_ANCHOR, "title");
 	    rbm = ParseMarkTag(mptr->start, MT_ANCHOR, "RBM");
@@ -149,18 +154,19 @@ static char *mo_extract_anchors(mo_hotlist *list, MarkInfo *mptr)
 	    node->type = mo_t_url;
 	    node->url = url;
 	    /* If there is a title attribute in the anchor, take it,
-	     * otherwise take the last text */
+	     * otherwise take the last text. */
 	    node->title = title ? title :
 	      		  (last_text ? strdup(last_text) : strdup("Unnamed"));
 	    if (rbm) {
 		node->rbm = 1;
 		free(rbm);
+		rbm = NULL;
 	    } else {
 		node->rbm = 0;
 	    }
 	    mo_convert_newlines_to_spaces(node->title);
 	    mo_append_item_to_hotlist(list, (mo_hot_item *)node);
-	    rbm = url = title = last_text = NULL;
+	    url = title = last_text = NULL;
 	}
       default:
 	break;
@@ -177,13 +183,15 @@ static void mo_parse_hotlist_list(mo_hotlist *list, MarkInfo **current)
   mo_hotlist *hotlist;
   mo_hotnode *node;
   char *last_text = NULL;
-  char *url = NULL, *title = NULL, *rbm = NULL;
+  char *url = NULL;
+  char *title = NULL;
+  char *rbm = NULL;
   MarkInfo *mptr;
   int done = 0;
   
   for (mptr = *current; mptr && !done; mptr && (mptr = mptr->next)) {
     switch (mptr->type) {
-      case M_NONE:		/* text, not tag */
+      case M_NONE:		/* Text, not tag */
 	if (notSpacesOrNewLine(mptr->text))
 	    last_text = mptr->text;
 	break;
@@ -198,46 +206,48 @@ static void mo_parse_hotlist_list(mo_hotlist *list, MarkInfo **current)
 	    node->type = mo_t_url;
 	    node->url = url;
 	    /* If there is a title attribute in the anchor, take it,
-	       otherwise take the last text */
+	     * otherwise take the last text. */
 	    node->title = title ? title :
 	    		  (last_text ? strdup(last_text) : strdup("Unnamed"));
-	    if (node->title && node->title[strlen(node->title)-1] == '\n')
-	        node->title[strlen(node->title)-1] = '\0';
+	    if (node->title && node->title[strlen(node->title) - 1] == '\n')
+	        node->title[strlen(node->title) - 1] = '\0';
 	    if (rbm) {
 		node->rbm = 1;
 		free(rbm);
+		rbm = NULL;
 	    } else {
 		node->rbm = 0;
 	    }
 	    mo_convert_newlines_to_spaces(node->title);
 	    mo_append_item_to_hotlist(list, (mo_hot_item *)node);
-	    rbm = url = title = last_text = NULL;
+	    url = title = last_text = NULL;
 	  }
 	break;
       case M_UNUM_LIST:
 	if (!mptr->is_end) {		/* Start Unum List tag */
 	    hotlist = (mo_hotlist *)malloc(sizeof(mo_hotlist));
 	    hotlist->type = mo_t_list;
-	    hotlist->nodelist = hotlist->nodelist_last = 0;
+	    hotlist->nodelist = hotlist->nodelist_last = NULL;
 	    hotlist->parent = list;
 	    hotlist->name = last_text ? strdup(last_text) : strdup("Unnamed");
-	    if (hotlist->name && hotlist->name[strlen(hotlist->name)-1] == '\n')
-	        hotlist->name[strlen(hotlist->name)-1] = '\0';
+	    if (hotlist->name &&
+		hotlist->name[strlen(hotlist->name) - 1] == '\n')
+	        hotlist->name[strlen(hotlist->name) - 1] = '\0';
 	    mo_convert_newlines_to_spaces(hotlist->name);
 	    rbm = ParseMarkTag(mptr->start, MT_UNUM_LIST, "RBM");
 	    if (rbm) {
 		hotlist->rbm = 1;
 		free(rbm);
+		rbm = NULL;
 	    } else {
 		hotlist->rbm = 0;
 	    }
-	    rbm = NULL;
 	    mo_append_item_to_hotlist(list, (mo_hot_item *)hotlist);
 	    mptr = mptr->next;
 	    last_text = NULL;
 	    mo_parse_hotlist_list(hotlist, &mptr);
 	    /* After this call, mptr is positioned on the end Unum List tag */
-	} else {			/* end Unum List tag */
+	} else {			/* End Unum List tag */
 	    *current = mptr;
 	    done = 1;
 	}
@@ -254,38 +264,36 @@ static void mo_parse_hotlist_list(mo_hotlist *list, MarkInfo **current)
  */
 char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
 {
-  char *name, *ptr;
-  int done, normal, has_list, depth;
+  char *name, *text;
+  int done = 0;
+  int normal = 0;
+  int has_list = 0;
+  int depth = 0;
   long size;
   MarkInfo *hot_mark_up, *mptr;
-  char *text;
 
   setbuf(fp, NULL);
   fseek(fp, 0L, SEEK_END);
   size = ftell(fp);
-  text = malloc(size + 1);
 
-  if (!text)
+  if (!(text = malloc(size + 1)))
       return NULL;
 
   fseek(fp, 0L, SEEK_SET);
   fread(text, (size_t)1, (size_t)size, fp);
   text[size] = '\0';
+
   /* Parse the HTML document */
   hot_mark_up = HTMLParse(NULL, text, NULL);
   free(text);
 
   /* Some pre-processing to see if this is in hotlist format or if
-     this is a normal document.
-     The algo is as follow: if an anchor is outside a list or if there
-     are more than one top level list, then it is not in hotlist format.
-     The 'normal' flag at the end of the pre-processing tells if it
-     is a normal document or a hotlist.
+   * this is a normal document.
+   * The algo is as follow:  if an anchor is outside a list or if there
+   * are more than one top level list, then it is not in hotlist format.
+   * The 'normal' flag at the end of the pre-processing tells if it
+   * is a normal document or a hotlist.
    */
-  done = 0;
-  normal = 0;
-  has_list = 0;
-  depth = 0;
   for (mptr = hot_mark_up; mptr && !done; mptr = mptr->next) {
       switch (mptr->type) {
 	case M_ANCHOR:
@@ -295,7 +303,7 @@ char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
 	  }
 	  break;
 	case M_UNUM_LIST:
-	  if (!mptr->is_end) {	/* start unum list tag */
+	  if (!mptr->is_end) {	/* Start unum list tag */
 	      if (!depth && has_list) {
 	          done = 1;
 		  normal = 1;
@@ -303,7 +311,7 @@ char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
 	          depth++;
 		  has_list = 1;
 	      }
-	  } else {			/* end unum list tag */
+	  } else {		/* End unum list tag */
 	      depth--;
 	  }
 	default:
@@ -321,11 +329,11 @@ char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
       done = 0;
       for (mptr = hot_mark_up; mptr && !done; mptr = mptr->next) {
 	  switch (mptr->type) {
-	    case M_NONE:		/* text, not tag */
+	    case M_NONE:		/* Text, not tag */
 	      if (notSpacesOrNewLine(mptr->text))
 	          last_text = mptr->text;
 	      break;
-	    case M_UNUM_LIST:	/* Unum List tag */
+	    case M_UNUM_LIST:		/* Unum List tag */
 	      done = 1;
 	    default:
 	      break;
@@ -345,22 +353,23 @@ char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
   FreeMarkUpList(hot_mark_up);
 
   /*
-   * Problem with hotlist name growing by 1 space with each write. So...
+   * Problem with hotlist name growing by 1 space with each write.  So...
    *   we chop off all the spaces on the end here.
    * We do it this way to get rid of all the people out there who already
    *   have hotlist names that are space infested.
    */
   if (name) {
-      for (ptr = (name + strlen(name) - 1); ptr && *ptr == ' '; ptr--)
+      char *ptr;
+
+      for (ptr = name + strlen(name) - 1; ptr && *ptr == ' '; ptr--)
           *ptr = '\0';
   }
-
   return name;
 }
 
 /*
- * This function replace '>', '<' and '&' by their entity references
- * and output them.
+ * This function replaces '>', '<' and '&' by their entity references
+ * and outputs them.
  */
 static void fputExpanded(char *s, FILE *fp)
 {
@@ -391,36 +400,35 @@ static void mo_write_list_r(mo_hotlist *list, FILE *fp)
       fputs("\n<UL>\n", fp);
   }
   for (item = list->nodelist; item; item = item->any.next) {
-    if (item->type == mo_t_url)	{ /* URL item */
-	if (!(item->hot.url))
-	    continue;
-	if (item->hot.rbm) {
-	    fputs("<LI> <A RBM HREF=\"", fp);
-	} else {
-	    fputs("<LI> <A HREF=\"", fp);
-	}
-	fputExpanded(item->hot.url, fp);
-	fputs("\"> ", fp);
-	if (!(item->hot.title)) {
-	    fputs("No Title\n", fp);
-	} else {
-	    fputExpanded(item->hot.title, fp);
-	}
-	fputs("</A>\n", fp);
-    } else {			/* list item */
-	fputs("<LI> ", fp);
-	mo_write_list_r(&(item->list), fp);
-    }
+      if (item->type == mo_t_url) {  /* URL item */
+	  if (!item->hot.url)
+	      continue;
+	  if (item->hot.rbm) {
+	      fputs("<LI> <A RBM HREF=\"", fp);
+	  } else {
+	      fputs("<LI> <A HREF=\"", fp);
+	  }
+	  fputExpanded(item->hot.url, fp);
+	  fputs("\"> ", fp);
+	  if (!item->hot.title) {
+	      fputs("No Title\n", fp);
+	  } else {
+	      fputExpanded(item->hot.title, fp);
+	  }
+	  fputs("</A>\n", fp);
+      } else {			/* List item */
+	  fputs("<LI> ", fp);
+	  mo_write_list_r(&item->list, fp);
+      }
   }
   fputs("</UL>\n", fp);
 }
 
 /*
  * Write a hotlist out to a file.
- * Return mo_succeed if everything goes OK;
- * mo_fail else.
+ * Return mo_succeed if everything goes OK, else mo_fail.
  */
-mo_status mo_write_hotlist (mo_hotlist *list, FILE *fp)
+mo_status mo_write_hotlist(mo_hotlist *list, FILE *fp)
 {
   static Boolean init = 0;
   static char *DAN;
@@ -430,8 +438,7 @@ mo_status mo_write_hotlist (mo_hotlist *list, FILE *fp)
       init = 1;
   }
 
-  fputs("<HTML>\n", fp);
-  fprintf(fp, "%s\n", NCSA_HOTLIST_FORMAT_COOKIE_THREE);
+  fprintf(fp, "<HTML>\n%s\n", NCSA_HOTLIST_FORMAT_COOKIE_THREE);
 
   fputs("<TITLE>Hotlist from ", fp);
   if (!DAN) {

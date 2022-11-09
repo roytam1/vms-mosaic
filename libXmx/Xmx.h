@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #ifndef __XMX_H__
 #define __XMX_H__
@@ -92,7 +92,7 @@
 /* --------------------------- INTERNAL DEFINES --------------------------- */
 
 /* Maximum number of resource args usable --- should be large
-   since applications also can add resources. */
+ * since applications also can add resources. */
 #define XmxMaxNumArgs 30
 
 /* ------------------------------ VARIABLES ------------------------------- */
@@ -102,15 +102,14 @@ extern int Xmx_n;
 extern Arg Xmx_wargs[];
 extern Widget Xmx_w;
 
-/* This probably won't be needed to be accessed
-   directly by an application; if not, it should be
-   moved to XmxP.h. */
+/* This probably won't be needed to be accessed directly by an
+ * application; if not, it should be moved to XmxP.h. */
 extern int Xmx_uniqid;
 
 /* ------------------------------ CONSTANTS ------------------------------- */
 
 /* These probably shouldn't be necessary, since we use
-   Gadgets whenever possible. */
+ * Gadgets whenever possible. */
 #define XmxWidget 0
 #define XmxGadget 1
 
@@ -119,11 +118,6 @@ extern int Xmx_uniqid;
 #define XmxShadowOut       1
 #define XmxShadowEtchedIn  2
 #define XmxShadowEtchedOut 3
-
-/* Currently unused. */
-#define XmxLeft   XmALIGNMENT_BEGINNING
-#define XmxCenter XmALIGNMENT_CENTER
-#define XmxRight  XmALIGNMENT_END
 
 /* Null values for some arguments. */
 #define XmxNotDisplayed -99999
@@ -152,8 +146,8 @@ extern int Xmx_uniqid;
 /* ---------------------------- MENU TYPEDEFS ----------------------------- */
 
 /* Struct used by app when loading option menu.  The 'set_state'
-   parameter is used to indicate menu history for the option menu;
-   the entry with 'XmxSet' is used. */
+ * parameter is used to indicate menu history for the option menu;
+ * the entry with 'XmxSet' is used. */
 typedef struct _XmxOptionMenuStruct {
   String namestr;
   int data;
@@ -175,10 +169,10 @@ typedef struct _XmxMenubarStruct {
 /* --------------------------- RECORD TYPEDEFS ---------------------------- */
 
 /* These typedefs, while public, are not guaranteed to remain static
-   and should not be actually used by an application. */
+ * and should not be actually used by an application. */
 
 /* A single entry in a menu (menubar, toggle menu, or option menu),
-   tagged by the integer token used as callback_data. */
+ * tagged by the integer token used as callback_data. */
 typedef struct _XmxMenuEntry {
   Widget w;
   int token;
@@ -224,8 +218,10 @@ extern void XmxAddEventHandler (Widget, EventMask, XtEventHandler, int);
 extern void XmxRemoveEventHandler (Widget, EventMask, XtEventHandler, int);
 
 extern void XmxStartup (void);
+extern void XmxSetDisplay (Display *);
 extern void XmxSetArg (String, XtArgVal);
 extern void XmxSetValues (Widget);
+extern void XmxGetValues (Widget);
 extern void XmxManageRemanage (Widget);
 extern void XmxSetSensitive (Widget, int);
 
@@ -262,22 +258,22 @@ extern void XmxAdjustLabelText (Widget, String);
 extern Widget XmxMakeLabel (Widget, String);
 extern Widget XmxMakeNamedLabel (Widget, String, String);
 extern Widget XmxMakeBlankLabel (Widget);
-extern Widget XmxMakeErrorDialog (Widget, String, String);
-extern void   XmxMakeErrorDialogWait (Widget, XtAppContext, char *, 
+extern void XmxMakeErrorDialog (Widget, String, String);
+extern void XmxMakeErrorDialogWait (Widget, XtAppContext, char *, 
+                                    char *, char *);
+extern void XmxMakeWarningDialog (Widget, String, String);
+extern void XmxMakeWarningDialogWait (Widget, XtAppContext, char *, 
                                       char *, char *);
-extern void   XmxMakeWarningDialogWait (Widget, XtAppContext, char *, 
-                                        char *, char *);
-extern Widget XmxMakeInfoDialog (Widget, String, String);
-extern void   XmxMakeInfoDialogWait (Widget, XtAppContext, char *, 
-                                     char *, char *);
+extern void XmxMakeInfoDialog (Widget, String, String);
+extern void XmxMakeInfoDialogWait (Widget, XtAppContext, char *,
+				   char *, char *);
 extern Widget XmxMakeQuestionDialog (Widget, String, String, XtCallbackProc, 
                                      int, int);
 extern XmString XmxMakeXmstrFromFile (String);
 extern XmString XmxMakeXmstrFromString (String);
 extern Widget XmxMakeBboardDialog (Widget, String);
 extern Widget XmxMakeFormDialog (Widget, String);
-extern Widget XmxMakeFileSBDialog (Widget, String, String, XtCallbackProc, 
-                                   int);
+extern Widget XmxMakeFileSBDialog (Widget, String, String, XtCallbackProc, int);
 extern Widget XmxMakeHelpDialog (Widget, XmString, String);
 extern Widget XmxMakeHelpTextDialog (Widget, String, String, Widget *);
 extern void XmxAdjustHelpDialogText (Widget, XmString, String);
@@ -313,7 +309,8 @@ extern Widget XmxMakeFormAndFourButtons (Widget, XtCallbackProc, String, String,
 extern Widget XmxMakeFormAndFiveButtons (Widget, XtCallbackProc, String,
                                          String, String, String, String,
 					 int, int, int, int, int);
-
+extern Widget XmxInitModalDialogs (Widget toplevel);
+extern void XmxResetModalDialogs (void);
 extern int XmxModalYesOrNo (Widget parent, XtAppContext app,
                             char *questionstr, char *yesstr,
                             char *nostr);
@@ -361,4 +358,4 @@ extern XmxMenuRecord *XmxRMakeToggleMenu (Widget, int, XtCallbackProc,
                                           XmxToggleMenuStruct *);
 extern XmxMenuRecord *XmxRMakeMenubar (Widget, XmxMenubarStruct *, Boolean);
 
-#endif /* __XMX_H__ */
+#endif  /* __XMX_H__ */

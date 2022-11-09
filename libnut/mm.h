@@ -52,22 +52,21 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2006 - The VMS Mosaic Project */
 
 typedef struct memory_struct {
-	int memoryType; /*type of chunk to use*/
-	char *memory; /*chunk(s) of memory*/
-	int sizeCnt; /*the number of chunks of size*/
-	int size; /*the size of _1_ chunk*/
-	int fullSize; /*the size * sizeCnt*/
-	int nextFree; /*the next free location (end of last allocation)*/
+	int memoryType; /* Type of chunk to use */
+	char *memory;   /* Chunk(s) of memory */
+	int sizeCnt;    /* Number of chunks of size */
+	int size;       /* Size of _1_ chunk */
+	int fullSize;   /* size * sizeCnt */
+	int nextFree;   /* Next free location (end of last allocation) */
 } mem_block;
 
 int memSize[] = {
-	4096, /*Lex Tree*/
-	8192 /*Parse Tree*/
+	4096,  /* Lex Tree */
+	8192   /* Parse Tree */
 };
-
 
 #define MEM_LEX 0
 #define MEM_PARSE 1
@@ -86,7 +85,7 @@ int memSize[] = {
 #define MEM_FAIL 0
 #define MEM_SUCCEED 1
 
-#define MEM_INDEX_SIZE(block) ((block)->fullSize/4) /*1/4 chunk size*/
+#define MEM_INDEX_SIZE(block) ((block)->fullSize / 4)  /* 1/4 chunk size */
 
 
 void freeBlock(mem_block *block);

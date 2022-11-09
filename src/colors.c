@@ -20,7 +20,8 @@ extern int srcTrace;
 #ifdef HAVE_JPEG
 #include "jpeglib.h"
 #include "readJPEG.h"
-extern JSAMPARRAY jcolormap;
+JSAMPARRAY jcolormap;
+#endif
 
 static char *colors_icons[] = {
 "78706B",
@@ -39,7 +40,6 @@ static char *colors_icons[] = {
 "BFBFBF",
 "E7E7E7"
 };
-#endif
 
 static char *colors_216[] = {
 "ffffff",
@@ -266,14 +266,16 @@ int get_safe_colors(Widget wid)
 	unsigned int r, g, b;
 	int i, j, num;
 	int failed = 0;
-	char t[3];
+	char *t;
 	XColor col;
-	static int safe_colors_done = 0;
+	Colormap cmap;
 	int gotit[216];
+	static int safe_colors_done = 0;
 #ifdef HAVE_JPEG
 	JSAMPROW workspace;
 #endif
 
+	/* Already been here */
 	if (safe_colors_done)
 		return safe_colors_done;
 
@@ -282,6 +284,10 @@ int get_safe_colors(Widget wid)
 		BSCnum = 0;
 		return 0;
 	}
+
+	cmap = installed_colormap ? installed_cmap :
+	       DefaultColormapOfScreen(XtScreen(wid));
+
 #ifdef HAVE_JPEG
 	jcolormap = (JSAMPARRAY)malloc(3 * sizeof(JSAMPROW));
 	workspace = (JSAMPROW)malloc(3 * 256 * sizeof(JSAMPLE));
@@ -290,17 +296,9 @@ int get_safe_colors(Widget wid)
 		workspace += 256;
 	}
 #endif
-	t[2] = 0;
 	for (i = 0; i < MUST_HAVE; i++) {
-		t[0] = colors_216[i][0];
-		t[1] = colors_216[i][1];
-		sscanf(t, "%x", &r);
-		t[0] = colors_216[i][2];
-		t[1] = colors_216[i][3];
-		sscanf(t, "%x", &g);
-		t[0] = colors_216[i][4];
-		t[1] = colors_216[i][5];
-		sscanf(t, "%x", &b);
+		t = colors_216[i];
+		sscanf(t, "%2x%2x%2x", &r, &g, &b);
 #ifdef HAVE_JPEG
 		jcolormap[0][i] = (JSAMPLE)r;
 		jcolormap[1][i] = (JSAMPLE)g;
@@ -311,10 +309,7 @@ int get_safe_colors(Widget wid)
 		col.green = g << 8;
 		col.blue = b << 8;
 		col.flags = DoRed | DoGreen | DoBlue;
-		if (!XAllocColor(XtDisplay(wid),
-				 (installed_colormap ? installed_cmap :
-				  DefaultColormapOfScreen(XtScreen(wid))),
-				 &col)) {
+		if (!XAllocColor(dsp, cmap, &col)) {
 			failed++;
 			gotit[i] = 0;
 		} else {
@@ -334,10 +329,7 @@ int get_safe_colors(Widget wid)
 		for (i = 0; i < MUST_HAVE; i++) {
 			if (gotit[i]) {
 				pix = (unsigned long) gotit[i];
-				XFreeColors(XtDisplay(wid),
-				       (installed_colormap ? installed_cmap :
-				        DefaultColormapOfScreen(XtScreen(wid))),
-				       &pix, 1, 0L);
+				XFreeColors(dsp, cmap,  &pix, 1, 0L);
 			}
 		}
 		BSCnum = 0;	/* Disable dithering */
@@ -349,15 +341,8 @@ int get_safe_colors(Widget wid)
 
 	/* Now try to get remaining browser safe colors */
 	for (i = MUST_HAVE; i < 216; i++) {
-		t[0] = colors_216[i][0];
-		t[1] = colors_216[i][1];
-		sscanf(t, "%x", &r);
-		t[0] = colors_216[i][2];
-		t[1] = colors_216[i][3];
-		sscanf(t, "%x", &g);
-		t[0] = colors_216[i][4];
-		t[1] = colors_216[i][5];
-		sscanf(t, "%x", &b);
+		t = colors_216[i];
+		sscanf(t, "%2x%2x%2x", &r, &g, &b);
 #ifdef HAVE_JPEG
 		jcolormap[0][i] = (JSAMPLE)r;
 		jcolormap[1][i] = (JSAMPLE)g;
@@ -367,10 +352,7 @@ int get_safe_colors(Widget wid)
 		col.green = g << 8;
 		col.blue = b << 8;
 		col.flags = DoRed | DoGreen | DoBlue;
-		if (!XAllocColor(XtDisplay(wid),
-				 (installed_colormap ? installed_cmap :
-				  DefaultColormapOfScreen(XtScreen(wid))),
-				 &col)) {
+		if (!XAllocColor(dsp, cmap, &col)) {
 #ifndef DISABLE_TRACE
 	                if (srcTrace)
 				fprintf(stderr,
@@ -386,15 +368,8 @@ int get_safe_colors(Widget wid)
 
 	/* Get the colors used by the icons */
 	for (i = 0; i < 15; i++) {
-		t[0] = colors_icons[i][0];
-		t[1] = colors_icons[i][1];
-		sscanf(t, "%x", &r);
-		t[0] = colors_icons[i][2];
-		t[1] = colors_icons[i][3];
-		sscanf(t, "%x", &g);
-		t[0] = colors_icons[i][4];
-		t[1] = colors_icons[i][5];
-		sscanf(t, "%x", &b);
+		t = colors_icons[i];
+		sscanf(t, "%2x%2x%2x", &r, &g, &b);
 #ifdef HAVE_JPEG
 		jcolormap[0][i + 216] = (JSAMPLE)r;
 		jcolormap[1][i + 216] = (JSAMPLE)g;
@@ -405,12 +380,8 @@ int get_safe_colors(Widget wid)
 		col.blue = b << 8;
 		col.flags = DoRed | DoGreen | DoBlue;
 		/* Should be already allocated, but need pixel value */
-		XAllocColor(XtDisplay(wid),
-			    (installed_colormap ? installed_cmap :
-			     DefaultColormapOfScreen(XtScreen(wid))),
-			    &col);
-		BSColors[BSCnum] = col;
-		BSCnum++;
+		XAllocColor(dsp, cmap, &col);
+		BSColors[BSCnum++] = col;
 	}
 
 	safe_colors_done = 2;
@@ -427,10 +398,7 @@ int get_safe_colors(Widget wid)
 		}
 		if (!failed) {
 			col.pixel = i;
-			XQueryColor(XtDisplay(wid),
-				    (installed_colormap ? installed_cmap :
-				     DefaultColormapOfScreen(XtScreen(wid))),
-				    &col);
+			XQueryColor(dsp, cmap, &col);
 			BSColors[BSCnum] = col;
 #ifdef HAVE_JPEG
 			jcolormap[0][BSCnum] = (JSAMPLE)(col.red >> 8);

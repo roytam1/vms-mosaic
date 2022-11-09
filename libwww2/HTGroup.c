@@ -62,20 +62,17 @@ typedef HTList UserDefList;
 typedef HTList AddressDefList;
 
 typedef struct {
-    UserDefList *	user_def_list;
-    AddressDefList *	address_def_list;
+    UserDefList *user_def_list;
+    AddressDefList *address_def_list;
 } Item;
 
 typedef struct {
-    char *	name;
-    GroupDef *	translation;
+    char *name;
+    GroupDef *translation;
 } Ref;
 
-	
 
-PRIVATE void syntax_error ARGS3(FILE *,	 fp,
-				char *,	 msg,
-				LexItem, lex_item)
+PRIVATE void syntax_error (FILE *fp, char *msg,	LexItem lex_item)
 {
     char buffer[41];
     int cnt = 0;
@@ -85,7 +82,7 @@ PRIVATE void syntax_error ARGS3(FILE *,	 fp,
 	if (cnt < 40)
 	    buffer[cnt++] = ch;
     }
-    buffer[cnt] = (char)0;
+    buffer[cnt] = '\0';
 
 #ifndef DISABLE_TRACE
     if (www2Trace)
@@ -97,7 +94,7 @@ PRIVATE void syntax_error ARGS3(FILE *,	 fp,
 }
 
 
-PRIVATE AddressDefList *parse_address_part ARGS1(FILE *, fp)
+PRIVATE AddressDefList *parse_address_part (FILE *fp)
 {
     AddressDefList *address_def_list = NULL;
     LexItem lex_item;
@@ -116,12 +113,12 @@ PRIVATE AddressDefList *parse_address_part ARGS1(FILE *, fp)
     address_def_list = HTList_new();
 
     for(;;) {
-	Ref *ref = (Ref*)malloc(sizeof(Ref));
+	Ref *ref = (Ref *)malloc(sizeof(Ref));
 	ref->name = NULL;
 	ref->translation = NULL;
 	StrAllocCopy(ref->name, lex_buffer);
 	
-	HTList_addObject(address_def_list, (void*)ref);
+	HTList_addObject(address_def_list, (void *)ref);
 
 	if (only_one || (lex_item = lex(fp)) != LEX_ITEM_SEP)
 	    break;
@@ -150,7 +147,7 @@ PRIVATE AddressDefList *parse_address_part ARGS1(FILE *, fp)
 }
 
 
-PRIVATE UserDefList *parse_user_part ARGS1(FILE *, fp)
+PRIVATE UserDefList *parse_user_part (FILE *fp)
 {
     UserDefList *user_def_list = NULL;
     LexItem lex_item;
@@ -168,13 +165,13 @@ PRIVATE UserDefList *parse_user_part ARGS1(FILE *, fp)
     user_def_list = HTList_new();
 
     for (;;) {
-	Ref *ref = (Ref*)malloc(sizeof(Ref));
+	Ref *ref = (Ref *)malloc(sizeof(Ref));
 
 	ref->name = NULL;
 	ref->translation = NULL;
 	StrAllocCopy(ref->name, lex_buffer);
 
-	HTList_addObject(user_def_list, (void*)ref);
+	HTList_addObject(user_def_list, (void *)ref);
 	
 	if (only_one || (lex_item = lex(fp)) != LEX_ITEM_SEP)
 	    break;
@@ -203,7 +200,7 @@ PRIVATE UserDefList *parse_user_part ARGS1(FILE *, fp)
 }
 
 
-PRIVATE Item *parse_item ARGS1(FILE *, fp)
+PRIVATE Item *parse_item (FILE *fp)
 {
     Item *item = NULL;
     UserDefList *user_def_list = NULL;
@@ -237,14 +234,14 @@ PRIVATE Item *parse_item ARGS1(FILE *, fp)
 	syntax_error(fp, "Empty item not allowed", lex_item);
 	return NULL;
     }
-    item = (Item*)malloc(sizeof(Item));
+    item = (Item *)malloc(sizeof(Item));
     item->user_def_list = user_def_list;
     item->address_def_list = address_def_list;
     return item;
 }
 
 
-PRIVATE ItemList *parse_item_list ARGS1(FILE *, fp)
+PRIVATE ItemList *parse_item_list (FILE *fp)
 {
     ItemList *item_list = HTList_new();
     Item *item;
@@ -255,7 +252,7 @@ PRIVATE ItemList *parse_item_list ARGS1(FILE *, fp)
 	    HTList_delete(item_list);	/* @@@@ */
 	    return NULL;
 	}
-	HTList_addObject(item_list, (void*)item);
+	HTList_addObject(item_list, (void *)item);
 	lex_item = lex(fp);
 	if (lex_item != LEX_ITEM_SEP) {
 	    unlex(lex_item);
@@ -274,7 +271,7 @@ PRIVATE ItemList *parse_item_list ARGS1(FILE *, fp)
 }
 
 
-PUBLIC GroupDef *HTAA_parseGroupDef ARGS1(FILE *, fp)
+PUBLIC GroupDef *HTAA_parseGroupDef (FILE *fp)
 {
     ItemList *item_list = NULL;
     GroupDef *group_def = NULL;
@@ -283,19 +280,18 @@ PUBLIC GroupDef *HTAA_parseGroupDef ARGS1(FILE *, fp)
     if (!(item_list = parse_item_list(fp))) {
 	return NULL;
     }
-    group_def = (GroupDef*)malloc(sizeof(GroupDef));
+    group_def = (GroupDef *)malloc(sizeof(GroupDef));
     group_def->group_name = NULL;
     group_def->item_list = item_list;
 
-    if ((lex_item = lex(fp)) != LEX_REC_SEP) {
+    if ((lex_item = lex(fp)) != LEX_REC_SEP)
 	syntax_error(fp, "Garbage after group definition", lex_item);
-    }
     
     return group_def;
 }    
 
 
-PRIVATE GroupDef *parse_group_decl ARGS1(FILE *, fp)
+PRIVATE GroupDef *parse_group_decl (FILE *fp)
 {
     char *group_name = NULL;
     GroupDef *group_def = NULL;
@@ -328,30 +324,28 @@ PRIVATE GroupDef *parse_group_decl ARGS1(FILE *, fp)
 }
 	
 
-
 /*
 ** Group manipulation routines
 */
 
-PRIVATE GroupDef *find_group_def ARGS2(GroupDefList *,	group_list,
-				       WWW_CONST char *,	group_name)
+PRIVATE GroupDef *find_group_def (GroupDefList *group_list,
+				  WWW_CONST char *group_name)
 {
     if (group_list && group_name) {
 	GroupDefList *cur = group_list;
 	GroupDef *group_def;
 
-	while (NULL != (group_def = (GroupDef*)HTList_nextObject(cur))) {
-	    if (!strcmp(group_name, group_def->group_name)) {
+	while (NULL != (group_def = (GroupDef *)HTList_nextObject(cur))) {
+	    if (!strcmp(group_name, group_def->group_name))
 		return group_def;
-            }
         }
     }
     return NULL;
 }
 
 
-PUBLIC void HTAA_resolveGroupReferences ARGS2(GroupDef *,	group_def,
-					      GroupDefList *,	group_def_list)
+PUBLIC void HTAA_resolveGroupReferences (GroupDef *group_def,
+					 GroupDefList *group_def_list)
 {
     if (group_def && group_def->item_list && group_def_list) {
 	ItemList *cur1 = group_def->item_list;
@@ -361,7 +355,7 @@ PUBLIC void HTAA_resolveGroupReferences ARGS2(GroupDef *,	group_def,
 	    UserDefList *cur2 = item->user_def_list;
 	    Ref *ref;
 
-	    while (NULL != (ref = (Ref*)HTList_nextObject(cur2)))
+	    while (ref = (Ref *)HTList_nextObject(cur2))
 		ref->translation = find_group_def(group_def_list, ref->name);
 
 	    /* Does NOT translate address_def_list */
@@ -370,20 +364,19 @@ PUBLIC void HTAA_resolveGroupReferences ARGS2(GroupDef *,	group_def,
 }
 
 
-PRIVATE void add_group_def ARGS2(GroupDefList *, group_def_list,
-				 GroupDef *,	 group_def)
+PRIVATE void add_group_def (GroupDefList *group_def_list, GroupDef *group_def)
 {
     HTAA_resolveGroupReferences(group_def, group_def_list);
-    HTList_addObject(group_def_list, (void*)group_def);
+    HTList_addObject(group_def_list, (void *)group_def);
 }
 
 
-PRIVATE GroupDefList *parse_group_file ARGS1(FILE *, fp)
+PRIVATE GroupDefList *parse_group_file (FILE *fp)
 {
     GroupDefList *group_def_list = HTList_new();
     GroupDef *group_def;
     
-    while (NULL != (group_def = parse_group_decl(fp)))
+    while (group_def = parse_group_decl(fp))
 	add_group_def(group_def_list, group_def);
     
     return group_def_list;
@@ -394,22 +387,22 @@ PRIVATE GroupDefList *parse_group_file ARGS1(FILE *, fp)
 ** Trace functions
 */
 
-PRIVATE void print_item ARGS1(Item *, item)
+PRIVATE void print_item (Item *item)
 {
     if (!item) {
 	fprintf(stderr, "\tNULL-ITEM\n");
     } else {
 	UserDefList *cur1 = item->user_def_list;
 	AddressDefList *cur2 = item->address_def_list;
-	Ref *user_ref = (Ref*)HTList_nextObject(cur1);
-	Ref *addr_ref = (Ref*)HTList_nextObject(cur2);
+	Ref *user_ref = (Ref *)HTList_nextObject(cur1);
+	Ref *addr_ref = (Ref *)HTList_nextObject(cur2);
 
 	if (user_ref) {
 	    fprintf(stderr, "\t[%s%s", user_ref->name,
-		    (user_ref->translation ? "*REF*" : ""));
-	    while (NULL != (user_ref = (Ref*)HTList_nextObject(cur1)))
+		    user_ref->translation ? "*REF*" : "");
+	    while (user_ref = (Ref *)HTList_nextObject(cur1))
 		fprintf(stderr, "; %s%s", user_ref->name,
-			(user_ref->translation ? "*REF*" : ""));
+			user_ref->translation ? "*REF*" : "");
 	    fprintf(stderr, "] ");
 	} else {
 	    fprintf(stderr, "\tANYBODY ");
@@ -417,7 +410,7 @@ PRIVATE void print_item ARGS1(Item *, item)
 
 	if (addr_ref) {
 	    fprintf(stderr, "@ [%s", addr_ref->name);
-	    while (NULL != (addr_ref = (Ref*)HTList_nextObject(cur2)))
+	    while (addr_ref = (Ref*)HTList_nextObject(cur2))
 		fprintf(stderr, "; %s", addr_ref->name);
 	    fprintf(stderr, "]\n");
 	} else {
@@ -427,20 +420,21 @@ PRIVATE void print_item ARGS1(Item *, item)
 }
 
 
-PRIVATE void print_item_list ARGS1(ItemList *, item_list)
+PRIVATE void print_item_list (ItemList *item_list)
 {
     ItemList *cur = item_list;
     Item *item;
 
     if (!item_list) {
 	fprintf(stderr, "EMPTY");
-    } else while (NULL != (item = (Item*)HTList_nextObject(cur))) {
-	print_item(item);
+    } else {
+	while (item = (Item *)HTList_nextObject(cur))
+	    print_item(item);
     }
 }
 
 
-PUBLIC void HTAA_printGroupDef ARGS1(GroupDef *, group_def)
+PUBLIC void HTAA_printGroupDef (GroupDef *group_def)
 {
     if (!group_def) {
 	fprintf(stderr, "\nNULL RECORD\n");
@@ -448,22 +442,21 @@ PUBLIC void HTAA_printGroupDef ARGS1(GroupDef *, group_def)
     }
 
     fprintf(stderr, "\nGroup %s:\n",
-	    (group_def->group_name ? group_def->group_name : "NULL"));
+	    group_def->group_name ? group_def->group_name : "NULL");
 
     print_item_list(group_def->item_list);
     fprintf(stderr, "\n");
 }
 
 
-PRIVATE void print_group_def_list ARGS1(GroupDefList *, group_list)
+PRIVATE void print_group_def_list (GroupDefList *group_list)
 {
     GroupDefList *cur = group_list;
     GroupDef *group_def;
     
-    while (NULL != (group_def = (GroupDef*)HTList_nextObject(cur)))
+    while (group_def = (GroupDef *)HTList_nextObject(cur))
 	HTAA_printGroupDef(group_def);
 }
-
 
 
 /*
@@ -481,41 +474,39 @@ PRIVATE void print_group_def_list ARGS1(GroupDefList *, group_list)
 ** ON EXIT:
 **	returns	YES, if match.
 */
-PRIVATE BOOL part_match ARGS2(WWW_CONST char *, tcur,
-			      WWW_CONST char *, icur)
+PRIVATE BOOL part_match (WWW_CONST char *tcur, WWW_CONST char *icur)
 {
     char required[4];
     char actual[4];
     WWW_CONST char *cur;
-    int cnt;
+    int cnt = 0;
 
-    if (!tcur || !icur) return NO;
+    if (!tcur || !icur)
+	return NO;
 
     cur = tcur;
-    cnt = 0;
     while (cnt < 3  &&  *cur && *cur != '.')
 	required[cnt++] = *(cur++);
-    required[cnt] = (char)0;
+    required[cnt] = '\0';
 
     cur = icur;
     cnt = 0;
     while (cnt < 3  &&  *cur && *cur != '.')
 	actual[cnt++] = *(cur++);
-    actual[cnt] = (char)0;
+    actual[cnt] = '\0';
 
 #ifndef DISABLE_TRACE
     if (www2Trace) {
 	BOOL status = HTAA_templateMatch(required, actual);
 
 	fprintf(stderr, "part_match: req: '%s' act: '%s' match: %s\n",
-		required, actual, (status ? "yes" : "no"));
+		required, actual, status ? "yes" : "no");
 	return status;
     }
 #endif
 
     return HTAA_templateMatch(required, actual);
 }
-
 
 
 /* PRIVATE						ip_number_match()
@@ -527,14 +518,14 @@ PRIVATE BOOL part_match ARGS2(WWW_CONST char *, tcur,
 ** ON EXIT:
 **	returns		YES, if match;  NO, if not.
 */
-PRIVATE BOOL ip_number_match ARGS2(WWW_CONST char *,	template,
-				   WWW_CONST char *,	inet_addr)
+PRIVATE BOOL ip_number_match (WWW_CONST char *template,
+			      WWW_CONST char *inet_addr)
 {
     WWW_CONST char *tcur = template;
     WWW_CONST char *icur = inet_addr;
     int cnt;
     
-    for (cnt=0; cnt < 4; cnt++) {
+    for (cnt = 0; cnt < 4; cnt++) {
 	if (!tcur || !icur || !part_match(tcur, icur))
 	    return NO;
 	if (NULL != (tcur = strchr(tcur, '.')))
@@ -544,7 +535,6 @@ PRIVATE BOOL ip_number_match ARGS2(WWW_CONST char *,	template,
     }
     return YES;
 }
-
 
 
 /* PRIVATE						is_domain_mask()
@@ -563,7 +553,7 @@ PRIVATE BOOL ip_number_match ARGS2(WWW_CONST char *,	template,
 **	returns	YES, if mask is a domain name mask.
 **		NO, if it is an inet number mask.
 */
-PRIVATE BOOL is_domain_mask ARGS1(WWW_CONST char *,	mask)
+PRIVATE BOOL is_domain_mask (WWW_CONST char *mask)
 {
     WWW_CONST char *cur = mask;
 
@@ -577,7 +567,6 @@ PRIVATE BOOL is_domain_mask ARGS1(WWW_CONST char *,	mask)
     }
     return NO;	/* All digits and dots, so it is an inet number mask */
 }
-
 
 
 /* PRIVATE							ip_mask_match()
@@ -600,9 +589,9 @@ PRIVATE BOOL is_domain_mask ARGS1(WWW_CONST char *,	mask)
 **			matches the mask.
 **			NO, if no match (no fire).
 */
-PRIVATE BOOL ip_mask_match ARGS3(WWW_CONST char *,	mask,
-				 WWW_CONST char *,	ip_number,
-				 WWW_CONST char *,	ip_name)
+PRIVATE BOOL ip_mask_match (WWW_CONST char *mask,
+			    WWW_CONST char *ip_number,
+			    WWW_CONST char *ip_name)
 {
     if (mask && (ip_number || ip_name)) {
 	if (is_domain_mask(mask)) {
@@ -617,11 +606,9 @@ PRIVATE BOOL ip_mask_match ARGS3(WWW_CONST char *,	mask,
 }
 
 
-
-
-PRIVATE BOOL ip_in_def_list ARGS3(AddressDefList *,	address_def_list,
-				  char *,		ip_number,
-				  char *,		ip_name)
+PRIVATE BOOL ip_in_def_list (AddressDefList *address_def_list,
+			     char *ip_number,
+			     char *ip_name)
 {
     if (address_def_list && (ip_number || ip_name)) {
 	AddressDefList *cur = address_def_list;
@@ -643,8 +630,8 @@ PRIVATE BOOL ip_in_def_list ARGS3(AddressDefList *,	address_def_list,
 */
 
 typedef struct {
-    char *	   group_filename;
-    GroupDefList * group_list;
+    char *group_filename;
+    GroupDefList *group_list;
 } GroupCache;
 
 typedef HTList GroupCacheList;
@@ -652,7 +639,7 @@ typedef HTList GroupCacheList;
 PRIVATE GroupCacheList *group_cache_list = NULL;
 
 
-PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
+PUBLIC GroupDefList *HTAA_readGroupFile (WWW_CONST char *filename)
 {
     FILE *fp;
     GroupCache *group_cache;
@@ -662,7 +649,7 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
     } else {
 	GroupCacheList *cur = group_cache_list;
 
-	while (NULL != (group_cache = (GroupCache*)HTList_nextObject(cur))) {
+	while (group_cache = (GroupCache *)HTList_nextObject(cur)) {
 	    if (!strcmp(filename, group_cache->group_filename)) {
 #ifndef DISABLE_TRACE
 		if (www2Trace)
@@ -671,9 +658,9 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
 			    filename, "already found in cache");
 #endif
 		return group_cache->group_list;
-	    } /* if cache match */
-	} /* while cached files remain */
-    } /* cache exists */
+	    }
+	}
+    }
 
 #ifndef DISABLE_TRACE
     if (www2Trace)
@@ -690,13 +677,13 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
 	return NULL;
     }
 
-    if (!(group_cache = (GroupCache*)malloc(sizeof(GroupCache))))
+    if (!(group_cache = (GroupCache *)malloc(sizeof(GroupCache))))
 	outofmem(__FILE__, "HTAA_readGroupFile");
 
     group_cache->group_filename = NULL;
     StrAllocCopy(group_cache->group_filename, filename);
     group_cache->group_list = parse_group_file(fp);
-    HTList_addObject(group_cache_list, (void*)group_cache);
+    HTList_addObject(group_cache_list, (void *)group_cache);
     fclose(fp);
 
 #ifndef DISABLE_TRACE
@@ -728,10 +715,10 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
 **			to the group.
 **			HTAA_OK if both IP address and user are ok.
 */
-PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
-							char *,	    username,
-							char *,	    ip_number,
-							char *,	    ip_name)
+PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup (GroupDef *group,
+						   char *username,
+						   char *ip_number,
+						   char *ip_name)
 {
     HTAAFailReasonType reason = HTAA_NOT_MEMBER;
 
@@ -739,7 +726,7 @@ PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
 	ItemList *cur1 = group->item_list;
 	Item *item;
 
-	while (NULL != (item = (Item*)HTList_nextObject(cur1))) {
+	while (item = (Item *)HTList_nextObject(cur1)) {
 	    if (!item->address_def_list ||	/* Any address allowed */
 		ip_in_def_list(item->address_def_list, ip_number, ip_name)) {
 		    
@@ -749,9 +736,8 @@ PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
 		    UserDefList *cur2 = item->user_def_list;
 		    Ref *ref;
 
-		    while (NULL != (ref = (Ref*)HTList_nextObject(cur2))) {
-			
-			if (ref->translation) {	/* Group, check recursively */
+		    while (ref = (Ref *)HTList_nextObject(cur2)) {
+			if (ref->translation) {  /* Group, check recursively */
 			    reason = HTAA_userAndInetInGroup(ref->translation,
 							     username,
 							     ip_number,ip_name);
@@ -759,23 +745,23 @@ PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
 				return HTAA_OK;
 			} else {	/* Username, check directly */
 			    if (username && *username &&
-				0 == strcmp(ref->name, username))
+				!strcmp(ref->name, username))
 				return HTAA_OK;
 			}
-		    } /* Every user/group name in this group */
-		} /* search for username */
-	    } /* IP address ok */
+		    }  /* Every user/group name in this group */
+		}  /* search for username */
+	    }  /* IP address ok */
 	    else {
 		return HTAA_IP_MASK;
 	    }
-	} /* while items in group */
-    } /* valid parameters */
+	}  /* while items in group */
+    }  /* valid parameters */
     
     return reason;		/* No match, or invalid parameters */
 }
 
 
-PUBLIC void GroupDef_delete ARGS1(GroupDef *, group_def)
+PUBLIC void GroupDef_delete (GroupDef *group_def)
 {
     if (group_def) {
 	FREE(group_def->group_name);
@@ -784,4 +770,3 @@ PUBLIC void GroupDef_delete ARGS1(GroupDef *, group_def)
 	free(group_def);
     }
 }
-

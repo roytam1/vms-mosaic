@@ -44,7 +44,7 @@ struct _HTStream {
 **	------------------
 */
 
-PRIVATE void HTMosaicHTML_put_character ARGS2(HTStream *, me, char, c)
+PRIVATE void HTMosaicHTML_put_character (HTStream *me, char c)
 {
     HText_appendCharacter(me->text, c);
 }
@@ -54,14 +54,13 @@ PRIVATE void HTMosaicHTML_put_character ARGS2(HTStream *, me, char, c)
 **	---------------
 **
 */
-PRIVATE void HTMosaicHTML_put_string ARGS2(HTStream *, me, WWW_CONST char *, s)
+PRIVATE void HTMosaicHTML_put_string (HTStream *me, WWW_CONST char *s)
 {
     HText_appendText(me->text, s);
 }
 
 
-PRIVATE void HTMosaicHTML_write ARGS3(HTStream *, me, WWW_CONST char *, s,
-				      int, l)
+PRIVATE void HTMosaicHTML_write (HTStream *me, WWW_CONST char *s, int l)
 {
     HText_appendBlock(me->text, s, l);
 }
@@ -73,9 +72,9 @@ PRIVATE void HTMosaicHTML_write ARGS3(HTStream *, me, WWW_CONST char *, s,
 **	Note that the SGML parsing context is freed, but the created object is
 **	not, as it takes on an existence of its own unless explicitly freed.
 */
-PRIVATE void HTMosaicHTML_free ARGS1(HTStream *, me)
+PRIVATE void HTMosaicHTML_free (HTStream *me)
 {
-  if (me->compressed != COMPRESSED_NOT) {
+  if ((me->compressed != COMPRESSED_NOT) && !me->interrupted) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, 
@@ -90,12 +89,12 @@ PRIVATE void HTMosaicHTML_free ARGS1(HTStream *, me)
 /*	End writing
 */
 
-PRIVATE void HTMosaicHTML_end_document ARGS1(HTStream *, me)
+PRIVATE void HTMosaicHTML_end_document (HTStream *me)
 {
     HText_endAppend(me->text);
 }
 
-PRIVATE void HTMosaicHTML_handle_interrupt ARGS1(HTStream *, me)
+PRIVATE void HTMosaicHTML_handle_interrupt (HTStream *me)
 {
   me->interrupted = 1;
   HText_doAbort(me->text);
@@ -119,12 +118,11 @@ PUBLIC WWW_CONST HTStreamClass HTMosaicHTML =
 /*		New object
 **		----------
 */
-PUBLIC HTStream *HTMosaicHTMLPresent ARGS5(
-	HTPresentation *,	pres,
-	HTParentAnchor *,	anchor,	
-	HTStream *,		sink,
-        HTFormat,               format_in,
-        int,                    compressed)
+PUBLIC HTStream *HTMosaicHTMLPresent (HTPresentation *pres,
+				      HTParentAnchor *anchor,	
+				      HTStream *sink,
+        			      HTFormat format_in,
+        			      int compressed)
 {
   HTStream *me = (HTStream *)malloc(sizeof(*me));
 

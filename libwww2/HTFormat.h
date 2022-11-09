@@ -11,15 +11,19 @@
 #ifndef HTFORMAT_H
 #define HTFORMAT_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"
-#include "HTStream.h"
-#include "HTAtom.h"
-#include "HTList.h"
-
-#ifdef SHORT_NAMES
-#define HTOutputSource HTOuSour
-#define HTOutputBinary HTOuBina
 #endif
+#ifndef HTSTREAM_H
+#include "HTStream.h"
+#endif 
+#ifndef HTATOM_H
+#include "HTAtom.h"
+#endif
+#ifndef HTLIST_H
+#include "HTList.h"
+#endif
+
 
 /*
 
@@ -47,8 +51,8 @@ typedef HTAtom *HTFormat;
 
 /*
 
-   www/present represents the user's perception of the document.  If you convert to
-   www/present, you present the material to the user.
+   www/present represents the user's perception of the document.  If you
+   convert to www/present, you present the material to the user.
    
  */
 #define WWW_PRESENT HTAtom_for("www/present")   /* The user's perception */
@@ -81,7 +85,7 @@ typedef HTAtom *HTFormat;
    
    The HTEncoding type
    
-   typedef HTAtom* HTEncoding;
+   typedef HTAtom *HTEncoding;
    
    The following are values for the MIME types:
    
@@ -102,24 +106,23 @@ The HTPresentation and HTConverter types
 
    This HTPresentation structure represents a possible conversion
    algorithm from one format to annother.  It includes a pointer to a
-   conversion routine. The conversion routine returns a stream to
-   which data should be fed. See also HTStreamStack which scans the
-   list of registered converters and calls one. See the initialisation
+   conversion routine.  The conversion routine returns a stream to
+   which data should be fed.  See also HTStreamStack which scans the
+   list of registered converters and calls one.  See the initialisation
    module for a list of conversion routines.
    
  */
 typedef struct _HTPresentation HTPresentation;
 
-typedef HTStream *HTConverter PARAMS((
-        HTPresentation *pres,
-        HTParentAnchor *anchor,
-        HTStream       *sink,
-        HTFormat        format_in,
-        int             compressed));
+typedef HTStream *HTConverter (HTPresentation *pres,
+        		       HTParentAnchor *anchor,
+			       HTStream       *sink,
+        		       HTFormat        format_in,
+        		       int             compressed);
         
 struct _HTPresentation {
-        HTAtom *rep;            /* representation name atmoized */
-        HTAtom *rep_out;        /* resulting representation */
+        HTAtom *rep;            /* Representation name atomized */
+        HTAtom *rep_out;        /* Resulting representation */
         HTConverter *converter; /* The routine to gen the stream stack */
         char   *command;        /* MIME-format string */
         float   quality;        /* Between 0 (bad) and 1 (good) */
@@ -152,14 +155,11 @@ HTSetPresentation: Register a system command to present a format
   maxsecs                 A limit on the time user will wait (0 for infinity)
                          
  */
-extern void HTSetPresentation PARAMS((
-        WWW_CONST char *representation,
-        WWW_CONST char *command,
-        float   quality,
-        float   secs,
-        float   secs_per_byte
-));
-
+extern void HTSetPresentation (WWW_CONST char *representation,
+        		       WWW_CONST char *command,
+        		       float   quality,
+        		       float   secs,
+        		       float   secs_per_byte);
 
 /*
 
@@ -175,15 +175,12 @@ HTSetConversion:   Register a converstion routine
                          
  */
 
-extern void HTSetConversion PARAMS((
-        WWW_CONST char *representation_in,
-        WWW_CONST char *representation_out,
-        HTConverter    *converter,
-        float           quality,
-        float           secs,
-        float           secs_per_byte
-));
-
+extern void HTSetConversion (WWW_CONST char *representation_in,
+        		     WWW_CONST char *representation_out,
+        		     HTConverter    *converter,
+        		     float           quality,
+        		     float           secs,
+        		     float           secs_per_byte);
 
 /*
 
@@ -191,19 +188,18 @@ HTStreamStack:   Create a stack of streams
 
    This is the routine which actually sets up the conversion. It
    currently checks only for direct conversions, but multi-stage
-   conversions are forseen. It takes a stream into which the output
+   conversions are forseen.  It takes a stream into which the output
    should be sent in the final format, builds the conversion stack,
    and returns a stream into which the data in the input format should
    be fed.  The anchor is passed because hypertxet objects load
    information into the anchor object which represents them.
    
  */
-extern HTStream *HTStreamStack PARAMS((
-        HTFormat                format_in,
-        HTFormat                rep_out,
-        int                     compressed,
-        HTStream               *sink,
-        HTParentAnchor         *anchor));
+extern HTStream *HTStreamStack (HTFormat         format_in,
+        			HTFormat         rep_out,
+        			int              compressed,
+        			HTStream        *sink,
+        			HTParentAnchor  *anchor);
 
 /*
 
@@ -217,19 +213,18 @@ HTStackValue: Find the cost of a filter stack
                          
   format_out              The format required
                          
-  initial_value           The intrinsic "value" of the data before conversion on a scale
-                         from 0 to 1
+  initial_value           The intrinsic "value" of the data before conversion
+			  on a scale from 0 to 1
                          
   length                  The number of bytes expected in the input format
                          
  */
-extern float HTStackValue PARAMS((
-        HTFormat                format_in,
-        HTFormat                rep_out,
-        float                   initial_value,
-        long int                length));
+extern float HTStackValue (HTFormat     format_in,
+        		   HTFormat     rep_out,
+        		   float        initial_value,
+        		   long int     length);
 
-#define NO_VALUE_FOUND  -1e20           /* returned if none found */
+#define NO_VALUE_FOUND  -1e20           /* Returned if none found */
 
 /*
 
@@ -239,43 +234,41 @@ HTCopy:  Copy a socket to a stream
    typically one which has been generated by HTStreamStack.
    
  */
-extern int HTCopy PARAMS((
-        int           file_number,
-        HTStream     *sink,
-        int           bytes_already_read,
-	void         *handle));
+extern int HTCopy (int        file_number,
+        	   HTStream  *sink,
+        	   int        bytes_already_read,
+		   void      *handle,
+		   int	      loading_length);
         
 /*
 
 HTFileCopy:  Copy a file to a stream
 
    This is used by the protocol engines to send data down a stream,
-   typically one which has been generated by HTStreamStack. It is
+   typically one which has been generated by HTStreamStack.  It is
    currently called by HTParseFile
    
  */
-extern void HTFileCopy PARAMS((
-        FILE      *fp,
-        HTStream  *sink));
+extern void HTFileCopy (FILE *fp, HTStream  *sink);
         
 /*
 
 Clear input buffer and set file number
 
    This routine and the one below provide simple character input from
-   sockets. (They are left over from the older architecure and may not be
+   sockets.  (They are left over from the older architecure and may not be
    used very much.)  The existence of a common routine and buffer saves
    memory space in small implementations.
    
  */
-extern void HTInitInput PARAMS((int file_number));
+extern void HTInitInput (int file_number);
 
 /*
 
 Get next character from buffer
 
  */
-extern char HTGetCharacter NOPARAMS;
+extern char HTGetCharacter ();
 
 
 /*
@@ -287,13 +280,12 @@ HTParseSocket: Parse a socket given its format
    succesful, <0 if not.
    
  */
-extern int HTParseSocket PARAMS((
-        HTFormat        format_in,
-        HTFormat        format_out,
-        HTParentAnchor *anchor,
-        int             file_number,
-        HTStream       *sink,
-        int             compressed));
+extern int HTParseSocket (HTFormat        format_in,
+        		  HTFormat        format_out,
+        		  HTParentAnchor *anchor,
+        		  int             file_number,
+        		  HTStream       *sink,
+        		  int             compressed);
 
 /*
 
@@ -304,26 +296,24 @@ HTParseFile: Parse a File through a file pointer
    if not.
    
  */
-extern int HTParseFile PARAMS((
-        HTFormat         format_in,
-        HTFormat         format_out,
-        HTParentAnchor  *anchor,
-        FILE            *fp,
-        HTStream        *sink,
-        int              compressed));
+extern int HTParseFile (HTFormat         format_in,
+        		HTFormat         format_out,
+        		HTParentAnchor  *anchor,
+        		FILE            *fp,
+        		HTStream        *sink,
+        		int              compressed);
 
 /*
 
 Epilogue
 
  */
-extern BOOL HTOutputSource;     /* Flag: shortcut parser */
-
 
 extern void HTRemoveConversion (WWW_CONST char *, WWW_CONST char *,
 				HTConverter *);
 
 #include "HText.h"  /* Must be after HTFormat defined above */
+
 extern void HTFileCopyToText (FILE *fp, HText *text);
 
 #endif

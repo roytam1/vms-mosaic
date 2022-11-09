@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
 
 #ifndef __HOTLIST_H__
 #define __HOTLIST_H__
@@ -63,28 +63,26 @@
 #include "vms_pwd.h"
 #endif  /* PGE */
 
-#define NCSA_HOTLIST_FORMAT_COOKIE_ONE \
-  "ncsa-xmosaic-hotlist-format-1"
+#define NCSA_HOTLIST_FORMAT_COOKIE_ONE  "ncsa-xmosaic-hotlist-format-1"
 
-#define NCSA_HOTLIST_FORMAT_COOKIE_TWO \
-  "<!-- ncsa-xmosaic-hotlist-format-2 -->"
+#define NCSA_HOTLIST_FORMAT_COOKIE_TWO  "<!-- ncsa-xmosaic-hotlist-format-2 -->"
 
 #define NCSA_HOTLIST_FORMAT_COOKIE_THREE \
   "<!-- ncsa-xmosaic-hotlist-format-3 -->"
 
 /* ------------------------------ mo_item_type ---------------------------- */
-typedef enum _mo_item_type
-{
-  mo_t_url, mo_t_list
+typedef enum _mo_item_type {
+  mo_t_url,
+  mo_t_list
 } mo_item_type;
 
 /* ------------------------------ mo_any_item ----------------------------- */
 
 /* mo_any_item is any item in a mo_hotlist. */
-typedef struct mo_any_item
-{
+typedef struct mo_any_item {
   mo_item_type type;
-  char *name; /* title for an URL, name for a hotlist */
+  /* Title for an URL, name for a hotlist */
+  char *name;
   /* Position in the list; starting at 1... */
   int position;
   union mo_hot_item *previous;
@@ -94,49 +92,48 @@ typedef struct mo_any_item
 /* ------------------------------ mo_hotnode ------------------------------ */
 
 /* mo_hotnode is a single item in a mo_hotlist. */
-typedef struct mo_hotnode
-{
+typedef struct mo_hotnode {
   mo_item_type type;
-  char *title; /* title for an URL */
+  /* URL title */
+  char *title;
   /* Position in the list; starting at 1... */
   int position;
   union mo_hot_item *previous;
   union mo_hot_item *next;
   char *url;
   char *lastdate;
-  int rbm; /* is it on the rbm? */
+  int rbm;  /* Is it on the rbm? */
 } mo_hotnode;
 
 /* ------------------------------ mo_hotlist ------------------------------ */
 
-/* mo_hotlist is a list of URL's and (cached) titles that can be
-   added to and deleted from freely, and stored and maintained across
-   sessions. */
-typedef struct mo_hotlist
-{
+/* mo_hotlist is a list of URL's and (cached) titles that can be added to
+ * and deleted from freely, and stored and maintained across sessions.
+ */
+typedef struct mo_hotlist {
   mo_item_type type;
-  char *name; /* name for a hotlist */
+  /* Hotlist name */
+  char *name;
   /* Position in the list; starting at 1... */
   int position;
   union mo_hot_item *previous;
   union mo_hot_item *next;
 
-  /* specific to mo_hotlist */
+  /* Specific to mo_hotlist */
   struct mo_hotlist *parent;
 
   union mo_hot_item *nodelist;
   /* Point to last element in nodelist for fast appends. */
   union mo_hot_item *nodelist_last;
-  int rbm; /* Is this list on the RBM? */
+  int rbm;  /* Is this list on the RBM? */
 } mo_hotlist;
 
 /* ------------------------------ mo_root_hotlist ------------------------- */
 
 /* mo_root_hotlist is the root hotlist */
-typedef struct mo_root_hotlist
-{
+typedef struct mo_root_hotlist {
   mo_item_type type;
-  char *name; /* name for a hotlist */
+  char *name;
   /* Position in the list; starting at 1... */
   int position;
   union mo_hot_item *previous;
@@ -149,19 +146,18 @@ typedef struct mo_root_hotlist
   /* Point to last element in nodelist for fast appends. */
   union mo_hot_item *nodelist_last;
   /* Filename for storing this hotlist to local disk; example is
-     $HOME/.mosaic-hotlist-default. */
+   *     $HOME/.mosaic-hotlist-default. */
   char *filename;
 
   /* Flag set to indicate whether this hotlist has to be written
-     back out to disk at some point. */
+   * back out to disk at some point. */
   int modified;
 } mo_root_hotlist;
 
 /* ------------------------------ mo_hot_item ----------------------------- */
 
 /* mo_hot_item is the union of all item type */
-typedef union mo_hot_item
-{
+typedef union mo_hot_item {
   mo_item_type type;
   mo_any_item any;
   mo_hotnode hot;
@@ -175,7 +171,7 @@ extern mo_status mo_add_item_to_hotlist(mo_hotlist *list, mo_item_type type,
                                         int rbm);
 #if 0
 extern mo_status mo_dump_hotlist(mo_hotlist *);
-#endif /* 0 */
+#endif
 extern mo_status mo_setup_default_hotlist(void);
 extern mo_status mo_write_default_hotlist(void);
 extern mo_status mo_post_hotlist_win(mo_window *);

@@ -35,15 +35,15 @@ CC = CC
 .ENDIF
 
 .IFDEF DECC
-CQUAL = /DECC/INCLUDE=[.ZLIB]
+CQUAL = /DECC/INCLUDE=[-.ZLIB]
 .ELSE
 .IFDEF DECCVAXC
-CQUAL = /VAXC/PRECISION=SINGLE/INCLUDE=[.ZLIB]
+CQUAL = /VAXC/PRECISION=SINGLE/INCLUDE=[-.ZLIB]
 .ELSE
 .IFDEF GNUC
-CQUAL = /INCLUDE=(GCC_Include,[.ZLIB.])
+CQUAL = /INCLUDE=(GCC_Include,[-.ZLIB.])
 .ELSE
-CQUAL = /PRECISION=SINGLE/INCLUDE=[.ZLIB]
+CQUAL = /PRECISION=SINGLE/INCLUDE=[-.ZLIB]
 .ENDIF
 .ENDIF
 .ENDIF
@@ -81,7 +81,7 @@ Odir:png.obj : png.c, png.h, pngconf.h
 Odir:pngpread.obj : pngpread.c, png.h, pngconf.h
 Odir:pngget.obj : pngget.c, png.h, pngconf.h
 Odir:pngset.obj : pngset.c, png.h, pngconf.h
-Odir:pngread.obj : pngread.c, png.h, pngconf.h, [.zlib]zlib.h
+Odir:pngread.obj : pngread.c, png.h, pngconf.h, [-.zlib]zlib.h
 Odir:pngrtran.obj : pngrtran.c, png.h, pngconf.h
 Odir:pngrutil.obj : pngrutil.c, png.h, pngconf.h
 Odir:pngerror.obj : pngerror.c, png.h, pngconf.h

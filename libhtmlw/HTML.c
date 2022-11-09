@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006 
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
  * The VMS Mosaic Project
  */
 
@@ -73,14 +73,15 @@
 #include <Xm/DrawingA.h>
 #include <Xm/ScrollBar.h>
 #ifndef MOTIF1_2
-extern void _XmDrawShadow(); /* Motif 1.1 .h files are broken */
-#undef XtIsRealized	     /* Motif 1.1 definition causes build failure */
+extern void _XmDrawShadow();  /* Motif 1.1 .h files are broken */
+#undef XtIsRealized	      /* Motif 1.1 definition causes build failure */
 #else
 #include <Xm/DrawP.h>
 #endif
 #include <Xm/ToggleB.h>
 #include <X11/cursorfont.h>
 #include <Xmu/StdSel.h>
+
 #ifdef VMS
 /* DEC extensions */
 #include <X11/decspecific.h>
@@ -104,6 +105,9 @@ extern char *strdup();
 #ifndef ABS
 #define ABS(x)  (((x) > 0) ? (x) : ((x) * -1))
 #endif
+
+extern unsigned char map_table[];
+#define TOLOWER(x) map_table[x]
 
 #ifndef DISABLE_TRACE
 int htmlwTrace;
@@ -149,7 +153,7 @@ static void		ViewRedisplay(HTMLWidget hw, int x, int y,
 				      int width, int height);
 static Boolean 		html_accept_focus(Widget w, Time *t);
 static ElemInfo 	*HTMLAnchorToEptr(HTMLWidget hw, char *name);
-static void 		Realize(Widget ww, XtValueMask *valueMask, 
+static void 		Realize(Widget w, XtValueMask *valueMask, 
 				XSetWindowAttributes *attrs); 
 
 /* In HTMLwidgets.c */
@@ -166,8 +170,12 @@ extern int Vclass;
 
 extern char *currentURL;
 
+extern int XmxBlockTimers;
+
 /* Exported to HTMLimages.c */
 GC maskGC = NULL;   /* PGE, transparent on solid background speedup */
+
+int Select_GC_Reset = 0;
 
 /* Default translations
  * Selection of text, and activate anchors.
@@ -175,17 +183,16 @@ GC maskGC = NULL;   /* PGE, transparent on solid background speedup */
  * 4/5/96 TPR added traversal_current to make sure if user presses
  * button in view the hotkeys get control.
  */
-
 static char defaultTranslations[] = " \
-<Btn1Down>:	select-start() ManagerGadgetArm()\n\
-<Btn1Motion>:	extend-adjust() ManagerGadgetButtonMotion()\n\
-<Btn1Up>:	extend-end(PRIMARY, CUT_BUFFER0) ManagerGadgetActivate() traversal_current()\n\
-<Btn2Down>:	select-start()\n\
-<Btn2Motion>:	extend-adjust()\n\
-<Btn2Up>:	extend-end(PRIMARY, CUT_BUFFER0)\n\
-<Motion>:       track-motion()\n\
-<Leave>:        track-motion()\n\
-<Expose>:       track-motion()\
+ <Btn1Down>:	select-start() ManagerGadgetArm()\n\
+ <Btn1Motion>:	extend-adjust() ManagerGadgetButtonMotion()\n\
+ <Btn1Up>:	extend-end(PRIMARY, CUT_BUFFER0) ManagerGadgetActivate() traversal_current()\n\
+ <Btn2Down>:	select-start()\n\
+ <Btn2Motion>:	extend-adjust()\n\
+ <Btn2Up>:	extend-end(PRIMARY, CUT_BUFFER0)\n\
+ <Motion>:      track-motion()\n\
+ <Leave>:       track-motion()\n\
+ <Expose>:      track-motion()\
 ";
 
 static XtActionsRec actionsList[] = {
@@ -221,9 +228,8 @@ static XtActionsRec SpareActionsList[] = {
 /*
  *  Resource definitions for HTML widget
  */
-
 static XtResource resources[] = {
-  /* Without Motif we need to override the borderWidth to 0 (from 1). */
+        /* Without Motif we need to override the borderWidth to 0 (from 1). */
 	{ WbNmarginWidth, WbCMarginWidth, XtRDimension, sizeof(Dimension),
 	  XtOffset(HTMLWidget, html.margin_width),
 	  XtRImmediate, (XtPointer) MARGIN_DEFAULT
@@ -303,8 +309,7 @@ static XtResource resources[] = {
 	},
 	{ WbNdashedAnchorUnderlines, WbCDashedAnchorUnderlines, 
 	  XtRBoolean, sizeof(Boolean),
-	  XtOffset(HTMLWidget, html.dashed_anchor_lines),
-	  XtRString, "False"
+	  XtOffset(HTMLWidget, html.dashed_anchor_lines), XtRString, "False"
 	},
 	{ WbNdashVisitedAnchorUnderlines, WbCDashVisitedAnchorUnderlines, 
 	  XtRBoolean, sizeof(Boolean),
@@ -469,6 +474,14 @@ static XtResource resources[] = {
 	  XtOffset(HTMLWidget, html.scroll_bars),
           XtRImmediate, (XtPointer) FRAME_SCROLL_AUTO
 	},
+	{ WbNmultiImage, WbCMultiImage, XtRBoolean, sizeof(Boolean),
+	  XtOffset(HTMLWidget, html.multi_image_load), XtRString, "True"
+	},
+        { WbNmultiLoadCallback, WbCMultiLoadCallback, 
+	  XtRCallback, sizeof(XtCallbackList),
+          XtOffset(HTMLWidget, html.multi_load_callback),
+          XtRImmediate, (XtPointer) NULL
+        }
 };
 
 
@@ -505,14 +518,14 @@ HTMLClassRec htmlClassRec = {
       defaultTranslations,			/* tm_table           */
       XtInheritQueryGeometry,			/* query_geometry     */
       XtInheritDisplayAccelerator,              /* display_accelerator*/
-      NULL,		                        /* extension          */
+      NULL		                        /* extension          */
    },
    {		/* composite_class fields */
       (XtGeometryHandler) GeometryManager,   	/* geometry_manager   */
       NULL,					/* change_managed     */
       XtInheritInsertChild,			/* insert_child       */
       XtInheritDeleteChild,			/* delete_child       */
-      NULL,                                     /* extension          */
+      NULL                                      /* extension          */
    },
    {		/* constraint_class fields */
       NULL,					/* resource list      */
@@ -521,7 +534,7 @@ HTMLClassRec htmlClassRec = {
       NULL,					/* init proc          */
       NULL,					/* destroy proc       */
       NULL,					/* set values proc    */
-      NULL,                                     /* extension          */
+      NULL                                      /* extension          */
    },
    {		/* manager_class fields */
       XtInheritTranslations,			/* translations           */
@@ -530,11 +543,11 @@ HTMLClassRec htmlClassRec = {
       NULL,					/* syn_cont_resources     */
       0,					/* num_syn_cont_resources */
       XmInheritParentProcess,                   /* parent_process         */
-      NULL,					/* extension 	          */    
+      NULL					/* extension 	          */
    },
    {		/* html_class fields */
       0						/* none			  */
-   }	
+   }
 };
 
 WidgetClass htmlWidgetClass = (WidgetClass)&htmlClassRec;
@@ -547,16 +560,13 @@ static char *mailToKludgeURL = NULL;
 int installed_colormap = 0;
 Colormap installed_cmap;
 
-void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc) 
+void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 {
 	ImageInfo lpicd;
 	ImageInfo *picd;
-	unsigned long valuemask;
-	XGCValues values;
 	ElemInfo *eptr;
 	static int init = 0;
-	static int MaxPixmapWidth;
-	static int MaxPixmapHeight;
+	static int MaxPixmapWidth, MaxPixmapHeight;
 
 	if (!bgname || !*bgname || !hw->html.drawGC || hw->html.bg_image)
 		return;
@@ -574,14 +584,19 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 			MaxPixmapWidth = 1200;
 		init = 1;
 	}
+	memset(&lpicd, 0, sizeof(ImageInfo));
 	lpicd.src = strdup(bgname);
+	lpicd.align = ALIGN_NONE;
+	lpicd.req_height = -1;  /* No req_height */
+	lpicd.req_width = -1;   /* No req_width */
+	lpicd.delayed = hw->html.delay_image_loads;
+	lpicd.cw_only = pcc->cw_only;
+
+	/** memset sets them
 	lpicd.alt_text = NULL;
 	lpicd.text = NULL;
-	lpicd.align = ALIGN_NONE;
 	lpicd.height = 0;
-	lpicd.req_height = -1;  /* No req_height */
 	lpicd.width = 0;
-	lpicd.req_width = -1;   /* No req_width */
 	lpicd.percent_width = 0;
 	lpicd.border = 0;
 	lpicd.hspace = 0;
@@ -591,7 +606,6 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 	lpicd.ismap = 0;
 	lpicd.fptr = NULL;
 	lpicd.internal = 0;
-	lpicd.delayed = hw->html.delay_image_loads;
 	lpicd.urldelayed = 0;
 	lpicd.fetched = 0;
 	lpicd.cached = 0;
@@ -602,13 +616,14 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 	lpicd.transparent = 0;
 	lpicd.image = None;
 	lpicd.clip = None;
-	lpicd.cw_only = pcc->cw_only;
 	lpicd.alpha = NULL;
 	lpicd.alpha_image_data = NULL;
 	lpicd.ori_colrs = NULL;
+	lpicd.ori_num_colors = 0;
+	**/
 
 	/* Get the image in lpicd */
-	HtmlGetImage(hw, &lpicd, pcc, False); /* Don't force load */
+	HtmlGetImage(hw, &lpicd, pcc, False);  /* Don't force load */
 
 	/* Mark it as background image, so ImageRefresh ignores it */
 	lpicd.is_bg_image = 1;
@@ -623,8 +638,7 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 			lpicd.height = MaxPixmapHeight;
 		} else if (lpicd.width > MaxPixmapWidth) {
 			int i;
-			unsigned char *tmpdata;
-			unsigned char *ptr, *ptr2;
+			unsigned char *tmpdata, *ptr, *ptr2;
 			XColor colrs[256];
 
 			if (lpicd.height > MaxPixmapHeight)
@@ -644,13 +658,11 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 			ProcessImageData((Widget)hw, &lpicd, colrs);
 			lpicd.cached = 0;
 		}
-
 		/* Make bigger if small */
 		size = lpicd.width * lpicd.height;
 		if (size < 129) {
-			int num, newsize, neww, newh, i, j, k;
-			unsigned char *tmpdata;
-			unsigned char *ptr, *ptr2;
+			int num, neww, newh, i, j, k;
+			unsigned char *tmpdata, *ptr, *ptr2;
 			XColor colrs[256];
 
 			if (size < 9) {
@@ -664,8 +676,8 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 			}
 			neww = num * lpicd.width;
 			newh = num * lpicd.height;
-			newsize = neww * newh;
-			ptr = tmpdata = (unsigned char *)malloc(newsize);
+			ptr = tmpdata = (unsigned char *)malloc(neww * newh);
+
 			for (i = 0; i < num; i++) {
 			    for (k = 0; k < lpicd.height; k++) {
 				ptr2 = lpicd.image_data + (lpicd.width * k);
@@ -696,13 +708,14 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 	} else {
 		return;
 	}
-
 	/*
 	** If we have a transparent background image then update the
 	** transparent color in the image to match the background color.
 	*/
 	if (lpicd.transparent) {
-	    Display *dsp = XtDisplay(hw);
+	    unsigned long valuemask = GCForeground | GCBackground | GCFunction;
+	    XGCValues values;
+	    Display *dsp = hw->html.dsp;
 
 	    if (lpicd.clip == None) {
 		lpicd.clip = XCreatePixmapFromBitmapData(dsp,
@@ -718,39 +731,25 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
                 maskGC = XCreateGC(dsp, XtWindow(hw->html.view), 0, 0);
                 XCopyGC(dsp, hw->html.drawGC, 0xFFFFFFFF, maskGC);
             }
-
             /* Clear the background pixels to 0 */
             values.foreground = 0xFFFFFFFF;
             values.background = 0;
             values.function = GXand;
-            valuemask = GCForeground | GCBackground | GCFunction;
             XChangeGC(dsp, maskGC, valuemask, &values);
-            XCopyPlane(dsp,
-                       hw->html.bgclip_SAVE,
-                       hw->html.bgmap_SAVE,
-                       maskGC,
-                       0, 0,
-                       hw->html.bg_width, hw->html.bg_height,
-                       0, 0, 1);
-
+            XCopyPlane(dsp, hw->html.bgclip_SAVE, hw->html.bgmap_SAVE, maskGC,
+                       0, 0, hw->html.bg_width, hw->html.bg_height, 0, 0, 1);
             /* Set the background pixels to background color */
             values.foreground = 0;
             values.background = hw->core.background_pixel;
             values.function = GXor;
-            valuemask = GCForeground | GCBackground | GCFunction;
             XChangeGC(dsp, maskGC, valuemask, &values);
-            XCopyPlane(dsp,
-                       hw->html.bgclip_SAVE,
-                       hw->html.bgmap_SAVE,
-                       maskGC,
-                       0, 0,
-                       hw->html.bg_width, hw->html.bg_height,
-                       0, 0, 1);
+            XCopyPlane(dsp, hw->html.bgclip_SAVE, hw->html.bgmap_SAVE, maskGC,
+                       0, 0, hw->html.bg_width, hw->html.bg_height, 0, 0, 1);
 	}
 
 	/* Create element for it so the image data can be freed later */
 	eptr = CreateElement(hw, E_IMAGE, pcc->cur_font, 0, 0, 0, 0, 0, pcc);
-	picd = (ImageInfo *) malloc(sizeof(ImageInfo));
+	picd = GetImageRec();
 	*picd = lpicd;
 	hw->html.bg_pic_data = eptr->pic_data = picd;
 
@@ -760,57 +759,78 @@ void hw_do_bg(HTMLWidget hw, char *bgname, PhotoComposeContext *pcc)
 void hw_do_color(HTMLWidget hw, char *att, char *cname,
 		 PhotoComposeContext *pcc)
 {
-	int r, g, b;
 	XColor ecol, col;
-	XColor fg, sel, ts, bs;
-	XmColorProc calc;
-	Colormap cmap;
-	Display *dsp = XtDisplay(hw);
-	char *val;
-	char t[3];
+	Colormap cmap = hw->core.colormap;
+	Display *dsp = hw->html.dsp;
+	char *val = cname;
 	int allocated = 0;
-	int i;
 
 	if (!att || !*att || !cname || !*cname)
 		return;
 
-	cmap = hw->core.colormap;
-	val = cname;
-
 	/* Clean up leading and trailing crud */
 	clean_white_space(val);
 
-	/* Adjust colors per HTML 3.2 */
-	if (!my_strcasecmp(val, "green")) {
-		val = "#008000";
-	} else if (!my_strcasecmp(val, "lime")) {
-		val = "#00FF00";
-	} else if (!my_strcasecmp(val, "gray")) {
-		val = "#808080";
-	} else if (!my_strcasecmp(val, "silver")) {
-		val = "#C0C0C0";
-	} else if (!my_strcasecmp(val, "olive")) {
-		val = "#808000";
-	} else if (!my_strcasecmp(val, "teal")) {
-		val = "#008080";
-	} else if (!my_strcasecmp(val, "aqua")) {
-		val = "#00FFFF";
-	} else if (!my_strcasecmp(val, "fuchsia") ||
-		   !my_strcasecmp(val, "magenta")) {
-		val = "#FF00FF";
-	} else if (!my_strcasecmp(val, "purple")) {
-		val = "#800080";
-	} else if (!my_strcasecmp(val, "maroon")) {
-		val = "#800000";
-	} else if (!my_strcasecmp(val, "navy")) {
-		val = "#000080";
-	/* Add colors not included in Motif */
-	} else if (!my_strcasecmp(val, "crimson")) {
-		if (!XLookupColor(dsp, cmap, val, &ecol, &col))
-			val = "#DC1436";
-	} else if (!my_strcasecmp(val, "indigo")) {
-		if (!XLookupColor(dsp, cmap, val, &ecol, &col))
-			val = "#4B0082";
+	if (*val != '#') {
+		switch (TOLOWER(*val)) {
+		    /* Adjust named colors per HTML 3.2 */
+		    case 'a':
+			if (!my_strcasecmp(val, "aqua"))
+				val = "#00FFFF";
+			break;
+		    case 'f':
+			if (!my_strcasecmp(val, "fuchsia"))
+				val = "#FF00FF";
+			break;
+		    case 'g':
+			if (!my_strcasecmp(val, "green")) {
+				val = "#008000";
+			} else if (!my_strcasecmp(val, "gray")) {
+				val = "#808080";
+			}
+			break;
+		    case 'l':
+			if (!my_strcasecmp(val, "lime"))
+				val = "#00FF00";
+			break;
+		    case 'm':
+			if (!my_strcasecmp(val, "magenta")) {
+				val = "#FF00FF";
+			} else if (!my_strcasecmp(val, "maroon")) {
+				val = "#800000";
+			}
+			break;
+		    case 'n':
+			if (!my_strcasecmp(val, "navy"))
+				val = "#000080";
+			break;
+		    case 'o':
+			if (!my_strcasecmp(val, "olive"))
+				val = "#808000";
+			break;
+		    case 'p':
+			if (!my_strcasecmp(val, "purple"))
+				val = "#800080";
+			break;
+		    case 's':
+			if (!my_strcasecmp(val, "silver"))
+				val = "#C0C0C0";
+			break;
+		    case 't':
+			if (!my_strcasecmp(val, "teal"))
+				val = "#008080";
+			break;
+		    /* Add colors not included in Motif */
+		    case 'c':
+			if (!my_strcasecmp(val, "crimson") &&
+			    !XLookupColor(dsp, cmap, val, &ecol, &col))
+				val = "#DC1436";
+			break;
+		    case 'i':
+			if (!my_strcasecmp(val, "indigo") &&
+			    !XLookupColor(dsp, cmap, val, &ecol, &col))
+				val = "#4B0082";
+		}
 	}
 	if (*val != '#') {
 		if (XAllocNamedColor(dsp, cmap, val, &col, &ecol)) {
@@ -822,13 +842,11 @@ void hw_do_color(HTMLWidget hw, char *att, char *cname,
 			if (htmlwTrace || reportBugs)
 				fprintf(stderr,	"Bad named color %s\n", cname);
 #endif
-		} else {
-			if ((Vclass != TrueColor) && (Vclass != DirectColor)) {
-				FindColor(hw, hw->core.colormap, &col);
-			} else {
-				return;
-			}
+		} else if ((Vclass != TrueColor) && (Vclass != DirectColor)) {
+			FindColor(hw, hw->core.colormap, &col);
 			allocated = 1;
+		} else {
+			return;
 		}
 	} else if (XParseColor(dsp, cmap, val, &col)) {
 		if ((Vclass != TrueColor) && (Vclass != DirectColor)) {
@@ -856,7 +874,10 @@ void hw_do_color(HTMLWidget hw, char *att, char *cname,
 		if (!*val)
 			return;
 		if (strlen(val) >= 6) {
-	            /* Must be valid hex */
+			int i, r, g, b;
+			char t[3];
+
+	                /* Must be valid hex */
             		for (i = 0; i < 6; i++) {
                 		if (!strchr("0123456789AaBbCcDdEeFf", val[i])) {
 					if (val[i] == 'O') {
@@ -927,7 +948,9 @@ void hw_do_color(HTMLWidget hw, char *att, char *cname,
 		pcc->bg = col.pixel;
 	} else if (!my_strcasecmp(att, "bgcolor")) {
 		/* Calculate shadow colors */
-		calc = XmGetColorCalculation();
+		XColor fg, sel, ts, bs;
+		XmColorProc calc = XmGetColorCalculation();
+
 		calc(&col, &fg, &sel, &ts, &bs);
 		if (XAllocColor(dsp, cmap, &ts)) 
 			hw->manager.top_shadow_color = ts.pixel;
@@ -939,7 +962,7 @@ void hw_do_color(HTMLWidget hw, char *att, char *cname,
 		pcc->bg = col.pixel;
 	} else if (!my_strcasecmp(att, "base")) {
 		DefaultFontColor(hw, pcc, col.pixel);
-	} else if (!my_strcasecmp(att, "link")) { /* These are in body tag */
+	} else if (!my_strcasecmp(att, "link")) {  /* These are in body tag */
 		hw->html.anchor_fg = col.pixel;
 	} else if (!my_strcasecmp(att, "vlink")) {
 		hw->html.visitedAnchor_fg = col.pixel;
@@ -956,11 +979,10 @@ static void DrawExpose(Widget w, XtPointer data, XEvent *event)
 {
 	XEvent NewEvent;
 	HTMLWidget hw = (HTMLWidget)data;
-	int x, y, x1, y1;
-	int width, height;
+	int x, y, x1, y1, width, height;
 	int nx, ny, nwidth, nheight;
-	Display *dsp;        
-	Window win;           
+	Display *dsp;
+	Window win;
 
         if (!(event->xany.type == Expose ||
 	      event->xany.type == GraphicsExpose))
@@ -988,12 +1010,12 @@ static void DrawExpose(Widget w, XtPointer data, XEvent *event)
                 height = event->xgraphicsexpose.height;
         }  
 
+        dsp = hw->html.dsp;
+        win = XtWindow(w);
+
 	/* Get rid of any extra expose events.
 	 * Be sure to get the entire area of exposure.
 	 */
-        dsp = XtDisplay(w);            
-        win = XtWindow(w); 
-
         /* Force all exposure events into the queue */
         XSync(dsp, False);
 	while (XCheckWindowEvent(dsp, win, ExposureMask, &NewEvent)) {
@@ -1032,14 +1054,19 @@ static void DrawExpose(Widget w, XtPointer data, XEvent *event)
 #endif
 	/* Need to clear it because of progressive display */
 	XClearArea(dsp, win, x, y, width, height, False);
+
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
 	ViewRedisplay(hw, x, y, width, height);
 }
 
 static void ResetWidgetsOnResize(HTMLWidget hw)
 {       
-        WidgetInfo *wptr;
+        WidgetInfo *wptr = hw->html.widget_list;
         
-        wptr = hw->html.widget_list;
         while (wptr) {
                 if (wptr->w)
                         wptr->seeable = 1;
@@ -1050,9 +1077,12 @@ static void ResetWidgetsOnResize(HTMLWidget hw)
 
 void ScrollWidgets(HTMLWidget hw)
 {
-	WidgetInfo *wptr;
+	WidgetInfo *wptr = hw->html.widget_list;
 	FrameInfo *fptr;
-	int xval, yval;
+	int xval = hw->html.scroll_x;
+	int yval = hw->html.scroll_y;
+	int view_height = hw->html.view_height;
+	int view_width = hw->html.view_width;
 	int x, y;
 	int scrolled = 0;
 
@@ -1060,9 +1090,6 @@ void ScrollWidgets(HTMLWidget hw)
         if (htmlwTrace)
 		fprintf(stderr, "In Scrollwidgets\n");
 #endif
-	xval = hw->html.scroll_x;
-	yval = hw->html.scroll_y;
-	wptr = hw->html.widget_list;
 	while (wptr) {
 		if (wptr->w) {
                         x = wptr->x - xval;
@@ -1078,10 +1105,10 @@ void ScrollWidgets(HTMLWidget hw)
                          * widget pages.  If no movement, then is probably
 			 * an expose event which requires a repaint.
                          */     
-                        if ((((y + wptr->eptr->height) >= 0) && 
-			     (y <= hw->html.view_height)) &&
+                        if ((((y + wptr->eptr->height) >= 0) &&
+			     (y <= view_height)) &&
                             (((x + wptr->eptr->width) >= 0) &&
-			     (x <= hw->html.view_width))) {
+			     (x <= view_width))) {
                                 XtMoveWidget(wptr->w, x, y);
 				scrolled = 1;
                         } else if (wptr->seeable) {
@@ -1096,7 +1123,6 @@ void ScrollWidgets(HTMLWidget hw)
 		}
 		wptr = wptr->next;
 	}
-
 	fptr = hw->html.iframe_list;
 	while (fptr) {
 		if (fptr->iframe) {
@@ -1104,9 +1130,9 @@ void ScrollWidgets(HTMLWidget hw)
                         y = fptr->frame_y - yval;
 
                         if ((((y + fptr->frame_height) >= 0) && 
-			     (y <= hw->html.view_height)) &&
+			     (y <= view_height)) &&
                             (((x + fptr->frame_width) >= 0) &&
-			     (x <= hw->html.view_width))) {
+			     (x <= view_width))) {
                                 XtMoveWidget(fptr->iframe, x + 2, y + 2);
 				scrolled = 1;
                         } else if (fptr->seeable) {
@@ -1126,9 +1152,10 @@ void ScrollWidgets(HTMLWidget hw)
 	/* Clean up previously covered areas */
 	if (scrolled) {
 		XEvent event;
-		Display *dsp = XtDisplay(hw->html.view);
+		Display *dsp = hw->html.dsp;
 		Window win = XtWindow(hw->html.view);
-		int width = 0, height = 0;
+		int width = 0;
+		int height = 0;
 		int nx, ny, x1, y1, nwidth, nheight;
 
 		XSync(dsp, False);
@@ -1183,10 +1210,12 @@ void ScrollWidgets(HTMLWidget hw)
  */
 static void ScrollToPos(Widget w, HTMLWidget hw, int value)
 {
-	unsigned long valuemask;
+	static unsigned long valuemask = GCGraphicsExposures;
 	XGCValues values;
-	Display *dsp = XtDisplay(hw);
+	Display *dsp = hw->html.dsp;
 	Window win = XtWindow(hw->html.view);
+	int vheight = hw->html.view_height;
+	int vwidth = hw->html.view_width;
 
 #ifndef DISABLE_TRACE
         if (htmlwTrace)
@@ -1204,9 +1233,13 @@ static void ScrollToPos(Widget w, HTMLWidget hw, int value)
 		}
 		return;
 	}
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
 	/* Disable GraphicExpose events (from CopyArea) */
 	values.graphics_exposures = False;
-	valuemask = GCGraphicsExposures;
 	XChangeGC(dsp, hw->html.drawGC, valuemask, &values);
 	/*
 	 * If we've moved the vertical scrollbar
@@ -1214,64 +1247,43 @@ static void ScrollToPos(Widget w, HTMLWidget hw, int value)
 	if (w == hw->html.vbar) {
 		/*
 		 * We've scrolled down.  Copy up the untouched part of the
-		 * window.  Then Clear and redraw the new area
-		 * exposed.
+		 * window.  Then Clear and redraw the new area exposed.
 		 */
 		if (value > hw->html.scroll_y) {
-			int dy;
-	    
-			dy = value - hw->html.scroll_y;
-			if (dy > hw->html.view_height) {
+			int dy = value - hw->html.scroll_y;
+
+			if (dy > vheight) {
 				hw->html.scroll_y = value;
-				XClearArea(dsp, win, 0, 0,
-					   hw->html.view_width,
-					   hw->html.view_height, False);
-				ViewRedisplay(hw, 0, 0,
-					      hw->html.view_width,
-					      hw->html.view_height);
+				XClearArea(dsp, win, 0, 0, vwidth,
+					   vheight, False);
+				ViewRedisplay(hw, 0, 0, vwidth, vheight);
 			} else {
-				XCopyArea(dsp, win, win,
-					  hw->html.drawGC, 0, dy,
-					  hw->html.view_width,
-					  hw->html.view_height - dy,
-					  0, 0);
+				XCopyArea(dsp, win, win, hw->html.drawGC, 0, dy,
+					  vwidth, vheight - dy, 0, 0);
 				hw->html.scroll_y = value;
-				XClearArea(dsp, win,
-					   0, (int)hw->html.view_height - dy,
-					   hw->html.view_width, dy, False);
-				ViewRedisplay(hw,
-					      0, (int)hw->html.view_height - dy,
-					      hw->html.view_width, dy);
+				XClearArea(dsp, win, 0, vheight - dy,
+					   vwidth, dy, False);
+				ViewRedisplay(hw, 0, vheight - dy, vwidth, dy);
 			}
 		}
 		/*
 		 * We've scrolled up.  Copy down the untouched part of the
-		 * window.  Then Clear and redraw the new area
-		 * exposed.
+		 * window.  Then Clear and redraw the new area exposed.
 		 */
 		else if (value < hw->html.scroll_y) {
-			int dy;
-	    
-			dy = hw->html.scroll_y - value;
-			if (dy > hw->html.view_height) {
+			int dy = hw->html.scroll_y - value;
+
+			if (dy > vheight) {
 				hw->html.scroll_y = value;
-				XClearArea(dsp, win, 0, 0,
-					   hw->html.view_width,
-					   hw->html.view_height, False);
-				ViewRedisplay(hw, 0, 0,
-					      hw->html.view_width,
-					      hw->html.view_height);
+				XClearArea(dsp, win, 0, 0, vwidth,
+					   vheight, False);
+				ViewRedisplay(hw, 0, 0, vwidth, vheight);
 			} else {
-				XCopyArea(dsp, win, win,
-					  hw->html.drawGC, 0, 0,
-					  hw->html.view_width,
-					  hw->html.view_height - dy,
-					  0, dy);
+				XCopyArea(dsp, win, win, hw->html.drawGC, 0, 0,
+					  vwidth, vheight - dy, 0, dy);
 				hw->html.scroll_y = value;
-				XClearArea(dsp, win, 0, 0,
-					   hw->html.view_width, dy, False);
-				ViewRedisplay(hw, 0, 0,
-					      hw->html.view_width, dy);
+				XClearArea(dsp, win, 0, 0, vwidth, dy, False);
+				ViewRedisplay(hw, 0, 0, vwidth, dy);
 			}
 		}
 	}
@@ -1281,72 +1293,50 @@ static void ScrollToPos(Widget w, HTMLWidget hw, int value)
 	else if (w == hw->html.hbar) {
 		/*
 		 * We've scrolled right. Copy left the untouched part of the
-		 * window.  Then Clear and redraw the new area
-		 * exposed.
+		 * window.  Then Clear and redraw the new area exposed.
 		 */
 		if (value > hw->html.scroll_x) {
-			int dx;
-	    
-			dx = value - hw->html.scroll_x;
-			if (dx > hw->html.view_width) {
+			int dx = value - hw->html.scroll_x;
+
+			if (dx > vwidth) {
 				hw->html.scroll_x = value;
-				XClearArea(dsp, win, 0, 0,
-					   hw->html.view_width,
-					   hw->html.view_height, False);
-				ViewRedisplay(hw, 0, 0,
-					      hw->html.view_width,
-					      hw->html.view_height);
+				XClearArea(dsp, win, 0, 0, vwidth,
+					   vheight, False);
+				ViewRedisplay(hw, 0, 0, vwidth, vheight);
 			} else {
-				XCopyArea(dsp, win, win,
-					  hw->html.drawGC, dx, 0,
-					  hw->html.view_width - dx,
-					  hw->html.view_height,
-					  0, 0);
+				XCopyArea(dsp, win, win, hw->html.drawGC, dx, 0,
+					  vwidth - dx, vheight, 0, 0);
 				hw->html.scroll_x = value;
-				XClearArea(dsp, win,
-					   (int)hw->html.view_width - dx, 0,
-					   dx, hw->html.view_height, False);
-				ViewRedisplay(hw, (int)hw->html.view_width - dx,
-					      0, dx, hw->html.view_height);
+				XClearArea(dsp, win, vwidth - dx, 0,
+					   dx, vheight, False);
+				ViewRedisplay(hw, vwidth - dx, 0, dx, vheight);
 			}
 		}
 		/*
 		 * We've scrolled left.  Copy right the untouched part of
-		 * the window.  Then Clear and redraw the new area
-		 * exposed.
+		 * the window.  Then Clear and redraw the new area exposed.
 		 */
 		else if (value < hw->html.scroll_x) {
-			int dx;
-	    
-			dx = hw->html.scroll_x - value;
-			if (dx > hw->html.view_width) {
+			int dx = hw->html.scroll_x - value;
+
+			if (dx > vwidth) {
 				hw->html.scroll_x = value;
-				XClearArea(dsp, win, 0, 0,
-					   hw->html.view_width,
-					   hw->html.view_height, False);
-				ViewRedisplay(hw, 0, 0,
-					      hw->html.view_width,
-					      hw->html.view_height);
+				XClearArea(dsp, win, 0, 0, vwidth,
+					   vheight, False);
+				ViewRedisplay(hw, 0, 0, vwidth, vheight);
 			} else {
-				XCopyArea(dsp, win, win,
-					  hw->html.drawGC, 0, 0,
-					  hw->html.view_width - dx,
-					  hw->html.view_height,
-					  dx, 0);
+				XCopyArea(dsp, win, win, hw->html.drawGC, 0, 0,
+					  vwidth - dx, vheight, dx, 0);
 				hw->html.scroll_x = value;
-				XClearArea(dsp, win, 0, 0,
-					   dx, hw->html.view_height, False);
-				ViewRedisplay(hw, 0, 0,
-					      dx, hw->html.view_height);
+				XClearArea(dsp, win, 0, 0, dx, vheight, False);
+				ViewRedisplay(hw, 0, 0, dx, vheight);
 			}
 		}
 	}
-
 	ScrollWidgets(hw);
 
 	/* Enable exposure events */
 	values.graphics_exposures = True;
-	valuemask = GCGraphicsExposures;
 	XChangeGC(dsp, hw->html.drawGC, valuemask, &values);
 }
 
@@ -1387,16 +1377,20 @@ static void DragScrollMove(Widget w, XtPointer client_data, XtPointer call_data)
 				 NULL);
 }
 
-static void Realize(Widget ww, XtValueMask *valueMask,
+static void Realize(Widget w, XtValueMask *valueMask,
 		    XSetWindowAttributes *attrs)     
 {       
-        HTMLWidget w = (HTMLWidget)ww;
+        HTMLWidget hw = (HTMLWidget)w;
         
-        XtCreateWindow(ww, InputOutput, (Visual *)CopyFromParent,
-                       *valueMask, attrs);
-        XtRealizeWidget(w->html.view);
-        XtRealizeWidget(w->html.vbar);
-        XtRealizeWidget(w->html.hbar);
+        XtCreateWindow(w, InputOutput, (Visual *)CopyFromParent,
+		       *valueMask, attrs);
+        XtRealizeWidget(hw->html.view);
+        XtRealizeWidget(hw->html.vbar);
+        XtRealizeWidget(hw->html.hbar);
+#ifndef DISABLE_TRACE
+	if (htmlwTrace)
+		fprintf(stderr, "Realized HTMLwidget\n");
+#endif
 }
 
 /* Create the horizontal and vertical scroll bars.
@@ -1404,11 +1398,10 @@ static void Realize(Widget ww, XtValueMask *valueMask,
  */
 static void CreateScrollbars(HTMLWidget hw)
 {
-	Arg arg[20];
-	Cardinal argcnt;
+	Arg arg[5];
+	Cardinal argcnt = 0;
 	XtTranslations trans;
 
-	argcnt = 0;
 	if (!hw->html.is_frame) {
 		XtSetArg(arg[argcnt], XmNwidth, 10);
 		argcnt++;
@@ -1436,38 +1429,30 @@ static void CreateScrollbars(HTMLWidget hw)
 			  ExposureMask | VisibilityChangeMask, True,
 			  (XtEventHandler)DrawExpose, (XtPointer)hw);
 	/*
-	 * As described previously, for some reason with Motif1.2/X11R5
+	 * As described previously, for some reason with Motif 1.2/X11R5
 	 * the list actionsList is corrupted when we get here,
 	 * so we have to use the special copy SpareActionsList
 	 */
 	XtAppAddActions(app_con, SpareActionsList, XtNumber(SpareActionsList));
 	trans = XtParseTranslationTable(defaultTranslations);
-	argcnt = 0;
-	XtSetArg(arg[argcnt], XtNtranslations, trans);
-	argcnt++;
-	XtSetValues(hw->html.view, arg, argcnt);
+	XtSetArg(arg[0], XtNtranslations, trans);
+	XtSetValues(hw->html.view, arg, 1);
 
 	/* Vert scrollbar */
-	argcnt = 0;
-	XtSetArg(arg[argcnt], XmNorientation, XmVERTICAL);
-	argcnt++;
-	XtSetArg(arg[argcnt], XtNwidth, VERT_SCROLL_WIDTH);
-	argcnt++;
+	XtSetArg(arg[0], XmNorientation, XmVERTICAL);
+	XtSetArg(arg[1], XtNwidth, VERT_SCROLL_WIDTH);
 	hw->html.vbar = XtCreateWidget("Vbar", xmScrollBarWidgetClass,
-				       (Widget)hw, arg, argcnt);
+				       (Widget)hw, arg, 2);
 	XtAddCallback(hw->html.vbar, XmNvalueChangedCallback,
 		      (XtCallbackProc)ScrollMove, (XtPointer)hw);
 	XtAddCallback(hw->html.vbar, XmNdragCallback,
 		      (XtCallbackProc)DragScrollMove, (XtPointer)hw);
 
 	/* Horiz scrollbar */
-	argcnt = 0;
-	XtSetArg(arg[argcnt], XmNorientation, XmHORIZONTAL);
-	argcnt++;
-	XtSetArg(arg[argcnt], XtNheight, HORIZ_SCROLL_HEIGHT);
-	argcnt++;
+	XtSetArg(arg[0], XmNorientation, XmHORIZONTAL);
+	XtSetArg(arg[1], XtNheight, HORIZ_SCROLL_HEIGHT);
 	hw->html.hbar = XtCreateWidget("Hbar", xmScrollBarWidgetClass,
-				       (Widget)hw, arg, argcnt);
+				       (Widget)hw, arg, 2);
 	XtAddCallback(hw->html.hbar, XmNvalueChangedCallback,
 		      (XtCallbackProc)ScrollMove, (XtPointer)hw);
 	XtAddCallback(hw->html.hbar, XmNdragCallback,
@@ -1494,19 +1479,18 @@ static void ConfigScrollBars(HTMLWidget hw)
 {
 	Arg arg[20];
 	Cardinal argcnt;
-	Dimension st;
+	Dimension st = 0;
 	int ss;
+	int vheight = hw->html.view_height;
+	int vwidth = hw->html.view_width;
 
 	/* Don't move frames */
 	if (!hw->html.is_frame) {
 		/* Move and size the viewing area */
 		st = hw->manager.shadow_thickness;
 		XtMoveWidget(hw->html.view, st, st);
-		XtResizeWidget(hw->html.view, hw->html.view_width,
-			       hw->html.view_height,
+		XtResizeWidget(hw->html.view, vwidth, vheight,
 			       hw->html.view->core.border_width);
-	} else {
-		st = 0;
 	}
 	/* Set up vertical scrollbar */
 	if (hw->html.use_vbar) {
@@ -1516,7 +1500,7 @@ static void ConfigScrollBars(HTMLWidget hw)
 		 * the viewing area
 		 */
 		XtResizeWidget(hw->html.vbar, hw->html.vbar->core.width,
-			       hw->html.view_height + (2 * st),
+			       vheight + (2 * st),
 			       hw->html.vbar->core.border_width);
 
 		/* Set the slider size to be the percentage of the
@@ -1529,12 +1513,12 @@ static void ConfigScrollBars(HTMLWidget hw)
 #ifndef DISABLE_TRACE
 			if (htmlwTrace)
 			     fprintf(stderr, "view_height %d, doc_height %d\n",
-				     hw->html.view_height, hw->html.doc_height);
+				     vheight, hw->html.doc_height);
 #endif
                         /* Added by marca: this produces results *very* close
 			 * (~1 pixel) to the original scrolled window behavior.
 			 */
-                        ss = hw->html.view_height;
+                        ss = vheight;
 		}
 		if (ss < 1)
 			ss = 1;
@@ -1545,7 +1529,7 @@ static void ConfigScrollBars(HTMLWidget hw)
 		/* If resizing of the document has made scroll_y
 		 * greater than the max, we want to hold it at the max.
 		 */
-		maxv = hw->html.doc_height - (int)hw->html.view_height;
+		maxv = hw->html.doc_height - vheight;
 		if (maxv < 0)
 			maxv = 0;
 		if (hw->html.scroll_y > maxv)
@@ -1553,7 +1537,7 @@ static void ConfigScrollBars(HTMLWidget hw)
 		/* Prevent the Motif max value and slider size
 		 * from going to zero, which is illegal
 		 */
-		maxv = maxv + ss;
+		maxv += ss;
 		if (maxv < 1)
 			maxv = 1;
 		/* Motif will not allow the actual value to be equal to
@@ -1565,15 +1549,19 @@ static void ConfigScrollBars(HTMLWidget hw)
 		if (hw->html.scroll_y < 0)
 			hw->html.scroll_y = 0;
 		argcnt = 0;
-		XtSetArg(arg[argcnt], XmNminimum, 0); argcnt++;
-		XtSetArg(arg[argcnt], XmNmaximum, maxv); argcnt++;
-		XtSetArg(arg[argcnt], XmNvalue, hw->html.scroll_y); argcnt++;
-		XtSetArg(arg[argcnt], XmNsliderSize, ss); argcnt++;
+		XtSetArg(arg[argcnt], XmNminimum, 0);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNmaximum, maxv);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNvalue, hw->html.scroll_y);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNsliderSize, ss);
+		argcnt++;
                 XtSetArg(arg[argcnt], XmNincrement, DEFAULT_INCREMENT);
 		argcnt++;
                 XtSetArg(arg[argcnt], XmNpageIncrement, 
-                         hw->html.view_height > DEFAULT_INCREMENT ? 
-                         hw->html.view_height - DEFAULT_INCREMENT : 1);
+                         vheight > DEFAULT_INCREMENT ? 
+                         vheight - DEFAULT_INCREMENT : 1);
 		argcnt++;
 		XtSetValues(hw->html.vbar, arg, argcnt);
 #ifndef DISABLE_TRACE
@@ -1590,7 +1578,7 @@ static void ConfigScrollBars(HTMLWidget hw)
 		/* Size the horizontal scrollbar to the width of
 		 * the viewing area
 		 */
-		XtResizeWidget(hw->html.hbar, hw->html.view_width + (2 * st),
+		XtResizeWidget(hw->html.hbar, vwidth + (2 * st),
 			       hw->html.hbar->core.height,
 			       hw->html.hbar->core.border_width);
 		/* Set the slider size to be the percentage of the
@@ -1602,14 +1590,14 @@ static void ConfigScrollBars(HTMLWidget hw)
 		} else {
                         /* marca: this produces results *very* close (~1 pixel)
                          * to the original scrolled window behavior. */
-                        ss = hw->html.view_width;
+                        ss = vwidth;
 		}
 		if (ss < 1)
 			ss = 1;
 		/* If resizing of the document has made scroll_x
 		 * greater than the max, we want to hold it at the max.
 		 */
-		maxv = hw->html.doc_width - (int)hw->html.view_width;
+		maxv = hw->html.doc_width - vwidth;
 		if (maxv < 0)
 			maxv = 0;
 		if (hw->html.scroll_x > maxv)
@@ -1617,7 +1605,7 @@ static void ConfigScrollBars(HTMLWidget hw)
 		/* Prevent the Motif max value and slider size
 		 * from going to zero, which is illegal
 		 */
-		maxv = maxv + ss;
+		maxv += ss;
 		if (maxv < 1)
 			maxv = 1;
 		/*
@@ -1630,15 +1618,19 @@ static void ConfigScrollBars(HTMLWidget hw)
 		if (hw->html.scroll_x < 0)
 			hw->html.scroll_x = 0;
 		argcnt = 0;
-		XtSetArg(arg[argcnt], XmNminimum, 0); argcnt++;
-		XtSetArg(arg[argcnt], XmNmaximum, maxv); argcnt++;
-		XtSetArg(arg[argcnt], XmNvalue, hw->html.scroll_x); argcnt++;
-		XtSetArg(arg[argcnt], XmNsliderSize, ss); argcnt++;
+		XtSetArg(arg[argcnt], XmNminimum, 0);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNmaximum, maxv);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNvalue, hw->html.scroll_x);
+		argcnt++;
+		XtSetArg(arg[argcnt], XmNsliderSize, ss);
+		argcnt++;
                 XtSetArg(arg[argcnt], XmNincrement, DEFAULT_INCREMENT);
 		argcnt++;
                 XtSetArg(arg[argcnt], XmNpageIncrement, 
-                         hw->html.view_width > DEFAULT_INCREMENT ? 
-                         hw->html.view_width - DEFAULT_INCREMENT : 1);
+                         vwidth > DEFAULT_INCREMENT ? 
+                         vwidth - DEFAULT_INCREMENT : 1);
 		argcnt++;
 		XtSetValues(hw->html.hbar, arg, argcnt);
 #ifndef DISABLE_TRACE
@@ -1653,27 +1645,22 @@ static void ConfigScrollBars(HTMLWidget hw)
 /* Reformat the window and scrollbars.  May be called due to changed document */
 static void ReformatWindow(HTMLWidget hw)
 {
-	int returned_y;
-	int new_width, width;
-	Dimension swidth, sheight;
-	Dimension st;
+	int returned_y, new_width, width;
+	Dimension swidth = VbarWidth(hw);
+	Dimension sheight = HbarHeight(hw);
+	Dimension st = 0;
 
 	/* Reset background image, any previous one freed by now */
 	hw->html.bg_image = 0;
 	hw->html.bgmap_SAVE = None;
 	hw->html.bgclip_SAVE = None;
 	/*
-	 * Find the current scrollbar sizes, and shadow thickness and format
-	 * the document to the current window width
+	 * Find the current scrollbar sizes, and shadow thickness and
+	 * format the document to the current window width
 	 * (assume a vertical scrollbar)
 	 */
-	swidth = VbarWidth(hw);
-	sheight = HbarHeight(hw);
-	if (!hw->html.is_frame) {
+	if (!hw->html.is_frame)
 		st = hw->manager.shadow_thickness;
-	} else {
-		st = 0;
-	}
 	if (hw->core.width <= swidth)
 		hw->core.width = swidth + 10;
 	new_width = hw->core.width - swidth;
@@ -1685,9 +1672,9 @@ static void ReformatWindow(HTMLWidget hw)
 		if (hw->html.max_pre_width > width) {
 			width = hw->html.max_pre_width;
 		} else {
-			width -= (20 * hw->html.margin_width / 100);
+			width -= 20 * hw->html.margin_width / 100;
 		}
-		width += (2 * hw->html.margin_width);
+		width += 2 * hw->html.margin_width;
 		if ((width <= hw->html.view_width) &&
 		    (returned_y <= hw->core.height))
 			hw->html.use_vbar = False;
@@ -1736,21 +1723,21 @@ static void ReformatWindow(HTMLWidget hw)
 	 * punctuation after anchors at the end of the line.
 	 */
 	} else {
-		new_width = new_width - (20 * hw->html.margin_width / 100);
+		new_width -= 20 * hw->html.margin_width / 100;
 	}
 	hw->html.doc_height = returned_y;
 	hw->html.doc_width = new_width + (2 * hw->html.margin_width);
 	if (hw->html.view_width > hw->html.doc_width)
 		hw->html.doc_width = hw->html.view_width;
 
-	/* If we need a horizontal scrollbar, place and manage it.  Save the
-	 * height of the current viewing area.
+	/* If we need a horizontal scrollbar, place and manage it.
+	 * Save the height of the current viewing area.
 	 */
 	if (((hw->html.scroll_bars == FRAME_SCROLL_YES) ||
 	     (hw->html.doc_width > hw->html.view_width)) &&
 	    (hw->html.scroll_bars != FRAME_SCROLL_NONE)) {
 		hw->html.use_hbar = True;
-		XtMoveWidget(hw->html.hbar, 0, (hw->core.height - sheight));
+		XtMoveWidget(hw->html.hbar, 0, hw->core.height - sheight);
 		XtManageChild(hw->html.hbar);
 		hw->html.view_height = hw->core.height - sheight - (2 * st);
 	} else {
@@ -1820,6 +1807,7 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
 	nw->html.map_list = NULL;
 	nw->html.formatted_elements = NULL;
 	nw->html.widget_list = NULL;
+	nw->html.widget_focus = NULL;
 	nw->html.iframe_list = NULL;
 	nw->html.form_list = NULL;
 	nw->html.html_objects = NULL;
@@ -1831,6 +1819,7 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
 	nw->html.charset = NULL;
 	nw->html.max_pre_width = 0;
 	nw->html.blinking_elements = NULL;
+	nw->html.image_src = NULL;
 
 	/* Initialize the color allocation index */
 	memset(nw->html.allocation_index, 0, 256 * sizeof(int));
@@ -1839,31 +1828,25 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
 	nw->html.frames = NULL;
 	nw->html.frame_callback = NULL;
 
+	nw->html.dsp = XtDisplay(nw);
+
 	/* Create the scrollbars.  Find their dimensions and then decide which
 	 * scrollbars you will need, and what the dimensions of the viewing
 	 * area are.  Start assuming a vertical scrollbar and a horizontal one.
 	 * Then remove vertical if short enough, and remove horizontal if
 	 * narrow enough.
 	 */
-	nw->html.vbar = NULL;
-	nw->html.hbar = NULL;
-	nw->html.view = NULL;
+	nw->html.vbar = nw->html.hbar = nw->html.view = NULL;
 	CreateScrollbars(nw);
-	nw->html.scroll_x = 0;
-	nw->html.scroll_y = 0;
+	nw->html.scroll_x = nw->html.scroll_y = 0;
 
 	/* Initialize private widget resources */
-	nw->html.select_start = NULL;
-	nw->html.select_end = NULL;
-	nw->html.sel_start_pos = 0;
-	nw->html.sel_end_pos = 0;
-	nw->html.new_start = NULL;
-	nw->html.new_end = NULL;
-	nw->html.new_start_pos = 0;
-	nw->html.new_end_pos = 0;
+	nw->html.select_start = nw->html.select_end = NULL;
+	nw->html.sel_start_pos = nw->html.sel_end_pos = 0;
+	nw->html.new_start = nw->html.new_end = NULL;
+	nw->html.new_start_pos = nw->html.new_end_pos = 0;
 	nw->html.active_anchor = NULL;
-	nw->html.press_x = 0;
-	nw->html.press_y = 0;
+	nw->html.press_x = nw->html.press_y = 0;
 
 	nw->html.cached_tracked_ele = NULL;
 
@@ -1894,7 +1877,7 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
 
 	/* Initialize cursor used when pointer is inside anchor. */
         if (in_anchor_cursor == (Cursor)NULL)
-        	in_anchor_cursor = XCreateFontCursor(XtDisplay(nw), XC_hand2);
+        	in_anchor_cursor = XCreateFontCursor(nw->html.dsp, XC_hand2);
 
 	/* Make sure we have a valid GC to draw with */
 	if (!HTMLdrawGC) {
@@ -1908,10 +1891,13 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
 		values.fill_style = FillSolid;
 		valuemask = GCFunction | GCPlaneMask | GCForeground |
 			    GCBackground | GCFillStyle;
-		HTMLdrawGC = XCreateGC(XtDisplay(nw),
-				       DefaultRootWindow(XtDisplay(nw)),
+		HTMLdrawGC = XCreateGC(nw->html.dsp,
+				       DefaultRootWindow(nw->html.dsp),
 				       valuemask, &values);
 	}
+	nw->html.cur_fg = nw->manager.foreground;
+	nw->html.cur_bg = nw->core.background_pixel;
+	nw->html.cur_font = NULL;
 	nw->html.drawGC = HTMLdrawGC;
 
 #ifndef DISABLE_TRACE
@@ -1927,7 +1913,9 @@ static void Initialize(HTMLWidget request, HTMLWidget nw)
  */
 static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
 {
-	int doc_x, doc_y;
+	int doc_x = x;
+	int doc_y = y;
+	int doc_end_x, doc_end_y;
 	ElemInfo *eptr;
 
 	if (!XtIsRealized((Widget)hw))
@@ -1940,8 +1928,10 @@ static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
 	hw->html.underline_yoffset = -1;
 
 	/* Use scrollbar values to map from view space to document space. */
-	doc_x = x + hw->html.scroll_x;
-	doc_y = y + hw->html.scroll_y;
+	doc_x += hw->html.scroll_x;
+	doc_y += hw->html.scroll_y;
+	doc_end_x = doc_x + width;
+	doc_end_y = doc_y + height;
 
 	/* Store values so CellRefresh can get them */
 	hw->html.redisplay_x = doc_x;
@@ -1952,7 +1942,7 @@ static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
 	/* If redisplaying whole page, then get rid of any expose events */
 	if (!x && !y && (width == hw->html.view_width) &&
 	    (height == hw->html.view_height)) {
-		Display *dsp = XtDisplay(hw->html.view);
+		Display *dsp = hw->html.dsp;
 		Window win = XtWindow(hw->html.view);
 		XEvent event;
 
@@ -1965,15 +1955,15 @@ static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
 	/* Find Element to Refresh */
 	eptr = hw->html.formatted_elements;
 	while (eptr) {
-		if (eptr->type == E_APROG || eptr->type == E_APPLET) {
+		if (eptr->type == E_APPLET) {
 			eptr = RefreshElement(hw, eptr);
 			eptr = eptr->next;
 			continue;
 		}
-		if (((eptr->y + eptr->height) < doc_y) || 
-		    (eptr->y > (doc_y + height)) ||
+		if (((eptr->y + eptr->height) < doc_y) ||
+		    (eptr->y > doc_end_y) ||
 		    ((eptr->x + eptr->width) < doc_x) ||
-		    (eptr->x > (doc_x + width))) {
+		    (eptr->x > doc_end_x)) {
 			/* Need to reset underlining properly */
 			if (eptr->type == E_CR)
 				hw->html.underline_yoffset = -1;
@@ -1989,7 +1979,6 @@ static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
         if (htmlwTrace || refreshTrace)
                 fprintf(stderr, "Completed ViewRedisplay\n");
 #endif
-
 }
 
 /* This is called by ImagePlace to do progressive display.  It is
@@ -1997,7 +1986,8 @@ static void ViewRedisplay(HTMLWidget hw, int x, int y, int width, int height)
  */
 void ProgressiveDisplay(HTMLWidget hw, ElemInfo *eptr, PhotoComposeContext *pcc)
 {
-	int r, b;
+	int vheight = hw->html.view_height;
+	int vwidth = hw->html.view_width;
 
 	/* Only refresh if we have a window already */
 	if (!XtIsRealized((Widget)hw))
@@ -2005,10 +1995,11 @@ void ProgressiveDisplay(HTMLWidget hw, ElemInfo *eptr, PhotoComposeContext *pcc)
 
 	/* Will be equal first time called for this page */
 	if (eptr == hw->html.formatted_elements) {
+		int r = hw->manager.top_shadow_color;
+		int b = hw->manager.bottom_shadow_color;
+
 		hw->html.view->core.background_pixel = 
 					      hw->core.background_pixel ? 0 : 1;
-		r = hw->manager.top_shadow_color;
-		b = hw->manager.bottom_shadow_color;
 		hw->manager.top_shadow_color = r ? 0 : 1;
 		hw->manager.bottom_shadow_color = b ? 0 : 1;
 		XtVaSetValues(hw->html.view,
@@ -2021,27 +2012,25 @@ void ProgressiveDisplay(HTMLWidget hw, ElemInfo *eptr, PhotoComposeContext *pcc)
 			      XmNtopShadowColor, r,
 			      XmNbottomShadowColor, b,
 			      NULL);
-		XClearArea(XtDisplay(hw), XtWindow(hw->html.view),
+		XClearArea(hw->html.dsp, XtWindow(hw->html.view),
 			   0, 0, 0, 0, False);
 
 		if (hw->html.bg_image)
 			HTMLDrawBackgroundImage((Widget)hw, 0, 0,
-						hw->html.view_width,
-						hw->html.view_height);
+						vwidth, vheight);
 		/* Reset underline offset */
 		hw->html.underline_yoffset = -1;
 	}
 
 	hw->html.redisplay_x = 0;
 	hw->html.redisplay_y = 0;
-	hw->html.redisplay_width = hw->html.view_width;
-	hw->html.redisplay_height = hw->html.view_height;
+	hw->html.redisplay_width = vwidth;
+	hw->html.redisplay_height = vheight;
 
 	while (eptr) {
 		/* Skip if not within view area or if transparent image in
 		 * table with image background */
-		if ((eptr->y > hw->html.view_height) ||
-		    (eptr->x > hw->html.view_width) ||
+		if ((eptr->y > vheight) || (eptr->x > vwidth) ||
 		    ((eptr->type == E_IMAGE) && pcc->in_table &&
 		     hw->html.bg_image && eptr->pic_data->transparent)) {
 			eptr = eptr->next;
@@ -2054,7 +2043,6 @@ void ProgressiveDisplay(HTMLWidget hw, ElemInfo *eptr, PhotoComposeContext *pcc)
         if (htmlwTrace)
                 fprintf(stderr, "Completed ProgressiveDisplay\n");
 #endif
-
 }
 
 static void TextBlink(XtPointer cld, XtIntervalId *id)
@@ -2076,6 +2064,13 @@ static void TextBlink(XtPointer cld, XtIntervalId *id)
 		return;
 	}
 
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+	/* Tell ExtendAdjust on other windows that we messed with the GC */
+	Select_GC_Reset = 1;
+
 	while (eptr) {
 		/* Skip if not in view area */
 		if (((eptr->y + eptr->height) < doc_y) || 
@@ -2094,7 +2089,7 @@ static void TextBlink(XtPointer cld, XtIntervalId *id)
 		} else {
 			eptr->blink = 1;
 		}
-		TextRefresh(hw, eptr, 0, (eptr->edata_len - 2));
+		TextRefresh(hw, eptr, 0, eptr->edata_len - 2, eptr->blink);
 		eptr = eptr->blink_next;
 	}
 
@@ -2110,7 +2105,8 @@ static void TextBlink(XtPointer cld, XtIntervalId *id)
 
 void ViewClearAndRefresh(HTMLWidget hw)
 {
-	int r, b;
+	int r = hw->manager.top_shadow_color;
+	int b = hw->manager.bottom_shadow_color;
 
 	/* Only refresh if we have a window already */
 	if (!XtIsRealized((Widget)hw))
@@ -2118,8 +2114,6 @@ void ViewClearAndRefresh(HTMLWidget hw)
 
 	/* Minor trickery to insure that the update happens... */
 	hw->html.view->core.background_pixel = hw->core.background_pixel? 0 : 1;
-	r = hw->manager.top_shadow_color;
-	b = hw->manager.bottom_shadow_color;
 	hw->manager.top_shadow_color = 	r ? 0 : 1;
 	hw->manager.bottom_shadow_color = b ? 0 : 1;
 	XtVaSetValues(hw->html.view,
@@ -2132,17 +2126,16 @@ void ViewClearAndRefresh(HTMLWidget hw)
 		      XmNtopShadowColor, r,
 		      XmNbottomShadowColor, b,
 		      NULL);
-	XClearArea(XtDisplay(hw), XtWindow(hw->html.view), 0, 0, 0, 0, False);
+	XClearArea(hw->html.dsp, XtWindow(hw->html.view), 0, 0, 0, 0, False);
 	ViewRedisplay(hw, 0, 0, hw->html.view_width, hw->html.view_height);
 	/* This is a fake deal to make an Expose event to call Redisplay
-	 * to redraw the shadow around the view area
+	 * to redraw the shadow around the view area.
 	 */
-	XClearArea(XtDisplay(hw), XtWindow(hw->html.view), 0, 0, 1, 1, True);
+	XClearArea(hw->html.dsp, XtWindow(hw->html.view), 0, 0, 1, 1, True);
 
 	if (hw->html.blinking_elements) {
-		BlinkInfo *cdata;
+		BlinkInfo *cdata = (BlinkInfo *) malloc(sizeof(BlinkInfo));
 
-		cdata = (BlinkInfo *) malloc(sizeof(BlinkInfo));
 		if (!cdata)
 			return;
 		cdata->drawing = hw->html.draw_count;
@@ -2170,25 +2163,24 @@ static void Redisplay(HTMLWidget hw, XEvent *event, Region region)
         if (htmlwTrace)
 		fprintf(stderr, "In Redisplay\n");
 #endif
-
 	/* Redraw the shadow around the scrolling area which may have been
 	 * messed up.
 	 */
 #ifndef MOTIF1_2
-       	_XmDrawShadow(XtDisplay(hw), XtWindow(hw),
+       	_XmDrawShadow(hw->html.dsp, XtWindow(hw),
 		      hw->manager.bottom_shadow_GC, hw->manager.top_shadow_GC,
 		      st, 0, 0,
 		      hw->html.view_width + (2 * st),
 		      hw->html.view_height + (2 * st));
-	_XmRedisplayGadgets((CompositeWidget)hw, (XExposeEvent*)event, region);
+	_XmRedisplayGadgets((CompositeWidget)hw, (XExposeEvent *)event, region);
 #else
-	_XmDrawShadows(XtDisplay(hw), XtWindow(hw),
+	_XmDrawShadows(hw->html.dsp, XtWindow(hw),
 		       hw->manager.top_shadow_GC, hw->manager.bottom_shadow_GC,
 		       0, 0,
 		       hw->html.view_width + (2 * st),
 		       hw->html.view_height + (2 * st),
 		       st, XmSHADOW_IN);
-	_XmRedisplayGadgets((Widget)hw, (XEvent*)event, region);
+	_XmRedisplayGadgets((Widget)hw, (XEvent *)event, region);
 #endif
 	return;
 }
@@ -2210,12 +2202,17 @@ static void Destroy(HTMLWidget hw)
  */
 static void Resize(HTMLWidget hw)
 {
-	ResetWidgetsOnResize(hw);
-
 #ifndef DISABLE_TRACE
         if (htmlwTrace)
 		fprintf(stderr, "In Resize\n");
 #endif
+	ResetWidgetsOnResize(hw);
+
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
 	ReformatWindow(hw);
 	ScrollWidgets(hw);
 	ViewClearAndRefresh(hw);
@@ -2224,25 +2221,24 @@ static void Resize(HTMLWidget hw)
 }
 
 /*
- * Find the complete text for this the anchor that aptr is a part of
+ * Find the complete text for the anchor that aptr is part of
  * and set it into the selection.
  */
 static void FindSelectAnchor(HTMLWidget hw, ElemInfo *aptr)
 {
-	ElemInfo *eptr;
+	ElemInfo *eptr = aptr;
 
-	eptr = aptr;
 	while (eptr->prev && eptr->prev->anchor_tag_ptr->anc_href &&
-	       (strcmp(eptr->prev->anchor_tag_ptr->anc_href,
-		       eptr->anchor_tag_ptr->anc_href) == 0))
+	       !strcmp(eptr->prev->anchor_tag_ptr->anc_href,
+		       eptr->anchor_tag_ptr->anc_href))
 		eptr = eptr->prev;
 	hw->html.select_start = eptr;
 	hw->html.sel_start_pos = 0;
 
 	eptr = aptr;
 	while (eptr->next && eptr->next->anchor_tag_ptr->anc_href &&
-	       (strcmp(eptr->next->anchor_tag_ptr->anc_href,
-		       eptr->anchor_tag_ptr->anc_href) == 0))
+	       !strcmp(eptr->next->anchor_tag_ptr->anc_href,
+		       eptr->anchor_tag_ptr->anc_href))
 		eptr = eptr->next;
 	hw->html.select_end = eptr;
 	hw->html.sel_end_pos = eptr->edata_len - 2;
@@ -2253,30 +2249,26 @@ static void FindSelectAnchor(HTMLWidget hw, ElemInfo *aptr)
  */
 static void SetAnchor(HTMLWidget hw)
 {
-	ElemInfo *eptr;
-	ElemInfo *start;
-	ElemInfo *end;
-	unsigned long fg, bg;
-	unsigned long old_fg, old_bg;
+	ElemInfo *eptr = hw->html.active_anchor;
+	ElemInfo *start, *end;
+	unsigned long fg, bg, old_fg, old_bg;
 
-	eptr = hw->html.active_anchor;
 	if (!eptr || !eptr->anchor_tag_ptr->anc_href)
 		return;
 	fg = hw->html.activeAnchor_fg;
 	bg = hw->html.activeAnchor_bg;
 
 	FindSelectAnchor(hw, eptr);
-	start = hw->html.select_start;
+	eptr = start = hw->html.select_start;
 	end = hw->html.select_end;
 	hw->html.underline_yoffset = -1;
-	eptr = start;
 	while (eptr && (eptr != end)) {
 		if (eptr->type == E_TEXT) {
 			old_fg = eptr->fg;
 			old_bg = eptr->bg;
 			eptr->fg = fg;
 			eptr->bg = bg;
-			TextRefresh(hw, eptr, 0, (eptr->edata_len - 2));
+			TextRefresh(hw, eptr, 0, eptr->edata_len - 2, False);
 			eptr->fg = old_fg;
 			eptr->bg = old_bg;
 		} else if (eptr->type == E_IMAGE) {
@@ -2298,7 +2290,7 @@ static void SetAnchor(HTMLWidget hw)
 			old_bg = eptr->bg;
 			eptr->fg = fg;
 			eptr->bg = bg;
-			TextRefresh(hw, eptr, 0, (eptr->edata_len - 2));
+			TextRefresh(hw, eptr, 0, eptr->edata_len - 2, False);
 			eptr->fg = old_fg;
 			eptr->bg = old_bg;
 		} else if (eptr->type == E_IMAGE) {
@@ -2321,8 +2313,7 @@ static void DrawSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 			  int start_pos, int end_pos)
 {
 	ElemInfo *eptr;
-	int epos;
-	int p1, p2;
+	int epos, p1, p2;
 
 	if (!start || !end)
 		return;
@@ -2357,10 +2348,7 @@ static void DrawSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 			eptr->selected = True;
 			eptr->start_pos = p1;
 			eptr->end_pos = p2;
-			TextRefresh(hw, eptr, p1, p2);
-		} else if (eptr->type == E_LINEFEED) {
-			eptr->selected = True;
-			LinefeedRefresh(hw, eptr);
+			TextRefresh(hw, eptr, p1, p2, True);
 		} else if (eptr->type == E_CR) {
 			hw->html.underline_yoffset = -1;
 		}
@@ -2372,7 +2360,6 @@ static void DrawSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 		} else {
 			p1 = 0;
 		}
-
 		if (eptr == end) {
 			p2 = end_pos;
 		} else {
@@ -2382,10 +2369,7 @@ static void DrawSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 			eptr->selected = True;
 			eptr->start_pos = p1;
 			eptr->end_pos = p2;
-			TextRefresh(hw, eptr, p1, p2);
-		} else if (eptr->type == E_LINEFEED) {
-			eptr->selected = True;
-			LinefeedRefresh(hw, eptr);
+			TextRefresh(hw, eptr, p1, p2, True);
 		}
 	}
 }
@@ -2396,15 +2380,8 @@ static void DrawSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
  */
 static void SetSelection(HTMLWidget hw)
 {
-	ElemInfo *start;
-	ElemInfo *end;
-	int start_pos, end_pos;
-
-	start = hw->html.select_start;
-	end = hw->html.select_end;
-	start_pos = hw->html.sel_start_pos;
-	end_pos = hw->html.sel_end_pos;
-	DrawSelection(hw, start, end, start_pos, end_pos);
+	DrawSelection(hw, hw->html.select_start, hw->html.select_end,
+		      hw->html.sel_start_pos, hw->html.sel_end_pos);
 }
 
 /*
@@ -2414,8 +2391,7 @@ static void EraseSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 			   int start_pos, int end_pos)
 {
 	ElemInfo *eptr;
-	int epos;
-	int p1, p2;
+	int epos, p1, p2;
 
 	if (!start || !end)
 		return;
@@ -2442,25 +2418,26 @@ static void EraseSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 	hw->html.underline_yoffset = -1;
 	eptr = start;
 	while (eptr && (eptr != end)) {
-		p1 = 0;
-		if (eptr == start)
+		if (eptr == start) {
 			p1 = start_pos;
+		} else {
+			p1 = 0;
+		}
 		p2 = eptr->edata_len - 2;
 		if (eptr->type == E_TEXT) {
 			eptr->selected = False;
-			TextRefresh(hw, eptr, p1, p2);
-		} else if (eptr->type == E_LINEFEED) {
-			eptr->selected = False;
-			LinefeedRefresh(hw, eptr);
+			TextRefresh(hw, eptr, p1, p2, True);
 		} else if (eptr->type == E_CR) {
 			hw->html.underline_yoffset = -1;
 		}
 		eptr = eptr->next;
 	}
 	if (eptr) {
-		p1 = 0;
-		if (eptr == start)
+		if (eptr == start) {
 			p1 = start_pos;
+		} else {
+			p1 = 0;
+		}
 		if (eptr == end) {
 			p2 = end_pos;
 		} else {
@@ -2468,10 +2445,7 @@ static void EraseSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
 		}
 		if (eptr->type == E_TEXT) {
 			eptr->selected = False;
-			TextRefresh(hw, eptr, p1, p2);
-		} else if (eptr->type == E_LINEFEED) {
-			eptr->selected = False;
-			LinefeedRefresh(hw, eptr);
+			TextRefresh(hw, eptr, p1, p2, True);
 		}
 	}
 }
@@ -2480,28 +2454,11 @@ static void EraseSelection(HTMLWidget hw, ElemInfo *start, ElemInfo *end,
  */
 static void ClearSelection(HTMLWidget hw)
 {
-	ElemInfo *start;
-	ElemInfo *end;
-	int start_pos, end_pos;
+	EraseSelection(hw, hw->html.select_start, hw->html.select_end,
+		       hw->html.sel_start_pos, hw->html.sel_end_pos);
 
-	start = hw->html.select_start;
-	end = hw->html.select_end;
-	start_pos = hw->html.sel_start_pos;
-	end_pos = hw->html.sel_end_pos;
-	EraseSelection(hw, start, end, start_pos, end_pos);
-
-	if (!start || !end) {
-		hw->html.select_start = NULL;
-		hw->html.select_end = NULL;
-		hw->html.sel_start_pos = 0;
-		hw->html.sel_end_pos = 0;
-		hw->html.active_anchor = NULL;
-		return;
-	}
-	hw->html.select_start = NULL;
-	hw->html.select_end = NULL;
-	hw->html.sel_start_pos = 0;
-	hw->html.sel_end_pos = 0;
+	hw->html.select_start = hw->html.select_end = NULL;
+	hw->html.sel_start_pos = hw->html.sel_end_pos = 0;
 	hw->html.active_anchor = NULL;
 }
 
@@ -2512,10 +2469,9 @@ static void ClearSelection(HTMLWidget hw)
  */
 static void UnsetAnchor(HTMLWidget hw)
 {
-	ElemInfo *eptr;
+	ElemInfo *eptr = hw->html.select_start;
 
 	/* Clear any activated images */
-	eptr = hw->html.select_start;
 	while (eptr && (eptr != hw->html.select_end)) {
 		if (eptr->type == E_IMAGE)
 			ImageRefresh(hw, eptr, NULL);
@@ -2527,30 +2483,22 @@ static void UnsetAnchor(HTMLWidget hw)
 }
 
 /*
- * Erase the old selection, and draw the new one in such a way
- * that advantage is taken of overlap, and there is no obnoxious
- * flashing.
+ * Erase the old selection and draw the new one in such a way that
+ * advantage is taken of overlap, and there is no obnoxious flashing.
  */
 static void ChangeSelection(HTMLWidget hw, ElemInfo *start,
 			    ElemInfo *end, int start_pos, int end_pos)
 {
-	ElemInfo *old_start;
-	ElemInfo *old_end;
-	ElemInfo *new_start;
-	ElemInfo *new_end;
+	ElemInfo *old_start = hw->html.new_start;
+	ElemInfo *old_end = hw->html.new_end;
+	ElemInfo *new_start = start;
+	ElemInfo *new_end = end;
 	ElemInfo *eptr;
 	int epos;
-	int new_start_pos, new_end_pos;
-	int old_start_pos, old_end_pos;
-
-	old_start = hw->html.new_start;
-	old_end = hw->html.new_end;
-	old_start_pos = hw->html.new_start_pos;
-	old_end_pos = hw->html.new_end_pos;
-	new_start = start;
-	new_end = end;
-	new_start_pos = start_pos;
-	new_end_pos = end_pos;
+	int new_start_pos = start_pos;
+	int new_end_pos = end_pos;
+	int old_start_pos = hw->html.new_start_pos;
+	int old_end_pos = hw->html.new_end_pos;
 
 	if (!new_start || !new_end)
 		return;
@@ -2715,7 +2663,8 @@ static void SelectStart(Widget w, XEvent *event,
 
 	if (XtClass(XtParent(w)) != htmlWidgetClass)
 		return;
-        XUndefineCursor(XtDisplay(hw), XtWindow(hw->html.view));
+
+        XUndefineCursor(hw->html.dsp, XtWindow(hw->html.view));
 	hw->html.cursor_in_anchor = False;
 	/*
 	 * Because X sucks, we can get the button pressed in the window, but
@@ -2723,6 +2672,11 @@ static void SelectStart(Widget w, XEvent *event,
 	 * never complete the selection.  Now on the next button press we
 	 * have to clean up this mess.
 	 */
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
 	EraseSelection(hw, hw->html.new_start, hw->html.new_end,
 		       hw->html.new_start_pos, hw->html.new_end_pos);
 	/*
@@ -2736,8 +2690,7 @@ static void SelectStart(Widget w, XEvent *event,
 	hw->html.new_start_pos = hw->html.sel_start_pos;
 	hw->html.new_end_pos = 0;
 
-	eptr = LocateElement(hw, BuEvent->x, BuEvent->y, &epos);
-	if (eptr) {
+	if (eptr = LocateElement(hw, BuEvent->x, BuEvent->y, &epos)) {
 		/*
 		 * If this is an anchor assume for now we are activating it
 		 * and not selecting it.
@@ -2754,10 +2707,8 @@ static void SelectStart(Widget w, XEvent *event,
 		 * for USEMAPs, delayed images and form ISMAPs.
 		 */
 		else if (eptr->type == E_IMAGE) {
-			hw->html.new_start = NULL;
-			hw->html.new_end = NULL;
-			hw->html.new_start_pos = 0;
-			hw->html.new_end_pos = 0;
+			hw->html.new_start = hw->html.new_end = NULL;
+			hw->html.new_start_pos = hw->html.new_end_pos = 0;
 			hw->html.press_x = BuEvent->x;
 			hw->html.press_y = BuEvent->y;
 			hw->html.but_press_time = BuEvent->time;
@@ -2767,16 +2718,15 @@ static void SelectStart(Widget w, XEvent *event,
 				hw->html.active_anchor = eptr;
 			return;
 		}
-		/* Else if we used button2, we can't select text, so exit here. */
+		/* Else if used button2, we can't select text, so exit here. */
 		else if (BuEvent->button == Button2) {
 			hw->html.press_x = BuEvent->x;
 			hw->html.press_y = BuEvent->y;
 			hw->html.but_press_time = BuEvent->time;
 			return;
 		}
-		/* Else a single click will not select a new object
-		 * but it will prime that selection on the next mouse
-		 * move.
+		/* Else a single click will not select a new object, but
+		 * it will prime that selection on the next mouse move.
 		 */
 		else {
 			hw->html.new_start = eptr;
@@ -2787,10 +2737,8 @@ static void SelectStart(Widget w, XEvent *event,
 			hw->html.press_y = BuEvent->y;
 		}
 	} else {
-		hw->html.new_start = NULL;
-		hw->html.new_end = NULL;
-		hw->html.new_start_pos = 0;
-		hw->html.new_end_pos = 0;
+		hw->html.new_start = hw->html.new_end = NULL;
+		hw->html.new_start_pos = hw->html.new_end_pos = 0;
 		hw->html.press_x = BuEvent->x;
 		hw->html.press_y = BuEvent->y;
 	}
@@ -2798,23 +2746,20 @@ static void SelectStart(Widget w, XEvent *event,
 }
 
 static void ExtendStart(Widget w, XEvent *event,
-			String *params,         /* unused */
-			Cardinal *num_params)   /* unused */
+			String *params,         /* Unused */
+			Cardinal *num_params)   /* Unused */
 {
 	HTMLWidget hw = (HTMLWidget)XtParent(w);
 	XButtonPressedEvent *BuEvent = (XButtonPressedEvent *)event;
-	ElemInfo *eptr;
-	ElemInfo *start, *end;
-	ElemInfo *old_start, *old_end;
-	int old_start_pos, old_end_pos;
-	int start_pos, end_pos;
-	int epos;
+	ElemInfo *eptr, *start, *end, *old_start, *old_end;
+	int old_start_pos, old_end_pos, start_pos, end_pos, epos;
 
 	if (XtClass(XtParent(w)) != htmlWidgetClass)
 		return;
+
 	eptr = LocateElement(hw, BuEvent->x, BuEvent->y, &epos);
 
-	if (eptr && (eptr->type == E_IMAGE)) /* Ignore IMAGE elements. */
+	if (eptr && (eptr->type == E_IMAGE))  /* Ignore IMAGE elements. */
 		eptr = NULL;
 	/*
 	 * Ignore NULL elements.
@@ -2824,7 +2769,7 @@ static void ExtendStart(Widget w, XEvent *event,
 		old_start_pos = hw->html.new_start_pos;
 		old_end = hw->html.new_end;
 		old_end_pos = hw->html.new_end_pos;
-		if (hw->html.new_start == NULL) {
+		if (!hw->html.new_start) {
 			hw->html.new_start = hw->html.select_start;
 			hw->html.new_start_pos = hw->html.sel_start_pos;
 			hw->html.new_end = hw->html.select_end;
@@ -2865,7 +2810,7 @@ static void ExtendStart(Widget w, XEvent *event,
 			start = eptr;
 			start_pos = epos;
 		}
-		if (old_start == NULL) {
+		if (!old_start) {
 			hw->html.new_start = hw->html.select_start;
 			hw->html.new_end = hw->html.select_end;
 			hw->html.new_start_pos = hw->html.sel_start_pos;
@@ -2881,7 +2826,7 @@ static void ExtendStart(Widget w, XEvent *event,
 		hw->html.new_end = end;
 		hw->html.new_start_pos = start_pos;
 		hw->html.new_end_pos = end_pos;
-	} else if (hw->html.new_start == NULL) {
+	} else if (!hw->html.new_start) {
 		hw->html.new_start = hw->html.select_start;
 		hw->html.new_start_pos = hw->html.sel_start_pos;
 		hw->html.new_end = hw->html.select_end;
@@ -2892,15 +2837,13 @@ static void ExtendStart(Widget w, XEvent *event,
 }
 
 static void ExtendAdjust(Widget w, XEvent *event,
-			 String *params,         /* unused */
-			 Cardinal *num_params)   /* unused */
+			 String *params,         /* Unused */
+			 Cardinal *num_params)   /* Unused */
 {
 	HTMLWidget hw = (HTMLWidget)XtParent(w);
 	XPointerMovedEvent *MoEvent = (XPointerMovedEvent *)event;
-	ElemInfo *eptr;
-	ElemInfo *start, *end;
-	int start_pos, end_pos;
-	int epos;
+	ElemInfo *eptr, *start, *end;
+	int start_pos, end_pos, epos;
 
 	if (XtClass(XtParent(w)) != htmlWidgetClass)
 		return;
@@ -2911,45 +2854,49 @@ static void ExtendAdjust(Widget w, XEvent *event,
 	    (ABS((hw->html.press_y - MoEvent->y)) <= SELECT_THRESHOLD))
 		return;
 	/*
+	 * Blinking text or animated image in another Mosaic window may
+	 * mess with the GC.
+	 */
+	if (Select_GC_Reset) {
+		/* Reset cached GC settings */
+		hw->html.cur_font = NULL;
+		XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+		XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+		Select_GC_Reset = 0;
+	}
+	/*
 	 * If we have an active anchor and we got here, we have moved the
 	 * mouse too far.  Deactivate anchor, and prime a selection.
-	 * If the anchor is internal text, don't
-	 * prime a selection.
+	 * If the anchor is internal text, don't prime a selection.
 	 */
 	if (hw->html.active_anchor) {
 		UnsetAnchor(hw);
-		hw->html.new_start = NULL;
-		hw->html.new_start_pos = 0;
-		hw->html.new_end = NULL;
-		hw->html.new_end_pos = 0;
+		hw->html.new_start = hw->html.new_end = NULL;
+		hw->html.new_start_pos = hw->html.new_end_pos = 0;
 	}
 	/*
 	 * If we used button2, we can't select text, so
 	 * clear selection and exit here.
 	 */
-	if ((MoEvent->state & Button2Mask) != 0) {
-		hw->html.select_start = NULL;
-		hw->html.select_end = NULL;
-		hw->html.sel_start_pos = 0;
-		hw->html.sel_end_pos = 0;
-		hw->html.new_start = NULL;
-		hw->html.new_end = NULL;
-		hw->html.new_start_pos = 0;
-		hw->html.new_end_pos = 0;
+	if (MoEvent->state & Button2Mask) {
+		hw->html.select_start = hw->html.select_end = NULL;
+		hw->html.sel_start_pos = hw->html.sel_end_pos = 0;
+		hw->html.new_start = hw->html.new_end = NULL;
+		hw->html.new_start_pos = hw->html.new_end_pos = 0;
 		return;
 	}
 	eptr = LocateElement(hw, MoEvent->x, MoEvent->y, &epos);
 
 	/*
 	 * If we are on an image pretend we are nowhere
-	 * and just return;
+	 * and just return.
 	 */
 	if (eptr && (eptr->type == E_IMAGE))
 		return;
 	/*
 	 * Ignore NULL items.
 	 * Ignore if the same as last selected item and position.
-	 * Ignore special internal text
+	 * Ignore special internal text.
 	 */
 	if (eptr &&
 	    ((eptr != hw->html.new_end) || (epos != hw->html.new_end_pos))) {
@@ -2974,18 +2921,26 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 {
 	HTMLWidget hw = (HTMLWidget)XtParent(w);
 	XButtonReleasedEvent *BuEvent = (XButtonReleasedEvent *)event;
-	ElemInfo *eptr;
-	ElemInfo *start, *end;
+	ElemInfo *eptr, *start, *end;
 	Atom *atoms;
-	int i, buffer;
-	int start_pos, end_pos;
-	int epos;
+	int i, buffer, start_pos, end_pos, epos;
 	char *text;
 
 	if (XtClass(XtParent(w)) != htmlWidgetClass)
 		return;
 	eptr = LocateElement(hw, BuEvent->x, BuEvent->y, &epos);
 
+	/*
+	 * Blinking text or animated image in another Mosaic window may
+	 * mess with the GC.
+	 */
+	if (Select_GC_Reset) {
+		/* Reset cached GC settings */
+		hw->html.cur_font = NULL;
+		XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+		XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+		Select_GC_Reset = 0;
+	}
 	/*
 	 * If we just released button one or two, and we are on an object,
 	 * and we have an active anchor, and we are on the active anchor,
@@ -2999,7 +2954,6 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 		return;
 	}
 	if (hw->html.active_anchor) {
-		start = hw->html.active_anchor;
 		UnsetAnchor(hw);
 		hw->html.new_start = eptr;
 		hw->html.new_start_pos = epos;
@@ -3032,7 +2986,6 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 	 */
 	if (eptr && (eptr->type == E_IMAGE))
 		eptr = NULL;
-
 	/*
 	 * If button released on a NULL item, take the last non-NULL
 	 * item that we highlighted.
@@ -3041,7 +2994,6 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 		eptr = hw->html.new_end;
 		epos = hw->html.new_end_pos;
 	}
-
 	if (eptr && hw->html.new_end) {
 		start = hw->html.new_start;
 		start_pos = hw->html.new_start_pos;
@@ -3057,18 +3009,14 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 		hw->html.select_end = end;
 		hw->html.sel_end_pos = end_pos;
 		SetSelection(hw);
-		hw->html.new_start = NULL;
-		hw->html.new_end = NULL;
-		hw->html.new_start_pos = 0;
-		hw->html.new_end_pos = 0;
+		hw->html.new_start = hw->html.new_end = NULL;
+		hw->html.new_start_pos = hw->html.new_end_pos = 0;
 
-		atoms = (Atom *)malloc(*num_params * sizeof(Atom));
-		if (!atoms) {
+		if (!(atoms = (Atom *)malloc(*num_params * sizeof(Atom)))) {
 			fprintf(stderr, "Cannot allocate atom list\n");
 			return;
 		}
-		XmuInternStrings(XtDisplay((Widget)hw), params, *num_params,
-				 atoms);
+		XmuInternStrings(hw->html.dsp, params, *num_params, atoms);
 		hw->html.selection_time = BuEvent->time;
 		for (i = 0; i < *num_params; i++) {
 			switch (atoms[i]) {
@@ -3091,10 +3039,11 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 						hw->html.sel_end_pos,
 						hw->html.font->max_bounds.width,
 						hw->html.margin_width);
-				XStoreBuffer(XtDisplay((Widget)hw),
-					     text, strlen(text), buffer);
-				if (text)
+				if (text) {
+					XStoreBuffer(hw->html.dsp, text,
+						     strlen(text), buffer);
 					free(text);
+				}
 			} else {
 				XtOwnSelection((Widget)hw, atoms[i],
 				       BuEvent->time,
@@ -3105,14 +3054,10 @@ static void ExtendEnd(Widget w, XEvent *event, String *params,
 		}
 		free((char *)atoms);
 	} else if (!eptr) {
-		hw->html.select_start = NULL;
-		hw->html.sel_start_pos = 0;
-		hw->html.select_end = NULL;
-		hw->html.sel_end_pos = 0;
-		hw->html.new_start = NULL;
-		hw->html.new_start_pos = 0;
-		hw->html.new_end = NULL;
-		hw->html.new_end_pos = 0;
+		hw->html.select_start = hw->html.select_end = NULL;
+		hw->html.sel_start_pos = hw->html.sel_end_pos = 0;
+		hw->html.new_start = hw->html.new_end = NULL;
+		hw->html.new_start_pos = hw->html.new_end_pos = 0;
 	}
 }
 
@@ -3133,7 +3078,7 @@ static void TrackMotion(Widget w, XEvent *event,
 	ElemInfo *eptr;
 	AreaInfo *area;
 	int epos, x, y;
-	Display *dsp = XtDisplay(hw);
+	Display *dsp = hw->html.dsp;
 
 	if (XtClass(hw) != htmlWidgetClass)
 		return;
@@ -3171,8 +3116,7 @@ static void TrackMotion(Widget w, XEvent *event,
 		}
 		return;
 	}
-	eptr = LocateElement(hw, x, y, &epos);
-	if (!eptr) {
+	if (!(eptr = LocateElement(hw, x, y, &epos))) {
 		LEAVING_ANCHOR(hw);
 		return;
 	}
@@ -3181,6 +3125,7 @@ static void TrackMotion(Widget w, XEvent *event,
 	} else {
 		hw->html.title_elem = NULL;
 	}
+
 	/* We're hitting a new anchor if eptr exists and
 	 * eptr != cached tracked element and anchor_tag_ptr != NULL.
 	 */
@@ -3191,15 +3136,15 @@ static void TrackMotion(Widget w, XEvent *event,
 	       eptr->is_in_form)))) {
 		hw->html.cached_tracked_ele = eptr;
 		if (eptr->pic_data && eptr->pic_data->usemap) {
-			MapInfo *map;
+			MapInfo *map = eptr->pic_data->map;
 
-			if (!(map = eptr->pic_data->map)) {
+			if (!map) {
 				map = FindMap(hw, eptr->pic_data->usemap);
 				eptr->pic_data->map = map;
 			}
 			if (map && (area = GetMapArea(map,
-			    x + hw->html.scroll_x - eptr->x,
-			    y + hw->html.scroll_y - eptr->y))) {
+					    x + hw->html.scroll_x - eptr->x,
+					    y + hw->html.scroll_y - eptr->y))) {
 				eptr->pic_data->area = area;
 				if (area->alt) {
 				     XtCallCallbackList((Widget)hw,
@@ -3241,8 +3186,8 @@ static void TrackMotion(Widget w, XEvent *event,
 			} else if (!hw->html.title_elem) {
 				LEAVING_ANCHOR(hw);
 			}
-		} else if (hw->html.cached_tracked_ele && eptr->pic_data
-			   && eptr->pic_data->usemap && eptr->pic_data->map) {
+		} else if (hw->html.cached_tracked_ele && eptr->pic_data &&
+			   eptr->pic_data->usemap && eptr->pic_data->map) {
 			if (!hw->html.cursor_in_anchor) {
 				XDefineCursor(dsp, XtWindow(hw->html.view),
 					      in_anchor_cursor);
@@ -3254,10 +3199,10 @@ static void TrackMotion(Widget w, XEvent *event,
 			if (!area && !eptr->pic_data->area) {
 				/* No area now or before */
 				if (hw->html.title_elem) {
-				        XtCallCallbackList((Widget)hw,
+				    XtCallCallbackList((Widget)hw,
 					  hw->html.pointer_motion_callback, "");
 				} else {
-					return;
+				    return;
 				}
 			} else if (!area && eptr->pic_data->area) {
 				/* Left an area, but no new one */
@@ -3291,13 +3236,13 @@ static void TrackMotion(Widget w, XEvent *event,
 
 
 /* We're adding a subject attribute to the anchor tag.
-   Of course this subject attribute is dependent on the HREF attribute
-   being set to a mailto URL.  I think this is a kludge.  libwww is not set
-   up for this, so to minimize modifications, this routine exists for 
-   libwww:HTSendMailTo() to call to get the subject for the mailto URL.
-   The static globals mailToKludgeSubject, etc. are set in HTMLInput when
-   an anchor is clicked.  
-*/
+ * Of course this subject attribute is dependent on the HREF attribute
+ * being set to a mailto URL.  I think this is a kludge.  libwww is not set
+ * up for this, so to minimize modifications, this routine exists for 
+ * libwww:HTSendMailTo() to call to get the subject for the mailto URL.
+ * The static globals mailToKludgeSubject, etc. are set in HTMLInput when
+ * an anchor is clicked.  
+ */
 void GetMailtoKludgeInfo(char **url, char **subject)
 {
 	*url = mailToKludgeURL;
@@ -3334,21 +3279,22 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 
 	if (eptr->anchor_tag_ptr->anc_href) {
 		/* Save the anchor text, replace newlines with spaces. */
-		tptr = ParseTextToString(hw->html.select_start,
+		ptr = tptr = ParseTextToString(hw->html.select_start,
 				   hw->html.select_start, hw->html.select_end,
 				   hw->html.sel_start_pos, hw->html.sel_end_pos,
 				   hw->html.font->max_bounds.width,
 				   hw->html.margin_width);
-		ptr = tptr;
-		while (ptr && *ptr) {
-			if (*ptr == '\n')
-				*ptr = ' ';
-			ptr++;
+		if (ptr) {
+			while (*ptr) {
+				if (*ptr == '\n')
+					*ptr = ' ';
+				ptr++;
+			}
 		}
 	}
 	UnsetAnchor(hw);	/* Clear the activated anchor */
 #ifdef EXTRA_FLUSH
-	XFlush(XtDisplay(hw));
+	XFlush(hw->html.dsp);
 #endif
 
         mailToKludgeSubject = eptr->anchor_tag_ptr->anc_title;
@@ -3370,7 +3316,6 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 		mo_gui_done_with_icon();
 		return;
 	}
-
 	if (eptr->pic_data && eptr->pic_data->delayed &&
 	    eptr->anchor_tag_ptr->anc_href &&
 	    ((event->xbutton.y + hw->html.scroll_y - eptr->y) > 10)) {
@@ -3389,12 +3334,18 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 	} 
 	/* A special ISMAP image in Form */
 	if (eptr->pic_data && eptr->pic_data->ismap && eptr->is_in_form) {
-		int form_x, form_y;
+		int form_x = event->xbutton.x + hw->html.scroll_x - eptr->x;
+		int form_y = event->xbutton.y + hw->html.scroll_y - eptr->y;
 
-		form_x = event->xbutton.x + hw->html.scroll_x - eptr->x;
-		form_y = event->xbutton.y + hw->html.scroll_y - eptr->y;
-		ImageSubmitForm(eptr->pic_data->fptr, event,
-				eptr->pic_data->text, form_x, form_y);
+		if (eptr->pic_data->ismap == 2) {
+			/* Reset form */
+			CBResetForm(w, (XtPointer) eptr->pic_data->fptr,
+				    (XtPointer) NULL);
+		} else {
+			/* Submit form */
+			ImageSubmitForm(eptr->pic_data->fptr, event,
+					eptr->pic_data->text, form_x, form_y);
+		}
 		return;
 	} 
 	/* Label in a form */
@@ -3446,7 +3397,7 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 #endif
 #ifndef DISABLE_TRACE
 				if (htmlwTrace)
-				     fprintf(stderr, "Pressed pushbutton\n");
+				    fprintf(stderr, "Pressed pushbutton\n");
 #endif
 				break;
 			    case W_TEXTFIELD:
@@ -3455,7 +3406,7 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 				Widget top = (Widget) hw;
 
 				while (!XtIsTopLevelShell(top))
-					top = XtParent(top);
+				    top = XtParent(top);
 				/* Focus on it */
 				XtSetKeyboardFocus(top, w);
 
@@ -3463,7 +3414,7 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 				skip_traversal_current = 1;
 #ifndef DISABLE_TRACE
 				if (htmlwTrace)
-				     fprintf(stderr, "Focused text\n");
+				    fprintf(stderr, "Focused text\n");
 #endif
 				break;
 			    }
@@ -3478,7 +3429,7 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 					nptr->pic_data->text, form_x, form_y);
 #ifndef DISABLE_TRACE
 			if (htmlwTrace)
-			     fprintf(stderr, "Pressed submit image\n");
+			    fprintf(stderr, "Pressed submit image\n");
 #endif
 		}
 		return;
@@ -3530,8 +3481,7 @@ static void _HTMLInput(Widget w, XEvent *event, ElemInfo *eptr,
 		free(tarbuf);
        	if (tptr)
 		free(tptr);
-	mailToKludgeSubject = NULL;
-	mailToKludgeURL = NULL;
+	mailToKludgeSubject = mailToKludgeURL = NULL;
 }
 
 /* SetValues is called when XtSetValues is used to change resources in this
@@ -3563,6 +3513,7 @@ static Boolean SetValues(HTMLWidget current, HTMLWidget request, HTMLWidget nw)
 		HTMLFreeWidgetInfo(current->html.widget_list);
 		current->html.widget_list = NULL;
 		nw->html.widget_list = NULL;
+		nw->html.widget_focus = NULL;
 
 		HTMLFreeFormInfo(current->html.form_list);
 		current->html.form_list = NULL;
@@ -3571,6 +3522,12 @@ static Boolean SetValues(HTMLWidget current, HTMLWidget request, HTMLWidget nw)
 		FreeMapList(current->html.map_list);
 		current->html.map_list = NULL;
 		nw->html.map_list = NULL;
+		
+		if (current->html.image_src) {
+			HTBTreeAndObject_free(current->html.image_src);
+			current->html.image_src = NULL;
+		}
+		nw->html.image_src = NULL;
 
 		FreeMarkUpList(current->html.html_objects);
 		FreeMarkUpList(current->html.html_header_objects);
@@ -3596,50 +3553,45 @@ static Boolean SetValues(HTMLWidget current, HTMLWidget request, HTMLWidget nw)
 		nw->html.html_refresh_objects = NULL;
 
 		/* Redisplay for the changed data. */
-		nw->html.scroll_x = 0;
-		nw->html.scroll_y = 0;
+		nw->html.scroll_x = nw->html.scroll_y = 0;
 		nw->html.max_pre_width = DocumentWidth(nw,
 						       nw->html.html_objects);
 		ReformatWindow(nw);
 		ViewClearAndRefresh(nw);
 
 		/* Clear any previous selection */
-		nw->html.select_start = NULL;
-		nw->html.select_end = NULL;
-		nw->html.sel_start_pos = 0;
-		nw->html.sel_end_pos = 0;
-		nw->html.new_start = NULL;
-		nw->html.new_end = NULL;
-		nw->html.new_start_pos = 0;
-		nw->html.new_end_pos = 0;
+		nw->html.select_start = nw->html.select_end = NULL;
+		nw->html.sel_start_pos = nw->html.sel_end_pos = 0;
+		nw->html.new_start = nw->html.new_end = NULL;
+		nw->html.new_start_pos = nw->html.new_end_pos = 0;
 		nw->html.active_anchor = NULL;
 
 		nw->html.cached_tracked_ele = NULL;
-	} else if ((request->html.font != current->html.font)||
-	         (request->html.italic_font != current->html.italic_font)||
-	         (request->html.bold_font != current->html.bold_font)||
-	         (request->html.bolditalic_font != current->html.bolditalic_font)||
-	         (request->html.fixed_font != current->html.fixed_font)||
-	         (request->html.fixedbold_font != current->html.fixedbold_font)||
-	         (request->html.fixeditalic_font != current->html.fixeditalic_font)||
-	         (request->html.header1_font != current->html.header1_font)||
-	         (request->html.header2_font != current->html.header2_font)||
-	         (request->html.header3_font != current->html.header3_font)||
-	         (request->html.header4_font != current->html.header4_font)||
-	         (request->html.header5_font != current->html.header5_font)||
-	         (request->html.header6_font != current->html.header6_font)||
-	         (request->html.address_font != current->html.address_font)||
-	         (request->html.plain_font != current->html.plain_font)||
-	         (request->html.plainbold_font != current->html.plainbold_font)||
-	         (request->html.plainitalic_font != current->html.plainitalic_font)||
-	         (request->html.listing_font != current->html.listing_font)||
-	         (request->html.activeAnchor_fg != current->html.activeAnchor_fg)||
-	         (request->html.activeAnchor_bg != current->html.activeAnchor_bg)||
-	         (request->html.anchor_fg != current->html.anchor_fg)||
-	         (request->html.visitedAnchor_fg != current->html.visitedAnchor_fg)||
-	         (request->html.dashed_anchor_lines != current->html.dashed_anchor_lines)||
-	         (request->html.dashed_visitedAnchor_lines != current->html.dashed_visitedAnchor_lines)||
-	         (request->html.num_anchor_underlines != current->html.num_anchor_underlines)||
+	} else if ((request->html.font != current->html.font) ||
+	         (request->html.italic_font != current->html.italic_font) ||
+	         (request->html.bold_font != current->html.bold_font) ||
+	         (request->html.bolditalic_font != current->html.bolditalic_font) ||
+	         (request->html.fixed_font != current->html.fixed_font) ||
+	         (request->html.fixedbold_font != current->html.fixedbold_font) ||
+	         (request->html.fixeditalic_font != current->html.fixeditalic_font) ||
+	         (request->html.header1_font != current->html.header1_font) ||
+	         (request->html.header2_font != current->html.header2_font) ||
+	         (request->html.header3_font != current->html.header3_font) ||
+	         (request->html.header4_font != current->html.header4_font) ||
+	         (request->html.header5_font != current->html.header5_font) ||
+	         (request->html.header6_font != current->html.header6_font) ||
+	         (request->html.address_font != current->html.address_font) ||
+	         (request->html.plain_font != current->html.plain_font) ||
+	         (request->html.plainbold_font != current->html.plainbold_font) ||
+	         (request->html.plainitalic_font != current->html.plainitalic_font) ||
+	         (request->html.listing_font != current->html.listing_font) ||
+	         (request->html.activeAnchor_fg != current->html.activeAnchor_fg) ||
+	         (request->html.activeAnchor_bg != current->html.activeAnchor_bg) ||
+	         (request->html.anchor_fg != current->html.anchor_fg) ||
+	         (request->html.visitedAnchor_fg != current->html.visitedAnchor_fg) ||
+	         (request->html.dashed_anchor_lines != current->html.dashed_anchor_lines) ||
+	         (request->html.dashed_visitedAnchor_lines != current->html.dashed_visitedAnchor_lines) ||
+	         (request->html.num_anchor_underlines != current->html.num_anchor_underlines) ||
 	         (request->html.num_visitedAnchor_underlines != current->html.num_visitedAnchor_underlines))
 	{
 		if ((request->html.plain_font != current->html.plain_font) ||
@@ -3650,9 +3602,8 @@ static Boolean SetValues(HTMLWidget current, HTMLWidget request, HTMLWidget nw)
 		ScrollWidgets(nw);
 		ViewClearAndRefresh(nw);
 	}
-
 	/*
-	 * vertical space has been changed
+	 * Vertical space has been changed
 	 */
 	if (request->html.percent_vert_space !=
 	    current->html.percent_vert_space) {
@@ -3668,16 +3619,14 @@ static Boolean ConvertSelection(Widget w, Atom *selection, Atom *target,
 				Atom *type, XtPointer *value,
 				unsigned long *length, int *format)
 {
-	Display *d = XtDisplay(w);
 	HTMLWidget hw = (HTMLWidget)w;
-	char *text;
+	Display *d = hw->html.dsp;
 
-	if (hw->html.select_start == NULL)
+	if (!hw->html.select_start)
 		return False;
 
 	if (*target == XA_TARGETS(d)) {
-		Atom *targetP;
-		Atom *std_targets;
+		Atom *targetP, *std_targets;
 		unsigned long std_length;
 
 		XmuConvertStandardSelection(w, hw->html.selection_time,
@@ -3690,7 +3639,7 @@ static Boolean ConvertSelection(Widget w, Atom *selection, Atom *target,
 			      &std_length, format);
 
 		*length = std_length + 5;
-		*value = (XtPointer)XtMalloc(sizeof(Atom) * (*length));
+		*value = (XtPointer)XtMalloc(*length * sizeof(Atom));
 		targetP = *(Atom **)value;
 		*targetP++ = XA_STRING;
 		*targetP++ = XA_TEXT(d);
@@ -3708,6 +3657,8 @@ static Boolean ConvertSelection(Widget w, Atom *selection, Atom *target,
 
 	if (*target == XA_STRING || *target == XA_TEXT(d) ||
 	    *target == XA_COMPOUND_TEXT(d)) {
+		char *text;
+
 		if (*target == XA_COMPOUND_TEXT(d)) {
 			*type = *target;
 		} else {
@@ -3741,6 +3692,8 @@ static Boolean ConvertSelection(Widget w, Atom *selection, Atom *target,
 	}
 
 	if (*target == XA_LENGTH(d)) {
+		char *text;
+
 		text = ParseTextToString(hw->html.formatted_elements,
 				   hw->html.select_start, hw->html.select_end,
 				   hw->html.sel_start_pos, hw->html.sel_end_pos,
@@ -3777,12 +3730,17 @@ static void LoseSelection(Widget w, Atom *selection)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
 	ClearSelection(hw);
 }
 
 static void SelectionDone(Widget w, Atom *selection, Atom *target)
 {
-	/* empty proc so Intrinsics know we want to keep storage */
+	/* Empty proc so Intrinsics know we want to keep storage */
 }
 
 
@@ -3802,10 +3760,9 @@ static void SelectionDone(Widget w, Atom *selection, Atom *target)
 char *HTMLGetText(Widget w, int pretty, char *url, char *time_str)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	char *text;
-	char *tptr, *buf;
-	ElemInfo *start;
-	ElemInfo *end;
+	char *text = NULL;
+	char *tptr;
+	ElemInfo *start, *end;
 
 	if (currentURL)
 		free(currentURL);
@@ -3814,16 +3771,14 @@ char *HTMLGetText(Widget w, int pretty, char *url, char *time_str)
 	} else {
 		currentURL = strdup("UNKNOWN");
 	}
-	text = NULL;
-	start = hw->html.formatted_elements;
-	end = start;
+	end = start = hw->html.formatted_elements;
 	while (end)
 		end = end->next;
 
 	if (pretty >= 2) {
 		tptr = ParseTextToPSString(hw, start, start, end, 0, 0,
 					   hw->html.font->max_bounds.width,
-					   hw->html.margin_width, pretty-2,
+					   hw->html.margin_width, pretty - 2,
 					   url, time_str);
 	} else if (pretty) {
 		tptr = ParseTextToPrettyString(hw, start, start, end, 0, 0,
@@ -3838,7 +3793,9 @@ char *HTMLGetText(Widget w, int pretty, char *url, char *time_str)
 		if (!text) {
 			text = tptr;
 		} else {
-			buf = (char *)malloc(strlen(text) + strlen(tptr) + 1);
+			char *buf = (char *)malloc(strlen(text) +
+						   strlen(tptr) + 1);
+
 			strcpy(buf, text);
 			strcat(buf, tptr);
 			free(text);
@@ -3856,24 +3813,21 @@ char *HTMLGetText(Widget w, int pretty, char *url, char *time_str)
 int HTMLPositionToId(Widget w, int x, int y)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	int epos;
-	ElemInfo *eptr;
+	ElemInfo *eptr = NULL;
 
 	/* We special case for when the scrollbars are at the
 	 * absolute top and left. */
-	if ((hw->html.scroll_y == 0) && (hw->html.scroll_x == 0)) 
+	if (!hw->html.scroll_y && !hw->html.scroll_x) 
 		return(0);
 
-	/* Check if x,y is over an element */
-	eptr = LocateElement(hw, x, y, &epos);
-
-	x = x + hw->html.scroll_x;
-	y = y + hw->html.scroll_y;
-	if (!eptr && (hw->html.scroll_x != 0)) {
+	x += hw->html.scroll_x;
+	y += hw->html.scroll_y;
+	if (hw->html.scroll_x) {
 		/* Find first element visible after or at x and y */
 		eptr = hw->html.formatted_elements;
 		while (eptr) {
-			if ((eptr->y < y) || (eptr->x < x)) {
+			if (((eptr->y + eptr->height) <= y) ||
+			    ((eptr->x + eptr->width) <= x)) {
 				eptr = eptr->next;
 				continue;
 			} 
@@ -3881,21 +3835,20 @@ int HTMLPositionToId(Widget w, int x, int y)
 		}
 	}
 
-	/* No elements have both x and y in view area, so try with just y */
-	if (!eptr && (hw->html.scroll_y != 0)) {
+	/* None have both x and y in view area, so try with just y */
+	if (!eptr && hw->html.scroll_y) {
 		/* Find first element visible after or at y */
 		eptr = hw->html.formatted_elements;
 		while (eptr) {
-			if (eptr->y < y) {
+			if ((eptr->y + eptr->height) <= y) {
 				eptr = eptr->next;
 				continue;
 			} 
 			break;
 		}
 	}
-
-	/* 0 means the very top of the document.  We put you there for
-	 * unfound elements.
+	/* 0 means the very top of the document.  We put you there
+	 * for unfound elements.
 	 */
 	if (!eptr) 
 		return(0);
@@ -3911,9 +3864,8 @@ int HTMLIdToPosition(Widget w, int element_id, int *x, int *y)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	ElemInfo *start;
-	ElemInfo *eptr;
+	ElemInfo *eptr = NULL;
 
-	eptr = NULL;
 	start = hw->html.formatted_elements;
 	while (start) {
 		if (start->ele_id == element_id) {
@@ -3922,7 +3874,6 @@ int HTMLIdToPosition(Widget w, int element_id, int *x, int *y)
 		}
 		start = start->next;
 	}
-
 	if (!eptr) {
 		*x = 0;
 		*y = 0;
@@ -3943,20 +3894,17 @@ int HTMLIdToPosition(Widget w, int element_id, int *x, int *y)
  *   to set the pointer a 1/2 page in the negative or positive direction...or
  *   simply leave it alone.
  */ 
-
 void HTMLGotoId(Widget w, int element_id, int correction)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	ElemInfo *start;
-	ElemInfo *eptr;
-	int newy;
-	int val, size, inc, pageinc;
+	ElemInfo *eptr = NULL;
+	int newy, val, size, inc, pageinc;
 
 	/* If we have no scrollbar, just return. */
 	if (!hw->html.use_vbar)
 		return;
 	/* Find the element corrsponding to the id passed in. */
-	eptr = NULL;
 	start = hw->html.formatted_elements;
 	while (start) {
 		if (start->ele_id == element_id) {
@@ -3969,14 +3917,14 @@ void HTMLGotoId(Widget w, int element_id, int correction)
 	/* No such element, do nothing. */
 	if (element_id && !eptr)
 		return;
-	if (element_id == 0) {
+	if (!element_id) {
 		newy = 0;
 	} else {
                 if (!correction) {    
                         newy = eptr->y - 2; 
-                } else if (correction < 0) { /* "up" a 1/2 page */
+                } else if (correction < 0) {  /* "up" a 1/2 page */
                         newy = eptr->y - 2 - ((int)(hw->html.view_height) / 2);
-                } else { /* "down" a 1/2 page */
+                } else {  /* "down" a 1/2 page */
                         newy = eptr->y - 2 + ((int)(hw->html.view_height) / 2);
                 }                     
         }   
@@ -4003,9 +3951,8 @@ int HTMLAnchorToPosition(Widget w, char *name, int *x, int *y)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	ElemInfo *start;
-	ElemInfo *eptr;
+	ElemInfo *eptr = NULL;
 
-	eptr = NULL;
 	start = hw->html.formatted_elements;
 	while (start) {
 		if (start->anchor_tag_ptr->anc_name &&
@@ -4035,10 +3982,9 @@ int HTMLAnchorToId(Widget w, char *name)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	ElemInfo *start;
-	ElemInfo *eptr;
+	ElemInfo *eptr = NULL;
 
 	/* Find the passed anchor name */
-	eptr = NULL;
 	start = hw->html.formatted_elements;
 	while (start) {
 		if (start->anchor_tag_ptr->anc_name &&
@@ -4048,7 +3994,6 @@ int HTMLAnchorToId(Widget w, char *name)
 		}
 		start = start->next;
 	}
-
 	if (!eptr)
 		return(0);
 	return(eptr->ele_id);
@@ -4061,12 +4006,10 @@ int HTMLAnchorToId(Widget w, char *name)
  */
 static ElemInfo *HTMLAnchorToEptr(HTMLWidget hw, char *name)
 {
-	ElemInfo *start;
-	ElemInfo *eptr;
+	ElemInfo *start = hw->html.formatted_elements;
+	ElemInfo *eptr = NULL;
 
 	/* Find the passed anchor name */
-	eptr = NULL;
-	start = hw->html.formatted_elements;
 	while (start) {
 		if (start->anchor_tag_ptr->anc_name &&
 		    !strcmp(start->anchor_tag_ptr->anc_name, name)) {
@@ -4075,7 +4018,6 @@ static ElemInfo *HTMLAnchorToEptr(HTMLWidget hw, char *name)
 		}
 		start = start->next;
 	}
-
 	return(eptr);
 }
 
@@ -4088,14 +4030,11 @@ static ElemInfo *HTMLAnchorToEptr(HTMLWidget hw, char *name)
 char **HTMLGetHRefs(Widget w, int *num_hrefs)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	int cnt;
-	ElemInfo *start;
-	ElemInfo *list;
-	ElemInfo *eptr;
+	int cnt = 0;
+	ElemInfo *start, *eptr;
+	ElemInfo *list = NULL;
 	char **harray;
 
-	list = NULL;
-	cnt = 0;
 	/*
 	 * Construct a linked list of all the different hrefs, counting
 	 * them as we go.
@@ -4112,8 +4051,8 @@ char **HTMLGetHRefs(Widget w, int *num_hrefs)
 			 */
 			eptr = list;
 			while (eptr) {
-				if (strcmp(eptr->anchor_tag_ptr->anc_href,
-				    start->anchor_tag_ptr->anc_href) == 0)
+				if (!strcmp(eptr->anchor_tag_ptr->anc_href,
+				            start->anchor_tag_ptr->anc_href))
 					break;
 				eptr = eptr->next;
 			}
@@ -4141,9 +4080,8 @@ char **HTMLGetHRefs(Widget w, int *num_hrefs)
 	eptr = list;
 	cnt--;
 	while (eptr) {
-		harray[cnt] = strdup(eptr->anchor_tag_ptr->anc_href);
+		harray[cnt--] = strdup(eptr->anchor_tag_ptr->anc_href);
 		eptr = eptr->next;
-		cnt--;
 	}
 	FreeLineList(list, hw);
 	return(harray);
@@ -4158,24 +4096,24 @@ char **HTMLGetImageSrcs(Widget w, int *num_srcs)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	MarkInfo *mptr;
-	int cnt;
+	int cnt = 0;
 	char *tptr;
 	char **harray;
 
-	cnt = 0;
 	mptr = hw->html.html_objects;
 	while (mptr) {
 		if (mptr->type == M_IMAGE) {
 			tptr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
-			if (tptr && *tptr) {
-				cnt++;
+			if (tptr) {
+				if (*tptr)
+					cnt++;
 				free(tptr);
 			}
 		} else if (mptr->type == M_FIGURE) {
-			/****** temporary until figure support */
 			tptr = ParseMarkTag(mptr->start, MT_FIGURE, "SRC");
-			if (tptr && *tptr) {
-				cnt++;
+			if (tptr) {
+				if (*tptr)
+					cnt++;
 				free(tptr);
 			}
 		}
@@ -4193,15 +4131,16 @@ char **HTMLGetImageSrcs(Widget w, int *num_srcs)
 		if (mptr->type == M_IMAGE) {
 			tptr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
 			if (tptr && *tptr) {
-				harray[cnt] = tptr;
-				cnt++;
+				harray[cnt++] = tptr;
+			} else if (tptr) {
+				free(tptr);
 			}
 		} else if (mptr->type == M_FIGURE) {
-			/****** temporary until figure support */
 			tptr = ParseMarkTag(mptr->start, MT_FIGURE, "SRC");
 			if (tptr && *tptr) {
-				harray[cnt] = tptr;
-				cnt++;
+				harray[cnt++] = tptr;
+			} else if (tptr) {
+				free(tptr);
 			}
 		}
 		mptr = mptr->next;
@@ -4220,11 +4159,9 @@ LinkInfo *HTMLGetLinks(Widget w, int *num_links)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	MarkInfo *mptr;
-	int cnt;
-	char *tptr;
+	int cnt = 0;
 	LinkInfo *larray;
 
-	cnt = 0;
 	mptr = hw->html.html_objects;
 	while (mptr) {
 		if (mptr->type == M_LINK)
@@ -4240,11 +4177,9 @@ LinkInfo *HTMLGetLinks(Widget w, int *num_links)
 	mptr = hw->html.html_objects;
 	cnt = 0;
 	while (mptr) {
-		if (mptr->type == M_BASE) {
-			tptr = ParseMarkTag(mptr->start, MT_LINK, "HREF");
-			larray[cnt].href = tptr;
-			cnt++;
-		}
+		if (mptr->type == M_LINK)
+			larray[cnt++].href = ParseMarkTag(mptr->start, MT_LINK,
+							  "HREF");
 		mptr = mptr->next;
 	}
 	return(larray);
@@ -4258,15 +4193,28 @@ void HTMLRetestAnchors(Widget w, visitTestProc testFunc)
 {
 	HTMLWidget hw = (HTMLWidget)w;
 	ElemInfo *start;
+	int doc_x = hw->html.scroll_x;
+	int doc_y = hw->html.scroll_y;
+	int doc_end_x = hw->html.scroll_x + hw->html.view_width;
+	int doc_end_y = hw->html.scroll_y + hw->html.view_height;
 
-	if (testFunc == NULL)
+	/* Reset cached GC settings */
+	hw->html.cur_font = NULL;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
+
+	if (!testFunc)
 		testFunc = (visitTestProc)hw->html.previously_visited_test;
 	/*
 	 * Search all elements
 	 */
 	start = hw->html.formatted_elements;
+	hw->html.underline_yoffset = -1;
 	while (start) {
-		if (start->anchor_tag_ptr->anc_href == NULL) {
+		if (!start->anchor_tag_ptr->anc_href ||
+		    start->fixed_anchor_color) {
+			if (start->type == E_CR)
+				hw->html.underline_yoffset = -1;
 			start = start->next;
 			continue;
 		}
@@ -4289,28 +4237,28 @@ void HTMLRetestAnchors(Widget w, visitTestProc testFunc)
 			start->fg = hw->html.anchor_fg;
 			start->underline_number =
 				hw->html.num_anchor_underlines;
-			start->dashed_underline =
-				hw->html.dashed_anchor_lines;
+			start->dashed_underline = hw->html.dashed_anchor_lines;
 		}
 		/*
-		 * Since the element may have changed, redraw it
+		 * Since the element may have changed, redraw it if visible
 		 */
-		hw->html.underline_yoffset = -1;
+		if (((start->y + start->height) < doc_y) || 
+		    (start->y > doc_end_y) ||
+		    ((start->x + start->width) < doc_x) ||
+		    (start->x > doc_end_x)) {
+			/* Not visible */
+			start = start->next;
+			continue;
+		}
 		switch(start->type) {
 		    case E_TEXT:
-			TextRefresh(hw, start, 0, (start->edata_len - 2));
+			TextRefresh(hw, start, 0, start->edata_len - 2, False);
 			break;
 		    case E_IMAGE:
 			ImageRefresh(hw, start, NULL);
 			break;
 		    case E_BULLET:
 			BulletRefresh(hw, start);
-			break;
-		    case E_LINEFEED:
-			LinefeedRefresh(hw, start);
-			break;
-		    case E_CR:
-			hw->html.underline_yoffset = -1;
 			break;
 		}
 		start = start->next;
@@ -4319,7 +4267,7 @@ void HTMLRetestAnchors(Widget w, visitTestProc testFunc)
 
 void HTMLClearSelection(Widget w)
 {
-	LoseSelection(w, NULL);
+	ClearSelection((HTMLWidget)w);
 }
 
 /*
@@ -4329,13 +4277,9 @@ void HTMLClearSelection(Widget w)
 void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	int found;
-	ElemInfo *eptr;
-	ElemInfo *e_start;
-	ElemInfo *e_end;
-	int start_pos, end_pos;
+	ElemInfo *eptr, *e_start, *e_end;
+	int start_pos, end_pos, i, buffer, found;
 	Atom *atoms;
-	int i, buffer;
 	char *text;
 	char *params[2];
 
@@ -4358,7 +4302,6 @@ void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 		if (!found)
 			return;
 	}
-
 	/*
 	 * If the ending position is not valid, fail the selection
 	 */
@@ -4379,13 +4322,13 @@ void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 			return;
 	}
 
-	LoseSelection(w, NULL);
+	ClearSelection(hw);
 
 	/*
 	 * We expect the ElementRefs came from HTMLSearchText, so we know
 	 * that the end_pos is one past what we want to select.
 	 */
-	end_pos = end_pos - 1;
+	end_pos -= 1;
 
 	/*
 	 * Sanify the position data
@@ -4400,10 +4343,8 @@ void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 	hw->html.select_end = e_end;
 	hw->html.sel_end_pos = end_pos;
 	SetSelection(hw);
-	hw->html.new_start = NULL;
-	hw->html.new_end = NULL;
-	hw->html.new_start_pos = 0;
-	hw->html.new_end_pos = 0;
+	hw->html.new_start = hw->html.new_end = NULL;
+	hw->html.new_start_pos = hw->html.new_end_pos = 0;
 
 	/*
 	 * Do all the gunk from the end of the ExtendEnd function
@@ -4411,11 +4352,11 @@ void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 	params[0] = "PRIMARY";
 	params[1] = "CUT_BUFFER0";
 	atoms = (Atom *)malloc(2 * sizeof(Atom));
-	if (atoms == NULL) {
+	if (!atoms) {
 		fprintf(stderr, "Cannot allocate atom list\n");
 		return;
 	}
-	XmuInternStrings(XtDisplay((Widget)hw), params, 2, atoms);
+	XmuInternStrings(hw->html.dsp, params, 2, atoms);
 	hw->html.selection_time = CurrentTime;
 	for (i = 0; i < 2; i++) {
 		switch (atoms[i]) {
@@ -4437,8 +4378,7 @@ void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end)
 						hw->html.sel_end_pos,
 						hw->html.font->max_bounds.width,
 						hw->html.margin_width);
-			XStoreBuffer(XtDisplay((Widget)hw),
-				     text, strlen(text), buffer);
+			XStoreBuffer(hw->html.dsp, text, strlen(text), buffer);
 			free(text);
 		} else {
 			XtOwnSelection((Widget)hw, atoms[i], CurrentTime,
@@ -4461,13 +4401,9 @@ char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
 			      char **insertp)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	int length;
-	char *text;
-	char *tptr;
-	ElemInfo *eptr;
-	ElemInfo *sel_start;
-	ElemInfo *sel_end;
-	ElemInfo *insert_start;
+	int length = 0;
+	char *text, *tptr;
+	ElemInfo *eptr, *sel_start, *sel_end, *insert_start;
 	int start_pos, end_pos, insert_pos;
 
 	if (SwapElements(hw->html.select_start, hw->html.select_end,
@@ -4482,30 +4418,26 @@ char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
 		sel_end = hw->html.select_end;
 		end_pos = hw->html.sel_end_pos;
 	}
-
 	insert_start = hw->html.new_start;
 	insert_pos = hw->html.new_start_pos;
 	*startp = NULL;
 	*endp = NULL;
 	*insertp = NULL;
 
-	length = 0;
 	eptr = hw->html.formatted_elements;
 	while (eptr) {
 		if (eptr->type == E_TEXT) {
-			length = length + eptr->edata_len - 1;
+			length += eptr->edata_len - 1;
 		} else if (eptr->type == E_LINEFEED) {
-			length = length + 1;
+			length++;
 		}
 		eptr = eptr->next;
 	}
-	text = (char *)malloc(length + 1);
+	tptr = text = (char *)calloc(length + 1, 1);
 	if (!text) {
 		fprintf(stderr, "No space for return string\n");
 		return(NULL);
 	}
-	strcpy(text, "");
-	tptr = text;
 
 	eptr = hw->html.formatted_elements;
 	while (eptr) {
@@ -4517,7 +4449,7 @@ char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
 			if (eptr == insert_start)
 				*insertp = (char *)(tptr + insert_pos);
 			strcat(text, (char *)eptr->edata);
-			tptr = tptr + eptr->edata_len - 1;
+			tptr += eptr->edata_len - 1;
 		} else if (eptr->type == E_LINEFEED) {
 			if (eptr == sel_start)
 				*startp = tptr;
@@ -4526,7 +4458,7 @@ char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
 			if (eptr == insert_start)
 				*insertp = tptr;
 			strcat(text, " ");
-			tptr = tptr + 1;
+			tptr++;
 		}
 		eptr = eptr->next;
 	}
@@ -4535,7 +4467,7 @@ char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
 
 /*
  * Idle work process which processes images which were not processed
- * during the initial display (i.e. they were not within view).
+ * during the initial display (i.e., they were not within view).
  * Processes only one image each time to avoid extended blockages.
  */
 static int FinishImages(XtPointer cld)
@@ -4553,9 +4485,9 @@ static int FinishImages(XtPointer cld)
 		if ((eptr->type == E_IMAGE) && !eptr->pic_data->image) {
 		    pic_data = eptr->pic_data;
 		    if (pic_data->image = InfoToImage(hw, pic_data, 0, eptr)) {
-		    	if (pic_data->transparent && pic_data->clip == None) {
+		    	if (pic_data->transparent && !pic_data->clip) {
 			    pic_data->clip = XCreatePixmapFromBitmapData(
-						   XtDisplay(hw),
+						   hw->html.dsp,
 						   XtWindow(hw->html.view),
 						   (char *) pic_data->clip_data,
 						   pic_data->width,
@@ -4610,32 +4542,41 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 	hw->html.drawing = 1;		/* Disable animation stop button */
 
 	/* Restore default colors as required */
-	hw->manager.foreground = hw->html.foreground_SAVE;
+	hw->html.cur_fg = hw->manager.foreground = hw->html.foreground_SAVE;
+	XSetForeground(hw->html.dsp, hw->html.drawGC, hw->html.cur_fg);
         hw->html.anchor_fg = hw->html.anchor_fg_SAVE;
         hw->html.visitedAnchor_fg = hw->html.visitedAnchor_fg_SAVE;
         hw->html.activeAnchor_fg = hw->html.activeAnchor_fg_SAVE;
         hw->html.activeAnchor_bg = hw->html.activeAnchor_bg_SAVE;
-        hw->core.background_pixel = hw->html.background_SAVE;
+        hw->html.cur_bg = hw->core.background_pixel = hw->html.background_SAVE;
         hw->html.view->core.background_pixel = hw->html.background_SAVE;
+	XSetBackground(hw->html.dsp, hw->html.drawGC, hw->html.cur_bg);
         if (hw->html.top_color_SAVE != hw->manager.top_shadow_color) {
 		/* Freed here since hw_do_color does not track the allocation */
-        	XFreeColors(XtDisplay(hw), hw->core.colormap,
+        	XFreeColors(hw->html.dsp, hw->core.colormap,
                             &hw->manager.top_shadow_color, 1, 0);
         	hw->manager.top_shadow_color = hw->html.top_color_SAVE;
         }            
         if (hw->html.bottom_color_SAVE != hw->manager.bottom_shadow_color) {
-        	XFreeColors(XtDisplay(hw), hw->core.colormap,
+        	XFreeColors(hw->html.dsp, hw->core.colormap,
                             &hw->manager.bottom_shadow_color, 1, 0);
         	hw->manager.bottom_shadow_color = hw->html.bottom_color_SAVE;
         }            
+	hw->html.cur_font = NULL;
 
 	HideWidgets(hw); 		/* Hide any old widgets */
 	/* Widgets and forms freed in History.c */
 	hw->html.widget_list = wptr;
+	hw->html.widget_focus = NULL;
 	hw->html.form_list = NULL;
-	FreeMapList(hw->html.map_list);
-	hw->html.map_list = NULL;
-
+	if (hw->html.map_list) {
+		FreeMapList(hw->html.map_list);
+		hw->html.map_list = NULL;
+	}
+	if (hw->html.image_src) {
+		HTBTreeAndObject_free(hw->html.image_src);
+		hw->html.image_src = NULL;
+	}
 	/* Keep charset, if any */
 	if (charset) {
 		hw->html.charset = strdup(charset);
@@ -4650,7 +4591,7 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 
 		/* Free any old colors, pixmaps and markup */
 		FreeColors(hw, hw->core.colormap);
-		FreeMarkUpList(hw->html.html_objects); /* Clear previous */
+		FreeMarkUpList(hw->html.html_objects);  /* Clear previous */
 
 		/* Parse the raw text with the HTML parser */
 		hw->html.html_objects = HTMLParse(hw, text, charset);
@@ -4663,13 +4604,12 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 			header_text = NULL;
 		hw->html.header_text = header_text;
 		FreeMarkUpList(hw->html.html_header_objects);
-
 		/*
 		 * Parse the header text with the HTML parser
 		 */
 		if (header_text) {
 			hw->html.html_header_objects =
-				HTMLParse(hw, header_text, NULL);
+					       HTMLParse(hw, header_text, NULL);
 		} else {
 			hw->html.html_header_objects = NULL;
 		}
@@ -4682,30 +4622,32 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 			footer_text = NULL;
 		hw->html.footer_text = footer_text;
 		FreeMarkUpList(hw->html.html_footer_objects);
-
 		/*
 		 * Parse the footer text with the HTML parser
 		 */
 		if (footer_text) {
 			hw->html.html_footer_objects =
-				HTMLParse(hw, footer_text, NULL);
+					       HTMLParse(hw, footer_text, NULL);
 		} else {
 			hw->html.html_footer_objects = NULL;
 		}
 	}
 	if (refresh_text) {
 		FreeMarkUpList(hw->html.html_refresh_objects);
-
 		/*
 		 * Parse the refresh text with the HTML parser
 		 */
 		if (*refresh_text) {
 			hw->html.html_refresh_objects =
-				HTMLParse(hw, refresh_text, NULL);
+					      HTMLParse(hw, refresh_text, NULL);
 		} else {
 			hw->html.html_refresh_objects = NULL;
 		}
 	}
+
+	/* Start image loads */
+	if (hw->html.image_src)
+		XtCallCallbackList((Widget)hw, hw->html.multi_load_callback,"");
 
 	/* Reformat the new text */
 	hw->html.max_pre_width = DocumentWidth(hw, hw->html.html_objects);
@@ -4717,8 +4659,8 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 	hw->html.scroll_x = 0;
 	ReformatWindow(hw);	/* Rescan all tag and make all */
 
-	/* Position text at target anchor or specified id, or at top if
-	 * no position specified.
+	/* Position text at target anchor or specified id, or at top
+	 * if no position specified.
 	 *
 	 * If a target anchor is passed, get the element rec
 	 */
@@ -4737,8 +4679,7 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 		}
 	}
 	if (!eptr) {
-		newx = 0;
-		newy = 0;
+		newx = newy = 0;
 	} else {
 		/* Don't move x if going to target anchor */
 		if (!target_anchor) {
@@ -4775,9 +4716,8 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 	ViewClearAndRefresh(hw); 	/* Display the new text */
 	/* Finish processing any unprocessed images */
 	if (!DidAllImages) {
-		WorkInfo *cdata;
+		WorkInfo *cdata = (WorkInfo *) malloc(sizeof(WorkInfo));
 
-		cdata = (WorkInfo *) malloc(sizeof(WorkInfo));
 		cdata->drawing = hw->html.draw_count;
 		cdata->eptr = hw->html.formatted_elements;
 		cdata->hw = hw;
@@ -4790,14 +4730,11 @@ void HTMLSetText(Widget w, char *text, char *header_text, char *footer_text,
 			fprintf(stderr, "Started FinishImages\n");
 #endif
 	}
-	hw->html.select_start = NULL;	/* Clear any previous selection */
-	hw->html.select_end = NULL;
-	hw->html.sel_start_pos = 0;
-	hw->html.sel_end_pos = 0;
-	hw->html.new_start = NULL;
-	hw->html.new_end = NULL;
-	hw->html.new_start_pos = 0;
-	hw->html.new_end_pos = 0;
+	/* Clear any previous selection */
+	hw->html.select_start = hw->html.select_end = NULL;
+	hw->html.sel_start_pos = hw->html.sel_end_pos = 0;
+	hw->html.new_start = hw->html.new_end = NULL;
+	hw->html.new_start_pos = hw->html.new_end_pos = 0;
 	hw->html.active_anchor = NULL;
 	hw->html.drawing = 0;		/* Enable animation stop button */
 }
@@ -4821,7 +4758,7 @@ int HTMLLastId(Widget w)
 	return(Id);
 }
 
-/* News hack of searching function for HTML widget...only looks for an edata
+/* News hack of searching function for HTML widget... only looks for an edata
  * of ">>>" as it will be by itself because the one we are looking for
  * will be enclosed in a <b></b>.
  */                   
@@ -4845,18 +4782,13 @@ int HTMLSearchNews(Widget w, ElementRef *m_start, ElementRef *m_end)
                               m_start->pos = 0;
                               m_end->id = eptr->ele_id;
                               m_end->pos = 3;
-
                               return(1);
                       }
               }
               eptr = eptr->next;
       }
-
       return(-1);
 }
-
-extern unsigned char map_table[];
-#define TOLOWER(x)      (map_table[x])
 
 /* Convenience function to search the text of the HTML document as a single
  * white space separated string.  Linefeeds are converted into spaces.
@@ -4877,14 +4809,10 @@ int HTMLSearchText(Widget w, char *pattern,
 		   int backward, int caseless)
 {
 	HTMLWidget hw = (HTMLWidget)w;
-	int found, equal;
-	char *match;
-	char *tptr;
-	char *mptr;
+	int found, equal, s_pos;
+	char *match, *tptr, *mptr;
 	char cval;
-	ElemInfo *eptr;
-	int s_pos;
-	ElemInfo *s_eptr;
+	ElemInfo *eptr, *s_eptr;
 	ElementRef s_ref, e_ref;
 	ElementRef *start, *end;
 
@@ -4893,16 +4821,13 @@ int HTMLSearchText(Widget w, char *pattern,
 		return(-1);
 
 	/* If we are caseless, make a lower case copy of the pattern to
-	 * match to use in compares.
-	 * Remember to free this before returning
+	 * use in compares.  Remember to free this before returning.
 	 */
 	if (caseless) {
-		match = (char *)malloc(strlen(pattern) + 1);
+		mptr = match = (char *)malloc(strlen(pattern) + 1);
 		tptr = pattern;
-		mptr = match;
 		while (*tptr) {
-			*mptr = (char)TOLOWER((int)*tptr);
-			mptr++;
+			*mptr++ = (char)TOLOWER((int)*tptr);
 			tptr++;
 		}
 		*mptr = '\0';
@@ -4968,18 +4893,16 @@ int HTMLSearchText(Widget w, char *pattern,
 		}
 	}
 	if (backward) {
-		char *mend;
+		char *mend = match;
 
 		/*
 		 * Save the end of match here for easy end to start searching
 		 */
-		mend = match;
 		while (*mend)
 			mend++;
 		if (mend > match)
 			mend--;
-		found = 0;
-		equal = 0;
+		found = equal = 0;
 		mptr = mend;
 
 		if (s_eptr) {
@@ -4989,7 +4912,6 @@ int HTMLSearchText(Widget w, char *pattern,
 			while (eptr->next)
 				eptr = eptr->next;
 		}
-
 		while (eptr) {
 			if (eptr->type == E_TEXT) {
 			    tptr = (char *)(eptr->edata + eptr->edata_len - 2);
@@ -4997,62 +4919,60 @@ int HTMLSearchText(Widget w, char *pattern,
 				tptr = (char *)(eptr->edata + s_pos);
 			    while (tptr >= eptr->edata) {
 				if (equal) {
-					if (caseless) {
-					    cval = (char)TOLOWER((int)*tptr);
-					} else {
-					    cval = *tptr;
-					}
-					while ((mptr >= match) &&
-					       (tptr >= eptr->edata) &&
-					       (cval == *mptr)) {
-						tptr--;
-						mptr--;
-					    if (tptr >= eptr->edata) {
-						if (caseless) {
-						    cval = (char)
-							TOLOWER((int)*tptr);
-						} else {
-						    cval = *tptr;
-						}
+				    if (caseless) {
+					cval = (char)TOLOWER((int)*tptr);
+				    } else {
+					cval = *tptr;
+				    }
+				    while ((mptr >= match) &&
+					   (tptr >= eptr->edata) &&
+					   (cval == *mptr)) {
+					mptr--;
+					if (--tptr >= eptr->edata) {
+					    if (caseless) {
+						cval = (char)
+							    TOLOWER((int)*tptr);
+					    } else {
+						cval = *tptr;
 					    }
 					}
-					if (mptr < match) {
-					    found = 1;
-					    start->id = eptr->ele_id;
-					    start->pos = (int)
+				    }
+				    if (mptr < match) {
+					found = 1;
+					start->id = eptr->ele_id;
+					start->pos = (int)
 						       (tptr - eptr->edata + 1);
-					    break;
-					} else if (tptr < eptr->edata) {
-					    break;
-					} else {
-					    equal = 0;
-					}
+					break;
+				    } else if (tptr < eptr->edata) {
+					break;
+				    } else {
+					equal = 0;
+				    }
 				} else {
-					mptr = mend;
-					if (caseless) {
-					    cval = (char)TOLOWER((int)*tptr);
-					} else {
-					    cval = *tptr;
-					}
-					while ((tptr >= eptr->edata) &&
-					       (cval != *mptr)) {
-						tptr--;
-					    if (tptr >= eptr->edata) {
-						if (caseless) {
-						    cval = (char)
-							TOLOWER((int)*tptr);
-						} else {
-						    cval = *tptr;
-						}
+				    mptr = mend;
+				    if (caseless) {
+					cval = (char)TOLOWER((int)*tptr);
+				    } else {
+					cval = *tptr;
+				    }
+				    while ((tptr >= eptr->edata) &&
+					   (cval != *mptr)) {
+					if (--tptr >= eptr->edata) {
+					    if (caseless) {
+						cval = (char)
+							    TOLOWER((int)*tptr);
+					    } else {
+						cval = *tptr;
 					    }
 					}
-					if ((tptr >= eptr->edata) &&
-					    (cval == *mptr)) {
-					    equal = 1;
-					    end->id = eptr->ele_id;
-					    end->pos = (int)
+				    }
+				    if ((tptr >= eptr->edata) &&
+					(cval == *mptr)) {
+					equal = 1;
+					end->id = eptr->ele_id;
+					end->pos = (int)
 						       (tptr - eptr->edata + 1);
-					}
+				    }
 				}
 			    }
 			}
@@ -5060,39 +4980,36 @@ int HTMLSearchText(Widget w, char *pattern,
 			 * Linefeeds match to single space characters.
 			 */
 			else if (eptr->type == E_LINEFEED) {
-				if (equal) {
-					if (*mptr == ' ') {
-						mptr--;
-						if (mptr < match) {
-							found = 1;
-							start->id =eptr->ele_id;
-							start->pos = 0;
-						}
-					} else {
-						equal = 0;
-					}
+			    if (equal) {
+				if (*mptr == ' ') {
+				    if (--mptr < match) {
+					found = 1;
+					start->id = eptr->ele_id;
+					start->pos = 0;
+				    }
 				} else {
-					mptr = mend;
-					if (*mptr == ' ') {
-						equal = 1;
-						end->id = eptr->ele_id;
-						end->pos = 0;
-						mptr--;
-						if (mptr < match) {
-							found = 1;
-							start->id =eptr->ele_id;
-							start->pos = 0;
-						}
-					}
+				    equal = 0;
 				}
+			    } else {
+				mptr = mend;
+				if (*mptr == ' ') {
+				    equal = 1;
+				    end->id = eptr->ele_id;
+				    end->pos = 0;
+				    if (--mptr < match) {
+					found = 1;
+					start->id =eptr->ele_id;
+					start->pos = 0;
+				    }
+				}
+			    }
 			}
 			if (found)
-				break;
+			    break;
 			eptr = eptr->prev;
 		}
-	} else { /* Forward */
-		found = 0;
-		equal = 0;
+	} else {  /* Forward */
+		found = equal = 0;
 		mptr = match;
 
 		if (s_eptr) {
@@ -5107,85 +5024,79 @@ int HTMLSearchText(Widget w, char *pattern,
 				tptr = (char *)(tptr + s_pos);
 			    while (*tptr ) {
 				if (equal) {
+				    if (caseless) {
+					cval = (char)TOLOWER((int)*tptr);
+				    } else {
+					cval = *tptr;
+				    }
+				    while (*mptr && (cval == *mptr)) {
+					tptr++;
+					mptr++;
 					if (caseless) {
-					       cval = (char)TOLOWER((int)*tptr);
+					    cval = (char)TOLOWER((int)*tptr);
 					} else {
-					       cval = *tptr;
+					    cval = *tptr;
 					}
-					while (*mptr && (cval == *mptr)) {
-						tptr++;
-						mptr++;
-						if (caseless) {
-						    cval = (char)
-							TOLOWER((int)*tptr);
-						} else {
-						    cval = *tptr;
-						}
-					}
-					if (*mptr == '\0') {
-						found = 1;
-						end->id = eptr->ele_id;
-						end->pos = (int)
-							   (tptr - eptr->edata);
-						break;
-					} else if (*tptr == '\0') {
-						break;
-					} else {
-						equal = 0;
-					}
+				    }
+				    if (!*mptr) {
+					found = 1;
+					end->id = eptr->ele_id;
+					end->pos = (int)(tptr - eptr->edata);
+					break;
+				    } else if (!*tptr) {
+					break;
+				    } else {
+					equal = 0;
+				    }
 				} else {
-					mptr = match;
+				    mptr = match;
+				    if (caseless) {
+					cval = (char)TOLOWER((int)*tptr);
+				    } else {
+					cval = *tptr;
+				    }
+				    while (*tptr && (cval != *mptr)) {
+					tptr++;
 					if (caseless) {
-					        cval =(char)TOLOWER((int)*tptr);
+					    cval = (char)TOLOWER((int)*tptr);
 					} else {
-						cval = *tptr;
+					    cval = *tptr;
 					}
-					while (*tptr && (cval != *mptr)) {
-						tptr++;
-						if (caseless) {
-						    cval = (char)
-							TOLOWER((int)*tptr);
-						} else {
-						    cval = *tptr;
-						}
-					}
-					if (cval == *mptr) {
-						equal = 1;
-						start->id = eptr->ele_id;
-						start->pos = (int)
-							   (tptr - eptr->edata);
-					}
+				    }
+				    if (cval == *mptr) {
+					equal = 1;
+					start->id = eptr->ele_id;
+					start->pos = (int)(tptr - eptr->edata);
+				    }
 				}
 			    }
 			} else if (eptr->type == E_LINEFEED) {
-				if (equal) {
-					if (*mptr == ' ') {
-						mptr++;
-						if (!*mptr) {
-							found = 1;
-							end->id = eptr->ele_id;
-							end->pos = 0;
-						}
-					} else {
-						equal = 0;
-					}
+			    if (equal) {
+				if (*mptr == ' ') {
+				    if (!*++mptr) {
+					found = 1;
+					end->id = eptr->ele_id;
+					end->pos = 0;
+				    }
 				} else {
-					mptr = match;
-					if (*mptr == ' ') {
-						equal = 1;
-						start->id = eptr->ele_id;
-						start->pos = 0;
-						mptr++;
-						if (!*mptr) {
-							found = 1;
-							end->id = eptr->ele_id;
-							end->pos = 0;
-						}
-					}
+				    equal = 0;
 				}
+			    } else {
+				mptr = match;
+				if (*mptr == ' ') {
+				    equal = 1;
+				    start->id = eptr->ele_id;
+				    start->pos = 0;
+				    if (!*++mptr) {
+					found = 1;
+					end->id = eptr->ele_id;
+					end->pos = 0;
+				    }
+				}
+			    }
 			}
 			if (found)
-				break;
+			    break;
 			eptr = eptr->next;
 		}
 	}
@@ -5204,17 +5115,25 @@ int HTMLSearchText(Widget w, char *pattern,
 
 void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width, int height) 
 {
-	int w_whole = 0, h_whole = 0;
-	int start_width = 0, start_height = 0;
-	int w_start_offset, h_start_offset;
-	int w_whole_tiles = 0, h_whole_tiles = 0;
-	int end_width, end_height;
-	int w, h;
-	int destx = 0, desty;
 	HTMLWidget hw = (HTMLWidget) wid;
+	int w_whole = 0;
+	int h_whole = 0;
+	int start_width = 0;
+	int start_height = 0;
+	int w_whole_tiles = 0;
+	int h_whole_tiles = 0;
+	int destx = 0;
+	int w_start_offset, h_start_offset;
+	int end_width, end_height, w, h, desty;
+	int bg_height, bg_width;
+	Display *dsp = hw->html.dsp;
+	Window win = XtWindow(hw->html.view);
+
+	bg_height = hw->html.bg_height;
+	bg_width = hw->html.bg_width;
 
 	if (!hw || (x < 0) || (y < 0) || (width <= 0) || (height <= 0) ||
-	    !hw->html.bg_width || !hw->html.bg_height || !hw->html.bgmap_SAVE ||
+	    !bg_width || !bg_height || !hw->html.bgmap_SAVE ||
 	    !hw->html.bg_image)
                 return;
 
@@ -5231,17 +5150,17 @@ void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width, int height)
 	 * Figure out the height of the area to draw.
 	 * If there is a height offset, index the number of height tiles.
 	 */
-	w_start_offset = (x + hw->html.scroll_x) % hw->html.bg_width;  
-	if (w_start_offset || (!w_start_offset && width < hw->html.bg_width)) {
+	w_start_offset = (x + hw->html.scroll_x) % bg_width;  
+	if (w_start_offset || (!w_start_offset && width < bg_width)) {
 		w_whole++;
-		start_width = hw->html.bg_width - w_start_offset;
+		start_width = bg_width - w_start_offset;
 		if (start_width > width)
 			start_width = width;
 	}
-	h_start_offset = (y + hw->html.scroll_y) % hw->html.bg_height;
-	if (h_start_offset || (!h_start_offset && height<hw->html.bg_height)) {
+	h_start_offset = (y + hw->html.scroll_y) % bg_height;
+	if (h_start_offset || (!h_start_offset && height < bg_height)) {
 		h_whole++;
-		start_height = hw->html.bg_height - h_start_offset;
+		start_height = bg_height - h_start_offset;
 		if (start_height > height)
 			start_height = height;
 	}
@@ -5254,11 +5173,11 @@ void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width, int height)
 	 *   if the if fails because they are inited to zero.
 	 */
 	if (width - start_width) {
-		w_whole_tiles = (width - start_width)/hw->html.bg_width;
+		w_whole_tiles = (width - start_width) / bg_width;
 		w_whole += w_whole_tiles;
 	}
 	if (height - start_height) {
-		h_whole_tiles = (height - start_height)/hw->html.bg_height;
+		h_whole_tiles = (height - start_height) / bg_height;
 		h_whole += h_whole_tiles;
 	}
 
@@ -5266,11 +5185,10 @@ void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width, int height)
 	 * Now we have the numbers to compute the amount of the last tile to
 	 * draw.  If there is something to draw, index the "whole" variable.
 	 */
-	end_width = width - (start_width + (w_whole_tiles * hw->html.bg_width));
+	end_width = width - (start_width + (w_whole_tiles * bg_width));
 	if (end_width)
 		w_whole++;
-	end_height = height -
-			  (start_height + (h_whole_tiles * hw->html.bg_height));
+	end_height = height - (start_height + (h_whole_tiles * bg_height));
 	if (end_height)
 		h_whole++;
  /*
@@ -5291,29 +5209,23 @@ void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width, int height)
 	for (h = 0; h < h_whole; h++) {
 		destx = x;
 		for (w = 0; w < w_whole; w++) {
-		    XCopyArea(XtDisplay(wid), hw->html.bgmap_SAVE,
-			      XtWindow(hw->html.view), hw->html.drawGC,
-			      w_start_offset * (!w), h_start_offset * (!h),
-			      (!w ? (start_width ? start_width :
-			             hw->html.bg_width) :
+		    XCopyArea(dsp, hw->html.bgmap_SAVE, win, hw->html.drawGC,
+			      w_start_offset * !w, h_start_offset * !h,
+			      !w ? (start_width ? start_width : bg_width) :
 			       ((w + 1) == w_whole ? (end_width ? end_width :
-						      hw->html.bg_width) :
-				hw->html.bg_width)),
-			      (!h ? (start_height ? start_height :
-				     hw->html.bg_height) :
+						      bg_width) :
+				bg_width),
+			      !h ? (start_height ? start_height : bg_height) :
 			       ((h + 1) == h_whole ? (end_height ? end_height :
-						      hw->html.bg_height) :
-				hw->html.bg_height)),
+						      bg_height) :
+				bg_height),
 			      destx, desty);
-		    destx += (!w ? (start_width ? start_width :
-				    hw->html.bg_width) :
-			      hw->html.bg_width);
+		    destx += !w ? (start_width ? start_width : bg_width) :
+			     bg_width;
 		}
-		desty += (!h ? (start_height ? start_height :
-			        hw->html.bg_height) :
-			  hw->html.bg_height);
+		desty += !h ? (start_height ? start_height : bg_height) :
+			 bg_height;
 	}
-
 	return;
 }
  
@@ -5373,7 +5285,13 @@ void RefreshURL(XtPointer cld, XtIntervalId *id)
 		free(refresh_info);
 		return;
 	}
-
+	/* If LIBXMX processing events, requeue the timer */
+	if (XmxBlockTimers) {
+		hw->html.refresh_timer = XtAppAddTimeOut(app_con, 1000,
+					        (XtTimerCallbackProc)RefreshURL,
+						(XtPointer)refresh_info);
+		return;
+	}
 	/* Only do first timer to go off if page had multiple refresh URLs */
 	hw->html.refresh_count++;
 
@@ -5422,14 +5340,21 @@ void HTMLFreeWidget(HTMLWidget hw)
         free(hw->html.workprocdata);
         hw->html.workprocdata = NULL;
     }
-
-    FreeMapList(hw->html.map_list);
-    hw->html.map_list = NULL;
-
+    if (hw->html.map_list) {
+	FreeMapList(hw->html.map_list);
+	hw->html.map_list = NULL;
+    }
+    if (hw->html.image_src) {
+	HTBTreeAndObject_free(hw->html.image_src);
+	hw->html.image_src = NULL;
+    }
     FreeMarkUpList(hw->html.html_objects);
-    FreeMarkUpList(hw->html.html_header_objects);
-    FreeMarkUpList(hw->html.html_footer_objects);
-    FreeMarkUpList(hw->html.html_refresh_objects);
+    if (hw->html.html_header_objects)
+	FreeMarkUpList(hw->html.html_header_objects);
+    if (hw->html.html_footer_objects)
+	FreeMarkUpList(hw->html.html_footer_objects);
+    if (hw->html.html_refresh_objects)
+	FreeMarkUpList(hw->html.html_refresh_objects);
     if (hw->html.header_text) {
         free(hw->html.header_text);
         hw->html.header_text = NULL;

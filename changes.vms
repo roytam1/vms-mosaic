@@ -142,7 +142,7 @@ From VMS 2.7-5 to VMS 2.7-6b1
  o MAKE_MOSAIC.COM updated for MMK V3.6
  o Support for builds with DEC C V5.6
  o Support for using MMK when MMS is also installed
- o Removed support for the DEC C ioctl routine because it doesn't work 
+ o Removed support for the DEC C ioctl routine because it doesn't work
  o Added small splash screen for VAX C builds
  o Removed useless icon pixmaps to reduce image size by 210 blocks
  o Reduced icon colormap usage by 6
@@ -178,7 +178,7 @@ From VMS 3.0b2 to VMS 3.0b3
  o Added support for ALIGN in <DIV> tags
  o Added support for ALIGN (left and right) in <IMG> tags
  o Added support for WIDTH=pixels in <TD> tags
- o Added <FRAME> NAME and <FRAMESET> information to frame display 
+ o Added <FRAME> NAME and <FRAMESET> information to frame display
  o Improved table cell and column width calculations
  o Improved support for forms in tables
  o Enlarged default size of the document view window
@@ -313,7 +313,7 @@ From VMS 3.0 to VMS 3.1
  o Added partial support for NUMBER as a form input type
  o Improved progressive display of page backgrounds
  o Removed space between left aligned tables and adjoining tables
- o Corrected transparent animation refresh problem in tables 
+ o Corrected transparent animation refresh problem in tables
  o Eliminated /STANDARD=VAXC for DEC C builds of the SRC library
  o Various bug fixes
 
@@ -371,8 +371,8 @@ From VMS 3.3 to VMS 3.4
  o Added limited support for HEIGHT in <TABLE> tags
  o Added support for using 'O' for '0' in hex colors
  o Changed default vertical alignment in table cells to MIDDLE
- o Changed Back and Forward to also track horizontal scrollbar
- o Changed hotlist popup menu to use multiple columns as needed 
+ o Changed Back and Forward to also track horizontal scroll bar
+ o Changed hotlist popup menu to use multiple columns as needed
  o Improved table and border width calculations
  o Improved global history file performance
  o Improved support for floating objects in lists
@@ -399,7 +399,7 @@ From VMS 3.4 to VMS 3.5
  o Changed popup menu Meta requests to return HEAD information
  o Removed support for font color in form buttons and checkboxes
  o Removed support for background color in push buttons and menus
- o Added support for STYLE=VISIBILITY:HIDDEN in <DIV> tags
+ o Added support for STYLE=visibility:hidden in <DIV> tags
  o Made contents of preference file case insensitive
  o Various bug and memory leak fixes
 
@@ -490,24 +490,24 @@ From VMS 3.7 to VMS 3.8
 ...............
 
  o Added support for Motif 1.5
- o Added Stop button to toolbar to stop loading or animations. 
+ o Added Stop button to Toolbar to stop loading or animations.
  o Added open in new window option to Open Document dialog
  o Added support for ID in all tags
  o Added support for image alpha channel transparency
  o Added support for compressed (4 and 8 bit) BMP images
  o Added support for OS/2, 16 bit, and 32 bit BMP images
  o Added support for MIME types "image/x-bmp" and "image/x-ms-bmp"
- o Added cookie permissions file (MOSAIC.HOSTPERM) and preference 
+ o Added cookie permissions file (MOSAIC.HOSTPERM) and preference
  o Added Cookie Jar Manager option to update the cookie files
  o Added cookie and cookie domain counters to Cookie Jar Manager
  o Added Map and Auction search selections to Navigate menu
- o Added support for crimson and indigo as named colors 
+ o Added support for crimson and indigo as named colors
  o Added support for &apos, &circ, &minus and &ndash
  o Added partial support for &dagger, &lowast, &ldquo, &lsaquo,
    &lsquo, &rdquo, &rsaquo and &rsquo
  o Added preference setting for text blink time
  o Added preference setting for form button background color
- o Changed the default background color from gray to white 
+ o Changed the default background color from gray to white
  o Changed cookie domain list to a balanced binary tree
  o Changed to display and store cookie domains in alphabetical order
  o Changed to strip carriage returns, linefeeds and tabs out of URLs
@@ -541,7 +541,7 @@ From VMS 3.8-1 to VMS 3.9
  o Added partial support for UTF-8 encoded left/right arrows, dagger,
    em/en dashes, bullet, ellipsis, euro, trademark and quote marks
  o Added native color quantization with Floyd-Steinberg dithering
-   for PNG and BMP RGB images 
+   for PNG and BMP RGB images
  o Added support for Version 4 and 5 Windows BMP images
  o Added support for transparent BMP images
  o Added support for inline frames in tables
@@ -551,22 +551,22 @@ From VMS 3.8-1 to VMS 3.9
  o Added support for "about:blank" for use by Google Groups
  o Added partial support for &Dagger, &euro, &hellip, &mdash and &trade
  o Improved support for &bull, &larr and &rarr
- o Added workaround for bug in the ProFTPD ftp server
+ o Added workaround for bug in the ProFTPD FTP server
  o Added cookieTrace trace option
  o Changed alpha channel transparancy processing to use 24 bit
-   color quantization with Floyd-Steinberg dithering 
+   color quantization with Floyd-Steinberg dithering
  o Changed to escape spaces and control characters in URLs
- o Increased the default ftp filename display length to 26
+ o Increased the default FTP filename display length to 26
  o Fixed crash caused by background images with very large dimensions
  o Fixed printing of pages with inline frames
  o Fixed problem with username/password prompts on secure pages
  o Fixed problem with form button background color in tables
  o Rewrote and improved performance of ParseMarkType routine
- o Overhauled the ftp support code including many bug fixes
+ o Overhauled the FTP support code including many bug fixes
  o Reworked XPM image support using LibXpm version 3.4k code
  o Upgraded PNG library to version 1.0.18
  o Upgraded ZLIB library to version 1.2.3
- o Colorized the FTP toolbar icons
+ o Colorized the FTP Toolbar icons
  o Colorized the Error and Question dialog pixmaps
  o Optimized preallocation of memory for markup and formatting elements
  o Added preference settings for markup and element preallocation
@@ -586,7 +586,7 @@ From VMS 3.9 to VMS 4.0
  o Added support for FRAME and RULES in <TABLE> tags
  o Added detection of UTF-8 character set specified in <META> tags
  o Added support and preference setting for MenuBar tearoff menus
- o Added tooltip (aka balloon) help for the toolbar, cookie jar manager
+ o Added tooltip (aka balloon) help for the Toolbar, cookie jar manager
    and various menus
  o Added tooltip support for TITLE in span, image, anchor and form tags
  o Added preference and menu option to enable/disable tooltip help
@@ -597,7 +597,7 @@ From VMS 3.9 to VMS 4.0
  o Added Postscript printing support for SIZE and NOSHADE in <HR> tags
  o Added Postscript printing of square and block bullets
  o Added support and preference setting for duplex Postscript printing
- o Added support for HTML tags as text in form text areas 
+ o Added support for HTML tags as text in form text areas
  o Added full support for &hellip, &mdash, &trade, &harr, &larr,
    &rarr, &uarr, &darr, &lozenge, &prime, &Prime, &fnof, &clubs,
    &diams, &hearts and &spades
@@ -610,7 +610,7 @@ From VMS 3.9 to VMS 4.0
  o Added the LIBLITECLUE library
  o Fixed slow drag scrolling of pages with lots of form widgets
  o Fixed DCL qualifiers which didn't work with preferences enabled
- o Fixed major GC (Graphics Context) leak and reduced GC allocations 
+ o Fixed major GC (Graphics Context) leak and reduced GC allocations
  o Fixed hangs caused by broken https servers doing keepalive
    on redirects
  o Eliminated progress meter flickering
@@ -637,7 +637,201 @@ From VMS 3.9 to VMS 4.0
  o Registers the "default" language procedure with XtSetLanguageProc
  o Progress meter now works with Motif 1.1
  o Eliminated use of Motif gadgets in the MenuBar
- o Reduced by ten the number of types sent in http Accept: headers
+ o Reduced by ten the number of types sent in HTTP Accept: headers
  o Eliminated all use of the caddr_t C type
+ o Various bug and memory leak fixes
+ o Various source reformating and cleanups
+
+From VMS 4.0 to VMS 4.1
+...............
+
+ o Enabled preallocation of memory for markup and formatting elements
+   which was inadvertently disabled in release 3.9
+ o Added support for Motif 1.6
+ o Created a new CERT.PEM file from a merge of the current IE, Mozilla
+   and Mosaic certificates.  Also added various other certificates.
+ o Added support for wildcard SSL certificates
+ o Added support for secure hosts with multiple CommonNames
+ o Added option to ignore (one session only or permanently) SSL errors
+   on a per host basis
+ o Added certificate information to the Encryption Status popup window
+ o Added detection of missing SSL CERT.PEM file
+ o Added FTP passive mode support
+ o Added support for TIFF images with LibTIFF v3.8.2
+ o Added support for Targa (TGA) images with LibTarga
+ o Added support for Sun Rasterfile (RAS) and X Window Dump (XWD) images
+ o Added preference settings to enable/disable JPEG, TIFF and PNG
+   error and warning messages
+ o Added support for MIME types application/x-x509-ca-cert, image/targa,
+   image/tga, image/x-targa, image/x-tga, image/x-tiff, image/x-xpm,
+   image/x-sun-raster and text/css
+ o Added support for the FileZilla FTP server
+ o Added content type header to mail sent via PMDF
+ o Added support for anchors with fixed font color
+ o Added support for hexadecimal & escape sequences
+ o Added support for & escape sequences crarr, hArr, lArr, uArr, rArr,
+   equiv, dArr, lceil, rceil, lfloor, rfloor, and, ang, asymp, cap, cong,
+   cup, empty, exist, forall, frasl, hyphen, infin, int, ge, isin, le,
+   loz, nabla, ne, notin, nsub, OElig, oelig, oplus, or, otimes, part,
+   permil, perp, prod, prop, Scaron, scaron, sdot, sim, sub, sube, sum,
+   sup, supe, there4, lang, rang, Yuml and Alpha thru omega (i.e., the
+   Greek Alphabet) plus thetasym, piv and upsih
+ o Added support for UTF-8 encoded arrows (uarr, darr, crarr, harr,
+   hArr, lArr, uArr, rArr and dArr), le, ge, ne, lang, rang, frasl,
+   lozenge, clubs, diamonds, hearts, spades, prime, Prime, real, image,
+   alefsym, weierp and the Symbol font mathematical operators and Greek
+   characters
+ o Added support for Unicode &# escape sequences for bullet, ellipsis,
+   em dash, en dash, ldquo, lsquo, double prime, rdquo, rsquo and
+   trademark
+ o Added support for Windows Latin-1 extended & escape sequences #130
+   thru #159
+ o Changed to display unknown UTF-8 characters as '?'
+ o Changed URL: window and Mosaic's window title to display escaped
+   spaces as actual spaces
+ o Changed tooltips to not popup when Mosaic window does not have focus
+ o Changed form tabbing to skip non-text fields
+ o Changed relative URL parsing to conform to RFC 1808 Part 4 Step 5
+ o Changed to strip angle brackets from URLs pasted to the logo button
+ o Changed number of form options limit from 1024 to 2048
+ o Changed to ignore IMG tags with blank SRC values
+ o Changed to ignore soft hyphen escapes
+ o Changed to unescape spaces in FTP URLs
+ o Changed image color quantization to keep more colors
+ o Changed markup to no longer keep end tag text
+ o Changed to allocate and reuse markup text memory in blocks
+ o Changed to allocate and reuse image structures in blocks
+ o Changed to strip leading "../" sequences on image source URLs
+ o Changed popup menu to not display link options on unlinked images
+ o Fixed problems reloading and refreshing inline frames in tables
+ o Fixed inline frame widget leak
+ o Fixed problem with popup menu Meta file requests
+ o Fixed crash and problems accessing Windows NT FTP servers
+ o Fixed problems caused by HTTP Keep-Alive timeouts
+ o Fixed problem with base tag URLs replacing document URLs
+ o Fixed problem tracking FTP server type in window title
+ o Improved support for username and password in FTP URLs
+ o Enabled automatic scrolling when tab traversing forms
+ o Improved tracking of form input focus
+ o Changed to block refresh timer events during dialog prompts
+ o Fixed multiple dialog widget leaks
+ o Changed XmxMakeErrorDialog and XmxMakeInfoDialog to automatically
+   manage and destroy their widgets
+ o Improved creation of HTTP Accept: headers and reduced types sent
+ o Upgraded PNG library to version 1.0.20
+ o Fixed problem with slashes in about: URLs
+ o Removed support for the mMosaic APROG tag
+ o Eliminated port.h file
+ o Removed all use of the C assert function in LIBXMX
+ o Various bug and memory leak fixes
+ o Various source reformating and cleanups
+
+From VMS 4.1 to VMS 4.2
+...............
+
+ o Added support for simultaneous inline image downloading
+ o Added preference settings to enable/disable and limit simultaneous
+   image downloading
+ o Added support for JPEG 2000 images with LIBOPENJPEG v1.2.0
+ o Added support for form button OnClick and anchor URLs containing
+   JavaScript functions "history.back()", "history.forward()",
+   "window.close()", "window.print()", "location.reload()",
+   "openExternal('xxx')" and "alert('xxx')"
+ o Added support for <BUTTON> tags with images
+ o Added support for OnClick URLs in form buttons
+ o Added support for <BODY> tags containing JavaScript redirect URLs
+   of the form onload="document.location='url'"; 
+ o Changed the default setting of preference USE_PREFERENCES to True
+ o Changed the default setting of preference IMAGEVIEWINTERNAL to True
+ o Changed to strip out scripts and style sheets completely in the
+   initial HTML parse
+ o Changed to cache only the state or text (instead of the actual widget)
+   of form toggle buttons, pulldown option menus and text fields
+ o Changed to not cache form push button widgets
+ o Changed to ignore Refresh URLs when page loading is aborted 
+ o Changed so that <DIV> tags do not line break inside <NOBR> tags
+ o Changed blank image from 8x8 to 1x1 pixels
+ o Changed to display blank image in place of tiny broken images
+ o Changed wildcard SSL certificate support to conform to RFC 2818
+ o Added X.509 certificate validation support for checking of X.509v3
+   SubjectAltName extensions when the X.509 commonName check fails
+ o Added Netlock, Startcom, Swisscom and Wells Fargo root authority
+   certificates to CERT.PEM
+ o Added preference setting to enable/disable JPEG 2000 error and
+   warning messages
+ o Added support for MIME types "image/jp2" and "image/x-jpeg2000"
+ o Added encyclopedia search selection to Navigate menu
+ o Added support for search URLs with no slash between the host and
+   the search string (e.g. http:xxxx.com?item=1234)
+ o Added support for ENCTYPE in <FORM> tags
+ o Added support for STYLE=visibility:hidden in <IFRAME> tags
+ o Added support for STYLE=display:none in form and <IMG> tags
+ o Added support for Unicode &# escape sequences for black circle,
+   dagger, double dagger, up and down pointing triangles, figure dash,
+   lsaquo, mu, much less than, much greater than, quotation dash and
+   rsaquo.
+ o Added support for UTF-8 encoded figure and quotation dashes
+ o Added preference to allow torn off Toolbar at startup
+ o Added support and preference for vertical tearoff Toolbar
+ o Added preference setting for text or icon Toolbar
+ o Added preference to enable/disable the Encryption icon
+ o Changed the SECURITYICON preference to enable/disable the
+   Authentication icon
+ o Added "presentation mode" display which can be toggled via the
+   mouse button 3 menu
+ o Added preference setting to enable/disable the "presentation mode"
+   toggle on mouse button 3
+ o Added support for the XHTML <HR/> tag with missing space
+ o Eliminated drawing of text background unless selected or blinking
+ o Eliminated flashing of the logo button
+ o Improved vertical scroll bar tracking
+ o Improved spacing around inline bullets
+ o Added support for FTP EPLF style directory listings
+ o Changed to use LIST instead NLST for FTP servers returning
+   "UNIX Type: L8" in response to SYST
+ o Fixed problem printing images which have an alpha channel
+ o Removed unneeded window decorations from modal dialogs
+ o Changed to not display the Motif window decoration controls when
+   in kiosk mode
+ o Fixed problem where modal dialogs could be obscured by other Mosaic
+   windows
+ o Fixed problem displaying transparent BMP images
+ o Fixed internal images (e.g. the broken image) pixmap leak
+ o Fixed form option menu widget leak
+ o Fixed problem with frame loads not being aborted by the stop and
+   logo buttons
+ o Fixed problem with rescaled image width calculation in tables
+   when only the image width is given
+ o Fixed problem refreshing bullets when scrolling horizontally
+ o Fixed crashes caused by <XMP> and <LISTING> tags
+ o Fixed crash caused by some animated GIFs in frames
+ o Fixed infinite loops on pages with inline frames when saving,
+   printing or image cache flushing
+ o Fixed Cookie Jar crash caused by large cookies
+ o Fixed hangs caused by broken servers when returning "404 Not Found"
+ o Fixed Postscript printing problem caused by parentheses in titles
+ o Fixed problem refreshing anchors during window redisplays
+ o Fixed problem correctly matching unterminated & escape sequences
+ o Fixed problem with improperly terminated & escape sequences
+ o Fixed problem with progress meter percentage displaying zero during
+   large downloads
+ o Fixed problem where the Logo icon was still displayed when disabled
+   via the KIOSK or GUI_LAYOUT preferences
+ o Fixed problem with Return not submitting some single text field forms
+ o Fixed problem where frame form submissions did not reset cursor and
+   logo button 
+ o Fixed LIBWWW2 memory leaks on interrupted connections
+ o Fixed problem where LIBTIFF would not build with MMK
+ o Added Display to the HTML Widget context to eliminate use of XtDisplay
+ o Reduced usage of XSetFont, XSetForeground and XSetBackground
+ o Fixed crash caused by TITLE tooltips in frames
+ o Fixed problem with anchored image table width calculation
+ o Added /IDENTIFICATION as a synonym for the /VERSION qualifier
+ o Upgraded PNG library to version 1.0.24
+ o Reduced the size of Postscript output by 1KB for each color image
+   after the first one
+ o Changed to not preallocate font and body colors on Truecolor displays
+ o Changed to not use USEICONBAR and USETEXTBUTTONBAR preferences
+ o Removed PARAMS and ARGSn macros from LIBWWW2
  o Various bug and memory leak fixes
  o Various source reformating and cleanups

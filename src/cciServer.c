@@ -106,9 +106,9 @@ MCCICloseAcceptPort()
 	NetCloseAcceptPort(listenPort);
 }
 
+/* Return 0 on failure */
+/* Return listenPort on success */
 int MCCIServerInitialize(int portNumber)
-/* return 0 on failure */
-/* return listenPort on success */
 {
 	listenPort = NetServerInitSocket(portNumber);
 
@@ -119,12 +119,12 @@ int MCCIServerInitialize(int portNumber)
 	}
 }
 
-int MCCIGetSocketDescriptor(MCCIPort clientPort)
-/* this routine is platform dependent and is not assumed to be supported
+/* This routine is platform dependent and is not assumed to be supported
  * on all platforms.  It is only here for those routines that wish to have
  * a select() external to the MCCI library.
- * this routine extracts the socket descriptor from the MCCIPort and
+ * This routine extracts the socket descriptor from the MCCIPort and
  * returns it */
+int MCCIGetSocketDescriptor(MCCIPort clientPort)
 {
         return(NetGetSocketDescriptor(clientPort));
 }
@@ -145,9 +145,9 @@ int MCCISendResponseLine(MCCIPort client, int code, char *text)
 	return(MCCI_OK);
 }
 
+/* Return NULL if no connection */
+/* Return a MCCIPort if connected */
 MCCIPort MCCICheckAndAcceptConnection()
-/* return NULL if no connection */
-/* return a MCCIPort if connected */
 {
 	MCCIPort client;
 
@@ -180,24 +180,22 @@ MCCIPort MCCICheckAndAcceptConnection()
 
 
 
+/* Return 1 on true, 0 on false */
 int MCCIIsThereInput(MCCIPort client)
-/* return 1 on true, 0 on false */
 {
         if (!client)
                 return(0);
         return(NetIsThereInput(client));
 }
 
+/* Read from client.  Next line should contain Content-Length: value 
+ * and then the content body.  Returns the number of chars read. 
+ * 0 on error.  Space is allocated and placed into 'content'*/
 int MCCIReadContent(MCCIPort client, char **content)
-/* read from client. Next line should contain Content-Length: value 
-   and then the content body. Returns the number of chars read. 
-   0 on error. space is allocated and placed into 'content'*/
 {
-	char *s;
-	int length;
+	int x, length;
 	char garbage;
-	char *line;
-	int x;
+	char *s, *line;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
@@ -213,7 +211,7 @@ int MCCIReadContent(MCCIPort client, char **content)
 
 	/* Read content length */
 	s = strchr(line, ':');  /* Skip to length */
-	if ((!s) || (!strlen(s)))
+	if (!s || !strlen(s))
 		return(0);
 	s++;
 	length = atoi(s);
@@ -240,14 +238,14 @@ int MCCIReadContent(MCCIPort client, char **content)
 	return(length);
 }
 
+/* Take care of the SEND request parsing */
+/* Return value to send back to cci client */
 int MCCIHandleSend(MCCIPort client, char *line, char *retText)
-     /* take care of the SEND request parsing */
-     /* return value to send back to cci client */
 {
   int retCode;
   char *s, *end, *start;
   
-  if (!(s = strchr(line, ' '))) { /* skip over SEND */
+  if (!(s = strchr(line, ' '))) {  /* Skip over SEND */
       strcpy(retText, "Error in protocol");
       return(MCCIR_ERROR);
   }
@@ -258,34 +256,32 @@ int MCCIHandleSend(MCCIPort client, char *line, char *retText)
       s = end;
       GetWordFromString(s, &start, &end);
       /* ejb 9 March 1995 added BEFORE and AFTER cases */
-      if (start && (start != end))
+      if (start && (start != end)) {
 	/* SEND ANCHOR STOP => turn off SEND ANCHOR */
-	if (!my_strncasecmp(start, MCCI_S_STOP, strlen(MCCI_S_STOP))) 
-	  MCCIRequestSendAnchor(&retCode, retText, client, 0);
-	else
-	  /* SEND ANCHOR BEFORE => Mosaic sends anchor, BEFORE done getting */
-	  if (!my_strncasecmp(start, MCCI_S_BEFORE, strlen(MCCI_S_BEFORE)))
+	if (!my_strncasecmp(start, MCCI_S_STOP, strlen(MCCI_S_STOP))) {
+	    MCCIRequestSendAnchor(&retCode, retText, client, 0);
+	} else if (!my_strncasecmp(start, MCCI_S_BEFORE,
+				   strlen(MCCI_S_BEFORE))) {
+	    /* SEND ANCHOR BEFORE => Mosaic sends anchor, BEFORE done getting */
 	    MCCIRequestSendAnchor(&retCode, retText, client, MCCI_SEND_BEFORE);
-	  else
+	} else if (!my_strncasecmp(start, MCCI_S_AFTER, strlen(MCCI_S_AFTER)) ||
+		   !start) {
 	    /* SEND ANCHOR AFTER => Mosaic sends anchor, AFTER done getting */
-	    if (!my_strncasecmp(start, MCCI_S_AFTER, strlen(MCCI_S_AFTER)) ||
-		(!(start)))
-	      MCCIRequestSendAnchor(&retCode, retText, client, MCCI_SEND_AFTER);
-	    else
-	/* SEND ANCHOR HANDLER => Mosaic sends anchor first then lets cci handle it  ADC ZZZ */
-               if (!my_strncasecmp(start,MCCI_S_HANDLER,strlen(MCCI_S_HANDLER)) ||
-                   (!(start)))
-                 MCCIRequestSendAnchor(&retCode,retText,client,MCCI_SEND_HANDLER);
-	       else
-	/* SEND ANCHOR XXXXX => Mosaic doesn't know what to do with it */
-	          {
-		    /* we don't know what to do with it. */
-		    strcpy(retText, "what\'s this stuff after ANCHOR?");
-		    return(MCCIR_ERROR);
-	          }
-	/* SEND ANCHOR => Mosaic sends anchor, AFTER done getting*/
-      else
+	    MCCIRequestSendAnchor(&retCode, retText, client, MCCI_SEND_AFTER);
+	} else if (!my_strncasecmp(start, MCCI_S_HANDLER,
+				   strlen(MCCI_S_HANDLER)) || !start) {
+	    /* SEND ANCHOR HANDLER => sends anchor first then lets cci handle it  ADC ZZZ */
+            MCCIRequestSendAnchor(&retCode, retText, client,MCCI_SEND_HANDLER);
+	} else {
+	    /* SEND ANCHOR XXXXX => Mosaic doesn't know what to do with it */
+	    /* We don't know what to do with it. */
+	    strcpy(retText, "what\'s this stuff after ANCHOR?");
+	    return(MCCIR_ERROR);
+	}
+	/* SEND ANCHOR => Mosaic sends anchor, AFTER done getting */
+      } else {
 	MCCIRequestSendAnchor(&retCode, retText, client, MCCI_SEND_AFTER);
+      }
   } else if (!my_strncasecmp(start, MCCI_S_OUTPUT, strlen(MCCI_S_OUTPUT))) {
 		/* SEND OUTPUT */
 		s = end;
@@ -365,26 +361,20 @@ int MCCIHandleSend(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Take care of the Post request parsing */
+/* Return value to send back to cci client */
 int MCCIHandlePost(MCCIPort client, char *line, char *retText)
-/* take care of the Post request parsing */
-/* return value to send back to cci client */
 {
-	char *s, *end;
-	char *url;
-	char *postData;
-	int postDataLength;
-	char *mimeType;
-	int retCode;
-	int output;
-	char *tmpend;
-	char *next;
+	char *s, *end, *url, *postData;
+	char *mimeType, *tmpend, *next;
+	int postDataLength, retCode, output;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr,"MCCIHandlePost(): parsing line: \"%s\"\n",line);
 #endif
 
-	if (!(s = strchr(line, ' '))) {  /* skip over POST */
+	if (!(s = strchr(line, ' '))) {  /* Skip over POST */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
@@ -395,18 +385,19 @@ int MCCIHandlePost(MCCIPort client, char *line, char *retText)
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	url++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate url */
+	url++;        /* Skip over '<' */
+	end--;        /* Backup over '>' */
+	*end = '\0';  /* Terminate url */
 
 	url = strdup(url);
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
-		fprintf(stderr,"MCCIHandlePost(): extracted url: \"%s\"\n",url);
+		fprintf(stderr,
+			"MCCIHandlePost(): extracted url: \"%s\"\n", url);
 #endif
 
-	GetWordFromString(s, &mimeType, &end); /* Get Content Type*/
+	GetWordFromString(s, &mimeType, &end);  /* Get Content Type*/
 	if ((!mimeType) || (mimeType == end)) {
 		strcpy(retText, "No Content-Type?");
 		return(MCCIR_ERROR);
@@ -414,19 +405,20 @@ int MCCIHandlePost(MCCIPort client, char *line, char *retText)
 	tmpend = end;
 
 	s = end;
-	GetWordFromString(s, &next, &end); /* move pointer to OUTPUT */
+	GetWordFromString(s, &next, &end);  /* Move pointer to OUTPUT */
 
-	*tmpend = '\0'; /* terminate the content-type */
+	*tmpend = '\0';  /* Terminate the content-type */
 	mimeType = strdup(mimeType);
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
-		fprintf(stderr,"MCCIHandlePost(): mimeType: \"%s\"\n",mimeType);
+		fprintf(stderr,
+			"MCCIHandlePost(): mimeType: \"%s\"\n", mimeType);
 #endif
 	output = MCCI_DEFAULT;
 	if (next && (next != end)) {
 	    if (!my_strncasecmp(next, MCCI_S_OUTPUT, strlen(MCCI_S_OUTPUT))) {
-		/* output tag */
+		/* Output tag */
 		s = end;
 		GetWordFromString(s, &next, &end);
 		if (next && (next != end)) {
@@ -443,7 +435,7 @@ int MCCIHandlePost(MCCIPort client, char *line, char *retText)
 				output = MCCI_DEFAULT;
 			}
 			s = end;
-			GetWordFromString(s,&next,&end);
+			GetWordFromString(s, &next, &end);
 		}
 	    }
 	} else {
@@ -475,39 +467,33 @@ int MCCIHandlePost(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Take care of the Display request parsing */
+/* Return value to send back to cci client */
 int MCCIHandleDisplay(MCCIPort client, char *line, char *retText)
-/* take care of the Display request parsing */
-/* return value to send back to cci client */
 {
-	char *s, *end;
-	char *url;
-	char *displayData;
-	int displayDataLength;
-	char *mimeType;
-	int retCode;
-	int output;
-	char *tmpend;
-	char *next;
+	char *s, *end, *url, *displayData;
+	char *mimeType, *tmpend, *next;
+	int displayDataLength, retCode, output;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "MCCIHandleDisplay(): parsing line: \"%s\"\n",
 			line);
 #endif
-	if (!(s = strchr(line, ' '))) { /* skip over DISPLAY */
+	if (!(s = strchr(line, ' '))) {  /* Skip over DISPLAY */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
 
-	GetWordFromString(s, &url, &end); /* Get <url> */
+	GetWordFromString(s, &url, &end);  /* Get <url> */
 	if ((!url) || (url == end)) {
 		strcpy(retText, "Hey bud, where's the URL for Display?");
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	url++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate url */
+	url++;        /* Skip over '<' */
+	end--;        /* Backup over '>' */
+	*end = '\0';  /* Terminate url */
 
 	url = strdup(url);
 
@@ -516,17 +502,17 @@ int MCCIHandleDisplay(MCCIPort client, char *line, char *retText)
 		fprintf(stderr, "MCCIHandleDisplay(): extracted url: \"%s\"\n",
 			url);
 #endif
-	GetWordFromString(s, &mimeType, &end); /* Get Content Type*/
-	if ((!mimeType) || (mimeType == end)) {
+	GetWordFromString(s, &mimeType, &end);  /* Get Content Type*/
+	if (!mimeType || (mimeType == end)) {
 		strcpy(retText, "No Content-Type?");
 		return(MCCIR_ERROR);
 	}
 	tmpend = end;
 
 	s = end;
-	GetWordFromString(s, &next, &end); /* move pointer to OUTPUT */
+	GetWordFromString(s, &next, &end);  /* Move pointer to OUTPUT */
 
-	*tmpend = '\0'; /* terminate the content-type */
+	*tmpend = '\0';  /* Terminate the content-type */
 	mimeType = strdup(mimeType);
 
 #ifndef DISABLE_TRACE
@@ -537,7 +523,7 @@ int MCCIHandleDisplay(MCCIPort client, char *line, char *retText)
 	output = MCCI_DEFAULT;
 	if (next && (next != end)) {
 	    if (!my_strncasecmp(next, MCCI_S_OUTPUT, strlen(MCCI_S_OUTPUT))) {
-		/* output tag */
+		/* Output tag */
 		s = end;
 		GetWordFromString(s, &next, &end);
 		if (next && (next != end)) {
@@ -587,40 +573,35 @@ int MCCIHandleDisplay(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Take care of the GET request parsing */
+/* Return value to send back to cci client */
 int MCCIHandleGet(MCCIPort client, char *line, char *retText)
-/* take care of the GET request parsing */
-/* return value to send back to cci client */
 {
-	char *s;
-	char *url, *end, *next;
-	int output;
-	char *headerExt;
-	int headerExtLength;
+	char *s, *url, *end, *next;
+	char *headerExt = NULL;
 	int retCode;
+	int headerExtLength = 0;
+	int output = MCCI_DEFAULT;
 
-	output = MCCI_DEFAULT;
-	headerExt = (char *) 0;
- 	headerExtLength = 0;
-	
-	if (!(s = strchr(line, ' '))) { /* skip over GET */
+	if (!(s = strchr(line, ' '))) {  /* Skip over GET */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
-	GetWordFromString(s, &url, &end); /* URL */
+	GetWordFromString(s, &url, &end);  /* URL */
 	if (my_strncasecmp(url, "URL", 3)) {
 		strcpy(retText, "No URL?");
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	GetWordFromString(s, &url, &end); /* actual <url> */
-	if ((!url) || (url == end)) {
+	GetWordFromString(s, &url, &end);  /* Actual <url> */
+	if (!url || (url == end)) {
 		strcpy(retText, "Hey bud, where's the URL?");
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	url++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate url */
+	url++;		/* Skip over '<' */
+	end--;		/* Backup over '>' */
+	*end = '\0';	/* Terminate url */
 
 	url = strdup(url);
 #ifndef DISABLE_TRACE
@@ -630,7 +611,7 @@ int MCCIHandleGet(MCCIPort client, char *line, char *retText)
 	GetWordFromString(s, &next, &end);
 	if (next && (next != end)) {
 	    if (!my_strncasecmp(next, MCCI_S_OUTPUT, strlen(MCCI_S_OUTPUT))) {
-		/* output tag */
+		/* Output tag */
 		s = end;
 		GetWordFromString(s, &next, &end);
 		if (next && (next != end)) {
@@ -657,17 +638,17 @@ int MCCIHandleGet(MCCIPort client, char *line, char *retText)
 #endif
 	if (next && (next != end)) {
 	    if (!my_strncasecmp(next, MCCI_S_HEADER, strlen(MCCI_S_HEADER)))
-		    /* get header extention */
+		    /* Get header extention */
 		    headerExtLength = MCCIReadContent(client, &headerExt);
 	}
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "pt #3 GetURL: URL=\"%s\"\n", url);
 #endif
-        /* set flag to be caught in MoCCISendAnchorToCCI */
+        /* Set flag to be caught in MoCCISendAnchorToCCI */
 	cciStatPreventSendAnchor(client, url); 
 	MCCIRequestGetURL(&retCode, retText, url, output, headerExt);
-	if ((headerExtLength > 0) && (headerExt))
+	if ((headerExtLength > 0) && headerExt)
 		free(headerExt);
 
 	free(url);
@@ -675,33 +656,30 @@ int MCCIHandleGet(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Take care of the GET request parsing */
+/* Return value to send back to cci client */
 int MCCIHandleDoCommand(MCCIPort client, char *line, char *retText)
-/* take care of the GET request parsing */
-/* return value to send back to cci client */
 {
-	char *s;
-	char *end, *tmpend;
-	char *command;
-	char *parameter;
+	char *s, *end, *tmpend;
+	char *command, *parameter;
 	int retCode;
 
-	/* expected line, DOCOMMAND command parameters... */
+	/* Expected line, DOCOMMAND command parameters... */
 #ifndef DISABLE_TRACE
 	if (cciTrace)
 		fprintf(stderr, "line is %s\n", line);
 #endif
-	if (!(s = strchr(line, ' '))) { /* skip over DOCOMMAND */
+	if (!(s = strchr(line, ' '))) {  /* Skip over DOCOMMAND */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
 
-	GetWordFromString(s, &command, &end); /* Get command */
-	if ((!command) || (command == end)) {
+	GetWordFromString(s, &command, &end);  /* Get command */
+	if (!command || (command == end)) {
 		strcpy(retText, "You need a command");
 		return(MCCIR_ERROR);
 	}
-	s = end;
-	tmpend = end;
+	s = tmpend = end;
 
 #ifndef DISABLE_TRACE
 	if (cciTrace)
@@ -726,21 +704,19 @@ int MCCIHandleDoCommand(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Take care of the Form request parsing */
+/* Return value to send back to cci client */
 int MCCIHandleForm(MCCIPort client, char *line, char *retText)
-/* take care of the Form request parsing */
-/* return value to send back to cci client */
 {
-	char *s;
-	char *actionID, *end, *next, *tmp;
-	int retCode;
-	int status;
+	char *s, *actionID, *end, *next, *tmp;
+	int retCode, status;
 
-	if (!(s = strchr(line, ' '))) { /* skip over FORM */
+	if (!(s = strchr(line, ' '))) {  /* Skip over FORM */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
 
-	GetWordFromString(s, &actionID, &end); /* actionID */
+	GetWordFromString(s, &actionID, &end);  /* actionID */
 	if ((!actionID) || (actionID == end)) {
 		strcpy(retText, "Hey bud, where's the actionID?");
 		return(MCCIR_ERROR);
@@ -759,7 +735,7 @@ int MCCIHandleForm(MCCIPort client, char *line, char *retText)
 		if (!my_strncasecmp(next,
 				    MCCI_S_STOP, strlen(MCCI_S_STOP))) {
 			status = 0;
-		} else if(!my_strncasecmp(next,
+		} else if (!my_strncasecmp(next,
 					  MCCI_S_START, strlen(MCCI_S_START))) {
 			status = 1;
 		} else {
@@ -790,14 +766,10 @@ static char *annoStrings[NUM_ANNO_CODES] =
 int MCCIHandleGetAnnotation(MCCIPort client, char *line. char *retText,
 			    char **retData, int *retDataLength)
 {
-	char *s;
-	char *end;
-	char *type;
-	char *url;
-	int annotationType;
-	int retCode;
+	char *s, *end, *type, *url;
+	int annotationType, retCode;
 
-	if (!(s = strchr(line, ' '))) { /* skip over GET */
+	if (!(s = strchr(line, ' '))) {  /* Skip over GET */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
@@ -823,15 +795,15 @@ int MCCIHandleGetAnnotation(MCCIPort client, char *line. char *retText,
 	}
 
 	s = end;
-	GetWordFromString(s, &url, &end); /* actual <url> */
-	if ((!url) || (url == end)) {
+	GetWordFromString(s, &url, &end);  /* Actual <url> */
+	if (!url || (url == end)) {
 		strcpy(retText, "Hey bud, where's the URL?");
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	url++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate url */
+	url++;        /* Skip over '<' */
+	end--;        /* Backup over '>' */
+	*end = '\0';  /* Terminate url */
 
 	url = strdup(url);
 #ifndef DISABLE_TRACE
@@ -863,21 +835,15 @@ int MCCIHandleGetAnnotation(MCCIPort client, char *line. char *retText,
 
 int MCCIHandlePutAnnotation(MCCIPort client, char *line, char *retText)
 {
-	char *s;
-	char *end;
-	char *type;
-	char *url;
-	char *annotation;
-	int annotationLength;
-	int retCode;
-	int annotationType;
+	char *s, *end, *type, *url, *annotation;
+	int annotationLength, retCode, annotationType;
 
 	if (!(s = strchr(line, ' '))) { /* skip over GET */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
 	annotationType = 0;
-	GetWordFromString(s, &type, &end); /* Get type (pub,priv,group) */
+	GetWordFromString(s, &type, &end);  /* Get type (pub,priv,group) */
 	if (!my_strncasecmp(type, MCCI_S_PUBLIC_ANN,
 			    strlen(MCCI_S_PUBLIC_ANN))) {
 		annotationType = MCCI_PUBLIC_ANNOTATION;
@@ -894,14 +860,14 @@ int MCCIHandlePutAnnotation(MCCIPort client, char *line, char *retText)
 
 	s = end;
 	GetWordFromString(s, &url, &end); /* actual <url> */
-	if ((!url) || (url == end)) {
+	if (!url || (url == end)) {
 		strcpy(retText, "Hey bud, where's the URL?");
 		return(MCCIR_ERROR);
 	}
 	s = end;
-	url++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate url */
+	url++;        /* Skip over '<' */
+	end--;        /* Backup over '>' */
+	*end = '\0';  /* Terminate url */
 
 	url = strdup(url);
 #ifndef DISABLE_TRACE
@@ -920,24 +886,22 @@ int MCCIHandlePutAnnotation(MCCIPort client, char *line, char *retText)
 
 int MCCIHandleFileToURL(MCCIPort client, char *line, char *retText)
 {
-	char *fileName;
-	char *s;
-	char *end;
+	char *fileName, *s, *end;
 	int retCode;
 
-	if (!(s = strchr(line, ' '))) { /* skip over FILETOURL*/
+	if (!(s = strchr(line, ' '))) {  /* Skip over FILETOURL */
 		strcpy(retText, "Error in protocol");
 		return(MCCIR_ERROR);
 	}
 
-	GetWordFromString(s, &fileName, &end); /* <fileName> */
-	if ((!fileName) || (fileName == end)) {
+	GetWordFromString(s, &fileName, &end);  /* <fileName> */
+	if (!fileName || (fileName == end)) {
 		strcpy(retText, "I need a filename to translate");
 		return(MCCIR_ERROR);
 	}
-	fileName++; /* skip over '<' */
-	end--; /* backup over '>' */
-	*end = '\0'; /* terminate fileName */
+	fileName++;   /* Skip over '<' */
+	end--;        /* Backup over '>' */
+	*end = '\0';  /* Terminate fileName */
 
 	fileName = strdup(fileName);
 
@@ -949,16 +913,15 @@ int MCCIHandleFileToURL(MCCIPort client, char *line, char *retText)
 }
 
 
+/* Read input from the client and do something with it */
+/* Return 1 on success, 0 on failure or disconnect */
 int MCCIHandleInput(MCCIPort client)
-/* read input from the client and do something with it */
-/* return 1 on success, 0 on failure or disconnect */
 {
 	int retCode;
 	char retText[MCCI_MAX_RETURN_TEXT];
-	char *blah;
+	char *line, *blah;
 	char **retData = &blah;
 	int  retDataLength = 0;
-	char *line;
 
 	line = NNTPGetLine(client);
 
@@ -977,8 +940,8 @@ int MCCIHandleInput(MCCIPort client)
 		return(0);
 	}
 
-	/* parse the request */
-	/* to save speed & memory this parse is destructive to text in 'line' */
+	/* Parse the request */
+	/* To save speed & memory this parse is destructive to text in 'line' */
 	if (!my_strncasecmp(line, MCCI_S_DISCONNECT,
 			    strlen(MCCI_S_DISCONNECT))) {
                 MCCISendResponseLine(client, MCCIR_DISCONNECT_OK,
@@ -990,25 +953,24 @@ int MCCIHandleInput(MCCIPort client)
 				 strlen(MCCI_S_GETANNOTATION))) {
 		retDataLength = 0;
 
-/*SWP -- 7/11/95
- * In the Original line, &retData is passed. retData is a char * to begin with
- * and it eventually gets assigned the value from mo_fetch_personal_annotations
- * which sends back all of the annotations for the specified url in one char
- * * string.  Not an array of strings.
- */
+ /*SWP -- 7/11/95
+  * In the Original line, &retData is passed.  retData is a char * to begin with
+  * and it eventually gets assigned the value from mo_fetch_personal_annotations
+  * which sends back all of the annotations for the specified url in one char
+  * * string.  Not an array of strings.
+  */
 		retCode = MCCIHandleGetAnnotation(client, line, retText,retData,
 						  &retDataLength);
-/* Original
+ /* Original
 		retCode = MCCIHandleGetAnnotation(client, line, retText,
 						  &retData, &retDataLength);
-*/
+ */
 		MCCISendResponseLine(client, retCode, retText);
 		if (retDataLength != 
-		    NetServerWrite(client, *retData, retDataLength)) {
+		    NetServerWrite(client, *retData, retDataLength))
 		  return(MCCI_FAIL);
-		}
 
-/* FINISHME */	/**** if retDataLength, send data */
+ /* FINISHME */	/**** if retDataLength, send data */
 		/*** if retDataLength, free retData?? */
 
 		if (retDataLength > 0)
@@ -1056,13 +1018,11 @@ int MCCIHandleInput(MCCIPort client)
 }
 
 
-MCCISendAnchorHistory(client, url)
-MCCIPort client;
-char *url;
+MCCISendAnchorHistory(MCCIPort client, char *url)
 {
 	char buff[1024];
 
-        if (MCCIanchorcached == 1) {      /* ugly ADC hack */
+        if (MCCIanchorcached == 1) {      /* Ugly ADC hack */
            sprintf(buff, "%s <%s> CACHED", MCCI_S_ANCHOR, url);
         } else {
 	   sprintf(buff, "%s <%s>", MCCI_S_ANCHOR, url);
@@ -1091,22 +1051,21 @@ int MCCIFormQueryToClient(MCCIPort client, char *actionID, char *query,
         if (length != NetServerWrite(client, buff, length))
                 return(MCCI_FAIL);
 
-        if (dataLength!= NetServerWrite(client, post_data, dataLength))
+        if (dataLength != NetServerWrite(client, post_data, dataLength))
                 return(MCCI_FAIL);
 	
 	return(MCCI_OK);
 }
 
+/* This routine used to send output back to the client */
 int MCCISendOutputFile(MCCIPort client, char *contentType, char *fileName)
-/* this routine used to send output back to the client */
 {
-	int length;
-	int countDown;
+	int length, countDown;
 	char buff[1030];
 	struct stat fileInfo;
 	FILE *fp;
 
-        if (stat(fileName, &fileInfo))  /* get the length of the file */
+        if (stat(fileName, &fileInfo))  /* Get the length of the file */
                 return(MCCI_FAIL);
 
         if (!(fp = fopen(fileName, "r")))
@@ -1135,8 +1094,8 @@ int MCCISendOutputFile(MCCIPort client, char *contentType, char *fileName)
 			countDown -= length;
 
 		} else {
-			/* error reading here...but we promised to send 
-			   countDown number of bytes, so send nulls */
+			/* Error reading here... but we promised to send 
+			 * countDown number of bytes, so send nulls */
 			while (countDown > 0) {
 				if (1 != NetServerWrite(client, "\0", 1))
 					return(MCCI_FAIL);
@@ -1149,9 +1108,9 @@ int MCCISendOutputFile(MCCIPort client, char *contentType, char *fileName)
 }
 
 
+/* Send BrowserView output response to client */
 int MCCISendBrowserViewOutput(MCCIPort client, char *url, char *contentType,
 			      char *data, int dataLength)
-/* Send BrowserView output response to client */
 {
 	char buff[1024];
 	int length;
@@ -1169,20 +1128,20 @@ int MCCISendBrowserViewOutput(MCCIPort client, char *url, char *contentType,
         if (length != NetServerWrite(client, buff, length))
                 return(MCCI_FAIL);
 
-        if (dataLength!= NetServerWrite(client, data, dataLength))
+        if (dataLength != NetServerWrite(client, data, dataLength))
                 return(MCCI_FAIL);
 	
 	return(MCCI_OK);
 }
 
 
-int MCCISendEventOutput(MCCIPort client, CCI_events event_type)
 /* Send Event output response to client */
+int MCCISendEventOutput(MCCIPort client, CCI_events event_type)
 {
 	char buff[1024];
 	int length;
 
-	sprintf(buff, "%d %d\r\n", MCCIR_SEND_EVENT, (int) event_type);
+	sprintf(buff, "%d %d\r\n", MCCIR_SEND_EVENT, (int)event_type);
 	length = strlen(buff);
         if (length != NetServerWrite(client, buff, length))
                 return(MCCI_FAIL);
@@ -1191,8 +1150,8 @@ int MCCISendEventOutput(MCCIPort client, CCI_events event_type)
 }
 
 
-int MCCISendMouseAnchorOutput(MCCIPort client, char *anchor)
 /* Send MouseAnchor output response to client */
+int MCCISendMouseAnchorOutput(MCCIPort client, char *anchor)
 {
 	if (MCCI_OK != MCCISendResponseLine(client, MCCIR_SEND_MOUSE_ANCHOR,
 					    anchor))
@@ -1201,5 +1160,5 @@ int MCCISendMouseAnchorOutput(MCCIPort client, char *anchor)
 	return(MCCI_OK);
 }
 #else
-int ccidummy3; /* Shut the freaking stupid compiler up */
+int ccidummy3;  /* Shut the freaking stupid compiler up */
 #endif /* CCI */

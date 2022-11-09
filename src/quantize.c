@@ -46,7 +46,7 @@
 %  the amount of memory necessary to match the spatial and color
 %  resolution of the human eye.  The QUANTIZE program takes a 24 bit
 %  image and reduces the number of colors so it can be displayed on
-%  raster device with less bits per pixel.  In most instances, the
+%  raster devices with less bits per pixel.  In most instances, the
 %  quantized image closely resembles the original reference image.
 %
 %  A reduction of colors in an image is also desirable for image
@@ -70,7 +70,7 @@
 %  The algorithm maps this domain onto a tree in which each node
 %  represents a cube within that domain.  In the following discussion
 %  these cubes are defined by the coordinate of two opposite vertices:
-%  The vertex nearest the origin in RGB space and the vertex farthest
+%  the vertex nearest the origin in RGB space and the vertex farthest
 %  from the origin.
 %
 %  The tree's root node represents the the entire domain, (0,0,0) through
@@ -82,15 +82,15 @@
 %  The basic algorithm operates in three phases: Classification,
 %  Reduction, and Assignment.  Classification builds a color
 %  description tree for the image.  Reduction collapses the tree until
-%  the number it represents, at most, the number of colors desired in the
-%  output image.  Assignment defines the output image's color map and
-%  sets each pixel's color by reclassification in the reduced tree.
+%  it represents, at most, the number of colors desired in the output
+%  image.  Assignment defines the output image's color map and sets
+%  each pixel's color by reclassification in the reduced tree.
 %
 %  Classification begins by initializing a color description tree of
 %  sufficient depth to represent each possible input color in a leaf.
 %  However, it is impractical to generate a fully-formed color
 %  description tree in the classification phase for realistic values of
-%  cmax.  If colors components in the input image are quantized to k-bit
+%  cmax.  If color components in the input image are quantized to k-bit
 %  precision, so that cmax = 2k-1, the tree would need k levels below the
 %  root node to allow representing each possible input color in a leaf.
 %  This becomes prohibitive because the tree's total number of nodes is
@@ -98,7 +98,7 @@
 %
 %  A complete tree would require 19,173,961 nodes for k = 8, cmax = 255.
 %  Therefore, to avoid building a fully populated tree, QUANTIZE: (1)
-%  Initializes data structures for nodes only as they are needed;  (2)
+%  Initializes data structures for nodes only as they are needed; (2)
 %  Chooses a maximum depth for the tree as a function of the desired
 %  number of colors in the output image (currently log2(colormap size)).
 %
@@ -112,7 +112,7 @@
 %    which this node represents;
 %
 %    n2 : Number of pixels whose color is not represented in a node at
-%    lower depth in the tree;  initially,  n2 = 0 for all nodes except
+%    lower depth in the tree;  initially, n2 = 0 for all nodes except
 %    leaves of the tree.
 %
 %    Sr, Sg, Sb : Sums of the red, green, and blue component values for
@@ -134,7 +134,7 @@
 %
 %  When a node to be pruned has offspring, the pruning procedure invokes
 %  itself recursively in order to prune the tree from the leaves upward.
-%  n2,  Sr, Sg,  and  Sb in a node being pruned are always added to the
+%  n2, Sr, Sg, and Sb in a node being pruned are always added to the
 %  corresponding data in that node's parent.  This retains the pruned
 %  node's color characteristics for later averaging.
 %
@@ -146,13 +146,13 @@
 %
 %  The other pixel count, n1, indicates the total number of colors
 %  within the cubic volume which the node represents.  This includes n1 -
-%  n2  pixels whose colors should be defined by nodes at a lower level in
+%  n2 pixels whose colors should be defined by nodes at a lower level in
 %  the tree.
 %
 %  Assignment generates the output image from the pruned tree.  The
 %  output image consists of two parts: (1)  A color map, which is an
 %  array of color descriptions (RGB triples) for each color present in
-%  the output image;  (2)  A pixel array, which represents each pixel as
+%  the output image; (2)  A pixel array, which represents each pixel as
 %  an index into the color map array.
 %
 %  First, the assignment phase makes one pass over the pruned color
@@ -161,7 +161,7 @@
 %  mean color of all pixels that classify no lower than this node.  Each
 %  of these colors becomes an entry in the color map.
 %
-%  Finally,  the assignment phase reclassifies each pixel in the pruned
+%  Finally, the assignment phase reclassifies each pixel in the pruned
 %  tree to identify the deepest node containing the pixel's color.  The
 %  pixel's value in the pixel array becomes the index of this node's mean
 %  color in the color map.
@@ -178,7 +178,7 @@
 */
 /* Modified for use with VMS Mosaic by GEC */
 
-/* This file is Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* This file is Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -196,7 +196,7 @@ extern int srcTrace;
   Define declarations.
 */
 #define MaxNodes	266817
-#define MaxTreeDepth	8  /* Log2(MaxRGB) */
+#define MaxTreeDepth	8	/* Log2(MaxRGB) */
 #define NodesInAList	2048
 #define MaxRGB		255
 
@@ -207,12 +207,10 @@ extern int srcTrace;
 /*
   Structures.
 */
-typedef struct _Node
-{
+typedef struct _Node {
   struct _Node
     *parent,
     *child[8];
-
   unsigned char
     id,
     level,
@@ -220,7 +218,6 @@ typedef struct _Node
     mid_red,
     mid_green,
     mid_blue;
-
   unsigned long
     number_colors,
     number_unique,
@@ -229,29 +226,25 @@ typedef struct _Node
     total_blue;
 } Node;
 
-typedef struct _Nodes
-{
+typedef struct _Nodes {
   Node nodes[NodesInAList];
   struct _Nodes *next;
 } Nodes;
 
-typedef struct _Cube
-{
+typedef struct _Cube {
   Node *root;
   XColor color, *colormap;
   unsigned int depth;
-
   unsigned long colors,
     pruning_threshold,
     next_pruning_threshold,
     distance,
     squares[MaxRGB + MaxRGB + 1];
-
   unsigned int shift[MaxTreeDepth + 1],
     nodes,
     free_nodes,
-    color_number;
-
+    color_number,
+    num_to_reduce;
   Node *next_node;
   Nodes *node_queue;
 } Cube;
@@ -261,6 +254,8 @@ typedef struct _Cube
 */
 static Cube cube;
 
+int Quantize_Found_Alpha;
+int Quantize_Found_NZero_Alpha;
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -300,17 +295,16 @@ static Node *InitializeNode(unsigned int id, unsigned int level, Node *parent,
 			    unsigned int mid_red, unsigned int mid_green,
 			    unsigned int mid_blue)
 {
-  register int i;
   register Node *node;
 
-  if (cube.free_nodes == 0) {
+  if (!cube.free_nodes) {
     register Nodes *nodes;
 
     /*
       Allocate a new nodes of nodes.
     */
     nodes = (Nodes *) malloc(sizeof(Nodes));
-    if (nodes == (Nodes *) NULL)
+    if (!nodes)
       return((Node *) NULL);
     nodes->next = cube.node_queue;
     cube.node_queue = nodes;
@@ -320,20 +314,23 @@ static Node *InitializeNode(unsigned int id, unsigned int level, Node *parent,
   cube.nodes++;
   cube.free_nodes--;
   node = cube.next_node++;
-  node->parent = parent;
+  memset(node, 0, sizeof(Node));
+  /** memset does them
   for (i = 0; i < 8; i++)
     node->child[i] = (Node *) NULL;
-  node->id = id;
-  node->level = level;
-  node->census = 0;
-  node->mid_red = mid_red;
-  node->mid_green = mid_green;
-  node->mid_blue = mid_blue;
   node->number_colors = 0;
   node->number_unique = 0;
   node->total_red = 0;
   node->total_green = 0;
   node->total_blue = 0;
+  node->census = 0;
+  **/
+  node->parent = parent;
+  node->id = id;
+  node->level = level;
+  node->mid_red = mid_red;
+  node->mid_green = mid_green;
+  node->mid_blue = mid_blue;
   return(node);
 }
 
@@ -363,12 +360,11 @@ static Node *InitializeNode(unsigned int id, unsigned int level, Node *parent,
 */
 static void PruneChild(register Node *node)
 {
-  register Node *parent;
+  register Node *parent = node->parent;
 
   /*
     Merge color statistics into parent.
   */
-  parent = node->parent;
   parent->census &= ~(1 << node->id);
   parent->number_unique += node->number_unique;
   parent->total_red += node->total_red;
@@ -403,12 +399,12 @@ static void PruneChild(register Node *node)
 */
 static void PruneLevel(register Node *node)
 {
-  register int id;
-
   /*
     Traverse any children.
   */
-  if (node->census != 0) {
+  if (node->census) {
+    register int id;
+
     for (id = 0; id < 8; id++) {
       if (node->census & (1 << id))
         PruneLevel(node->child[id]);
@@ -445,18 +441,18 @@ static void PruneLevel(register Node *node)
 */
 static void ClosestColor(register Node *node)
 {
-  register unsigned int id;
-
   /*
     Traverse any children.
   */
-  if (node->census != 0) {
+  if (node->census) {
+    register unsigned int id;
+
     for (id = 0; id < 8; id++) {
       if (node->census & (1 << id))
         ClosestColor(node->child[id]);
     }
   }
-  if (node->number_unique != 0) {
+  if (node->number_unique) {
     register XColor *color;
     register unsigned int blue_distance, green_distance, red_distance;
     register unsigned long distance;
@@ -505,29 +501,31 @@ static void ClosestColor(register Node *node)
 */
 static void ColorMap(register Node *node)
 {
-  register unsigned int id;
-
   /*
     Traverse any children.
   */
-  if (node->census != 0) {
+  if (node->census) {
+    register unsigned int id;
+
     for (id = 0; id < 8; id++) {
       if (node->census & (1 << id))
         ColorMap(node->child[id]);
     }
   }
-  if (node->number_unique != 0) {
+  if (node->number_unique) {
+    unsigned long num = node->number_unique >> 1;
+
     /*
       Colormap entry is defined by the mean color in this cube.
     */
     cube.colormap[cube.colors].red =
-        ((node->total_red + (node->number_unique >> 1)) / node->number_unique);
+				(node->total_red + num) / node->number_unique;
     cube.colormap[cube.colors].green =
-        ((node->total_green + (node->number_unique >> 1)) /node->number_unique);
+				(node->total_green + num) / node->number_unique;
     cube.colormap[cube.colors].blue =
-        ((node->total_blue + (node->number_unique >> 1)) / node->number_unique);
+				(node->total_blue + num) / node->number_unique;
     cube.colormap[cube.colors].pixel = cube.colors;
-    cube.colormap[cube.colors].flags = DoRed|DoGreen|DoBlue;
+    cube.colormap[cube.colors].flags = DoRed | DoGreen | DoBlue;
     node->number_colors = cube.colors++;
   }
 }
@@ -583,14 +581,17 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
   } ErrorPacket;
 
   ErrorPacket *error;
-  int *cache, step, qstep;
+  int cache[1 << 18];
+  int step, qstep;
   int pixel = 3 + (alpha ? 1 : 0);
   Node *node;
-  register int i, blue_error, *error_limit, green_error, red_error;
-  register unsigned char *q, *p;
+  int elimit[MaxRGB * 2 + 1];
+  unsigned char rlimit[3 * (MaxRGB + 1)];
+  register int i, blue_error, green_error, red_error;
+  register int *error_limit = elimit;
   register ErrorPacket *cs, *ns;
-  register unsigned char *range_limit;
-
+  register unsigned char *q, *p;
+  register unsigned char *range_limit = rlimit;
   unsigned char *newimage;
   unsigned char blue, green, red;
   unsigned int id, quantum, x, y;
@@ -599,25 +600,13 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
   /*
     Allocate memory.
   */
-  cache = (int *)malloc((1 << 18) * sizeof(int));
-  error = (ErrorPacket *)malloc(((width + 2) << 1) * sizeof(ErrorPacket));
-  error_limit = (int *)malloc((MaxRGB * 2 + 1) * sizeof(int));
-  range_limit = (unsigned char *)malloc(3 * (MaxRGB + 1) *
-					sizeof(unsigned char));
+  error = (ErrorPacket *)calloc((width + 2) << 1, sizeof(ErrorPacket));
   newimage = (unsigned char *)malloc(width * height);
-  if ((cache == (int *) NULL) || (error == (ErrorPacket *) NULL) ||
-      (error_limit == (int *) NULL) ||
-      (range_limit == (unsigned char *) NULL) ||
-      (newimage == (unsigned char *) NULL)) {
+
+  if (!error || !newimage) {
     fprintf(stderr, "Unable to dither image: Memory allocation failed\n");
-    if (cache)
-	free(cache);
     if (error)
 	free(error);
-    if (error_limit)
-	free(error_limit);
-    if (range_limit)
-	free(range_limit);
     if (newimage)
 	free(newimage);
     return(NULL);
@@ -625,16 +614,14 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
   /*
     Initialize color cache.
   */
-  for (i = 0; i < (1 << 18); i++)
-    cache[i] = (-1);
+  memset(cache, 255, (1 << 18) * sizeof(int));
   /*
     Initialize error tables.
   */
-  for (i = 0; i < ((width + 2) << 1); i++) {
-    error[i].red = 0;
-    error[i].green = 0;
-    error[i].blue = 0;
-  }
+  /** calloc does it
+  for (i = 0; i < ((width + 2) << 1); i++)
+    error[i].red = error[i].green =  error[i].blue = 0;
+  **/
   /*
     Initialize error limit (constrain error).
   */
@@ -662,10 +649,10 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
   */
   for (i = 0; i <= MaxRGB; i++) {
     range_limit[i] = 0;
-    range_limit[i + (MaxRGB + 1)] = (unsigned char) i;
+    range_limit[i + MaxRGB + 1] = (unsigned char) i;
     range_limit[i + (MaxRGB + 1) * 2] = MaxRGB;
   }
-  range_limit += (MaxRGB + 1);
+  range_limit += MaxRGB + 1;
   /*
     Dither image.
   */
@@ -729,9 +716,7 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
                 Q     7/16
           3/16  5/16  1/16
       */
-      cs->red = 0;
-      cs->green = 0;
-      cs->blue = 0;
+      cs->red = cs->green = cs->blue = 0;
       cs += step;
       cs->red += 7 * red_error;
       cs->green += 7 * green_error;
@@ -753,12 +738,7 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
   /*
     Free up memory.
   */
-  range_limit -= (MaxRGB + 1);
-  free((char *)range_limit);
-  error_limit -= MaxRGB;
-  free((char *)error_limit);
   free((char *)error);
-  free((char *)cache);
 
   return(newimage);
 }
@@ -775,19 +755,19 @@ static unsigned char *DitherImage(unsigned char *image, unsigned int width,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Procedure Assignment generates the output image from the pruned tree.  The
-%  output image consists of two parts: (1)  A color map, which is an
+%  Procedure Assignment generates the output image from the pruned tree.
+%  The output image consists of two parts: (1)  A color map, which is an
 %  array of color descriptions (RGB triples) for each color present in
-%  the output image;  (2)  A pixel array, which represents each pixel as
+%  the output image; (2)  A pixel array, which represents each pixel as
 %  an index into the color map array.
 %
 %  First, the assignment phase makes one pass over the pruned color
 %  description tree to establish the image's color map.  For each node
-%  with n2  > 0, it divides Sr, Sg, and Sb by n2 .  This produces the
+%  with n2  > 0, it divides Sr, Sg, and Sb by n2.  This produces the
 %  mean color of all pixels that classify no lower than this node.  Each
 %  of these colors becomes an entry in the color map.
 %
-%  Finally,  the assignment phase reclassifies each pixel in the pruned
+%  Finally, the assignment phase reclassifies each pixel in the pruned
 %  tree to identify the deepest node containing the pixel's color.  The
 %  pixel's value in the pixel array becomes the index of this node's mean
 %  color in the color map.
@@ -823,10 +803,6 @@ static unsigned char *Assignment(unsigned char *image, unsigned int dither,
 			         unsigned int width, unsigned int height,
 				 XColor *colrs, int alpha)
 {
-  register int i;
-  register Node *node;
-  register unsigned char *p;
-  register unsigned int id;
   unsigned char *newimage;
 
   /*
@@ -840,11 +816,15 @@ static unsigned char *Assignment(unsigned char *image, unsigned int dither,
   */
   if (dither)
     newimage = DitherImage(image, width, height, alpha);
+
   if (!dither || !newimage) {
+    register int i;
+    register Node *node;
+    register unsigned char *p = image;
     register unsigned char *q;
+    register unsigned int id;
     unsigned int size = width * height;
 
-    p = image;
     newimage = q = malloc(size);
     if (!newimage)
       return(NULL);
@@ -892,7 +872,7 @@ static unsigned char *Assignment(unsigned char *image, unsigned int dither,
 %  of sufficient depth to represent each possible input color in a leaf.
 %  However, it is impractical to generate a fully-formed color
 %  description tree in the classification phase for realistic values of
-%  cmax.  If colors components in the input image are quantized to k-bit
+%  cmax.  If color components in the input image are quantized to k-bit
 %  precision, so that cmax = 2k-1, the tree would need k levels below the
 %  root node to allow representing each possible input color in a leaf.
 %  This becomes prohibitive because the tree's total number of nodes is
@@ -900,7 +880,7 @@ static unsigned char *Assignment(unsigned char *image, unsigned int dither,
 %
 %  A complete tree would require 19,173,961 nodes for k = 8, cmax = 255.
 %  Therefore, to avoid building a fully populated tree, QUANTIZE: (1)
-%  Initializes data structures for nodes only as they are needed;  (2)
+%  Initializes data structures for nodes only as they are needed; (2)
 %  Chooses a maximum depth for the tree as a function of the desired
 %  number of colors in the output image (currently log2(colormap size)).
 %
@@ -914,7 +894,7 @@ static unsigned char *Assignment(unsigned char *image, unsigned int dither,
 %    which this node represents;
 %
 %    n2 : Number of pixels whose color is not represented in a node at
-%    lower depth in the tree;  initially,  n2 = 0 for all nodes except
+%    lower depth in the tree; initially, n2 = 0 for all nodes except
 %    leaves of the tree.
 %
 %    Sr, Sg, Sb : Sums of the red, green, and blue component values for
@@ -939,10 +919,11 @@ static void Classification(unsigned char *image, unsigned int size, int alpha)
 {
   register int i;
   register Node *node;
-  register unsigned char *p;
+  register unsigned char *p = image;
   register unsigned int bisect, id, level;
 
-  p = image;
+  Quantize_Found_Alpha = Quantize_Found_NZero_Alpha = 0;
+
   for (i = 0; i < size; i++) {
     if (cube.nodes > MaxNodes) {
       /*
@@ -969,7 +950,7 @@ static void Classification(unsigned char *image, unsigned int size, int alpha)
             			  node->mid_red + (id & 1 ? bisect : -bisect),
             			  node->mid_green + (id & 2 ? bisect : -bisect),
             			  node->mid_blue + (id & 4 ? bisect : -bisect));
-        if (node->child[id] == (Node *) NULL) {
+        if (!node->child[id]) {
           fprintf(stderr, MEMORY_FAILURE);
           mo_exit();
         }
@@ -977,23 +958,36 @@ static void Classification(unsigned char *image, unsigned int size, int alpha)
           cube.colors++;
       }
       /*
-        Record the number of colors represented by this node.  Shift by level
-        in the color description tree.
+        Record the number of colors represented by this node.  Shift by
+        level in the color description tree.
       */
       node = node->child[id];
       node->number_colors += 1 << cube.shift[level];
     }
     /*
-      Increment unique color count and sum RGB values for this leaf for later
-      derivation of the mean cube color.
+      Increment unique color count and sum RGB values for this leaf for
+      later derivation of the mean cube color.
     */
     node->number_unique++;
     node->total_red += *p++;
     node->total_green += *p++;
     node->total_blue += *p++;
-    if (alpha)
-	p++;
+    if (alpha) {
+      if (!Quantize_Found_NZero_Alpha && (*p != 255)) {
+	Quantize_Found_Alpha = 1;
+	if (*p)
+	  Quantize_Found_NZero_Alpha = 1;
+      }
+      p++;
+    }
   }
+#ifndef DISABLE_TRACE
+  if (srcTrace && Quantize_Found_Alpha) {
+    fprintf(stderr, "[QUANTIZE] Found Alpha Channel\n");
+    if (!Quantize_Found_NZero_Alpha)
+      fprintf(stderr, "[QUANTIZE] Alpha Channel is all zero\n");
+  }
+#endif
 }
 
 /*
@@ -1025,13 +1019,13 @@ static void Classification(unsigned char *image, unsigned int size, int alpha)
 static void InitializeCube(unsigned int number_pixels,
 			   unsigned int number_colors)
 {
-  char c;
+  char c = 1;
   register int i;
   unsigned int bits, level, max_shift;
   static int log4[6] = {4, 16, 64, 256, 1024, ~0};
 
   /*
-    Initialize tree to describe color cube.  Depth is: Log4(colormap size)+2;
+    Initialize tree to describe color cube.  Depth is: Log4(colormap size) + 2;
   */
   cube.node_queue = (Nodes *) NULL;
   cube.nodes = 0;
@@ -1045,14 +1039,13 @@ static void InitializeCube(unsigned int number_pixels,
   /*
     Initialize the shift values.
   */
-  c = 1;
-  for (bits = 0; c != (char) 0; bits++)
+  for (bits = 0; c; bits++)
     c <<= 1;
-  for (max_shift = sizeof(unsigned int)*bits; number_pixels != 0; max_shift--)
+  for (max_shift = sizeof(unsigned int) * bits; number_pixels; max_shift--)
     number_pixels >>= 1;
   for (level = 0; level <= cube.depth; level++) {
     cube.shift[level] = max_shift;
-    if (max_shift != 0)
+    if (max_shift)
       max_shift--;
   }
   /*
@@ -1060,7 +1053,7 @@ static void InitializeCube(unsigned int number_pixels,
   */
   cube.root = InitializeNode(0, 0, (Node *) NULL, (MaxRGB + 1) >> 1,
 			     (MaxRGB + 1) >> 1, (MaxRGB + 1) >> 1);
-  if (cube.root == (Node *) NULL) {
+  if (!cube.root) {
     fprintf(stderr, MEMORY_FAILURE);
     mo_exit();
   }
@@ -1100,19 +1093,24 @@ static void InitializeCube(unsigned int number_pixels,
 */
 static void Reduce(register Node *node)
 {
-  register unsigned int id;
-
   /*
     Traverse any children.
   */
-  if (node->census != 0) {
+  if (node->census) {
+    register unsigned int id;
+
     for (id = 0; id < 8; id++) {
       if (node->census & (1 << id))
         Reduce(node->child[id]);
     }
   }
-  if (node->number_colors <= cube.pruning_threshold) {
+
+  if (cube.num_to_reduce && (node->number_colors <= cube.pruning_threshold)) {
     PruneChild(node);
+    /*
+      Stop reduction when pruned enough.
+    */
+    cube.num_to_reduce--;
   } else {
     /*
       Find minimum pruning threshold.
@@ -1155,8 +1153,8 @@ static void Reduce(register Node *node)
 %
 %  For each node, n2 pixels exist for which that node represents the
 %  smallest volume in RGB space containing those pixel's colors.  When n2
-%  > 0 the node will uniquely define a color in the output image. At the
-%  beginning of reduction,  n2 = 0  for all nodes except a the leaves of
+%  > 0 the node will uniquely define a color in the output image.  At the
+%  beginning of reduction,  n2 = 0  for all nodes except the leaves of
 %  the tree which represent colors present in the input image.
 %
 %  The other pixel count, n1, indicates the total number of colors
@@ -1185,6 +1183,7 @@ static void Reduction(unsigned int number_colors)
   while (cube.colors > number_colors) {
     cube.pruning_threshold = cube.next_pruning_threshold;
     cube.next_pruning_threshold = cube.root->number_colors - 1;
+    cube.num_to_reduce = cube.colors - number_colors;
     cube.colors = 0;
     Reduce(cube.root);
   }
@@ -1245,23 +1244,37 @@ unsigned char *QuantizeImage(unsigned char *image, unsigned int w,
 			     unsigned int dither, XColor *colrs, int alpha) 
 {
   Nodes *nodes;
-  unsigned int size;
+  unsigned int size = w * h;
   unsigned char *newimage;
   int i;
 
-  size = w * h;
   InitializeCube(size, number_colors);
   Classification(image, size, alpha);
-  Reduction(number_colors);
 
+  if (cube.colors > number_colors) {
+      int ori_colrs = cube.colors;
+
+      /* Too many colors, so reduce them */
+      Reduction(number_colors);
+#ifndef DISABLE_TRACE
+      if (srcTrace)
+          fprintf(stderr, "[QUANTIZE] Reduced from %d to %d colors\n",
+		  ori_colrs, cube.colors);
+#endif
+      /* Dither below if requested */
+  } else {
+      /* Not reduced, so nothing to dither */
+      dither = 0;
+  }
   newimage = Assignment(image, dither, w, h, colrs, alpha);
+
   if (!newimage) {
      application_user_feedback("Image too large:  Quantization failure");
      return NULL;
   }
 #ifndef DISABLE_TRACE
   if (srcTrace)
-     fprintf(stderr, "[QUANTIZE] Quantized to %d colors\n", cube.colors);
+     fprintf(stderr, "[QUANTIZE] Quantized %d colors\n", cube.colors);
 #endif
   /*
     Fix up the X color map
@@ -1278,7 +1291,7 @@ unsigned char *QuantizeImage(unsigned char *image, unsigned int w,
     nodes = cube.node_queue->next;
     free((char *) cube.node_queue);
     cube.node_queue = nodes;
-  } while (cube.node_queue != (Nodes *) NULL);
+  } while (cube.node_queue);
 
   return newimage;
 }

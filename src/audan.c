@@ -78,7 +78,7 @@
 #ifdef HAVE_AUDIO_ANNOTATIONS
 
 /* Check and make sure that the recording command we named
-   in the resource is actually there and executable. */
+ * in the resource is actually there and executable. */
 mo_status mo_audio_capable (void)
 {
   char *filename = get_pref_string(eRECORD_COMMAND_LOCATION);
@@ -132,7 +132,7 @@ static XmxCallback (stop_cb)
   XmxSetSensitive(win->audio_stop_button, XmxNotSensitive);
 
   /* Stop the record process.  This works for both SGI recordaiff
-     and Sun record, apparently. */
+   * and Sun record, apparently. */
   kill(win->record_pid, SIGINT);
   
   /* Wait until the process is dead. */
@@ -179,7 +179,7 @@ static XmxCallback (buttons_cb)
                       get_pref_string(eDEFAULT_AUTHOR_NAME));
               len = 0;
               fp = fopen(win->record_fnam, "r");
-              if (fp != NULL) {
+              if (fp) {
                   /*
                    * Fine the length of the file the really cheesy way!
                    */
@@ -188,7 +188,7 @@ static XmxCallback (buttons_cb)
                   len = ftell(fp);
                   fseek(fp, 0L, 0);
                   data = (unsigned char *)malloc(len * sizeof(unsigned char));
-                  if (data != NULL) {
+                  if (data) {
                       len = fread(data, sizeof(char), len, fp);
                   } else {
                       len = 0;
@@ -212,9 +212,10 @@ static XmxCallback (buttons_cb)
               /* Do the right thing. */
               int pan_id = mo_next_pan_id();
               char *default_directory = 
-		get_pref_string(ePRIVATE_ANNOTATION_DIRECTORY);
-              char filename[500], *cmd;
+				 get_pref_string(ePRIVATE_ANNOTATION_DIRECTORY);
+              char filename[500];
 	      char namestr[200], textstr[500], titlestr[200];
+	      char *cmd;
               extern char *machine;
               
 #ifdef __sgi
@@ -227,7 +228,7 @@ static XmxCallback (buttons_cb)
                       "PAN-", pan_id);
 #endif
               
-/*SWP -- New "mv" fucntion to take care of these /bin/mv things*/
+ /*SWP -- New "mv" fucntion to take care of these /bin/mv things */
 	      {
 	          char retBuf[BUFSIZ];
 		  int status;
@@ -329,13 +330,9 @@ mo_status mo_post_audio_annotate_win (mo_window *win)
 	 "Press Start to start recording; Stop to stop recording.\nRepeat until you're satisfied with the annotation.\nThen either Save or Dismiss the annotation." );
       
       win->audio_start_button = XmxMakePushButton(audio_annotate_form,
-                                                  "Start",
-                                                  start_cb,
-                                                  0);
+                                                  "Start", start_cb, 0);
       win->audio_stop_button = XmxMakePushButton(audio_annotate_form,
-                                                 "Stop",
-                                                 stop_cb,
-                                                 0);
+                                                 "Stop", stop_cb, 0);
       win->audio_pubpri_menu = XmxRMakeOptionMenu
         (audio_annotate_form, "", pubpri_opts_cb, pubpri_opts);
       XmxRSetSensitive(win->audio_pubpri_menu, mo_annotation_public, 
@@ -351,8 +348,7 @@ mo_status mo_post_audio_annotate_win (mo_window *win)
       
       buttons_form = XmxMakeFormAndThreeButtons
         (audio_annotate_form, buttons_cb, "Save",
-	 "Dismiss", "Help...",
-         0, 1, 2);
+	 "Dismiss", "Help...", 0, 1, 2);
       
       /* Constraints for audio_annotate_form. */
       XmxSetOffsets(yap_label, 10, 10, 10, 10);

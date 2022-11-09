@@ -52,12 +52,13 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
 #include "gui.h"
 #include "gui-dialogs.h"
+#include "gui-extras.h"
 #include "mailto.h"
 #include "mo-www.h"
 
@@ -89,56 +90,51 @@ static void do_mailto_post(mo_window *win, char *to, char *from, char *subject,
 		           char *body);
 
 /* ----------------------- mo_post_mailto_window ------------------------ */
-static XmxCallback (include_fsb_cb)
+static XmxCallback(include_fsb_cb)
 {
-  char *fname, efname[MO_LINE_LENGTH];
+  char *fname, *status;
+  char efname[MO_LINE_LENGTH];
+  char line[MO_LINE_LENGTH];
   FILE *fp;
-  char line[MO_LINE_LENGTH], *status;
   long pos;
-
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
   if (!win)
       return;
 
   XtUnmanageChild(win->mail_fsb_win);
-  fname = (char *)malloc(128 * sizeof(char));
   
   XmStringGetLtoR(((XmFileSelectionBoxCallbackStruct *)call_data)->value,
-                   XmSTRING_DEFAULT_CHARSET,
-                   &fname);
+                  XmSTRING_DEFAULT_CHARSET, &fname);
 
   pathEval(efname, fname);
+  XtFree(fname);
 
-  fp = fopen(efname, "r");
-  if (!fp) {
-      char *buf, *final, tmpbuf[80];
+  if (!(fp = fopen(efname, "r"))) {
+      char *buf = my_strerror(errno);
+      char *final;
+      char tmpbuf[80];
       int final_len;
 
-      buf = my_strerror(errno);
       if (!buf || !*buf || !strcmp(buf, "Error 0")) {
           sprintf(tmpbuf, "Unknown Error");
           buf = tmpbuf;
       }
 
-      final_len = 30 +
-	  ((!efname || !*efname ? 3 : strlen(efname)) + 13) +
-	  15 + (strlen(buf) + 13);
-      final = (char *)calloc(final_len, sizeof(char));
+      final_len = 30 + ((!efname || !*efname ? 3 : strlen(efname)) + 13) +
+	          15 + (strlen(buf) + 13);
+      final = (char *)malloc(final_len);
 
       strcpy(final,"\nUnable to Open File:\n");
       sprintf(final + strlen(final), "   %s\n",
-	      (!efname || !*efname ? " " : efname));
+	      !efname || !*efname ? " " : efname);
       sprintf(final + strlen(final), "\nOpen Error:\n");
       sprintf(final + strlen(final), "   %s\n", buf);
 
       XmxMakeErrorDialog(win->mailto_win, final, "Open Error");
-      XtManageChild(Xmx_w);
 
-      if (final) {
+      if (final)
 	  free(final);
-	  final = NULL;
-      }
       return;
   }
   
@@ -146,26 +142,23 @@ static XmxCallback (include_fsb_cb)
       status = fgets(line, MO_LINE_LENGTH, fp);
       if (!status || !*line)
 	  break;
-      
       XmTextInsert(win->mailto_text,
                    pos = XmTextGetInsertionPosition(win->mailto_text), line);
       /* Move insertion position to past this line to avoid inserting the
        * lines in reverse order */
       XmTextSetInsertionPosition(win->mailto_text, pos + strlen(line));
   }
-
   return;
 }
 
-static XmxCallback (mailto_win_cb)
+static XmxCallback(mailto_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   char *msg, *subj, *to;
   long pos;
 
-  switch (XmxExtractToken((int)client_data))
-    {
-    case 0:  /* send */
+  switch (XmxExtractToken((int)client_data)) {
+    case 0:  /* Send */
       XtUnmanageChild(win->mailto_win);
       
       msg = XmxTextGetString(win->mailto_text);
@@ -174,38 +167,37 @@ static XmxCallback (mailto_win_cb)
 
       mo_send_mailto_message(msg, to, subj, "text/plain", 
 			     win->current_node->url);
-      free(msg);
-      free(to);
-      free(subj);
-
+      XtFree(msg);
+      XtFree(to);
+      XtFree(subj);
       break;
-    case 1:   /* dismiss */
+
+    case 1:   /* Dismiss */
       XtUnmanageChild(win->mailto_win); 
       /* Do nothing. */
       break;
-    case 2:   /* help */
+
+    case 2:   /* Help */
       mo_open_another_window(win, mo_assemble_help_url("help-on-mailto.html"),
 			     NULL, NULL);
       break;
       
-    case 3:    /* insert file */
+    case 3:    /* Insert file */
 	if (!win->mail_fsb_win) {
-	    win->mail_fsb_win = XmxMakeFileSBDialog
-				(win->mailto_win,
-		 		"VMS Mosaic: Include File In Mail Message",
-		 		"Name of file to include:",
-		 		include_fsb_cb, 0);
+	    win->mail_fsb_win = XmxMakeFileSBDialog(win->mailto_win,
+		 		     "VMS Mosaic: Include File In Mail Message",
+		 		     "Name of file to include:",
+		 		     include_fsb_cb, 0);
 	} else {
 	    XmFileSelectionDoSearch(win->mail_fsb_win, NULL);
 	}
-	
 	XmxManageRemanage(win->mail_fsb_win);
 	break;
         
     case 4:
         if (win->current_node->url) {
             XmTextInsert(win->mailto_text,
-                         pos = XmTextGetInsertionPosition (win->mailto_text),
+                         pos = XmTextGetInsertionPosition(win->mailto_text),
                          win->current_node->url);
             /* Move insertion position to past this line
              * to avoid inserting the lines in reverse order */
@@ -213,19 +205,17 @@ static XmxCallback (mailto_win_cb)
                                        pos + strlen(win->current_node->url));
         }
         break;
-    }
-
+  }
   return;
 }
 
-static XmxCallback (mailto_form_win_cb)
+static XmxCallback(mailto_form_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   char *subj, *to, *namestr;
   
-  switch (XmxExtractToken((int)client_data))
-    {
-    case 0:  /* send */
+  switch (XmxExtractToken((int)client_data)) {
+    case 0:   /* Send */
       XtUnmanageChild(win->mailto_form_win);
       
       to = XmxTextGetString(win->mailto_form_tofield);
@@ -234,63 +224,58 @@ static XmxCallback (mailto_form_win_cb)
 
       do_mailto_post(win, to, namestr, subj, win->post_data);
 
-      free(namestr);
-      free(to);
-      free(subj);
+      XtFree(namestr);
+      XtFree(to);
+      XtFree(subj);
       if (win->post_data) {
 	  free(win->post_data);
 	  win->post_data = NULL;
       }
-
       break;
-    case 1:   /* dismiss */
+
+    case 1:   /* Dismiss */
       XtUnmanageChild(win->mailto_form_win); 
       /* Do nothing. */
       if (win->post_data) {
 	  free(win->post_data);
 	  win->post_data = NULL;
       }
-
       break;
-    case 2:   /* help */
+
+    case 2:   /* Help */
       mo_open_another_window(win, 
          		     mo_assemble_help_url("help-on-mailto-form.html"),
          		     NULL, NULL);
       break;
-    }
-
+  }
   return;
 }
 
-mo_status mo_post_mailto_win (char *to_address, char *subject)
+mo_status mo_post_mailto_win(char *to_address, char *subject)
 {
   mo_window *win = current_win;
   FILE *fp;
   long pos;
-  char namestr[1024], tmp[1024];
+  char namestr[1024];
 
   if (do_post) {
       if (!subject || !*subject) {
 	  char str[BUFSIZ];
 
 	  sprintf(str, "Form Result(s) Posted from %s", pre_title);
-
 	  return(mo_post_mailto_form_win(to_address, str));
       } else {
 	  return(mo_post_mailto_form_win(to_address, subject));
       }
   }
-
   if (!win->mailto_win) {
-      Widget dialog_frame;
-      Widget dialog_sep, buttons_form;
-      Widget mailto_form;
-      Widget tolabel, sublabel, fromlabel;
+      Widget dialog_frame, dialog_sep, buttons_form;
+      Widget mailto_form, tolabel, sublabel, fromlabel;
       
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->mailto_win = XmxMakeFormDialog 
-        (win->base, "VMS Mosaic: Mail To Author");
+      win->mailto_win = XmxMakeFormDialog(win->base,
+					  "VMS Mosaic: Mail To Author");
       dialog_frame = XmxMakeFrame(win->mailto_win, XmxShadowOut);
       
       /* Constraints for base. */
@@ -359,10 +344,9 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
 	 sublabel, NULL);
 
       /* Create buttons */
-      buttons_form = XmxMakeFormAndFiveButtons
-        (mailto_form, mailto_win_cb,
-         "Send", "Insert File", "Insert URL", "Dismiss", "Help...",
-         0, 3, 4, 1, 2);
+      buttons_form = XmxMakeFormAndFiveButtons(mailto_form, mailto_win_cb,
+		      "Send", "Insert File", "Insert URL", "Dismiss", "Help...",
+		      0, 3, 4, 1, 2);
 
       XmxSetOffsets(XtParent(win->mailto_text), 3, 0, 3, 3);
       XmxSetConstraints
@@ -384,7 +368,6 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
 
   sprintf(namestr, "%s <%s>", get_pref_string(eDEFAULT_AUTHOR_NAME),
           get_pref_string(eDEFAULT_AUTHOR_EMAIL));
-  
   XmxTextSetString(win->mailto_fromfield, namestr);
   XmxTextSetString(win->mailto_tofield, to_address);
   if (!subject || !*subject) {
@@ -395,7 +378,6 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
   } else {
       XmTextFieldSetString(win->mailto_subfield, subject);
   }
-
   XmxTextSetString(win->mailto_text, "");
   
   /* Tack signature on the end if it exists - code from Martin Hamilton */
@@ -403,7 +385,9 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
       XmxTextSetString(win->mailto_text, "\n\n");
       /* Leave a gap... */
       XmTextSetInsertionPosition(win->mailto_text, 2);
-      if ((fp = fopen(get_pref_string(eSIGNATURE), "r")) != NULL) {
+      if (fp = fopen(get_pref_string(eSIGNATURE), "r")) {
+	  char tmp[1024];
+
           while (fgets(tmp, sizeof(tmp) - 1, fp)) {
               XmTextInsert(win->mailto_text,
                            pos = XmTextGetInsertionPosition(win->mailto_text),
@@ -414,10 +398,8 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
       } else {
           XmxTextSetString(win->mailto_text, "");
       }
-      
   }
   XmTextSetInsertionPosition(win->mailto_text, 0);
-      
   XmxManageRemanage(win->mailto_win);
 
   return mo_succeed;
@@ -426,89 +408,78 @@ mo_status mo_post_mailto_win (char *to_address, char *subject)
 
 static void eatSpace(char *s)
 {
-	char *p, *p0;
+    char *p, *p0;
 
-	for (p = s; *s; s++) {
-		if (isspace(*s)) {
-			*s = ' '; /* Get rid of anything like TAB */
-			p = (++s);
-			while (*s && isspace(*s))
-				s++;
-			if (!*s) {
-				*p = '\0';
-				return;
-			}
-			if (s > p) {
-				for (p0 = p; *s; s++, p++)
-					*p = (*s);
-				*p = '\0';
-				s = p0;
-			}
-		}
+    for (p = s; *s; s++) {
+	if (isspace(*s)) {
+	    *s++ = ' ';  /* Get rid of anything like TAB */
+	    p = s;
+	    while (*s && isspace(*s))
+		s++;
+	    if (!*s) {
+		*p = '\0';
+		return;
+	    }
+	    if (s > p) {
+		for (p0 = p; *s; s++, p++)
+		    *p = *s;
+		*p = '\0';
+		s = p0;
+	    }
 	}
-	return;
+    }
+    return;
 }
 
 
 static char *makeReadable(char *str, int condense)
 {
-	char *buf, *name, *val;
-	char *b;
+    char *buf, *name, *val, *b;
 
-	if (!str)
-		return(NULL);
+    if (!str)
+	return(NULL);
+    b = strdup(str);
 
-	b = strdup(str);
-
-	/* Decode the encoded info (str) into name-value pairs */
-	buf = (char *)calloc((strlen(b) * 3), sizeof(char));
-	if (!buf)
-		return(NULL);
-	sprintf(buf, "\n");
-	for (; (b && *b); ) {
-		val = makeword(b, '&');
-		plustospace(val);
-		unescape_url(val);
-		name = makeword(val, '=');
-		if (condense)	/* Take out all "multiple isspace()" */
-			eatSpace(val);
-		sprintf(buf, "%sNAME=[%s]\nVALUE=[%s]\n\n",
-			(buf && *buf ? buf : "\n"),
-			(name && *name ? name : "(NULL)"),
-			(val && *val ? val : "(NULL)"));
-		if (val) {
-			free(val);
-			val = NULL;
-		}
-		if (name) {
-			free(name);
-			name = NULL;
-		}
-	}
-	free(b);
-
-	return(buf);
+    /* Decode the encoded info (str) into name-value pairs */
+    if (!(buf = (char *)malloc((strlen(b) * 3) * sizeof(char))))
+	return(NULL);
+    sprintf(buf, "\n");
+    for (; b && *b; ) {
+	val = makeword(b, '&');
+	plustospace(val);
+	unescape_url(val);
+	name = makeword(val, '=');
+	if (condense)	/* Take out all "multiple isspace()" */
+	    eatSpace(val);
+	sprintf(buf, "%sNAME=[%s]\nVALUE=[%s]\n\n", buf && *buf ? buf : "\n",
+		name && *name ? name : "(NULL)", val && *val ? val : "(NULL)");
+	if (val)
+	    free(val);
+	if (name)
+	    free(name);
+    }
+    free(b);
+    return(buf);
 }
 
 
-mo_status mo_post_mailto_form_win (char *to_address, char *subject)
+mo_status mo_post_mailto_form_win(char *to_address, char *subject)
 {
   mo_window *win = current_win;
-  char namestr[1024], *buf = NULL;
+  char namestr[1024];
+  char *buf;
 
   if (!do_post)
       return(mo_fail);
 
   if (!win->mailto_form_win) {
-      Widget dialog_frame;
-      Widget dialog_sep, buttons_form;
-      Widget mailto_form_form;
-      Widget tolabel, sublabel, fromlabel;
+      Widget dialog_frame, dialog_sep, buttons_form;
+      Widget mailto_form_form, tolabel, sublabel, fromlabel;
       
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->mailto_form_win = XmxMakeFormDialog 
-        (win->base, "VMS Mosaic: Mail Form Results To Author");
+      win->mailto_form_win = XmxMakeFormDialog(win->base,
+				     "VMS Mosaic: Mail Form Results To Author");
       dialog_frame = XmxMakeFrame(win->mailto_form_win, XmxShadowOut);
       
       /* Constraints for base. */
@@ -532,28 +503,28 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
       
       dialog_sep = XmxMakeHorizontalSeparator(mailto_form_form);
 
-      /* create from, to, and subject widgets */
+      /* Create from, to, and subject widgets */
       fromlabel = XmxMakeLabel(mailto_form_form, "From:");
-      XmxSetArg (XmNeditable, False);
+      XmxSetArg(XmNeditable, False);
       win->mailto_form_fromfield = XmxMakeTextField(mailto_form_form);
 
       tolabel = XmxMakeLabel(mailto_form_form, "To:");
-      XmxSetArg (XmNeditable, False);
+      XmxSetArg(XmNeditable, False);
       win->mailto_form_tofield = XmxMakeTextField(mailto_form_form);
 
       sublabel = XmxMakeLabel(mailto_form_form, "Subject:");
-      XmxSetArg (XmNeditable, False);
+      XmxSetArg(XmNeditable, False);
       win->mailto_form_subfield = XmxMakeTextField(mailto_form_form);
 
-      /* constraints for FROM */
+      /* Constraints for FROM */
       XmxSetOffsets(fromlabel, 14, 10, 10, 10);
       XmxSetConstraints
 	(fromlabel, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_FORM, 
 	 XmATTACH_NONE, NULL, NULL, NULL, NULL);
       XmxSetOffsets(win->mailto_form_fromfield, 10, 10, 10, 10);
       XmxSetConstraints
-	(win->mailto_form_fromfield, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_WIDGET,
-	 XmATTACH_FORM, NULL, NULL, fromlabel, NULL);
+	(win->mailto_form_fromfield, XmATTACH_FORM, XmATTACH_NONE,
+	 XmATTACH_WIDGET, XmATTACH_FORM, NULL, NULL, fromlabel, NULL);
 
       /* Constraints for TO */
       XmxSetOffsets(tolabel, 14, 10, 10, 10);
@@ -562,8 +533,9 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
 	 win->mailto_form_fromfield, NULL, NULL, NULL);
       XmxSetOffsets(win->mailto_form_tofield, 10, 10, 10, 10);
       XmxSetConstraints
-	(win->mailto_form_tofield, XmATTACH_WIDGET, XmATTACH_NONE, XmATTACH_WIDGET, 
-	 XmATTACH_FORM, win->mailto_form_fromfield, NULL, tolabel, NULL);
+	(win->mailto_form_tofield, XmATTACH_WIDGET, XmATTACH_NONE,
+	 XmATTACH_WIDGET, XmATTACH_FORM,
+	 win->mailto_form_fromfield, NULL, tolabel, NULL);
 
       /* Constraints for SUBJECT */
       XmxSetOffsets(sublabel, 14, 10, 10, 10);
@@ -577,11 +549,10 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
 	 sublabel, NULL);
 
       /* Create buttons */
-      buttons_form = XmxMakeFormAndThreeButtons
-        (mailto_form_form, mailto_form_win_cb,
-         "Send", "Dismiss", "Help...",
-         0, 1, 2);
-
+      buttons_form = XmxMakeFormAndThreeButtons(mailto_form_form,
+						mailto_form_win_cb,
+						"Send", "Dismiss", "Help...",
+						0, 1, 2);
       XmxSetOffsets(XtParent(win->mailto_form_text), 3, 0, 3, 3);
       XmxSetConstraints
         (XtParent(win->mailto_form_text), XmATTACH_WIDGET, XmATTACH_WIDGET, 
@@ -590,8 +561,8 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
 
       XmxSetArg(XmNtopOffset, 10);
       XmxSetConstraints 
-        (dialog_sep, XmATTACH_NONE, XmATTACH_WIDGET, XmATTACH_FORM, 
-         XmATTACH_FORM,
+        (dialog_sep, XmATTACH_NONE, XmATTACH_WIDGET, XmATTACH_FORM,
+	 XmATTACH_FORM,
          NULL, buttons_form, NULL, NULL);
       XmxSetConstraints 
         (buttons_form, XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, 
@@ -602,7 +573,6 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
 
   sprintf(namestr, "%s <%s>", get_pref_string(eDEFAULT_AUTHOR_NAME),
           get_pref_string(eDEFAULT_AUTHOR_EMAIL));
-  
   XmxTextSetString(win->mailto_form_fromfield, namestr);
   XmxTextSetString(win->mailto_form_tofield, to_address);
   if (subject) {
@@ -618,7 +588,6 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
       free(buf);
 
   XmTextSetInsertionPosition(win->mailto_form_text, 0);
-
   XmxManageRemanage(win->mailto_form_win);
 
   return mo_succeed;
@@ -629,36 +598,32 @@ mo_status mo_post_mailto_form_win (char *to_address, char *subject)
 static void do_mailto_post(mo_window *win, char *to, char *from, char *subject,
 		           char *body)
 {
-	if (!win || !win->current_node || !win->current_node->url ||
-	    !*(win->current_node->url)|| !from)
-		return;
+  if (!win || !win->current_node || !win->current_node->url ||
+      !*win->current_node->url || !from)
+      return;
 
-	if (!strcmp(post_content_type, "text/plain")) {
-		char *buf;
+  if (!strcmp(post_content_type, "text/plain")) {
+      char *buf = makeReadable(body, 0);
 
-		buf = makeReadable(body, 0);
 #ifndef DISABLE_TRACE
-		if (srcTrace)
-			fprintf(stderr,
-			       "To: [%s]\nFrom: [%s]\nSubj: [%s]\nBody: [%s]\n",
-			       to, from, subject, buf);
+      if (srcTrace)
+	  fprintf(stderr, "To: [%s]\nFrom: [%s]\nSubj: [%s]\nBody: [%s]\n",
+		  to, from, subject, buf);
 #endif
-		mo_send_mailto_message(buf, to, subject, post_content_type, 
-				       win->current_node->url);
-		if (buf)
-			free(buf);
-	} else {
+      mo_send_mailto_message(buf, to, subject, post_content_type, 
+			     win->current_node->url);
+      if (buf)
+	  free(buf);
+  } else {
 #ifndef DISABLE_TRACE
-		if (srcTrace)
-			fprintf(stderr,
-			       "To: [%s]\nFrom: [%s]\nSubj: [%s]\nBody: [%s]\n",
-			       to, from, subject, body);
+      if (srcTrace)
+	  fprintf(stderr, "To: [%s]\nFrom: [%s]\nSubj: [%s]\nBody: [%s]\n",
+		  to, from, subject, body);
 #endif
-		mo_send_mailto_message(body, to, subject, post_content_type, 
-				       win->current_node->url);
-	}
-
-	return;
+      mo_send_mailto_message(body, to, subject, post_content_type, 
+			     win->current_node->url);
+  }
+  return;
 }
 
 /* Mail code originally in whine.c, then in techsupport.c, then in mo-www.c */
@@ -674,8 +639,7 @@ FILE *mo_start_sending_mail_message(char *to, char *subj,
                                     char *content_type, char *url)
 {
 #ifdef VMS
-  char *cp;
-  char *prefix;
+  char *cp, *prefix;
 #else
   char *tmp;
   char cmd[2048];
@@ -684,24 +648,23 @@ FILE *mo_start_sending_mail_message(char *to, char *subj,
   /* Calling routines should have already checked for NULL To: */
 
   if (!strcmp(content_type, "url_only"))
-    content_type = "text/plain";
+      content_type = "text/plain";
 
 #ifndef VMS
   /* Try listing address on command line. */
   for (tmp = to; *tmp; tmp++) {
-    if (*tmp == ',')
-      *tmp = ' ';
+      if (*tmp == ',')
+          *tmp = ' ';
   }
   if (get_pref_string(eMAIL_FILTER_COMMAND) && content_type &&
-    strcmp(content_type, "application/postscript")) {
-    sprintf(cmd, "%s | %s %s", get_pref_string(eMAIL_FILTER_COMMAND),
-            get_pref_string(eSENDMAIL_COMMAND), to);
+      strcmp(content_type, "application/postscript")) {
+      sprintf(cmd, "%s | %s %s", get_pref_string(eMAIL_FILTER_COMMAND),
+              get_pref_string(eSENDMAIL_COMMAND), to);
   } else {
-    sprintf(cmd, "%s %s", get_pref_string(eSENDMAIL_COMMAND), to);
+      sprintf(cmd, "%s %s", get_pref_string(eSENDMAIL_COMMAND), to);
   }
-
-  if ((_fp = popen(cmd, "w")) == NULL)
-    return NULL;
+  if (!(_fp = popen(cmd, "w")))
+      return NULL;
 
   fprintf(_fp, "To: %s\n", to);
   fprintf(_fp, "Subject: %s\n", subj);
@@ -712,84 +675,83 @@ FILE *mo_start_sending_mail_message(char *to, char *subj,
   fprintf(_fp, "X-Mailer: VMS Mosaic %s on %s\n", 
           MO_VERSION_STRING, MO_MACHINE_TYPE);
   if (url)
-    fprintf(_fp, "X-URL: %s\n", url);
-
+      fprintf(_fp, "X-URL: %s\n", url);
   fprintf(_fp, "\n");
   
   /* Stick in BASE tag as appropriate. */
-  if (url && content_type && !strcmp(content_type, "text/x-html"))
-    fprintf(_fp, "<base href=\"%s\">\n", url);
+  if (url && content_type && !strcmp(content_type, "text/html"))
+      fprintf(_fp, "<base href=\"%s\">\n", url);
 #else /* VMS */
   mail_fnam = (char *)mo_tmpnam(url);
-  _fp = fopen(mail_fnam, "w");
+  _fp = fopen(mail_fnam, "w", "ctx=rec", "rfm=var", "rat=cr");
   if (!_fp) {
-    fprintf(stderr,
+      fprintf(stderr,
 	    "\nVMS scratch file open error: %s\n", strerror(errno, vaxc$errno));
-    goto oops;
+      goto oops;
   }
 
   /* Convert quotes to spaces */
   for (cp = subj; *cp; cp++) {
-    if (*cp == '\"')
-      *cp = ' ';
+      if (*cp == '\"')
+          *cp = ' ';
   }
   fprintf(_fp, "$ Set NoVerify\n");
   fprintf(_fp, "$ On Error Then Goto End\n");
+  fprintf(_fp, "$ Set Message/NoIdent/NoFacil/Notext/NoSever\n");
 
-  /* Next for PMDF only */
   prefix = get_pref_string(eVMS_MAIL_PREFIX);
   if (!prefix)
-    prefix = " ";
+      prefix = " ";
   if (!strcmp(prefix, "IN%") || !strcmp(prefix, "in%")) {
-    fprintf(_fp, "$ Define PMDF_HEADER \"X-Courtesy-Of: VMS Mosaic %s on %s\"\n",
-            MO_VERSION_STRING, MO_MACHINE_TYPE);
-    if (url)
-      fprintf(_fp, "$ Define PMDF_HEADER_1 \"X-URL: %s\"\n", url);
-    fprintf(_fp, "$ Define /User SYS$Output nl:\n");
-    fprintf(_fp, "$ Mail$$/Subject=\"%s\" SYS$Input: \"%s\"\"%s\"\"\"\n", subj,
-            prefix, to);
-  } else {
-    fprintf(_fp, "$ Define /User SYS$Output nl:\n");
-    if (!strchr(to, '@') || !strcmp(prefix, " ")) {
-      fprintf(_fp, "$ Mail$$/Subject=\"%s\" SYS$Input: \"%s\"\n", subj, to);
-    } else {
+      /* PMDF */
+      fprintf(_fp,
+	      "$ Define PMDF_HEADER \"X-Courtesy-Of: VMS Mosaic %s on %s\"\n",
+              MO_VERSION_STRING, MO_MACHINE_TYPE);
+      if (url)
+          fprintf(_fp, "$ Define PMDF_HEADER_1 \"X-URL: %s\"\n", url);
+      fprintf(_fp, "$ Define PMDF_HEADER_2 \"Content-Type: %s\"\n",
+	      content_type);
+      fprintf(_fp, "$ Define /User SYS$Output nl:\n");
       fprintf(_fp, "$ Mail$$/Subject=\"%s\" SYS$Input: \"%s\"\"%s\"\"\"\n",
-              subj, prefix, to);
-    }
+	      subj, prefix, to);
+  } else {
+      fprintf(_fp, "$ Define /User SYS$Output nl:\n");
+      if (!strchr(to, '@') || !strcmp(prefix, " ")) {
+          fprintf(_fp, "$ Mail$$/Subject=\"%s\" SYS$Input: \"%s\"\n", subj, to);
+      } else {
+          fprintf(_fp, "$ Mail$$/Subject=\"%s\" SYS$Input: \"%s\"\"%s\"\"\"\n",
+                  subj, prefix, to);
+      }
   }
   fprintf(_fp, "$ Deck/Dollars=\"$ EOD_MOSAIC\"\n");
   return _fp;
 
-oops:
+ oops:
   free(mail_fnam);
 #endif /* VMS, BSN, GEC */
 
   return _fp;
 }
 
-mo_status mo_finish_sending_mail_message (void)
+mo_status mo_finish_sending_mail_message(void)
 {
 #ifndef VMS
   if (_fp)
-    pclose(_fp);
+      pclose(_fp);
 #else
   if (_fp) {
-    char *cmd = (char *)malloc(strlen(mail_fnam) + 8);
+      char *cmd = (char *)malloc(strlen(mail_fnam) + 8);
 
-    fprintf(_fp, "\n$ EOD_MOSAIC\n");
-    fprintf(_fp, "$End:\n");
-    fclose(_fp);
-    sprintf(cmd, "@%s.", mail_fnam);
-    if ((system(cmd)) != 1) {
-      application_error("Unable to mail document.", "Mail Command Error");
-#ifndef DISABLE_TRACE
-      if (srcTrace)
-	fprintf(stderr, "Mail command failed.\n");
-#endif
-    }
-    free(cmd);
-    remove(mail_fnam);
-    free(mail_fnam);
+      fprintf(_fp, "\n$ EOD_MOSAIC\n");
+      fprintf(_fp, "$End:\n");
+      fclose(_fp);
+      sprintf(cmd, "@%s.", mail_fnam);
+
+      GUI_System(cmd, "Mailto failure");
+
+      free(cmd);
+      remove(mail_fnam);
+      free(mail_fnam);
   }
 #endif /* VMS, BSN, GEC */
 
@@ -806,39 +768,37 @@ mo_status mo_send_mailto_message(char *text, char *to, char *subj,
   FILE *fp;
 
   if (!to || !*to) {
-    application_error("Mail has no To: address.", "Mail Error");
-    return mo_fail;
+      application_error("Mail has no To: address.", "Mail Error");
+      return mo_fail;
   }
   if (!text || !*text) {
-    application_error("Mail message has no text.", "Mail Error");
-    return mo_fail;
+      application_error("Mail message has no text.", "Mail Error");
+      return mo_fail;
   }
   if (!subj || !*subj) {
-    application_error("Mail has blank Subject:", "Mail Error");
-    return mo_fail;
+      application_error("Mail has blank Subject:", "Mail Error");
+      return mo_fail;
   }
 
-  fp = mo_start_sending_mail_message(to, subj, content_type, url);
-  if (!fp)
-    goto oops;
+  if (!(fp = mo_start_sending_mail_message(to, subj, content_type, url)))
+      goto oops;
 
   if (!strcmp(content_type, "url_only")) {
-    fputs(url, fp);
-    fputs("\n\n", fp);
+      fputs(url, fp);
+      fputs("\n\n", fp);
   } else {
 #ifndef VMS
-    fputs(text, fp);
+      fputs(text, fp);
 #else
-    if (write(fileno(fp), text, strlen(text)) < 0)
-      goto oops;
+      if (write(fileno(fp), text, strlen(text)) < 0)
+          goto oops;
 #endif
   }
-
   mo_finish_sending_mail_message();
 
   return mo_succeed;
 
-oops:
+ oops:
   application_error("Unable to mail document.", "Mail Error");
   return mo_fail;
 }

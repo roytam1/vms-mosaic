@@ -16,33 +16,30 @@
 #include "HTFormat.h"
 #include "HTAlert.h"
 #include "../libnut/str-tools.h"
+
 #ifndef DISABLE_TRACE
 extern int www2Trace;
 #endif
 
 extern void GetMailtoKludgeInfo();
 
-PUBLIC int HTSendMailTo ARGS4(
-      WWW_CONST char *,     arg,
-      HTParentAnchor *,	anAnchor,
-      HTFormat,		format_out,
-      HTStream *,	stream)
+PUBLIC int HTSendMailTo (WWW_CONST char *arg,
+			 HTParentAnchor *anAnchor,
+			 HTFormat format_out,
+			 HTStream *stream)
 {
-  char *mailtoURL;
-  char *mailtoSubject;
+    char *mailtoURL, *mailtoSubject;
+    WWW_CONST char *p1 = arg;
 
 #ifndef DISABLE_TRACE
-  if (www2Trace) 
-      fprintf(stderr, "HTMailto: Mailing to %s\n", arg);
+    if (www2Trace) 
+        fprintf(stderr, "HTMailto: Mailing to %s\n", arg);
 #endif
-  
-  {
-    WWW_CONST char *p1 = arg;
     
-    /*	We will ask for the document, omitting the host name & anchor.
+    /*	We will ask for the document, omitting the host name and anchor.
      **
      **	Syntax of address is
-     **		xxx@yyy			User xxx at site yyy (xxx is optional).
+     **		xxx@yyy		User xxx at site yyy (xxx is optional).
      */        
     if (!my_strncasecmp(arg, "mailto:", 7))
         p1 = arg + 7;		/* Skip "mailto:" prefix */
@@ -55,7 +52,6 @@ PUBLIC int HTSendMailTo ARGS4(
     GetMailtoKludgeInfo(&mailtoURL, &mailtoSubject);
     (void) mo_post_mailto_win(p1, mailtoSubject);
     return HT_LOADED;
-  }
 }
 
 PUBLIC HTProtocol HTMailto = { "mailto", HTSendMailTo, NULL };

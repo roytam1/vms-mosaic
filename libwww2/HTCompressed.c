@@ -9,16 +9,10 @@
 #include "HTFile.h"
 #include "HTUtils.h"
 #include "tcp.h"
-#include "HTML.h"
-#include "HTMLDTD.h"
 #include "HText.h"
 #include "HTAlert.h"
-#include "HTList.h"
 #include "HTInit.h"
 #include "HTFWriter.h"
-#include "HTPlain.h"
-#include "SGML.h"
-#include "HTMLGen.h"
 #include "HTCompressed.h"
 
 #include "../libnut/system.h"
@@ -27,30 +21,23 @@
 extern int www2Trace;
 #endif
 
-struct _HTStream 
-{
-  WWW_CONST HTStreamClass *isa;
-  /* ... */
-};
-
 int is_uncompressed = 0;
 
-extern char *uncompress_program, *gunzip_program;
+extern char *uncompress_program;
+extern char *gunzip_program;
 
 /* Given a filename of a local compressed file, compress it in place.
-
-   We assume that the file does not already have a .Z or .z extension
-   at this point -- this is a little weird but it's convenient. */
+ *
+ * We assume that the file does not already have a .Z or .z extension
+ * at this point -- this is a little weird but it's convenient.
+ */
 void HTCompressedFileToFile (char *fnam, int compressed)
 {
-  char *znam;
-  char *cmd;
+  char *znam, *cmd;
 #ifdef VMS
   char *cund, *cp, *cnam;
   int  nund;
 #endif /* VMS, BSN */
-
-  cmd = NULL;
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
@@ -70,9 +57,9 @@ void HTCompressedFileToFile (char *fnam, int compressed)
   /* Either compressed or gzipped. */
 #ifndef VMS   /* PGE, VMS filenames don't allow multiple '.'s */
   if (compressed == COMPRESSED_BIGZ) {
-    sprintf(znam, "%s.Z", fnam);
+      sprintf(znam, "%s.Z", fnam);
   } else {
-    sprintf(znam, "%s.gz", fnam);
+      sprintf(znam, "%s.gz", fnam);
   }
 #else
   /*
@@ -86,36 +73,35 @@ void HTCompressedFileToFile (char *fnam, int compressed)
   cp = strchr(fnam, ':');
   if (cnam < cp)
       cnam = cp;
-  if ((cund = strchr(cnam, '.')) != NULL) {
+  if (cund = strchr(cnam, '.')) {
       nund = -1;
       if (compressed == COMPRESSED_BIGZ) {
-        sprintf(znam, "%s_Z", fnam);
+          sprintf(znam, "%s_Z", fnam);
       } else {
-        sprintf(znam, "%s-gz", fnam);
+          sprintf(znam, "%s-gz", fnam);
       }
   } else {
       nund = -1;
       if (compressed == COMPRESSED_BIGZ) {
-        sprintf(znam, "%s._Z", fnam);
+          sprintf(znam, "%s._Z", fnam);
       } else {
-        sprintf(znam, "%s.-gz", fnam);
+          sprintf(znam, "%s.-gz", fnam);
       }
   }
 #endif /* VMS, BSN */
 
   /* New "mv" function to take care of these /bin/mv things */
   {
-     char retBuf[BUFSIZ];
-     int status;
+      char retBuf[BUFSIZ];
 
-     if ((status = my_move(fnam, znam, retBuf, BUFSIZ, 1)) != SYS_SUCCESS) {
-	sprintf(retBuf,
-	  "Unable to uncompress compressed data;\nresults may be in error.\n%s",
-	  retBuf);
-	application_user_info_wait(retBuf);
-	free(znam);
-	return;
-     }
+      if (my_move(fnam, znam, retBuf, BUFSIZ, 1) != SYS_SUCCESS) {
+	  sprintf(retBuf,
+	   "Unable to uncompress compressed data;\nresults may be in error.\n%s",
+	   retBuf);
+	  application_user_info_wait(retBuf);
+	  free(znam);
+	  return;
+      }
   }
 
 #ifndef DISABLE_TRACE
@@ -135,58 +121,54 @@ void HTCompressedFileToFile (char *fnam, int compressed)
   HTProgress("Uncompressing data.");
 
   {
-  	int status, skip_output = 0;
-  	char retBuf[BUFSIZ];
-  	char final[BUFSIZ];
+      int status;
+      int skip_output = 0;
+      char retBuf[BUFSIZ], final[BUFSIZ];
 
-	*retBuf = '\0';
-	*final = '\0';
+      *retBuf = '\0';
 
-	if ((status = my_system(cmd, retBuf, BUFSIZ)) != SYS_SUCCESS) {
-		switch(status) {
-		    case SYS_NO_COMMAND:
-			sprintf(final,
-				"%sThere was no command to execute.\n",
-				final);
-			break;
-		    case SYS_FORK_FAIL:
-			sprintf(final, "%sThe fork call failed.\n",
-				final);
-			break;
-		    case SYS_PROGRAM_FAILED:
-			sprintf(final,
-			      "%sThe program specified was not able to exec.\n",
-			      final);
-			break;
-		   case SYS_NO_RETBUF:
-			sprintf(final,
-				"%sThere was no return buffer.\n",
-				final);
-			break;
-		   case SYS_FCNTL_FAILED:
-			sprintf(final,
-			       "%sFcntl failed to set non-block on the pipe.\n",
-			       final);
-			break;
-		}
-		/* Give them the output */
-		if (*retBuf)
-			sprintf(final, "%s%s", final, retBuf);
-	} else if (*retBuf) {
-		/* Give them the output */
-		sprintf(final, "%s%s", final, retBuf);
-	} else {
-		/* Okay */
-		skip_output = 1;
-	}
+      if ((status = my_system(cmd, retBuf, BUFSIZ)) != SYS_SUCCESS) {
+	  char *msg;
 
-	if (!skip_output) {
-		application_user_info_wait(final);
-		free(cmd);
-		free(znam);
-		HTProgress("Uncompress failed.");
-		return;
-	}
+	  switch(status) {
+	      case SYS_NO_COMMAND:
+		  msg = "There was no command to execute.";
+		  break;
+	      case SYS_FORK_FAIL:
+		  msg = "The fork call failed.";
+		  break;
+	      case SYS_PROGRAM_FAILED:
+		  msg = "The program specified was not able to run.";
+		  break;
+	      case SYS_NO_RETBUF:
+		  msg = "There was no return buffer.\n";
+		  break;
+	      case SYS_FCNTL_FAILED:
+		  msg = "Fcntl failed to set non-block on the pipe.";
+		  break;
+	      default:
+		  msg = "Unexpected failure.";
+	  }
+	  /* Give them the output */
+	  if (*retBuf) {
+	      sprintf(final, "%s\n%s", msg, retBuf);
+	  } else {
+	      sprintf(final, "%s", msg);
+	  }
+      } else if (*retBuf) {
+	  /* Give them the output */
+	  sprintf(final, "%s", retBuf);
+      } else {
+	  /* Okay */
+	  skip_output = 1;
+      }
+      if (!skip_output) {
+	  application_user_info_wait(final);
+	  free(cmd);
+	  free(znam);
+	  HTProgress("Uncompress failed.");
+	  return;
+      }
   }
 
   HTProgress("Data uncompressed.");
@@ -203,10 +185,9 @@ void HTCompressedFileToFile (char *fnam, int compressed)
 #ifdef VMS
   if (nund != -1) {
       char retBuf[BUFSIZ];
-      int status;
 
       znam[strlen(fnam)] = '\0';
-      if ((status = my_move(znam, fnam, retBuf, BUFSIZ, 1)) != SYS_SUCCESS) {
+      if (my_move(znam, fnam, retBuf, BUFSIZ, 1) != SYS_SUCCESS) {
 	  sprintf(retBuf,
 	     "Unable to rename uncompressed data file;\nresults may be in error.\n%s",
 	     retBuf);
@@ -238,7 +219,7 @@ void HTCompressedHText (HText *text, int compressed, int plain)
       return;
 
   /* Hmmmmmmmmm, I'm not sure why we subtract 1 here, but it is
-     indeed working... */
+   * indeed working... */
   size_of_data = HText_getTextLength(text) - 1;
 
   if (size_of_data == 0) {
@@ -262,8 +243,8 @@ void HTCompressedHText (HText *text, int compressed, int plain)
       if (www2Trace)
           fprintf(stderr, "Could not open temp file '%s'\n", fnam);
 #endif
-      application_user_feedback
-          ("Unable to uncompress compressed data;\nresults may be in error.");
+      application_user_feedback(
+	     "Unable to uncompress compressed data;\nresults may be in error.");
       free(fnam);
       return;
   }
@@ -279,8 +260,8 @@ void HTCompressedHText (HText *text, int compressed, int plain)
       if (www2Trace)
           fprintf(stderr, "Only wrote %d bytes\n", rv);
 #endif
-      application_user_feedback
-        ("Unable to write compressed data to local disk;\nresults may be in error.");
+      application_user_feedback(
+          "Unable to write compressed data to disk;\nresults may be in error.");
   }
   fclose(fp);
 
@@ -303,8 +284,7 @@ void HTCompressedHText (HText *text, int compressed, int plain)
       HText_appendText(text, "<PLAINTEXT>\n");
   }
 
-  fp = fopen(fnam, "r");
-  if (!fp) {
+  if (!(fp = fopen(fnam, "r"))) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "Could not open temp file for reading '%s'\n", fnam);

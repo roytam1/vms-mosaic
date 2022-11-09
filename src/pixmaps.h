@@ -60,6 +60,5 @@ void MakeAnimationPixmaps(Widget);
 void ReleaseSplashColors(Widget wid);
 Pixmap LoadSplashXPM(Widget wid, int *colorcount);
 void MakePixmaps(Widget wid);
-void DrawSecurityPixmap(Widget wid, Pixmap pix);
 
 #endif

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006
+/* Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007
  * The VMS Mosaic Project
  */
 
@@ -107,6 +107,7 @@ extern char **HTMLGetHRefs(Widget w, int *num_hrefs);
 extern char **HTMLGetImageSrcs(Widget w, int *num_srcs);
 extern void *HTMLGetWidgetInfo(Widget w);
 extern void *HTMLGetFormInfo(Widget w);
+extern void HTMLCacheWidgetInfo(void *ptr);
 extern void HTMLFreeWidgetInfo(void *ptr);
 extern void HTMLFreeFormInfo(void *ptr);
 extern LinkInfo *HTMLGetLinks(Widget w, int *num_links);
@@ -153,6 +154,8 @@ typedef struct fcall_rec {
 	int attribute_count;
 	char **attribute_names;
 	char **attribute_values;
+	char *freeit1;
+	char *freeit2;
 } WbFormCallbackData;
 
 typedef struct form_rec {
@@ -163,8 +166,8 @@ typedef struct form_rec {
         char *enctype;
 	int start;
 	int end;
-        Widget button_pressed; /* Match button pressed to one of submits */
-	int cw_only;	       /* Mark it as belonging to EstimateMinMaxTable */
+        Widget button_pressed;  /* Match button pressed to one of submits */
+	Boolean cw_only;	/* Mark it used by EstimateMinMaxTable */
 	int cached;
 	struct form_rec *next;
 } FormInfo;
@@ -190,13 +193,13 @@ typedef struct map_rec {
       AreaInfo *areaList;
       struct map_rec *next;
 } MapInfo;
-        
-/*      
+
+/*
  * Defines for client-side ismap
- */     
-#define AREA_RECT 0 
-#define AREA_CIRCLE 1  
-#define AREA_POLY 2 
+ */
+#define AREA_RECT 0
+#define AREA_CIRCLE 1
+#define AREA_POLY 2
 
 /* Define alignment values */
 typedef enum {
@@ -223,7 +226,7 @@ typedef struct image_rec {
 	int has_border;
 	int hspace;
 	int vspace;
-	char *usemap; 
+	char *usemap;
         MapInfo *map;
         AreaInfo *area;
 	int ismap;
@@ -269,6 +272,7 @@ typedef struct image_rec {
 	int saved_y;
 	unsigned char *rgb;	/* Used by ImageQuantize callback */
 	XColor *ori_colrs;	/* Original colors for Alpha channel use */
+	int ori_num_colors;
 } ImageInfo;
 
 typedef struct anim_rec {
@@ -297,13 +301,18 @@ typedef struct wid_rec {
 	int width;
 	int height;
         Boolean seeable;
+        Boolean display;
 	int extra_before;
 	char *name;
 	char *value;
+	char *onclick;
 	char *password;
 	char **mapping;
 	Boolean checked;
 	Boolean mapped;
+	Boolean data_cached;
+        Boolean toggled;
+	char *cached_text;
 	unsigned long bgcolor;
 	unsigned long fgcolor;
 	int cache_count;
@@ -333,7 +342,7 @@ typedef struct _CellStruct {
         int height;
         int width;
         int max_width;
-        int min_width;          
+        int min_width;
 	int relative_width;
 	int absolute_width;
 	int req_height;
@@ -346,16 +355,16 @@ typedef struct _CellStruct {
 	int content_height;
 	int group;
 } CellStruct;
-                                
+
 typedef struct _ColumnList {
         CellStruct *cells;
         int cell_count;
         int max_row_span;
 } ColumnList;
-                        
+
 typedef struct _RowList {
         CellStruct **cells_lines;
-        int row_count; 
+        int row_count;
         int max_cell_count_in_line;
         int low_cur_line_num;
 } RowList;
@@ -457,9 +466,8 @@ typedef ImageInfo *(*resolveImageProc)();
 #define E_SPACER	(1 << 8)
 #define E_CR		(1 << 9)
 #define E_CELL_TABLE	(1 << 10)
-#define E_APROG		(1 << 11)
-#define E_APPLET	(1 << 12)
-#define E_IFRAME	(1 << 13)
+#define E_APPLET	(1 << 11)
+#define E_IFRAME	(1 << 12)
 
 typedef enum {
 	CODE_TYPE_UNKNOW,
@@ -487,27 +495,6 @@ typedef struct _AppletRec {
 	Widget w;
 	Widget frame;
 } AppletInfo;
-
-typedef struct _AprogRec {
-	CodeType ctype;
-	char *src;
-	char *name;
-	int width;
-	int height;
-	int x;
-	int y;
-	int border_width;
-	AlignType valignment;
-	int param_count;
-	char **param_name_t;
-	char **param_value_t;
-	int url_arg_count;
-	char **url_arg;
-	char **ret_filenames;
-	Boolean cw_only;
-	Widget w;
-	Widget frame;
-} AprogInfo;
 
 typedef struct _EODataStruct {
 	char *src;
@@ -557,39 +544,39 @@ typedef struct font_rec {
         struct font_rec *next;
 } FontRec;
 
-/*****  
-* Possible types of frame sizes
-*****/               
+/*
+ * Possible types of frame sizes
+ */
 typedef enum {
         FRAME_SIZE_FIXED = 1,                 /* Size specified in pixels */
         FRAME_SIZE_RELATIVE,                  /* Size is relative */
         FRAME_SIZE_OPTIONAL                   /* Size is optional */
 } FrameSize;
 
-/***** 
-* What type of scrolling a frame should employ.
-*****/                                
-typedef enum {                         
-        FRAME_SCROLL_NONE = 1,        
-        FRAME_SCROLL_AUTO,            
-        FRAME_SCROLL_YES              
+/*
+ * What type of scrolling a frame should employ.
+ */
+typedef enum {
+        FRAME_SCROLL_NONE = 1,
+        FRAME_SCROLL_AUTO,
+        FRAME_SCROLL_YES
 } FrameScrolling;
 
-/*****  
-* Possible Frame layout policies
-*****/  
+/*
+ * Possible Frame layout policies
+ */
 typedef enum {
-        FRAMESET_LAYOUT_ROWS = 1,	/* Rows only */      
-        FRAMESET_LAYOUT_COLS = 2,	/* Columns only */      
+        FRAMESET_LAYOUT_ROWS = 1,	/* Rows only */
+        FRAMESET_LAYOUT_COLS = 2,	/* Columns only */
         FRAMESET_LAYOUT_ROW_COLS = 4    /* Left to right, top to bottom */
 } FramesetLayout;
 
-#define	FRAME_TYPE    1	/* This is a frame with HTML inside */
-#define	FRAMESET_TYPE 2	/* HTML begins with frameset tag */
+#define	FRAME_TYPE    1	 /* This is a frame with HTML inside */
+#define	FRAMESET_TYPE 2	 /* HTML begins with frameset tag */
 /* Note:
-	A frameset may have the FRAME_TYPE because son of frameset
-	The upper level frameset does not set the FRAME_TYPE
-*/
+ *	A frameset may have the FRAME_TYPE because son of frameset
+ *	The upper level frameset does not set the FRAME_TYPE
+ */
 
 typedef struct frame_rec {
 	int		frame_type;	/* FRAMESET_TYPE, FRAME_TYPE */
@@ -618,16 +605,16 @@ typedef struct frame_rec {
 	Boolean		cw_only;	/* Compute size only? */
 } FrameInfo;
 
-/*****
-* Frame callback request type
-*****/
+/*
+ * Frame callback request type
+ */
 typedef enum {
         FRAME_CREATE = 0,
-        FRAME_DELETE = 1,        
+        FRAME_DELETE = 1,
         IFRAME_CREATE = 2
 } FrameRequest;
 
-typedef struct HTMLFrameCallbackStruct { 
+typedef struct HTMLFrameCallbackStruct {
 	FrameRequest reason;
 	int doc_height;
 	int doc_width;
@@ -639,7 +626,6 @@ typedef struct ele_rec {
 	WidgetInfo *widget_data;
 	TableInfo *table_data;
 	CellStruct *cell_data;
-	AprogInfo *aps;
 	AppletInfo *ats;
 	XFontStruct *font;
 	AlignType valignment;
@@ -654,7 +640,6 @@ typedef struct ele_rec {
 	int width;
 	int height;
 	int ele_id;
-	int aprog_id;
 	int applet_id;
 	int underline_number;
 	Boolean dashed_underline;
@@ -662,12 +647,12 @@ typedef struct ele_rec {
 	unsigned long fg;
 	unsigned long bg;
 	MarkInfo *anchor_tag_ptr;   /* Put it in struct mark_up */
+	int fixed_anchor_color;     /* Has fixed anchor font color */
 	char *edata;
 	int edata_len;
 	struct ele_rec *next;
 	struct ele_rec *prev;
 	struct ele_rec *line_next;
-	int preallo;
 	int font_size;
 	CurFontFamily font_family;
 	CurFontType font_type;
@@ -698,7 +683,6 @@ typedef struct {
 /*
  * New resource names
  */
-
 #define	WbNmarginWidth		"marginWidth"
 #define	WbNmarginHeight		"marginHeight"
 #define	WbNtext			"text"
@@ -766,6 +750,8 @@ typedef struct {
 #define WbNframeSupport		 "frameSupport"
 #define WbNisFrame		 "isFrame"
 #define WbNscrollBars		 "scrollBars"
+#define WbNmultiImage		 "multiImage"
+#define WbNmultiLoadCallback	 "multiLoadCallback"
 /*
  * New resource classes
  */
@@ -834,5 +820,7 @@ typedef struct {
 #define WbCFrameSupport		 "FrameSupport"
 #define WbCIsFrame		 "IsFrame"
 #define WbCScrollBars		 "ScrollBars"
+#define WbCMultiImage		 "MultiImage"
+#define WbCMultiLoadCallback	 "MultiLoadCallback"
 
-#endif /* HTMLW_HTML_H */
+#endif  /* HTMLW_HTML_H */

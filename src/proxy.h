@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #define FONTNAME "-adobe-courier-medium-r-normal-*-17-*-*-*-*-*-iso8859-1"
 
@@ -82,23 +82,11 @@ struct Proxy {
 
 /* Added function prototypes - DXP */
 
-void AddProxyToList(), ShowProxyList(), EditProxyInfo(), CommitProxyInfo(),
-        DismissProxy(), ClearProxyText(), FillProxyText(),  WriteProxies(),
-        RemoveProxyInfo(), EditProxyDomainInfo(), DisplayErrorMessage(), 
-        ShowProxyDomainList(), CommitProxyDomainInfo(),
-        CallEdit(), CallAdd(), CallEditDomain(), CallAddDomain(), 
-        CallRemoveProxy(), DestroyDialog(), PopProxyDialog(), DeleteProxy(),
-        EditNoProxyInfo(), CenterDialog(), ProxyHelpWindow(), 
-        HelpWindow(), ClearTempBongedProxies();
-
+void ClearTempBongedProxies();
 struct Proxy *ReadProxies(char *filename);
-
 struct Proxy *ReadNoProxies(char *filename);
-
 struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList);
-
 void DeleteProxyDomain(struct ProxyDomain *p);
-
 int has_fallbacks(char *protocol);
-
 struct Proxy *GetProxy(char *proxy, char *access, int fMatchEnd);
+struct Proxy *GetNoProxy(char *access, char *site);

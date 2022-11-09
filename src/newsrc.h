@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
 
 #ifndef NEWSRC_H
 #define NEWSRC_H
@@ -66,10 +66,11 @@
 
 typedef struct newsgroup_T {
   char *name;                    /* Group name */
-  long minart, maxart;           /* current article number information */
-  long unread;                   /* current num of unread articles (0 if caught up) */
-                                 /* may not be valid if group is not subscribed */
-  long newsrcmin, newsrcmax;     /* most current newsrc information */
+  long minart, maxart;           /* Current article number information */
+  long unread;                   /* Current num of unread articles (0 if caught
+				  * up) may not be valid if group is not
+				  * subscribed */
+  long newsrcmin, newsrcmax;     /* Most current newsrc information */
   char *read;                    /* Bitmask for read articles */
   long attribs;                  /* This group's attributes */
 
@@ -97,4 +98,5 @@ int newsrc_kill (void);
 
 void rereadseq (newsgroup_t *);
 void setminmax (newsgroup_t *, long, long);
+
 #endif

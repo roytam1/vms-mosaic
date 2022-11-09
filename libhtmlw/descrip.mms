@@ -5,7 +5,7 @@
 ! Mosaic 2.4 20-Aug-1994
 ! Mosaic version 2.6 1-Nov-1995, George Cook
 !
-! Copyright (C) 2005, 2006 - The VMS Mosaic Project
+! Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -112,7 +112,7 @@ CFLAGS = $(CQUALC)
 .ENDIF
 
 OBJECTS = Odir:HTML-PSformat.obj Odir:HTML.obj Odir:HTMLapplet.obj \
- Odir:HTMLaprog.obj Odir:HTMLform.obj Odir:HTMLframe.obj Odir:HTMLformat.obj \
+ Odir:HTMLform.obj Odir:HTMLframe.obj Odir:HTMLformat.obj \
  Odir:HTMLimages.obj Odir:HTMLlists.obj Odir:HTMLparse.obj Odir:HTMLfont.obj \
  Odir:HTMLtable.obj Odir:HTMLtext.obj Odir:HTMLwidgets.obj Odir:list.obj \
  Odir:HTMLimagemap.obj
@@ -125,10 +125,8 @@ Odir:HTML-PSformat.obj : HTML-PSformat.c [-]config.h htmlwidgets.h htmlp.h \
 Odir:HTML.obj          : HTML.c [-]config.h [-]config_$(WORK).h htmlp.h html.h \
                          htmlparse.h htmlfont.h htmlframe.h htmlputil.h \
 			 htmlwidgets.h [-.src]prefs.h [-.libnut]str-tools.h \
-			 [-.libnut]system.h
+			 [-.libnut]system.h [-.libwww2]htbtree.h
 Odir:HTMLapplet.obj    : HTMLapplet.c [-]config.h htmlp.h html.h htmlPutil.h \
-			 htmlparse.h
-Odir:HTMLaprog.obj     : HTMLaprog.c [-]config.h htmlp.h html.h htmlPutil.h \
 			 htmlparse.h
 Odir:HTMLfont.obj      : HTMLfont.c [-]config.h htmlp.h html.h htmlPutil.h \
 			 htmlfont.h htmlparse.h [-.libxmx]xmx.h
@@ -141,12 +139,12 @@ Odir:HTMLimages.obj    : HTMLimages.c [-]config.h htmlp.h html.h noimage.xbm \
                          htmlparse.h htmlputil.h htmlfont.h \
 			 [-.src]img.h [-.src]fsdither.h [-.src]mo-www.h \
 			 [-.src]mosaic.h [-.src]prefs.h [-.src]prefs_defs.h \
-			 delayedimage.xbm anchoredimage.xbm
+			 delayedimage.xbm anchoreddelayedimage.xbm noimage.xbm
 Odir:HTMLimagemap.obj  : HTMLimagemap.c [-]config.h htmlp.h html.h htmlputil.h
-Odir:HTMLlists.obj     : HTMLlists.c [-]config.h html.h htmlmiscdefs.h \
+Odir:HTMLlists.obj     : HTMLlists.c [-]config.h html.h htmlp.h htmlmiscdefs.h \
 			 [-.src]prefs.h [-.src]prefs_defs.h
 Odir:HTMLparse.obj     : HTMLparse.c [-]config.h htmlp.h html.h htmlparse.h \
-			 htmlputil.h
+			 htmlputil.h [-.libwww2]htbtree.h
 Odir:HTMLtable.obj     : HTMLtable.c [-]config.h htmlp.h html.h htmlparse.h
 Odir:HTMLtext.obj      : HTMLtext.c [-]config.h htmlp.h html.h htmlparse.h \
 			 htmlmiscdefs.h htmlputil.h list.h

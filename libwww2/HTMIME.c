@@ -3,7 +3,7 @@
 **
 **	This is RFC 1341-specific code.
 **	The input stream pushed into this parser is assumed to be
-**	stripped on CRs, ie lines end with LF, not CR LF.
+**	stripped on CRs, i.e., lines end with LF, not CR LF.
 **	(It is easy to change this except for the body part where
 **	conversion can be slow.)
 **
@@ -29,17 +29,13 @@ extern int securityType;
 extern int www2Trace;
 #endif
 
-/* Very ugly. */
-extern int loading_length;
-
 /* Export to GUI */
-MIMEInfo MIME_http = {NULL, NULL, NULL, NULL};
+MIMEInfo MIME_http = { NULL, NULL, NULL, NULL };
 
 /*		MIME Object
 **		-----------
 */
-typedef enum _MIME_state 
-{
+typedef enum _MIME_state {
   BEGINNING_OF_LINE,
   CONTENT_,
   CONTENT_T,
@@ -62,7 +58,7 @@ typedef enum _MIME_state
   SKIP_GET_VALUE,		/* Skip space then get value */
   GET_VALUE,		        /* Get value till white space */
   JUNK_LINE,		        /* Ignore the rest of this folded line */
-  NEWLINE,		        /* Just found a LF .. maybe continuation */
+  NEWLINE,		        /* Just found a LF ... maybe continuation */
   CHECK,			/* Check against check_pointer */
   MIME_TRANSPARENT,	        /* Put straight through to target ASAP! */
   MIME_IGNORE		        /* Ignore entire file */
@@ -73,42 +69,33 @@ typedef enum _MIME_state
 } MIME_state;
 
 #define VALUE_SIZE 8192		/* @@@@@@@ Arbitrary? */
-struct _HTStream 
-{
+
+struct _HTStream {
   WWW_CONST HTStreamClass *isa;
-  
-  MIME_state		state;		/* current state */
-  MIME_state		if_ok;		/* got this state if match */
-  MIME_state		field;		/* remember which field */
-  MIME_state		fold_state;	/* state on a fold */
-  WWW_CONST char       *check_pointer;	/* checking input */
-  
-  char		       *value_pointer;	/* storing values */
+  MIME_state		state;		/* Current state */
+  MIME_state		if_ok;		/* Got this state if match */
+  MIME_state		field;		/* Remember which field */
+  MIME_state		fold_state;	/* State on a fold */
+  WWW_CONST char       *check_pointer;	/* Checking input */
+  char		       *value_pointer;	/* Storing values */
   char 			value[VALUE_SIZE];
-  
   HTParentAnchor       *anchor;		/* Given on creation */
   HTStream	       *sink;		/* Given on creation */
-  
-  char		       *boundary;	/* For multipart */
   char		       *set_cookie;     /* Set-Cookie */
   char		       *set_cookie2;    /* Set-Cookie2 */
-  
   HTFormat		encoding;	/* Content-Transfer-Encoding */
   char		       *compression_encoding;
   int                   content_length;
-  int                   header_length;  /* for io accounting -bjs */
+  int                   header_length;  /* For IO accounting -bjs */
   HTFormat		format;		/* Content-Type */
   HTStream 	       *target;		/* While writing out */
   HTStreamClass		targetClass;
-  
   HTAtom	       *targetRep;	/* Converting into? */
-  
   char		       *location;
   char		       *expires;
   char		       *last_modified;
   char		       *refresh;
   char		       *charset;
-
   int interrupted;
 };
 
@@ -126,27 +113,29 @@ struct _HTStream
 **	and resynchronises on line beginnings.
 */
 
-PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
+PRIVATE void HTMIME_put_character (HTStream *me, char c)
 {
+  char ori_c = c;
 #ifdef HAVE_KERBEROS
-    static int got_kerb = 0;
-    static HTAAScheme kscheme;
-    extern int validate_kerberos_server_auth();
+  static int got_kerb = 0;
+  static HTAAScheme kscheme;
+  extern int validate_kerberos_server_auth();
 #endif
 
-    if (me->state == MIME_TRANSPARENT) {
-	(*me->targetClass.put_character)(me->target, c);    /* MUST BE FAST */
-	return;
-    } else {
-	me->header_length++; /* Update this first */
-    }
+  if (me->state == MIME_TRANSPARENT) {
+      (*me->targetClass.put_character)(me->target, c);    /* MUST BE FAST */
+      return;
+  } else {
+      me->header_length++;  /* Update this first */
+  }
 
-    /* Strip CRs */
-    if (c == '\r')
-	return;
+  /* Strip CRs */
+  if (c == '\r')
+      return;
 
-  switch(me->state) 
-    {
+  c = tolower(c);
+
+  switch(me->state) {
     case MIME_IGNORE:
 #ifndef DISABLE_TRACE
       if (www2Trace)
@@ -155,18 +144,16 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
       return;
       
     case NEWLINE:
-      if (c != '\n' && WHITE(c)) {
+      if (c != '\n' && WHITE(ori_c)) {
           /* Folded line */
           me->state = me->fold_state;	/* Pop state before newline */
           break;
       }
-      /* else falls through */
+      /* Else falls through */
       
     case BEGINNING_OF_LINE:
-      switch(c) 
-        {
+      switch(c) {
         case 'c':
-        case 'C':
           me->check_pointer = "ontent-";
           me->if_ok = CONTENT_;
           me->state = CHECK;
@@ -176,7 +163,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
           break;
 
-	case 'E':	/* Extension or Expires */
 	case 'e':
 	  me->state = E;
 #ifndef DISABLE_TRACE
@@ -186,7 +172,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 	  break;
 
         case 'l':
-        case 'L':
           me->state = L;
 #ifndef DISABLE_TRACE
           if (www2Trace)
@@ -195,7 +180,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
 
         case 'r':
-        case 'R':
           me->state = R;
 #ifndef DISABLE_TRACE
           if (www2Trace)
@@ -204,7 +188,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
 
         case 's':
-        case 'S':
           me->check_pointer = "et-cookie";
           me->if_ok = SET_COOKIE;
           me->state = CHECK;
@@ -215,9 +198,8 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
 
 #ifdef HAVE_KERBEROS
-          /*  for kerberos mutual authentication  */
+          /*  For kerberos mutual authentication  */
         case 'w':
-        case 'W':
           me->check_pointer = "ww-authenticate:";
           me->if_ok = WWW_AUTHENTICATE;
           me->state = CHECK;
@@ -228,8 +210,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
 #endif
 
-        case '\n':			/* Blank line: End of Header! */
-          {
+        case '\n': {			/* Blank line: End of Header! */
             int compressed = COMPRESSED_NOT;
 
 #ifndef DISABLE_TRACE
@@ -248,12 +229,11 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
                     compressed = COMPRESSED_BIGZ;
                 } else if (!strcmp(me->compression_encoding, "x-gzip")) {
                     compressed = COMPRESSED_GNUZIP;
-                } else {
 #ifndef DISABLE_TRACE
-                    if (www2Trace)
-                        fprintf(stderr,
-			        "[MIME] Unknown compression_encoding '%s'\n",
-                                me->compression_encoding);
+                } else if (www2Trace) {
+                    fprintf(stderr,
+			    "[MIME] Unknown compression_encoding '%s'\n",
+                            me->compression_encoding);
 #endif
                 }
             }
@@ -263,8 +243,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
                 fprintf(stderr, "[MIME] compressed == %d\n", compressed);
 #endif
 	    if (me->set_cookie || me->set_cookie2) {
-		HTSetCookie(me->set_cookie,
-			    me->set_cookie2,
+		HTSetCookie(me->set_cookie, me->set_cookie2,
 			    me->anchor->address);
 		if (me->set_cookie)
 		    free(me->set_cookie);
@@ -283,35 +262,31 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
                 /* Default to HTML. */
                 me->target = HTStreamStack(HTAtom_for("text/html"),
-                                           me->targetRep,
-                                           compressed,
-                                           me->sink,
-                                           me->anchor);
+                                           me->targetRep, compressed,
+                                           me->sink, me->anchor);
             }
             if (me->target) {
                 me->targetClass = *me->target->isa;
 		/* Check for encoding and select state from there @@ */
-                /* From now push straigh through */
+                /* From now push straight through */
 #ifndef DISABLE_TRACE
                 if (www2Trace)
                     fprintf (stderr, "[MIME] Entering MIME_TRANSPARENT\n");
 #endif
                 me->state = MIME_TRANSPARENT; 
 		/* Header is now completely read */
-		
             } else {
                 /* This is HIGHLY EVIL -- the browser WILL BREAK
-                   if it ever reaches here.  Thus the default to
-                   HTML above, which should always happen... */
+                 * if it ever reaches here.  Thus the default to
+                 * HTML above, which should always happen... */
 #ifndef DISABLE_TRACE
                 if (www2Trace) 
                     fprintf(stderr, "[MIME] HIT HIGHLY EVIL!!! ***\n");
 #endif
                 me->state = MIME_IGNORE;		/* What else to do? */
             }
-          }
-          break;
-
+            break;
+        }
 	default:
 #ifndef DISABLE_TRACE
           if (www2Trace)
@@ -319,11 +294,11 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
           goto bad_field_name;
           
-	} /* switch on character */
+      }  /* Switch on character */
       break;
       
     case CHECK:				/* Check against string */
-      if (TOLOWER(c) == *(me->check_pointer)++) {
+      if (c == *(me->check_pointer)++) {
           if (!*me->check_pointer) 
               me->state = me->if_ok;
       } else {		/* Error */
@@ -331,7 +306,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           if (www2Trace) 
               fprintf(stderr,
                       "[MIME] Bad character `%c' found where `%s' expected\n",
-                      c, me->check_pointer - 1);
+                      ori_c, me->check_pointer - 1);
 #endif
           goto bad_field_name;
       }
@@ -344,7 +319,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 't':
-	case 'T':
           me->state = CONTENT_T;
 #ifndef DISABLE_TRACE
           if (www2Trace)
@@ -353,24 +327,22 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
           
 	case 'e':
-	case 'E':
           me->check_pointer = "ncoding:";
           me->if_ok = CONTENT_ENCODING;
           me->state = CHECK;
 #ifndef DISABLE_TRACE
           if (www2Trace)
-              fprintf(stderr, "[MIME] Found E, checking for 'ncoding:'\n");
+              fprintf(stderr, "[MIME] Found E, check for 'ncoding:'\n");
 #endif
           break;
           
 	case 'l':
-	case 'L':
           me->check_pointer = "ength:";
           me->if_ok = CONTENT_LENGTH;
           me->state = CHECK;
 #ifndef DISABLE_TRACE
           if (www2Trace)
-              fprintf(stderr, "[MIME] Found L, checking for 'ength:'\n");
+              fprintf(stderr, "[MIME] Found L, check for 'ength:'\n");
 #endif
           break;
           
@@ -380,8 +352,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
               fprintf(stderr, "[MIME] Found nothing; bleah\n");
 #endif
           goto bad_field_name;
-          
-      } /* Switch on character */
+      }
       break;
       
     case CONTENT_T:
@@ -391,7 +362,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 'r':
-	case 'R':
           me->check_pointer = "ansfer-encoding:";
           me->if_ok = CONTENT_TRANSFER_ENCODING;
           me->state = CHECK;
@@ -402,7 +372,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           break;
           
 	case 'y':
-	case 'Y':
           me->check_pointer = "pe:";
           me->if_ok = CONTENT_TYPE;
           me->state = CHECK;
@@ -418,7 +387,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
               fprintf(stderr, "[MIME] Found nothing; bleah\n");
 #endif
           goto bad_field_name;
-      } /* Switch on character */
+      }
       break;
 
     case L:
@@ -428,35 +397,32 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 'a':
-	case 'A':
-		me->check_pointer = "st-modified:";
-		me->if_ok = LAST_MODIFIED;
-		me->state = CHECK;
+	  me->check_pointer = "st-modified:";
+	  me->if_ok = LAST_MODIFIED;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Is LA; check for st-modified:\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is LA; check for st-modified:\n");
 #endif
-		break;
+	  break;
 
 	case 'o':
-	case 'O':
-		me->check_pointer = "cation:";
-		me->if_ok = LOCATION;
-		me->state = CHECK;
+	  me->check_pointer = "cation:";
+	  me->if_ok = LOCATION;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr,
-			    "[MIME] Is LO; check for cation:\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is LO; check for cation:\n");
 #endif
-		break;
+	  break;
 
 	default:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Found nothing; bleah\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Found nothing; bleah\n");
 #endif
-		goto bad_field_name;
-      } /* switch on character */
+	  goto bad_field_name;
+      }
       break;
 
     case R:
@@ -466,24 +432,22 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 'e':
-	case 'E':
-		me->check_pointer = "fresh:";
-		me->if_ok = REFRESH;
-		me->state = CHECK;
+	  me->check_pointer = "fresh:";
+	  me->if_ok = REFRESH;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr,
-			    "[MIME] Is RE; check for fresh:\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is RE; check for fresh:\n");
 #endif
-		break;
+	  break;
 
 	default:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Found nothing; bleah\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Found nothing; bleah\n");
 #endif
-		goto bad_field_name;
-      } /* switch on character */
+	      goto bad_field_name;
+      }
       break;
 
     case E:
@@ -493,21 +457,20 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 'x':
-	case 'X':
-		me->state = EX;
+	  me->state = EX;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Is EX; checking for EXP or EXT:\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is EX; check for EXP or EXT:\n");
 #endif
-		break;
+	  break;
 
 	default:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Found nothing; bleah\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Found nothing; bleah\n");
 #endif
-		goto bad_field_name;
-      } /* switch on character */
+	  goto bad_field_name;
+      }
       break;
 
     case EX:
@@ -517,69 +480,64 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
       switch(c) {
 	case 'p':
-	case 'P':
-		me->check_pointer = "ires";
-		me->if_ok = EXPIRES;
-		me->state = CHECK;
+	  me->check_pointer = "ires";
+	  me->if_ok = EXPIRES;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Is EXP; check for 'ires'\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is EXP; check for 'ires'\n");
 #endif
-		break;
+	  break;
 
 	case 't':
-	case 'T':
-		me->check_pointer = "ension:";
-		me->if_ok = EXTENSION;
-		me->state = CHECK;
+	  me->check_pointer = "ension:";
+	  me->if_ok = EXTENSION;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Is EXT; check for 'ension:'\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Is EXT; check for 'ension:'\n");
 #endif
-		break;
+	  break;
 
 	default:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Was EX; found nothing\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] Was EX; found nothing\n");
 #endif
-		goto bad_field_name;
-      } /* Switch on character */
+	  goto bad_field_name;
+      }
       break;
 
     case SET_COOKIE:			/* Check for ':' or '2' */
-	switch (c) {
+      switch (c) {
 	case ':':
-	    me->field = SET_COOKIE1;		/* Remember it */
-	    me->state = SKIP_GET_VALUE;
+	  me->field = SET_COOKIE1;		/* Remember it */
+	  me->state = SKIP_GET_VALUE;
 #ifndef DISABLE_TRACE
-	    if (www2Trace)
-	        fprintf(stderr, "[MIME] SET_COOKIE, found :\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] SET_COOKIE, found :\n");
 #endif
-	    break;
+	  break;
 
 	case '2':
-	    me->check_pointer = ":";
-	    me->if_ok = SET_COOKIE2;
-	    me->state = CHECK;
+	  me->check_pointer = ":";
+	  me->if_ok = SET_COOKIE2;
+	  me->state = CHECK;
 #ifndef DISABLE_TRACE
-	    if (www2Trace)
-	        fprintf(stderr,
-		        "[MIME] SET_COOKIE, found 2, checking for ':'\n");
+	  if (www2Trace)
+	      fprintf(stderr, "[MIME] SET_COOKIE, found 2, check for ':'\n");
 #endif
-	    break;
+	  break;
 
 	default:
 #ifndef DISABLE_TRACE
-	    if (www2Trace)
-	        fprintf(stderr,
-		        "[MIME] Bad character `%c' found where `%s' expected\n",
-		        c, "':' or '2'");
+	  if (www2Trace)
+	      fprintf(stderr,
+		      "[MIME] Found `%c' where ':' or '2' expected\n", ori_c);
 #endif
-	    goto bad_field_name;
-
-	} /* switch on character */
-	break;
+	  goto bad_field_name;
+      }
+      break;
 
 #ifdef HAVE_KERBEROS
     case WWW_AUTHENTICATE:
@@ -604,7 +562,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
           me->state = NEWLINE;
           break;
       }
-      if (WHITE(c)) 
+      if (WHITE(ori_c)) 
           break;	/* Skip white space */
       
       me->value_pointer = me->value;
@@ -612,16 +570,15 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
       /* Fall through to store first character */
       
     case GET_VALUE:
-      if (WHITE(c) && (c != ' ')) {	/* End of field */
+      if (WHITE(ori_c) && (c != ' ')) {	/* End of field */
 	  char *cp;
 
-          *me->value_pointer = 0;
-	  cp = (me->value_pointer - 1);
+          *me->value_pointer = '\0';
+	  cp = me->value_pointer - 1;
 	  /* Trim trailing white space */
-	  while ((cp >= me->value) && WHITE(*cp)) {
-	      *cp = '\0';
-	      cp--;
-	  }
+	  while ((cp >= me->value) && WHITE(*cp))
+	      *cp-- = '\0';
+
           switch (me->field) {
             case CONTENT_TYPE:
 #ifndef DISABLE_TRACE
@@ -685,8 +642,6 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 
             case CONTENT_LENGTH:
               me->content_length = atoi(me->value);
-              /* This is TEMPORARY. */
-              loading_length = me->content_length;
 #ifndef DISABLE_TRACE
               if (www2Trace)
                   fprintf(stderr, "[MIME] Got content length '%d'\n", 
@@ -695,68 +650,68 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
               break;
 
             case EXPIRES:
-		if (me->expires)
-		    free(me->expires);
-		me->expires = strdup(me->value);
+	      if (me->expires)
+		  free(me->expires);
+	      me->expires = strdup(me->value);
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Got expires '%s'\n", me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Got expires '%s'\n", me->value);
 #endif
-		break;
+	      break;
 
             case LAST_MODIFIED:
-		if (me->last_modified)
-		    free(me->last_modified);
-		me->last_modified = strdup(me->value);
+	      if (me->last_modified)
+		  free(me->last_modified);
+	      me->last_modified = strdup(me->value);
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Got last modified '%s'\n",
-			    me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Got last modified '%s'\n", me->value);
 #endif
-		break;
+	      break;
 
             case LOCATION:
-		me->location = me->value;
+	      me->location = me->value;
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Got location '%s'\n", me->location);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Got location '%s'\n", me->location);
 #endif
-		break;
+	      break;
 
             case REFRESH:
-		if (me->refresh)
-		    free(me->refresh);
-		me->refresh = strdup(me->value);
+	      if (me->refresh)
+		  free(me->refresh);
+	      me->refresh = strdup(me->value);
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Got refresh '%s'\n", me->refresh);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Got refresh '%s'\n", me->refresh);
 #endif
-		break;
+	      break;
 
 	    case SET_COOKIE1:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Set-Cookie: '%s'\n", me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Set-Cookie: '%s'\n", me->value);
 #endif
-		if (me->set_cookie == NULL) {
-		    StrAllocCopy(me->set_cookie, me->value);
-		} else {
-		    StrAllocCat(me->set_cookie, ", ");
-		    StrAllocCat(me->set_cookie, me->value);
-		}
-		break;
+	      if (me->set_cookie == NULL) {
+		  StrAllocCopy(me->set_cookie, me->value);
+	      } else {
+		  StrAllocCat(me->set_cookie, ", ");
+		  StrAllocCat(me->set_cookie, me->value);
+	      }
+	      break;
+
 	    case SET_COOKIE2:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Set-Cookie2: '%s'\n", me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Set-Cookie2: '%s'\n", me->value);
 #endif
-		if (me->set_cookie2 == NULL) {
-		    StrAllocCopy(me->set_cookie2, me->value);
-		} else {
-		    StrAllocCat(me->set_cookie2, ", ");
-		    StrAllocCat(me->set_cookie2, me->value);
-		}
-		break;
+	      if (me->set_cookie2 == NULL) {
+		  StrAllocCopy(me->set_cookie2, me->value);
+	      } else {
+		  StrAllocCat(me->set_cookie2, ", ");
+		  StrAllocCat(me->set_cookie2, me->value);
+	      }
+	      break;
 
 #ifdef HAVE_KERBEROS
             case WWW_AUTHENTICATE:
@@ -765,10 +720,11 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
                  * WWW-Authenticate: KerberosV4 [strified ktext]
                  * also allowed: KerberosV5, KerbV4-Encrypted, KerbV5-Encrypted
                  *
-                 * This code is ugly: we have to keep this got_kerb static around because
-                 * the FSM isn't really designed to have fields with values that
-                 * include whitespace.  got_kerb tells us that we've been in this code
-                 * before, and that we saw the word "kerberos"
+                 * This code is ugly: we have to keep this got_kerb static
+		 * around because the FSM isn't really designed to have fields
+		 * with values that include whitespace.  got_kerb tells us that
+		 * we've been in this code before, and that we saw the word
+		 * "kerberos"
                  */
 #ifndef DISABLE_TRACE
                 if (www2Trace)
@@ -777,10 +733,10 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 #endif
                 if (got_kerb) {
                     validate_kerberos_server_auth(kscheme, me->value);
-                    got_kerb = 0;       /* reset kerb state */
+                    got_kerb = 0;       /* Reset kerb state */
                     me->state = me->field;
 		} else if (!my_strncasecmp(me->value, "kerb", 4)) {
-                    if (0) {    	/* just to get things started */
+                    if (0) {    	/* Just to get things started */
 		    }
 #ifdef KRB4
                     else if (!my_strncasecmp(me->value, "KerberosV4", 10)) {
@@ -801,58 +757,56 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 			     "Unrecognized field in WWW-Authenticate header\n");
                        	     me->state = me->field;
 		    }
-
 		}
                 break;
 #endif
 
             case EXTENSION:
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr,"[MIME] Got Extension value '%s'\n",
-			    me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Got Extension value '%s'\n",
+			  me->value);
 #endif
-		/* Lowercase it. */
-		{
-                    char *tmp;
+	      /* Lowercase it. */
+	      {
+                  char *tmp;
 
-		    for (tmp = me->value; *tmp; tmp++)
-			*tmp = TOLOWER (*tmp);
-		}
+		  for (tmp = me->value; *tmp; tmp++)
+		      *tmp = TOLOWER(*tmp);
+	      }
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-		    fprintf(stderr, "[MIME] Lowercased to '%s'\n", me->value);
+	      if (www2Trace)
+		  fprintf(stderr, "[MIME] Lowercased to '%s'\n", me->value);
 #endif
-		switch (*(me->value)) {
-		    case 'd': /* Domain */
-			if (!strcmp(me->value, "domain-restricted")) {
-			    securityType = HTAA_DOMAIN;
+	      switch (*me->value) {
+		case 'd':  /* Domain */
+		  if (!strcmp(me->value, "domain-restricted")) {
+		      securityType = HTAA_DOMAIN;
 #ifndef DISABLE_TRACE
-			    if (www2Trace)
-				fprintf(stderr,
-			           "[MIME] Domain restrict extension found.\n");
+		      if (www2Trace)
+			  fprintf(stderr,
+			         "[MIME] Domain restrict extension found.\n");
 #endif
-				break;
-			}
-			/* Fall through */
-		    default: /* Unknown */
+		      break;
+		  }
+		  /* Fall through */
+		default:  /* Unknown */
 #ifndef DISABLE_TRACE
-			if (www2Trace)
-			    fprintf(stderr,
-				    "[MIME] Unknown extension header: '%s'\n",
-				    me->value);
+		  if (www2Trace)
+		      fprintf(stderr, "[MIME] Unknown extension header: '%s'\n",
+			      me->value);
 #endif
-			me->state = me->field;
-			break;
-		}
-		break;
+		  me->state = me->field;
+		  break;
+	      }
+	      break;
 
 	    default:		/* Should never get here */
               break;
-	    }
+	  }
       } else {
           if (me->value_pointer < (me->value + VALUE_SIZE - 1)) {
-              *me->value_pointer++ = c;
+              *me->value_pointer++ = ori_c;
               break;
           } else {
               goto value_too_long;
@@ -867,7 +821,7 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
       }
       break;
       
-  } /* switch on state */
+  }  /* Switch on state */
   
   return;
   
@@ -888,31 +842,33 @@ PRIVATE void HTMIME_put_character ARGS2(HTStream *, me, char, c)
 **
 **	Strings must be smaller than this buffer size.
 */
-PRIVATE void HTMIME_put_string ARGS2(HTStream *, me, WWW_CONST char *, s)
+PRIVATE void HTMIME_put_string (HTStream *me, WWW_CONST char *s)
 {
-  WWW_CONST char *p;
-
 #ifndef DISABLE_TRACE
   if (www2Trace)
       fprintf(stderr, "[HTMIME_put_string] Putting '%s'\n", s);
 #endif
+
   if (me->state == MIME_TRANSPARENT) {		/* Optimisation */
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "via transparent put_string\n");
 #endif
-      (*me->targetClass.put_string)(me->target,s);
+      (*me->targetClass.put_string)(me->target, s);
+
   } else if (me->state != MIME_IGNORE) {
+      WWW_CONST char *p;
+
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "via char-by-char put_character\n");
 #endif
-      for (p = s; *p; p++) 
-          HTMIME_put_character(me, *p);
-  } else {
+      for (p = s; *p; )
+          HTMIME_put_character(me, *p++);
+
 #ifndef DISABLE_TRACE
-      if (www2Trace)
-          fprintf(stderr, "DOING NOTHING!\n");
+  } else if (www2Trace) {
+      fprintf(stderr, "DOING NOTHING!\n");
 #endif
   }
   return;
@@ -922,32 +878,33 @@ PRIVATE void HTMIME_put_string ARGS2(HTStream *, me, WWW_CONST char *, s)
 /*	Buffer write.  Buffers can (and should!) be big.
 **	------------
 */
-PRIVATE void HTMIME_write ARGS3(HTStream *, me, WWW_CONST char *, s, int, l)
+PRIVATE void HTMIME_write (HTStream *me, WWW_CONST char *s, int l)
 {
-  WWW_CONST char *p;
-
 #ifndef DISABLE_TRACE
   if (www2Trace)
       fprintf(stderr, "[HTMIME_write] Putting %d bytes\n", l);
 #endif
+
   if (me->state == MIME_TRANSPARENT) {		/* Optimisation */
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "via transparent put_block\n");
 #endif
       (*me->targetClass.put_block)(me->target, s, l);
+
   } else if (me->state != MIME_IGNORE) {
+      WWW_CONST char *p;
+
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "via char-by-char put_character\n");
 #endif
+      for (p = s; p < (s + l); )
+          HTMIME_put_character(me, *p++);
 
-      for (p = s; p < (s + l); p++)
-          HTMIME_put_character(me, *p);
-  } else {
 #ifndef DISABLE_TRACE
-      if (www2Trace)
-          fprintf(stderr, "DOING NOTHING!\n");
+  } else if (www2Trace) {
+      fprintf(stderr, "DOING NOTHING!\n");
 #endif
   }
   return;
@@ -958,9 +915,9 @@ PRIVATE void HTMIME_write ARGS3(HTStream *, me, WWW_CONST char *, s, int, l)
 **	-------------------
 **
 */
-PRIVATE void HTMIME_free ARGS1(HTStream *, me)
+PRIVATE void HTMIME_free (HTStream *me)
 {
-  if (!me->target) {
+  if (!me->target && !me->interrupted) {
 #ifndef DISABLE_TRACE
       if (www2Trace) {
           fprintf(stderr, "[HTMIME_free] No target!\n");
@@ -975,10 +932,12 @@ PRIVATE void HTMIME_free ARGS1(HTStream *, me)
           fprintf(stderr, "  me->target->isa 0x%08x\n", me->target->isa);
 #endif
       me->targetClass = *me->target->isa;
-/* VAX C compiler cannot deal with the orginal line at all, GEC */
+
+      /* VAX C compiler cannot deal with the orginal line at all, GEC */
       (*me->targetClass.put_string) (me->target, 
-"<H1>ERROR IN HTTP/1.0 RESPONSE</H1> The remote server returned a HTTP/1.0 response that Mosaic's MIME parser could not understand.  Please contact the server maintainer.<P> Sorry for the inconvenience,<P> <ADDRESS>The Management</ADDRESS>");
-/* BSN put an extra line feed here for VAXC's limited record length */
+      "<H1>ERROR IN HTTP/1.0 RESPONSE</H1> The remote server returned a HTTP/1.0 response that Mosaic's MIME parser could not understand.  Please contact the server maintainer.<P> Sorry for the inconvenience,<P> <ADDRESS>The Management</ADDRESS>");
+      /* BSN put an extra line feed here for VAXC's limited record length */
+
       securityType = HTAA_UNKNOWN;
   } 
   if (me->target) 
@@ -989,19 +948,16 @@ PRIVATE void HTMIME_free ARGS1(HTStream *, me)
           free(MIME_http.expires);
       MIME_http.expires = me->expires;
   }
-
   if (me->last_modified) {
       if (MIME_http.last_modified)
           free(MIME_http.last_modified);
       MIME_http.last_modified = me->last_modified;
   }
-
   if (me->refresh) {
       if (MIME_http.refresh)
           free(MIME_http.refresh);
       MIME_http.refresh = me->refresh;
   }
-
   if (me->charset) {
       if (MIME_http.charset)
           free(MIME_http.charset);
@@ -1016,20 +972,22 @@ PRIVATE void HTMIME_free ARGS1(HTStream *, me)
 /*	End writing
 */
 
-PRIVATE void HTMIME_end_document ARGS1(HTStream *, me)
+PRIVATE void HTMIME_end_document (HTStream *me)
 {
   if (me->target) 
       (*me->targetClass.end_document)(me->target);
 }
 
-PRIVATE void HTMIME_handle_interrupt ARGS1(HTStream *, me)
+PRIVATE void HTMIME_handle_interrupt (HTStream *me)
 {
   me->interrupted = 1;
 
-  /* Propagate interrupt message down. */
-  if (me->target)
+  /* Propagate interrupt message down, then free down */
+  if (me->target) {
       (*me->targetClass.handle_interrupt)(me->target);
-
+      (*me->targetClass.free)(me->target);
+      me->target = NULL;
+  }
   return;
 }
 
@@ -1037,8 +995,7 @@ PRIVATE void HTMIME_handle_interrupt ARGS1(HTStream *, me)
 /*	Structured Object Class
 **	-----------------------
 */
-PUBLIC WWW_CONST HTStreamClass HTMIME =
-{		
+PUBLIC WWW_CONST HTStreamClass HTMIME = {		
   "MIMEParser",
   HTMIME_free,
   HTMIME_end_document,
@@ -1052,53 +1009,71 @@ PUBLIC WWW_CONST HTStreamClass HTMIME =
 **	-------------------------
 */
 
-PUBLIC HTStream *HTMIMEConvert ARGS5(
-	HTPresentation *,	pres,
-	HTParentAnchor *,	anchor,
-	HTStream *,		sink,
-        HTFormat,               format_in,
-        int,                    compressed)
+PUBLIC HTStream *HTMIMEConvert (HTPresentation *pres,
+				HTParentAnchor *anchor,
+				HTStream *sink,
+    				HTFormat format_in,
+        			int compressed)
 {
     HTStream *me;
-    
-    me = malloc(sizeof(*me));
+    static HTAtom *www_plaintext;
+    static int init = 0;
+
+    if (!init) {
+	www_plaintext = WWW_PLAINTEXT;
+	init = 1;
+    }
+    me = calloc(1, sizeof(*me));
     if (!me)
         outofmem(__FILE__, "HTMIMEConvert");
-
-    me->isa = &HTMIME;       
-
 #ifndef DISABLE_TRACE
     if (www2Trace)
         fprintf(stderr, "[HTMIMEConvert] HELLO!\n");
 #endif
 
+    me->isa = &HTMIME;       
     me->sink = sink;
     me->anchor = anchor;
-    me->target = NULL;
     me->state = BEGINNING_OF_LINE;
-    me->format = WWW_PLAINTEXT;
+    me->format = www_plaintext;
     me->targetRep = pres->rep_out;
-    me->boundary = NULL;	/* Not set yet */
+    me->content_length = -1;
+
+    /** calloc zeros
+    me->target = NULL;
     me->set_cookie = NULL;
     me->set_cookie2 = NULL;
     me->location = NULL;
     me->interrupted = 0;
     me->encoding = 0;
     me->compression_encoding = NULL;
-    me->content_length = -1;
-    me->header_length = 0; /* To allow differentiation between
-			      content and header for read length */
+    me->header_length = 0;      * To allow differentiation between
+			        * content and header for read length
     me->expires = NULL;
     me->last_modified = NULL;
     me->refresh = NULL;
     me->charset = NULL;
+    **/
     return me;
 }
 
-/* a kludge for HTFormat.c */
 int HTMIME_get_header_length(HTStream *me)
 {
     if (me->isa != &HTMIME)
-	return 0; /* In case we screw up */ 
+	return 0;  /* In case we screw up */
     return me->header_length;
+}
+
+int HTMIME_get_content_length(HTStream *me)
+{
+    if (me->isa != &HTMIME)
+	return -1;  /* In case we screw up */
+    return me->content_length;
+}
+
+Boolean HTMIME_header_done(HTStream *me)
+{
+    if (me->state == MIME_TRANSPARENT)
+	return True;
+    return False;
 }
