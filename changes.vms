@@ -1,0 +1,448 @@
+From NCSA 2.6 to VMS 2.6-1b
+...............
+
+ o Included the version 6 Jpeg library from NCSA Mosaic 2.7b2
+ o Included the HTML table support enable/disable option from NCSA
+   Mosaic 2.7b2
+ o Included several minor bug fixes from NCSA Mosaic 2.7b2
+ o The -home command setting now overrides the WWW_HOME logical.
+
+From NCSA 2.6 and VMS 2.6-1b to VMS 2.6-2
+...............
+
+ o Created a single integrated build procedure for both MMS and
+   non-MMS builds
+ o Added support for SOCKETSHR/NETLIB
+ o URL access methods (e.g. http:) are now case-insensitive
+ o Upgraded from freeWAIS 0.3 to freeWAIS 0.5
+ o Upgraded to the LIBHTMLW from NCSA Mosaic 2.7b2 for improved
+   postscript printing
+ o Included the proxy/noproxy support from NCSA Mosaic 2.7b2
+ o Included the Document Links display from NCSA Mosaic 2.7b2
+ o Included the Load Meter from NCSA Mosaic 2.7b2
+ o Included the inline PNG image support from NCSA Mosaic 2.7b2
+ o Added workarounds for the Motif 1.2-3 dialog bug.
+ o Added support for MultiNet V3.5 rev A and B header files
+ o Added support for DEC C version 5.2 header files
+ o Made all float operations single precision for both VAX C
+   and DEC C
+ o Added VMS Mosaic help selection.
+ o Numerous minor bug fixes.
+
+From VMS 2.6-2 to VMS 2.7-1b
+...............
+
+ o Upgraded to the LIBHTMLW from NCSA Mosaic 2.7b3
+ o Added support for multiple builds in one directory structure
+
+From VMS 2.7-1b to VMS 2.7-2b
+...............
+
+ o Upgraded to the LIBHTMLW from NCSA Mosaic 2.7b4
+ o Finished upgrading all libraries to at least NCSA Mosaic 2.7b2
+ o Added support for simultaneous execution of builds
+
+From VMS 2.7-2b to VMS 2.7-4b
+...............
+
+ o Upgraded all libraries to NCSA Mosaic 2.7b4
+ o Added support for OpenVMS V7.0
+ o MMS and MMK builds now automatically delete unneeded object files
+
+From VMS 2.7-4b to VMS 2.7-4b2
+...............
+
+ o 18 point fonts are automatically used if 17 point fonts are missing
+ o LUCIDA and NO_17_PT options removed from build procedure
+ o Disables Motif 1.2-3 bug workaround if Motif 1.2-3 ECO 7 installed
+ o Support for submitting MAKE_MOSAIC.COM to batch
+ o Image clipping performance enhancements
+ o Postscript viewer now selectable via MAKE_MOSAIC.COM
+
+From VMS 2.7-4b2 to VMS 2.7-4b3
+...............
+
+ o Updated DESCRIP.MMS files with .H file dependencies
+ o Image clipping limited based on transitions instead of image size
+ o Added DCL command line interface
+ o Fixed various problems in the remote control interface
+
+From VMS 2.7-4b3 to VMS 2.7-4
+...............
+
+ o Added more options to the DCL command line interface
+ o Enhanced the output of the /VERSION qualifier
+ o Added help file for the command line interface
+ o Added CLEAN option for non-MMS builds
+ o Support for Motif 1.2-4
+ o Support for adding Mosaic command to the system dcltables
+ o Fixed various FTP file name problems
+
+From VMS 2.7-4 to VMS 2.7-5b1
+...............
+
+ o Upgraded all libraries to NCSA Mosaic 2.7b5
+ o Upgraded JPEG library to version 6A
+ o Upgraded PNG library to version 0.89
+ o Upgraded ZLIB library to version 1.0.2
+ o Updated build files to make and use NCSA's config.h
+ o Updated DESCRIP.MMS files with new .H file dependencies for 2.7b5
+ o Added backupFileVersions X resource
+
+From VMS 2.7-5b1 to VMS 2.7-5b2
+...............
+
+ o Support for DEC C V5.3 on VAX systems
+ o Build date now included in crash and /VERSION info
+ o Reduced executable image size by over 950 blocks
+ o Included all current NCSA 2.7b5 bug fixes
+
+From VMS 2.7-5b2 to VMS 2.7-5b3
+...............
+
+ o Upgraded ZLIB library to version 1.0.4
+ o Eliminated /STANDARD=VAXC for LIBHTMLW DEC C builds
+ o MaxClipTransitions clipping limit implemented for VXT 2000
+   terminals and DECwindows eXcursion
+ o Disabled popup menu in kiosk mode
+ o Added UCX compatibility support for CMU, MultiNet and Pathway
+
+From VMS 2.7-5b3 to VMS 2.7-5b4
+...............
+
+ o Added GNU C (2.7.1) support for VAX UCX compatibility builds
+ o Added START and END parameters for non-MMS builds
+ o Removed UCX$IPC_SHR.EXE from DEC C UCX compatibility links
+ o Linker option files are now dynamically created as needed
+ o Telnet command port parameter syntax now determined at run-time
+ o Image Identification now set to actual version (e.g. 2.7-5b4)
+
+From VMS 2.7-5b4 to VMS 2.7-5
+...............
+
+ o DCL command line interface now supported for VAX C and GNU C builds
+ o MAKE_MOSAIC.COM now checks if MMK is at version 3.4 or later
+ o Various bug fixes
+
+From VMS 2.7-5 to VMS 2.7-6b1
+...............
+
+ o Upgraded all libraries to initial NCSA Mosaic 2.7b6
+ o Upgraded PNG library to version 0.96
+ o Added UCX compatibility support for TCPware
+ o Added preference file support
+ o Added VMS specific Comment Card
+ o Added support for finger URLs
+ o Added Logo Button URL Paste action
+ o Added VMS logo support
+ o Improved TN3270 URL support
+ o MAKE_MOSAIC.COM now checks if MultiNet is at version 3.4 or later
+   for UCX compatibility builds
+ o Support for MultiNet builds with DEC C V5.5
+ o MAKE_MOSAIC.COM updated for MMK V3.6
+ o Support for builds with DEC C V5.6
+ o Support for using MMK when MMS is also installed
+ o Removed support for the DEC C ioctl routine because it doesn't work 
+ o Added small splash screen for VAX C builds
+ o Removed useless icon pixmaps to reduce image size by 210 blocks
+ o Reduced icon colormap usage by 6
+
+From VMS 2.7-6b1 to VMS 3.0b1
+...............
+
+ o Replaced NCSA LIBHTMLW with mMosaic V3.2.3 LIBHTMLW which has much
+   better table support and support for <CENTER> and ALIGN in <P> tags
+ o Various bug fixes
+
+From VMS 3.0b1 to VMS 3.0b2
+...............
+
+ o Many bug fixes and restorations of 2.7 functionality
+ o Added support for ALIGN in heading tags
+ o Added support for ALIGN and WIDTH in <HR> tags
+ o Added support for alignment of tables and forms
+ o Added support for ALIGN in <TD> and <TH> tags
+ o Improved support for alignment tags within tables
+ o Improved support for tables in forms
+ o Upgraded PNG library to version 0.98
+ o Upgraded ZLIB library to version 1.0.7
+ o Translated most of mMosaic's French code comments to English
+ o Eliminated /STANDARD=VAXC for LIBWWW2 DEC C builds
+ o Added NOLINK option to build procedure
+ o Accepts Extended MIME Content-Types
+ o Treats CR without LF as CR/LF when in <PRE> blocks
+
+From VMS 3.0b2 to VMS 3.0b3
+...............
+
+ o Added support for ALIGN in <DIV> tags
+ o Added support for ALIGN (left and right) in <IMG> tags
+ o Added support for WIDTH=pixels in <TD> tags
+ o Added <FRAME> NAME and <FRAMESET> information to frame display 
+ o Improved table cell and column width calculations
+ o Improved support for forms in tables
+ o Enlarged default size of the document view window
+ o Reduced the size of the "broken image" image by over 50%
+ o Added additional fixes from NCSA Mosaic 2.7b6
+ o Upgraded PNG library to version 0.99a
+ o Upgraded ZLIB library to version 1.0.8
+ o Added support for &quot within tags
+ o Eliminated display of borders for empty table cells
+ o Fixed various alignment problems
+ o Added separate table debug tracing
+ o Added TRACE option to build procedure
+ o Support for builds with DEC C V5.7
+
+From VMS 3.0b3 to VMS 3.0b4
+...............
+
+ o Implemented progressive display
+ o Added support for COLOR in <FONT> tags
+ o Added support for BGCOLOR in <TABLE>, <TR> and <TD> tags
+ o Added support for SIZE and NOSHADE in <HR> tags
+ o Added support for table rows without <TD> tags
+ o Improved support for heading and <P> tags in lists
+ o Included bodyBG (body background) resource from NCSA Mosaic 2.7b6
+ o Improved handling of 8bit characters and & escape sequences
+ o Upgraded ZLIB library to version 1.1.1
+ o Upgraded PNG library to version 1.0.0
+ o Changed to ignore leading spaces in list items
+ o Removed old non-mMosaic code from sources
+
+From VMS 3.0b4 to VMS 3.0b5
+...............
+
+ o Included 3D table borders from mMosaic 3.3.0
+ o Added support for SIZE in <FONT> tags (Times font only)
+ o Added support for <BASEFONT> tag
+ o Form buttons and checkboxes have same color as the background
+ o Table background colors display correctly over background images
+ o Improved support for CELLSPACING and CELLPADDING in <TABLE> tags
+ o Improved font memory management
+ o Improved colormap management
+ o Enabled Gamma correction for PNG images
+ o Improved support for <BLOCKQUOTE> tags in tables
+ o Upgraded JPEG library to version 6B
+ o Upgraded ZLIB library to version 1.1.2
+ o Upgraded PNG library to version 1.0.1
+ o Removed mMosaic Multicast code from sources
+
+From VMS 3.0b5 to VMS 3.0b6
+...............
+
+ o Added support for client side image maps
+ o SIZE in <FONT> tags now supports all Mosaic fonts
+ o Added support for FACE (Mosaic fonts only) in <FONT> tags
+ o Improved image cache performance
+ o Added caching of image clip mask data
+ o Improved internal image viewer performance
+ o Form menu options now expand to multiple columns as needed
+
+From VMS 3.0b6 to VMS 3.0b7
+...............
+
+ o Improved line spacing between headers, paragraphs, tables, etc.
+ o Improved table width and height calculations
+ o Improved vertical alignment of text, images and widgets
+ o Improved support for forms in tables
+ o Restored support for vertical (TOP, BOTTOM, MIDDLE) image alignment
+ o Added support for ALIGN in <TR> tags
+ o Added support for NAME (target anchors) in anchor tags
+ o Added optional tracking of visited target anchors
+ o Added support for WIDTH=percent in <TD> tags
+ o Added support for VSPACE in <IMG> tags
+ o Added support for <OPTION> tags with no VALUE
+ o Added support for BOTTOM in <CAPTION> tags
+ o Added skipping of <SCRIPT> and <STYLE> tag contents
+ o Added Mozilla (Netscape) to spoof agents menu
+ o Added optional debugging menu
+ o Added reportBugs trace option
+ o Various bug fixes and workarounds for bogus HTML
+
+From VMS 3.0b7 to VMS 3.0b8
+...............
+
+ o Added support for animated GIFs
+ o Updated Help, Navigate and Document menus
+ o Maintains correct base URL for edited documents
+ o Deletes editor temporary files
+ o Eliminated underlining of space preceeding anchors
+ o Restored support for <LISTING> tag
+ o Improved display of <NOFRAMES> information
+ o Improved line spacing of pre-formatted text
+ o Corrected the colors "gray", "green" and "purple" per HTML 3.2
+ o Added the colors "silver", "olive", "teal", "aqua" and "fuchsia"
+ o Improved support for WIDTH=percent in <TD> tags
+ o Added Lynx and MSIE to spoof agents menu
+ o Added support for space as a "coords" delimiter in <AREA> tags
+ o Upgraded ZLIB library to version 1.1.3
+ o Added build support for latest Motif 1.2-3 ECO kits
+ o Removed "NCSA" from splash image
+
+From VMS 3.0b8 to VMS 3.0
+...............
+
+ o Added support for floating images
+ o Added support for left floating tables
+ o Added animation stop function to logo button
+ o Improved form scrolling and screen refresh performance
+ o Added font color support to form buttons and checkboxes
+ o Added support for bold italic fonts
+ o Added rescaling support for animated images
+ o Added support for CLEAR in <BR> tags
+ o Added support for TYPE and START in <OL> tags
+ o Added support for VALUE in <LI> tags
+ o Added support for HEIGHT and NOWRAP in <TD> tags
+ o Added support for HSPACE and WIDTH=percent in <IMG> tags
+ o Added support for <NOBR> tags in tables
+ o Improved table width calculations
+ o Corrected various animation refresh problems
+ o Improved support for form menus containing many options
+ o Added help for Document Links window
+ o Added support for single quoted tag values
+ o Added refreshTrace trace option
+
+From VMS 3.0 to VMS 3.1
+...............
+
+ o Added support for Refresh URLs in <META> tags
+ o Added support for proxy server authentication
+ o Added Referer info to inline image download reguests
+ o Added support for relative redirection URLs
+ o Added support for <S> tags
+ o Added partial support for NUMBER as a form input type
+ o Improved progressive display of page backgrounds
+ o Removed space between left aligned tables and adjoining tables
+ o Corrected transparent animation refresh problem in tables 
+ o Eliminated /STANDARD=VAXC for DEC C builds of the SRC library
+ o Various bug fixes
+
+From VMS 3.1 to VMS 3.2
+...............
+
+ o Added support for browser safe colors
+ o Added Floyd-Steinberg dithering of images
+ o Added support for right floating tables
+ o Improved support for floating images
+ o Improved vertical alignment of images
+ o Added support for tables containing no <TR> and <TD>/<TH> tags
+ o Added support for HTML containing Null characters
+ o Added Referer info to image viewer download reguests
+ o Reduced icon and GUI colormap usage
+ o Changed "Previous page" button to ignore Refresh URLs
+ o Updated help information
+ o Improved support for file://localhost/ URLs
+ o Improved support for PNG images
+ o Upgraded PNG library to version 1.0.3
+ o Removed CCI support from default build
+ o Removed HDF and DTM code from source
+ o Various bug fixes
+
+From VMS 3.2 to VMS 3.3
+...............
+
+ o Restored support for Postscript printing
+ o Added VMS directory browsing
+ o Added support for ALT text with delayed and broken images
+ o Added preallocation of memory for markup and formatting elements
+ o Added support for NOWRAP in <TABLE> tags
+ o Updated the Navigate menu with various search engines
+ o Changed temporary file names to be Mosaic specific
+ o Corrected several memory and temporary file leaks
+ o Improved support for italic fonts in headers
+ o Improved support for keyboardFocusPolicy = explicit
+ o Various bug fixes
+
+From VMS 3.3 to VMS 3.4
+...............
+
+ o Added support for non-persistent cookies
+ o Added a cookie jar management interface
+ o Added support for VALIGN in <TR> and <TD>/<TH> tags
+ o Added support for <SPACER> tags
+ o Added support for MARGINWIDTH, LEFTMARGIN, RIGHTMARGIN,
+   MARGINHEIGHT and TOPMARGIN in <BODY> tags
+ o Added support for <BLINK> tags
+ o Added background processing of images outside view area
+ o Added support for TYPE in <UL> tags
+ o Added support for ABSMIDDLE, ABSBOTTOM and TEXTTOP alignment
+   in <IMG> tags
+ o Added support for COLOR in <BASEFONT> tags
+ o Added limited support for HEIGHT in <TABLE> tags
+ o Added support for using 'O' for '0' in hex colors
+ o Changed default vertical alignment in table cells to MIDDLE
+ o Changed Back and Forward to also track horizontal scrollbar
+ o Changed hotlist popup menu to use multiple columns as needed 
+ o Improved table and border width calculations
+ o Improved global history file performance
+ o Improved support for floating objects in lists
+ o Improved parsing of quoted strings in tags
+ o Restored support for single plane (monochrome) displays
+ o Eliminated hangs caused by external image viewer aborts
+ o Removed obsolete preferences from preference file
+ o Removed KCMS code
+ o Various bug and memory leak fixes
+
+From VMS 3.4 to VMS 3.5
+...............
+
+ o Added support for secure connections (https:)
+ o Added detection of graphics cards (e.g. GPX) which limit the
+   size of pixmaps to the size of the display
+ o Improved support for persistent HTTP connections
+ o Improved (radically) display speed of small background images
+ o Improved parsing of & strings
+ o Improved spacing around form buttons and checkboxes
+ o Improved support for <NOBR> tags
+ o Improved alignment of tables in tables
+ o Improved vertical alignment of list bullets
+ o Changed popup menu Meta requests to return HEAD information
+ o Removed support for font color in form buttons and checkboxes
+ o Removed support for background color in push buttons and menus
+ o Added support for STYLE=VISIBILITY:HIDDEN in <DIV> tags
+ o Made contents of preference file case insensitive
+ o Various bug and memory leak fixes
+
+From VMS 3.5 to VMS 3.5-1
+...............
+
+ o Added support for persistent secure connections
+ o Added number of bits to encryption status display
+ o Added support for left and right floating spacers
+ o Added preferences for maximum pixmap dimensions
+ o Removed limit on number of simultaneous floating objects
+ o Improved FTP support
+ o Fixed problems with secure connections
+ o Fixed problem with GIFs which have non-Netscape application blocks
+ o Fixed problem with RBM on some versions of Motif
+
+From VMS 3.5-1 to VMS 3.6
+...............
+
+ o Added support for frames
+ o Added support for persistent cookies
+ o Added support for the Symbol font
+ o Added support for MIME type "image/pjpeg"
+ o Added support for spaces in hex color values
+ o Added Support for builds with DEC C V6.2
+ o Reduced number of colors needed for browser safe color support
+ o Improved color allocation management
+ o Improved support for subscripts and superscripts
+ o Improved Postscript printing of floating images
+ o Fixed problem with image rescaling when only width is specified
+ o Fixed redirect problems caused by Content-Location: headers
+ o Fixed Postscript printing problems caused by long URLs
+ o Various bug and memory leak fixes
+
+From VMS 3.6 to VMS 3.6-1
+...............
+
+ o Added support for inline frames (<IFRAME>)
+ o Added support for printing frames
+ o Added support for SCROLLING in <FRAME> tags
+ o Added support for grid frame sets
+ o Added support for OpenSSL version 0.9.5
+ o Added Referer info to form requests
+ o Changed to use TrueColor when default visual is DirectColor
+ o Improved table width calculations
+ o Various bug and file leak fixes

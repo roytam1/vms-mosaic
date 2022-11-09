@@ -51,1004 +51,2193 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
 #include "../config.h"
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
+
+#include "HTMLmiscdefs.h"
+#include "HTMLparse.h"
 #include "HTMLP.h"
+#include "HTMLPutil.h"
+#include "HTMLfont.h"
+
+#include "../src/mosaic.h"
+#include "../src/img.h"
+#include "../src/fsdither.h"
+
+#include <X11/Intrinsic.h>
+#ifndef MOTIF1_2
+#undef XtIsRealized	     /* Motif 1.1 definition causes build failure */
+#endif
+
 #include "NoImage.xbm"
 #include "DelayedImage.xbm"
-#include "AnchoredImage.xbm"
+#include "mAnchoredImage.xbm"
 
-/* SWP -- Now use eptr->bwidth -- 02/08/96
-#define IMAGE_BORDER	2 */
-#define IMAGE_DEFAULT_BORDER 2
+#include "../src/bitmaps/gopher_image.xbm"
+#include "../src/bitmaps/gopher_movie.xbm"
+#include "../src/bitmaps/gopher_menu.xbm"
+#include "../src/bitmaps/gopher_text.xbm"
+#include "../src/bitmaps/gopher_sound.xbm"
+#include "../src/bitmaps/gopher_index.xbm"
+#include "../src/bitmaps/gopher_telnet.xbm"
+#include "../src/bitmaps/gopher_binary.xbm"
+#include "../src/bitmaps/gopher_unknown.xbm"
 
-ImageInfo no_image;
-ImageInfo delayed_image;
-ImageInfo anchored_image;
+static ImageInfo *gopher_image = NULL;
+static ImageInfo *gopher_movie = NULL;
+static ImageInfo *gopher_menu = NULL;
+static ImageInfo *gopher_text = NULL;
+static ImageInfo *gopher_sound = NULL;
+static ImageInfo *gopher_index = NULL;
+static ImageInfo *gopher_telnet = NULL;
+static ImageInfo *gopher_binary = NULL;
+static ImageInfo *gopher_unknown = NULL;
 
-static int allocation_index[256];
+static ImageInfo *no_image = NULL;
+static ImageInfo *delayed_image = NULL;
+static ImageInfo *anchored_image = NULL;
 
-#ifndef DISABLE_TRACE
-extern int htmlwTrace;
-#endif
+extern Pixmap internalCookie;
+
+static GC maskGC;   /* PGE, transparent on solid background speedup */
+
+/* Speed up the Pixmap inquiry */
+static int MaxPixmapWidth = -1;
+static int MaxPixmapHeight = -1;
+
+/* For selective image loading */
+extern Boolean currently_delaying_images;
+
+/* Visual and class of display, from GUI.C */
+extern int Vclass;
+extern Visual *theVisual;
+
+/* X context from GUI.C */
+XtAppContext app_context;
+/* Display dimension limit stuff from GUI.C */
+extern int LimDim;
+extern int LimDimX;
+extern int LimDimY;
+ 
+/* From COLORS.C */
+extern XColor BSColors[256];
+extern int BSCnum;
 
 extern int installed_colormap;
 extern Colormap installed_cmap;
 
-void CreateOrNotGC(HTMLWidget w);
+void ImageAnimate(XtPointer cld, XtIntervalId *id);
+
+int progressiveDisplayEnabled;
+
+#if defined(__STDC__) || defined(__sgi)
+#define IMGINFO_FROM_BITMAP(x) \
+{ \
+	if (!x) { \
+		x = (ImageInfo *)malloc(sizeof(ImageInfo)); \
+		x->image = XCreatePixmapFromBitmapData(XtDisplay(hw), \
+			XtWindow(hw), \
+			(char*) x##_bits,  \
+			x##_width, x##_height, \
+			fg_pixel, bg_pixel, \
+			DefaultDepthOfScreen(XtScreen(hw))); \
+	} \
+	picd->ismap = 0; \
+	picd->usemap = NULL; \
+	picd->width = x##_width; \
+	picd->height = x##_height; \
+	picd->req_width = -1;\
+	picd->req_height = -1;\
+	picd->image_data = (unsigned char*) x##_bits; \
+	picd->internal = 1; \
+	picd->delayed = 0; \
+	picd->fetched = 0; \
+	picd->cached = 0; \
+	picd->num_colors = 2; \
+	picd->transparent = 0; \
+	picd->image = x->image; \
+	picd->is_bg_image = 0; \
+	picd->aligned = 0; \
+}
+#else
+#define IMGINFO_FROM_BITMAP(x) \
+{ \
+	if (!x) { \
+		x = (ImageInfo *)malloc(sizeof(ImageInfo)); \
+		x->image = XCreatePixmapFromBitmapData(XtDisplay(hw), \
+			XtWindow(hw), \
+			(char*) x/**/_bits,  \
+			x/**/_width, x/**/_height, \
+			fg_pixel, bg_pixel, \
+			DefaultDepthOfScreen(XtScreen(hw))); \
+	} \
+	picd->ismap = 0; \
+	picd->usemap = NULL; \
+	picd->alt_text = NULL; \
+	picd->text = NULL; \
+	picd->width = x/**/_width; \
+	picd->height = x/**/_height; \
+	picd->req_width = -1;\
+	picd->req_height = -1;\
+	picd->image_data = (unsigned char*) x/**/_bits; \
+	picd->internal = 1; \
+	picd->delayed = 0; \
+	picd->fetched = 0; \
+	picd->cached = 0; \
+	picd->num_colors = 2; \
+	picd->transparent = 0; \
+	picd->image = x->image; \
+	picd->is_bg_image = 0; \
+	picd->aligned = 0; \
+}
+#endif
 
 /*
- * Free all the colors in the default colormap that we have allocated so far.
+ * Free all the widget's colors in the default colormap that we have
+ * allocated so far.
  */
-void
-FreeColors(dsp, colormap)
-	Display *dsp;
-	Colormap colormap;
+void FreeColors(HTMLWidget hw, Colormap colormap)
 {
 	int i, j;
 	unsigned long pix;
+	Display *d = XtDisplay(hw);
 
-	for (i=0; i<256; i++)
-	{
-		if (allocation_index[i])
-		{
+	for (i=0; i < 256; i++) {
+		if (hw->html.allocation_index[i]) {
 			pix = (unsigned long)i;
-			/*
-			 * Because X is stupid, we have to Free the color
+			/* Because X is stupid, we have to Free the color
 			 * once for each time we've allocated it.
 			 */
-			for (j=0; j<allocation_index[i]; j++)
-			{
-				XFreeColors(dsp, colormap, &pix, 1, 0L);
-			}
+			for (j=0; j < hw->html.allocation_index[i]; j++)
+				XFreeColors(d, colormap, &pix, 1, 0L);
 		}
-		allocation_index[i] = 0;
+		hw->html.allocation_index[i] = 0;
 	}
 }
-
-
-void
-FreeBodyImages(hw)
-	HTMLWidget hw;
-{
-
-	if (hw->html.bgmap_SAVE!=None) {
-		XFreePixmap(XtDisplay(hw),
-			    hw->html.bgmap_SAVE);
-		hw->html.bgmap_SAVE=None;
-	}
-	if (hw->html.bgclip_SAVE!=None) {
-		XFreePixmap(XtDisplay(hw),
-			    hw->html.bgclip_SAVE);
-		hw->html.bgclip_SAVE=None;
-	}
-
-	return;
-}
-
 
 /*
- * Free up all the pixmaps allocated for this document.
+ * Find closest color by allocating it, or picking an already allocated color
  */
-void
-FreeImages(hw)
-	HTMLWidget hw;
+int FindColor(HTMLWidget hw, Colormap colormap, XColor *colr)
 {
-	struct ele_rec *eptr;
+	int i, match, ret;
+	int rd, gd, bd, dist, mindist;
+	int cindx;
+	XColor tempcolr;
+	static XColor def_colrs[256];
+	static int have_colors = 0;
+	int NumCells;
+	Display *d = XtDisplay(hw);
 
-	eptr = hw->html.formatted_elements;
-	while (eptr != NULL)
-	{
-		if ((eptr->type == E_IMAGE)&&(eptr->pic_data != NULL))
-		{
-			/*
-			 * Don't free the no_image default image
-			 */
-			if ((eptr->pic_data->image != None)&&
-			    (eptr->pic_data->image != delayed_image.image)&&
-			    (eptr->pic_data->image != anchored_image.image)&&
-			    (eptr->pic_data->image != no_image.image))
-			{
-				/*
-				 * Don't free internal images
-				 */
-				if ((eptr->edata != NULL)&&
-					(strncmp(eptr->edata, INTERNAL_IMAGE,
-					strlen(INTERNAL_IMAGE)) == 0))
-				{
-				}
-				else
-				{
-					if (eptr->pic_data->image!=None) {
-						XFreePixmap(XtDisplay(hw),
-							    eptr->pic_data->image);
-						eptr->pic_data->image = None;
-					}
-					if (eptr->pic_data->transparent && eptr->pic_data->clip!=None) {
-						XFreePixmap(XtDisplay(hw),
-							    eptr->pic_data->clip);
-						eptr->pic_data->clip = None;
-					}
-				}
-			}
-		}
-		eptr = eptr->next;
-	}
+        tempcolr.red = colr->red;      
+        tempcolr.green = colr->green;  
+        tempcolr.blue = colr->blue;    
+        tempcolr.flags = colr->flags;  
 
-	/* Now take care of the background image! -- SWP */
-	if (hw->html.bgmap_SAVE!=None) {
-		XFreePixmap(XtDisplay(hw),
-			    hw->html.bgmap_SAVE);
-		hw->html.bgmap_SAVE=None;
-	}
-	if (hw->html.bgclip_SAVE!=None) {
-		XFreePixmap(XtDisplay(hw),
-			    hw->html.bgclip_SAVE);
-		hw->html.bgclip_SAVE=None;
-	}
-}
+	ret = match = XAllocColor(d, colormap, colr);
+	if (!match) {
+                colr->red = tempcolr.red;
+                colr->green = tempcolr.green;
+                colr->blue = tempcolr.blue;  
+                colr->flags = tempcolr.flags;
 
-
-/*
- * Find the closest color by allocating it, or picking an already allocated
- * color
- */
-void
-FindColor(dsp, colormap, colr)
-	Display *dsp;
-	Colormap colormap;
-	XColor *colr;
-{
-int i, match;
-#ifdef MORE_ACCURATE
-double rd, gd, bd, dist, mindist;
-#else
-int rd, gd, bd, dist, mindist;
-#endif /* MORE_ACCURATE */
-int cindx;
-XColor tempcolr;
-static XColor def_colrs[256];
-static int have_colors = 0;
-int NumCells;
-
-	tempcolr.pixel=colr->pixel;
-	tempcolr.red=colr->red;
-	tempcolr.green=colr->green;
-	tempcolr.blue=colr->blue;
-	tempcolr.flags=colr->flags;
-	tempcolr.pad=colr->pad;
-
-	match = XAllocColor(dsp, colormap, colr);
-	if (match == 0)
-	{
-		colr->pixel=tempcolr.pixel;
-		colr->red=tempcolr.red;
-		colr->green=tempcolr.green;
-		colr->blue=tempcolr.blue;
-		colr->flags=tempcolr.flags;
-		colr->pad=tempcolr.pad;
-
-		NumCells = DisplayCells(dsp, DefaultScreen(dsp));
-		if (!have_colors)
-		{
-			for (i=0; i<NumCells; i++)
-			{
+		NumCells = DisplayCells(d, DefaultScreen(d));
+		if (!have_colors) {
+			for (i=0; i < NumCells; i++)
 				def_colrs[i].pixel = i;
-			}
-			XQueryColors(dsp, colormap, def_colrs, NumCells);
+			XQueryColors(d, colormap, def_colrs, NumCells);
 			have_colors = 1;
 		}
-#ifdef MORE_ACCURATE
-		mindist = 196608.0;		/* 256.0 * 256.0 * 3.0 */
-		cindx = (-1);
-		for (i=0; i<NumCells; i++)
-		{
-			rd = (def_colrs[i].red - colr->red) / 256.0;
-			gd = (def_colrs[i].green - colr->green) / 256.0;
-			bd = (def_colrs[i].blue - colr->blue) / 256.0;
-			dist = (rd * rd) +
-				(gd * gd) +
-				(bd * bd);
-			if (dist < mindist)
-			{
-				mindist = dist;
-				cindx = def_colrs[i].pixel;
-				if (dist == 0.0)
-				{
-					break;
-				}
-			}
-		}
-#else
 		mindist = 196608;		/* 256 * 256 * 3 */
-		cindx = (-1);
-		for (i=0; i<NumCells; i++)
-		{
-			rd = ((int)(def_colrs[i].red >> 8) -
-				(int)(colr->red >> 8));
-			gd = ((int)(def_colrs[i].green >> 8) -
-				(int)(colr->green >> 8));
-			bd = ((int)(def_colrs[i].blue >> 8) -
-				(int)(colr->blue >> 8));
-			dist = (rd * rd) +
-				(gd * gd) +
-				(bd * bd);
-			if (dist < mindist)
-			{
+		cindx = -1;
+		for (i=0; i < NumCells; i++) {
+			rd = (int)(def_colrs[i].red >> 8) -
+			     (int)(colr->red >> 8);
+			gd = (int)(def_colrs[i].green>> 8) -
+			     (int)(colr->green >> 8);
+			bd = (int)(def_colrs[i].blue >> 8) -
+			     (int)(colr->blue >> 8);
+			dist = (rd * rd) + (gd * gd) + (bd * bd);
+			if (dist < mindist) {
 				mindist = dist;
 				cindx = def_colrs[i].pixel;
 				if (dist == 0)
-				{
 					break;
-				}
 			}
 		}
-#endif /* MORE_ACCURATE */
-		if (cindx==(-1)) {
-			colr->pixel=BlackPixel(dsp,
-					       DefaultScreen(dsp));
-			colr->red = colr->green = colr->blue = 0;
-		}
-		else {
-			colr->pixel = cindx;
-			colr->red = def_colrs[cindx].red;
-			colr->green = def_colrs[cindx].green;
-			colr->blue = def_colrs[cindx].blue;
-		}
-	}
-	else
-	{
-		/*
-		 * Keep a count of how many times we have allocated the
+                if (cindx == (-1)) {   
+                        colr->pixel = BlackPixel(d, DefaultScreen(d));
+                        colr->red = colr->green = colr->blue = 0;
+                } else {               
+                        colr->pixel = cindx;
+                        colr->red = def_colrs[cindx].red;
+                        colr->green = def_colrs[cindx].green;
+                        colr->blue = def_colrs[cindx].blue;
+                } 
+	} else {
+		/* Keep a count of how many times we have allocated the
 		 * same color, so we can properly free them later.
 		 */
-		allocation_index[colr->pixel]++;
-
-		/*
-		 * If this is a new color, we've actually changed the default
+		hw->html.allocation_index[colr->pixel]++;
+		/* If this is a new color, we've actually changed default
 		 * colormap, and may have to re-query it later.
 		 */
-		if (allocation_index[colr->pixel] == 1)
-		{
+		if (hw->html.allocation_index[colr->pixel] == 1)
 			have_colors = 0;
-		}
 	}
+	return ret;
 }
 
-
-static int
-highbit(ul)
-unsigned long ul;
+/* Returns position of highest set bit in 'ul' as an integer (0-31),
+ * or -1 if none.
+ */
+static int highbit( unsigned long ul)
 {
-	/*
-	 * returns position of highest set bit in 'ul' as an integer (0-31),
-	 * or -1 if none.
-	 */
-
 	int i;
-	for (i=31; ((ul&0x80000000) == 0) && i>=0;  i--, ul<<=1);
+
+	for (i=31; ((ul&0x80000000) == 0) && i>=0; i--, ul<<=1);
 	return i;
 }
 
 
 /*
-#ifndef NEW
-#define NEW
-#endif
-*/
+ * Rescale an image GD 24 Apr 97
+ * From the XV Software 3.10a.  See the copyright notice of xv-3.10a 
+ */
+static void RescalePic(HTMLWidget hw, ImageInfo *picd, int nw, int nh)
+{ 
+	int cy, ex, ey, *cxarr, *cxarrp;
+	unsigned char *clptr, *elptr, *epptr, *epic;
 
-#ifdef NEW
-extern int bits_per_pixel(int dpy, int depth); /*this is in ../src/pixmaps.c*/
-#endif
+	/* Change image_data width and height in picd */
+
+	clptr = NULL; cxarrp = NULL; cy = 0;  /* Shut up compiler */
+
+	/* Create a new pic of the appropriate size */
+	epic = (unsigned char *) malloc((size_t) (nw * nh));
+	cxarr = (int *) malloc(nw * sizeof(int));
+	if (!epic || !cxarr) {
+		fprintf(stderr, "RescalePic memory overflow\n");
+		return;
+	}
+
+	/* The scaling routine.  Not really all that scary after all... */
+	/* OPTIMIZATON:  Malloc an nw array of ints which will hold the */
+	/* values of the equation px = (pWIDE * ex) / nw.  Faster than doing */
+	/* a mul and a div for every point in picture */
+	for (ex = 0; ex < nw; ex++)        
+		cxarr[ex] = (picd->width * ex) / nw;
+	elptr = epptr = epic;             
+	for (ey = 0; ey < nh; ey++, elptr += nw) {
+		cy = (picd->height * ey) / nh;      
+		epptr = elptr;
+		clptr = picd->image_data + (cy * picd->width);
+		for (ex = 0, cxarrp = cxarr; ex < nw; ex++, epptr++)
+			*epptr = clptr[*cxarrp++];  
+	}                                 
+	free(cxarr);
+
+	picd->image_data = epic;
+	picd->width = nw;
+	picd->height = nh;
+}
 
 /*
- * Make am image of appropriate depth for display from image data.
+ * Make an image of appropriate depth for display from image data.
+ *
+ * NOTE: as of 2.7b5 it appears that this is never called with "clip"
+ * nonzero.  The 2.7b5 code ignored "clip" in most code paths, so I'm
+ * just going to ignore it in all paths.
  */
-XImage *
-MakeImage(dsp, data, width, height, depth, img_info, clip)
+static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	Display *dsp;
 	unsigned char *data;
-	int width, height;
 	int depth;
 	ImageInfo *img_info;
+	XColor *cmap;
 	int clip;
 {
-	int linepad, shiftnum;
-	int shiftstart, shiftstop, shiftinc;
-        int bytesperline,bpp;
+	int shiftnum, shiftstart, shiftstop, shiftinc;
+        int bpp;
 	int temp;
 	int w, h;
 	XImage *newimage;
-	unsigned char *bit_data, *bitp, *datap;
-	Visual *theVisual;
-	int bmap_order;
+	unsigned char *bit_data, *bitp, *datap, *endofline;
 	unsigned long c;
 	int rshift, gshift, bshift;
+	int rmask, gmask, bmask;
+	int width = img_info->width;
+	int height = img_info->height;
 
-#ifdef NEW
-        switch(bpp=bits_per_pixel(dsp,depth))
-#else
-	switch(depth)
-#endif
-	{
-	    case 6:
-	    case 8:
-		bit_data = (unsigned char *)malloc(width * height);
-/*
-		bcopy(data, bit_data, (width * height));
-*/
-		memcpy(bit_data, data, (width * height));
-		bytesperline = width;
-		if (clip) {
-			depth = 1;
-		}
-		newimage = XCreateImage(dsp,
-			DefaultVisual(dsp, DefaultScreen(dsp)),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 8, bytesperline);
-		break;
-	    case 1:
-	    case 2:
-	    case 4:
-		if (BitmapBitOrder(dsp) == LSBFirst)
-		{
-			shiftstart = 0;
-			shiftstop = 8;
-#ifndef NEW
-			shiftinc = depth;
-#else
-                        shiftinc = bpp;
-#endif
-		}
-		else
-		{
-#ifndef NEW
-			shiftstart = 8 - depth;
-			shiftstop = -depth;
-			shiftinc = -depth;
-#else
-                        shiftstart = 8 - bpp;
-                        shiftstop = -bpp;
-                        shiftinc = -bpp;
-#endif
-		}
-		linepad = 8 - (width % 8);
-		bit_data = (unsigned char *)malloc(((width + linepad) * height)
-				+ 1);
-		bitp = bit_data;
-		datap = data;
-		*bitp = 0;
+	/* We create the XImage first so that we can rely on Xlib to choose
+	 * the correct bits_per_pixel and scanline width for the image.
+	 * It's OK to pass a NULL data pointer to XCreateImage.
+	 * Note we use a worst-case assumption of bitmap_pad = 32.
+	 */
+	newimage = XCreateImage(dsp, theVisual,
+				depth, ZPixmap, 0, (char *) NULL,
+				width, height, 32, 0);
+	if (!newimage)
+	  return NULL;
+	/* Allocate data space using scanline width from XCreateImage. */
+	bit_data = (unsigned char *) malloc(newimage->bytes_per_line * height);
+	newimage->data = (char *) bit_data;
+	if (!bit_data) {
+	  XDestroyImage(newimage);
+	  return NULL;
+	}
+
+	/* Fill in the image data. */
+	bpp = newimage->bits_per_pixel;	/* Not always the same as depth! */
+
+	switch (bpp) {
+	case 1:
+	case 2:
+	case 4:
+	  /* FIXME: this code assumes byte_order == bitmap_bit_order */
+	  if (newimage->bitmap_bit_order == LSBFirst) {
+	    shiftstart = 0;
+	    shiftstop = 8;
+	    shiftinc = bpp;
+	  } else {
+	    shiftstart = 8-bpp;
+	    shiftstop = (-bpp);
+	    shiftinc = (-bpp);
+	  }
+	  datap = data;
+	  bitp = bit_data;
+	  for (h=0; h < height; h++) {
+	    endofline = bitp + newimage->bytes_per_line;
+	    temp = 0;
+	    shiftnum = shiftstart;
+	    for (w=0; w < width; w++) {
+	      temp |= (*datap++)<<shiftnum;
+	      shiftnum += shiftinc;
+	      if (shiftnum == shiftstop) {
+		*bitp++ = (unsigned char) temp;
+		temp = 0;
 		shiftnum = shiftstart;
-		for (h=0; h<height; h++)
-		{
-			for (w=0; w<width; w++)
-			{
-				temp = *datap++ << shiftnum;
-				*bitp = *bitp | temp;
-				shiftnum = shiftnum + shiftinc;
-				if (shiftnum == shiftstop)
-				{
-					shiftnum = shiftstart;
-					bitp++;
-					*bitp = 0;
-				}
-			}
-			for (w=0; w<linepad; w++)
-			{
-				shiftnum = shiftnum + shiftinc;
-				if (shiftnum == shiftstop)
-				{
-					shiftnum = shiftstart;
-					bitp++;
-					*bitp = 0;
-				}
-			}
-		}
-#ifndef NEW
-		bytesperline = (width + linepad) * depth / 8;
-#else
-                bytesperline = (width + linepad) * bpp / 8;
-#endif
-		newimage = XCreateImage(dsp,
-			DefaultVisual(dsp, DefaultScreen(dsp)),
-			depth, ZPixmap, 0, (char *)bit_data,
-			(width + linepad), height, 8, bytesperline);
-		break;
-	    /*
-	     * WARNING:  This depth 16 code is donated code for 16 but
-	     * TrueColor displays.  I have no access to such displays, so I
-	     * can't really test it.
-	     * Donated by - nosmo@ximage.com
-	     */
-	    case 16:
-		bit_data = (unsigned char *)malloc(width * height * 2);
-		bitp = bit_data;
-		datap = data;
-    
-		theVisual = DefaultVisual(dsp, DefaultScreen(dsp));
-		rshift = 15 - highbit(theVisual->red_mask);
-		gshift = 15 - highbit(theVisual->green_mask);
-		bshift = 15 - highbit(theVisual->blue_mask);
-		bmap_order = BitmapBitOrder(dsp);
-     
-		for (w = (width * height); w > 0; w--)
-		{
-			temp = (((img_info->reds[(int)*datap] >> rshift) & 
-				 theVisual->red_mask) |
-				((img_info->greens[(int)*datap] >> gshift) & 
-				 theVisual->green_mask) |
-				((img_info->blues[(int)*datap] >> bshift) & 
-				 theVisual->blue_mask));
-			if (bmap_order == MSBFirst)
-			{
-				*bitp++ = (temp >> 8) & 0xff;
-				*bitp++ = temp & 0xff;
-			}
-			else
-			{
-				*bitp++ = temp & 0xff;
-				*bitp++ = (temp >> 8) & 0xff;
-			}
+	      }
+	    }
+	    if (bitp != endofline) {
+	      /* Dump out last partial byte */
+	      *bitp++ = (unsigned char) temp;
+	      /* Zero-pad; probably not really necessary */
+	      while (bitp != endofline)
+		*bitp++ = 0;
+	    }
+	  }
+	  break;
 
-			datap++;
-		}
+	case 8:
+	  if (newimage->bytes_per_line == width) {
+	    /* Easy if no padding needed */
+	    memcpy(bit_data, data, (width * height));
+	  } else {
+	    /* Copy a scanline at a time; don't bother to fill pad bytes */
+	    datap = data;
+	    bitp = bit_data;
+	    for (h=0; h < height; h++) {
+	      memcpy(bitp, datap, width);
+	      datap += width;
+	      bitp += newimage->bytes_per_line;
+	    }
+	  }
+	  break;
 
-		newimage = XCreateImage(dsp,
-			DefaultVisual(dsp, DefaultScreen(dsp)),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 16, 0);
-		break;
-	    case 24:
-#ifdef NEW
-	    case 32:
-#endif
-		bit_data = (unsigned char *)malloc(width * height * 4);
+	  /*
+	   * Donated by - nosmo@ximage.com
+	   */
+	case 16:
+	  rmask = theVisual->red_mask;
+	  gmask = theVisual->green_mask;
+	  bmask = theVisual->blue_mask;
+	  rshift = 15-highbit(rmask);
+	  gshift = 15-highbit(gmask);
+	  bshift = 15-highbit(bmask);
 
-		theVisual = DefaultVisual(dsp, DefaultScreen(dsp));
-		rshift = highbit(theVisual->red_mask) - 7;
-		gshift = highbit(theVisual->green_mask) - 7;
-		bshift = highbit(theVisual->blue_mask) - 7;
-		bmap_order = BitmapBitOrder(dsp);
+	  datap = data;
+	  bitp = bit_data;
+	  if (newimage->byte_order == MSBFirst) {
+	    for (h=0; h < height; h++) {
+	      endofline = bitp + newimage->bytes_per_line;
+	      for (w = width; w > 0; w--) {
+		temp = (int) *datap++;
+		temp = ((cmap[temp].red>>rshift)&rmask)|
+		  ((cmap[temp].green>>gshift)&gmask)|
+		  ((cmap[temp].blue>>bshift)&bmask);
+		*bitp++ = (temp>>8)&0xff;
+		*bitp++ = temp&0xff;
+	      }
+	      bitp = endofline;
+	    }
+	  } else {
+	    for (h=0; h < height; h++) {
+	      endofline = bitp + newimage->bytes_per_line;
+	      for (w = width; w > 0; w--) {
+		temp = (int) *datap++;
+		temp = ((cmap[temp].red>>rshift)&rmask)|
+		  ((cmap[temp].green>>gshift)&gmask)|
+		  ((cmap[temp].blue>>bshift)&bmask);
+		*bitp++ = temp&0xff;
+		*bitp++ = (temp>>8)&0xff;
+	      }
+	      bitp = endofline;
+	    }
+	  }
+	  break;
 
-		bitp = bit_data;
-		datap = data;
-		for (w = (width * height); w > 0; w--)
-		{
-		    c =
-		     (((img_info->reds[(int)*datap] >> 8) & 0xff) << rshift) |
-		     (((img_info->greens[(int)*datap] >> 8) & 0xff) << gshift) |
-		     (((img_info->blues[(int)*datap] >> 8) & 0xff) << bshift);
+	case 32:
+	  /* Bletcherous code ... assumes masks are 8 bits wide. */
+	  rshift = highbit(theVisual->red_mask)-7;
+	  gshift = highbit(theVisual->green_mask)-7;
+	  bshift = highbit(theVisual->blue_mask)-7;
 
-			datap++;
+	  datap = data;
+	  bitp = bit_data;
+	  for (h=0; h < height; h++) {
+	    endofline = bitp + newimage->bytes_per_line;
+	    for (w = width; w > 0; w--) {
+	      temp = (int) *datap++;
+	      c = (((cmap[temp].red>>8)&0xff)<<rshift)|
+		(((cmap[temp].green>>8)&0xff)<<gshift)|
+		(((cmap[temp].blue>>8)&0xff)<<bshift);
 
-			if (bmap_order == MSBFirst)
-			{
-				*bitp++ = (unsigned char)((c >> 24) & 0xff);
-				*bitp++ = (unsigned char)((c >> 16) & 0xff);
-				*bitp++ = (unsigned char)((c >> 8) & 0xff);
-				*bitp++ = (unsigned char)(c & 0xff);
-			}
-			else
-			{
-				*bitp++ = (unsigned char)(c & 0xff);
-				*bitp++ = (unsigned char)((c >> 8) & 0xff);
-				*bitp++ = (unsigned char)((c >> 16) & 0xff);
-				*bitp++ = (unsigned char)((c >> 24) & 0xff);
-			}
-		}
+	      if (newimage->byte_order == MSBFirst) {
+		*bitp++ = (unsigned char)((c>>24)&0xff);
+		*bitp++ = (unsigned char)((c>>16)&0xff);
+		*bitp++ = (unsigned char)((c>>8)&0xff);
+		*bitp++ = (unsigned char)(c&0xff);
+	      } else {
+		*bitp++ = (unsigned char)(c&0xff);
+		*bitp++ = (unsigned char)((c>>8)&0xff);
+		*bitp++ = (unsigned char)((c>>16)&0xff);
+		*bitp++ = (unsigned char)((c>>24)&0xff);
+	      }
+	    }
+	    bitp = endofline;
+	  }
+	  break;
 
-		newimage = XCreateImage(dsp,
-			DefaultVisual(dsp, DefaultScreen(dsp)),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 32, 0);
-		break;
-	    default:
+	default:
 #ifndef DISABLE_TRACE
-		if (htmlwTrace) {
-			fprintf(stderr, "Don't know how to format image for display of depth %d\n", depth);
-		}
+	  if (htmlwTrace || reportBugs) {
+	    fprintf(stderr, "Don't know how to format pixmap of depth %d\n",
+		    bpp);
+	  }
 #endif
-
-		return(NULL);
+	  XDestroyImage(newimage);
+	  return(NULL);
 	}
 
 	return(newimage);
 }
 
-
-int
-AnchoredHeight(hw)
-	HTMLWidget hw;
+static ImageInfo *DelayedImageData( HTMLWidget hw)
 {
-	return((int)(AnchoredImage_height + IMAGE_DEFAULT_BORDER));
-}
+	static Pixel fg_pixel, bg_pixel;
 
-
-char *
-IsMapForm(hw)
-	HTMLWidget hw;
-{
-	char *str;
-
-	str = (char *)malloc(strlen("ISMAP Form") + 1);
-	if (str != NULL)
-	{
-		strcpy(str, "ISMAP Form");
-	}
-	return(str);
-}
-
-
-int
-IsIsMapForm(hw, href)
-	HTMLWidget hw;
-	char *href;
-{
-	if ((href != NULL)&&(strcmp(href, "ISMAP Form") == 0))
-	{
-		return(1);
-	}
-	else
-	{
-		return(0);
-	}
-}
-
-
-char *
-DelayedHRef(hw)
-	HTMLWidget hw;
-{
-	char *str;
-
-	str = (char *)malloc(strlen("Delayed Image") + 1);
-	if (str != NULL)
-	{
-		strcpy(str, "Delayed Image");
-	}
-	return(str);
-}
-
-
-int
-IsDelayedHRef(hw, href)
-	HTMLWidget hw;
-	char *href;
-{
-	if ((href != NULL)&&(strcmp(href, "Delayed Image") == 0))
-	{
-		return(1);
-	}
-	else
-	{
-		return(0);
-	}
-}
-
-
-Pixmap
-DelayedImage(hw, anchored)
-	HTMLWidget hw;
-	Boolean anchored;
-{
-        if (delayed_image.image == None)
-        {
-		delayed_image.transparent=0;
-                delayed_image.image = XCreatePixmapFromBitmapData(
-                        XtDisplay(hw->html.view),
-                        XtWindow(hw->html.view), DelayedImage_bits,
-                        DelayedImage_width, DelayedImage_height,
-/*
- * Without motif we use our own foreground resource instead of
- * using the manager's
- */
-#ifdef MOTIF
-                        hw->manager.foreground,
-#else
-                        hw->html.foreground,
-#endif /* MOTIF */
-                        hw->core.background_pixel,
-                        DefaultDepthOfScreen(XtScreen(hw)));
-	}
-
-        if ((anchored == True)&&(anchored_image.image == None))
-        {
-                Pixmap pix;
-
-		anchored_image.transparent=0;
-                anchored_image.image = XCreatePixmapFromBitmapData(
-                        XtDisplay(hw->html.view),
-                        XtWindow(hw->html.view), AnchoredImage_bits,
-                        AnchoredImage_width, AnchoredImage_height,
-/*
- * Without motif we use our own foreground resource instead of
- * using the manager's
- */
-#ifdef MOTIF
-                        hw->manager.foreground,
-#else
-                        hw->html.foreground,
-#endif /* MOTIF */
-                        hw->core.background_pixel,
-                        DefaultDepthOfScreen(XtScreen(hw)));
-                pix = XCreatePixmap(
-                        XtDisplay(hw->html.view),
-                        XtWindow(hw->html.view),
-                        DelayedImage_width,
-                        (DelayedImage_height + AnchoredImage_height +
-                                IMAGE_DEFAULT_BORDER),
-                        DefaultDepthOfScreen(XtScreen(hw)));
-                XSetForeground(XtDisplay(hw), hw->html.drawGC,
-                        hw->core.background_pixel);
-                XFillRectangle(XtDisplay(hw->html.view), pix,
-                        hw->html.drawGC, 0, 0,
-                        DelayedImage_width,
-                        (DelayedImage_height + AnchoredImage_height +
-                                IMAGE_DEFAULT_BORDER));
-                XCopyArea(XtDisplay(hw->html.view),
-                        anchored_image.image, pix, hw->html.drawGC,
-                        0, 0, AnchoredImage_width, AnchoredImage_height,
-                        0, 0);
-                XCopyArea(XtDisplay(hw->html.view),
-                        delayed_image.image, pix, hw->html.drawGC,
-                        0, 0, DelayedImage_width, DelayedImage_height,
-                        0, (AnchoredImage_height + IMAGE_DEFAULT_BORDER));
-                XFreePixmap(XtDisplay(hw->html.view), anchored_image.image);
-                anchored_image.image = pix;
-
-                return(anchored_image.image);
-	}
-
-        return(delayed_image.image);
-}
-
-
-ImageInfo *
-DelayedImageData(hw, anchored)
-	HTMLWidget hw;
-	Boolean anchored;
-{
-	delayed_image.delayed = 1;
-	delayed_image.internal = 0;
-	delayed_image.fetched = 0;
-	delayed_image.width = DelayedImage_width;
-	delayed_image.height = DelayedImage_height;
-	delayed_image.num_colors = 0;
-	delayed_image.reds = NULL;
-	delayed_image.greens = NULL;
-	delayed_image.blues = NULL;
-	delayed_image.image_data = NULL;
-	delayed_image.clip_data = NULL;
-	delayed_image.image = None;
-	delayed_image.clip = None;
-	delayed_image.transparent = 0;
-
-	if (anchored == True)
-	{
-		anchored_image.delayed = 0;
-		anchored_image.internal = 0;
-		anchored_image.fetched = 0;
-		anchored_image.width = DelayedImage_width;
-		anchored_image.height = DelayedImage_height +
-			AnchoredImage_height + IMAGE_DEFAULT_BORDER;
-		anchored_image.num_colors = 0;
-		anchored_image.reds = NULL;
-		anchored_image.greens = NULL;
-		anchored_image.blues = NULL;
-		anchored_image.image_data = NULL;
-		anchored_image.image = None;
-		anchored_image.clip_data = NULL;
-		anchored_image.clip = None;
-		anchored_image.transparent = 0;
-
-		return(&anchored_image);
-	}
-
-	return(&delayed_image);
-}
-
-
-Pixmap
-NoImage(hw)
-	HTMLWidget hw;
-{
-	if (no_image.image == None)
-	{
-		no_image.transparent=0;
-		no_image.image = XCreatePixmapFromBitmapData(
+        if (delayed_image == NULL) {
+		delayed_image = (ImageInfo *)malloc(sizeof(ImageInfo));
+		delayed_image->usemap = NULL;
+		delayed_image->map = NULL;
+		delayed_image->ismap = 0;
+		delayed_image->fptr = NULL;
+                                 
+		delayed_image->internal = 2;
+		delayed_image->delayed = 1;
+		delayed_image->fetched = 0;
+		delayed_image->cached = 0;
+		delayed_image->width = DelayedImage_width;
+		delayed_image->height = DelayedImage_height;
+		delayed_image->num_colors = 2;
+		delayed_image->bg_index = 0;
+		delayed_image->image_data = (unsigned char*)DelayedImage_bits;
+		delayed_image->clip_data = NULL;
+		delayed_image->transparent = 0;
+		delayed_image->image = None;
+		delayed_image->clip = None;
+		delayed_image->alt_text = NULL;
+		delayed_image->text = NULL;
+		delayed_image->src = NULL;
+		delayed_image->is_bg_image = 0;
+		delayed_image->aligned = 0;
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+                delayed_image->image = XCreatePixmapFromBitmapData(
 			XtDisplay(hw),
-			XtWindow(hw->html.view), NoImage_bits,
+                        XtWindow(hw), (char*) DelayedImage_bits,
+                        DelayedImage_width, DelayedImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(hw)));
+	}
+	if ((fg_pixel != hw->manager.foreground) ||
+	    (bg_pixel != hw->core.background_pixel)) {
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+                delayed_image->image = XCreatePixmapFromBitmapData(
+			XtDisplay(hw),
+                        XtWindow(hw), (char*) DelayedImage_bits,
+                        DelayedImage_width, DelayedImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(hw)));
+	}
+
+	return(delayed_image);
+}
+
+static ImageInfo *AnchoredImageData( HTMLWidget hw)
+{
+	static Pixel fg_pixel, bg_pixel;
+
+        if (anchored_image == NULL) {
+		anchored_image = (ImageInfo *)malloc(sizeof(ImageInfo));
+		anchored_image->usemap = NULL;
+		anchored_image->map = NULL;
+		anchored_image->ismap = 0;
+		anchored_image->fptr = NULL;
+
+		anchored_image->internal = 2;
+		anchored_image->delayed = 1;
+		anchored_image->fetched = 0;
+		anchored_image->cached = 0;
+		anchored_image->width = AnchoredImage_width;
+		anchored_image->height = AnchoredImage_height;
+		anchored_image->num_colors = 2;
+		anchored_image->bg_index = 0;
+		anchored_image->image_data = (unsigned char*)AnchoredImage_bits;
+		anchored_image->clip_data = NULL;
+		anchored_image->transparent = 0;
+		anchored_image->image = None;
+		anchored_image->clip = None;
+		anchored_image->alt_text = NULL;
+		anchored_image->text = NULL;
+		anchored_image->src = NULL;
+		anchored_image->is_bg_image = 0;
+		anchored_image->aligned = 0;
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+                anchored_image->image = XCreatePixmapFromBitmapData(
+			XtDisplay(hw), XtWindow(hw), (char*) AnchoredImage_bits,
+                        AnchoredImage_width, AnchoredImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(hw)));
+	}
+	if ((fg_pixel != hw->manager.foreground) ||
+	    (bg_pixel != hw->core.background_pixel)) {
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+                anchored_image->image = XCreatePixmapFromBitmapData(
+			XtDisplay(hw), XtWindow(hw), (char*) AnchoredImage_bits,
+                        AnchoredImage_width, AnchoredImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(hw)));
+	}
+
+	return(anchored_image);
+}
+
+static ImageInfo *NoImageData( HTMLWidget hw)
+{
+	static Pixel fg_pixel, bg_pixel;
+
+	if (no_image == NULL) {
+		no_image = (ImageInfo *)malloc(sizeof(ImageInfo));
+		no_image->usemap = NULL;
+		no_image->map = NULL;
+		no_image->ismap = 0;
+		no_image->fptr = NULL;
+
+		no_image->internal = 2;
+		no_image->delayed = 0;
+		no_image->fetched = 0;
+		no_image->cached = 0;
+		no_image->width = NoImage_width;
+		no_image->height = NoImage_height;
+		no_image->num_colors = 2;
+		no_image->bg_index = 0;
+		no_image->image_data = (unsigned char*)NoImage_bits;
+		no_image->clip_data = NULL;
+		no_image->transparent = 0;
+		no_image->image = None;
+		no_image->clip = None;
+		no_image->alt_text = NULL;
+		no_image->text = NULL;
+		no_image->src = NULL;
+		no_image->is_bg_image = 0;
+		no_image->aligned = 0;
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+		no_image->image = XCreatePixmapFromBitmapData(XtDisplay(hw),
+			XtWindow(hw), (char*) NoImage_bits,
 			NoImage_width, NoImage_height,
-/*
- * Without motif we use our own foreground resource instead of
- * using the manager's
- */
-#ifdef MOTIF
-                        hw->manager.foreground,
-#else
-                        hw->html.foreground,
-#endif /* MOTIF */
-			hw->core.background_pixel,
+                        fg_pixel,
+                        bg_pixel,
 			DefaultDepthOfScreen(XtScreen(hw)));
 	}
-	return(no_image.image);
+	if ((fg_pixel != hw->manager.foreground) ||
+	    (bg_pixel != hw->core.background_pixel)) {
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+                no_image->image = XCreatePixmapFromBitmapData(XtDisplay(hw),
+                        XtWindow(hw), (char*) NoImage_bits,
+                        NoImage_width, NoImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(hw)));
+	}
+
+	return(no_image);
 }
 
-
-ImageInfo *
-NoImageData(hw)
-	HTMLWidget hw;
-{
-	no_image.delayed = 0;
-	no_image.internal = 0;
-	no_image.fetched = 0;
-	no_image.width = NoImage_width;
-	no_image.height = NoImage_height;
-	no_image.num_colors = 0;
-	no_image.reds = NULL;
-	no_image.greens = NULL;
-	no_image.blues = NULL;
-	no_image.image_data = NULL;
-	no_image.clip_data = NULL;
-	no_image.image = None;
-	no_image.clip = None;
-	no_image.transparent=0;
-
-	return(&no_image);
-}
-
-
-Pixmap
-InfoToImage(hw, img_info, clip)
-	HTMLWidget hw;
-	ImageInfo *img_info;
-	int clip;
+/* Currently never called with clip non-zero */
+Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 {
 	int i, size;
 	int delta, not_right_col, not_last_row;
 	Pixmap Img;
 	XImage *tmpimage;
 	XColor tmpcolr;
+	XColor *cmap = img_info->colrs;
 	int *Mapping;
 	unsigned char *tmpdata;
 	unsigned char *ptr;
 	unsigned char *ptr2;
-	int Vclass;
-	XVisualInfo vinfo, *vptr;
 	Boolean need_to_dither;
 	unsigned long black_pixel;
 	unsigned long white_pixel;
 	int depth;
+	int need_dither_color = 0;
 
-	CreateOrNotGC(hw);
+	depth = DefaultDepthOfScreen(XtScreen(hw));
 
-	/* find the visual class. */
-	vinfo.visualid = XVisualIDFromVisual(DefaultVisual(XtDisplay(hw),
-		DefaultScreen(XtDisplay(hw))));
-	vptr = XGetVisualInfo(XtDisplay(hw), VisualIDMask, &vinfo, &i);
-	Vclass = vptr->class;
-	depth=vptr->depth;
 	if (clip) {
 		need_to_dither = False;
+	} else {
+		if (depth == 1) {
+			need_to_dither = True;
+			black_pixel = BlackPixel(XtDisplay(hw),
+					DefaultScreen(XtDisplay(hw)));
+			white_pixel = WhitePixel(XtDisplay(hw),
+					DefaultScreen(XtDisplay(hw)));
+		} else {
+			need_to_dither = False;
+		}
 	}
-	else if (vptr->depth == 1)
-	{
-		need_to_dither = True;
-		black_pixel = BlackPixel(XtDisplay(hw),
-				DefaultScreen(XtDisplay(hw)));
-		white_pixel = WhitePixel(XtDisplay(hw),
-				DefaultScreen(XtDisplay(hw)));
-	}
-	else
-	{
-		need_to_dither = False;
-	}
-	XFree((char *)vptr);
-
 	Mapping = (int *)malloc(img_info->num_colors * sizeof(int));
-
 	if (!clip) {
-		for (i=0; i < img_info->num_colors; i++)
-		{
-			tmpcolr.red = img_info->reds[i];
-			tmpcolr.green = img_info->greens[i];
-			tmpcolr.blue = img_info->blues[i];
+		for (i=0; i < img_info->num_colors; i++) {
+			tmpcolr.red = cmap[i].red;
+			tmpcolr.green = cmap[i].green;
+			tmpcolr.blue = cmap[i].blue;
 			tmpcolr.flags = DoRed|DoGreen|DoBlue;
-			if ((Vclass == TrueColor) || (Vclass == DirectColor))
-			{
+			if ((Vclass == TrueColor) || (Vclass == DirectColor)) {
 				Mapping[i] = i;
-			}
-			else if (need_to_dither == True)
-			{
-				Mapping[i] = ((tmpcolr.red>>5)*11 +
+			} else if (need_to_dither) {
+       				Mapping[i] = ((tmpcolr.red>>5)*11 +
 					      (tmpcolr.green>>5)*16 +
 					      (tmpcolr.blue>>5)*5) / (65504/64);
-			}
-			else
-			{
-				FindColor(XtDisplay(hw),
-					  (installed_colormap ?
-					   installed_cmap :
-					   DefaultColormapOfScreen(XtScreen(hw))),
-					  &tmpcolr);
+			} else {
+				if (!FindColor(hw, hw->core.colormap, &tmpcolr))
+					/* Didn't get actual color */
+					need_dither_color = 1;
 				Mapping[i] = tmpcolr.pixel;
 			}
 		}
 	}
-
 	/*
 	 * Special case:  For 2 color non-black&white images, instead
 	 * of 2 dither patterns, we will always drop them to be
 	 * black on white.
 	 */
-	if ((need_to_dither == True)&&(img_info->num_colors == 2))
-	{
-		if (Mapping[0] < Mapping[1])
-		{
+	if (need_to_dither && (img_info->num_colors == 2)) {
+		if (Mapping[0] < Mapping[1]) {
 			Mapping[0] = 0;
 			Mapping[1] = 64;
-		}
-		else
-		{
+		} else {
 			Mapping[0] = 64;
 			Mapping[1] = 0;
 		}
 	}
-
 	size = img_info->width * img_info->height;
-	if (size == 0)
-	{
-		tmpdata = NULL;
+	tmpdata = (unsigned char *)malloc(size);
+	CHECK_OUT_OF_MEM(tmpdata);
+	if (clip) {
+		ptr = img_info->clip_data;
+	} else {
+		ptr = img_info->image_data;
 	}
-	else
-	{
-		tmpdata = (unsigned char *)malloc(size);
-	}
-	if (tmpdata == NULL)
-	{
-		tmpimage = NULL;
-		Img = None;
-	}
-	else
-	{
+	ptr2 = tmpdata;
+	if (need_to_dither) {
+		int cx, cy;
+
 		if (clip) {
-			ptr = img_info->clip_data;
-		}
-		else {
-			ptr = img_info->image_data;
+			for (ptr2 = tmpdata, ptr = img_info->clip_data;
+			     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
+				*ptr2 = Mapping[(int)*ptr];
+			}
+		} else {
+			for (ptr2 = tmpdata, ptr = img_info->image_data;
+			     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
+				*ptr2 = Mapping[(int)*ptr];
+			}
 		}
 		ptr2 = tmpdata;
-
-		if (need_to_dither == True)
-		{
-			int cx, cy;
-
-			if (clip) {
-				for (ptr2 = tmpdata, ptr = img_info->clip_data;
-				     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
-					*ptr2 = Mapping[(int)*ptr];
+		for (cy=0; cy < img_info->height; cy++) {
+			for (cx=0; cx < img_info->width; cx++) {
+				/*
+				 * Assume high numbers are really negative
+				 */
+				if (*ptr2 > 128)
+					*ptr2 = 0;
+				if (*ptr2 > 64)
+					*ptr2 = 64;
+				/*
+				 * Traditional Floyd-Steinberg
+				 */
+				if (*ptr2 < 32) {
+					delta = *ptr2;
+					*ptr2 = black_pixel;
+				} else {
+					delta = *ptr2 - 64;
+					*ptr2 = white_pixel;
 				}
-			}
-			else {
-				for (ptr2 = tmpdata, ptr = img_info->image_data;
-				     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
-					*ptr2 = Mapping[(int)*ptr];
+				if (not_right_col = (cx < (img_info->width-1))){
+					*(ptr2+1) += delta*7 >> 4;
 				}
-			}
-
-			ptr2 = tmpdata;
-			for (cy=0; cy < img_info->height; cy++)
-			{
-				for (cx=0; cx < img_info->width; cx++)
-				{
-					/*
-					 * Assume high numbers are
-					 * really negative.
-					 */
-					if (*ptr2 > 128)
-					{
-						*ptr2 = 0;
-					}
-					if (*ptr2 > 64)
-					{
-						*ptr2 = 64;
-					}
-
-					/*
-					 * Traditional Floyd-Steinberg
-					 */
-					if (*ptr2 < 32)
-					{
-						delta = *ptr2;
-						*ptr2 = black_pixel;
-					}
-					else
-					{
-						delta = *ptr2 - 64;
-						*ptr2 = white_pixel;
-					}
-					if (not_right_col =
-						(cx < (img_info->width-1)))
-					{
-						*(ptr2+1) += delta*7 >> 4;
-					}
-
-					if (not_last_row =
-						(cy < (img_info->height-1)))
-					{
-						(*(ptr2+img_info->width)) +=
-							delta*5 >> 4;
-					}
-
-					if (not_right_col && not_last_row)
-					{
-						(*(ptr2+img_info->width+1)) +=
-							delta >> 4;
-					}
-
-					if (cx && not_last_row)
-					{
-						(*(ptr2+img_info->width-1)) +=
-							delta*3 >> 4;
-					}
-					ptr2++;
+				if (not_last_row = (cy < (img_info->height-1))){
+					(*(ptr2 + img_info->width)) +=
+						delta*5 >> 4;
 				}
-			}
-		} /* end if (need_to_dither==True) */
-		else
-		{
-
-			for (i=0; i < size; i++)
-			{
-				if (clip) {
-					*ptr2++ = *ptr;
+				if (not_right_col && not_last_row) {
+					(*(ptr2 + img_info->width+1)) +=
+						delta >> 4;
 				}
-				else {
-					*ptr2++ = (unsigned char)Mapping[(int)*ptr];
+				if (cx && not_last_row) {
+					(*(ptr2 + img_info->width-1)) +=
+						delta*3 >> 4;
 				}
-				ptr++;
+				ptr2++;
 			}
 		}
-
-		depth=DefaultDepthOfScreen(XtScreen(hw));
-		tmpimage = MakeImage(XtDisplay(hw), tmpdata,
-			img_info->width, img_info->height,
-			depth, img_info, clip);
-
-                /* Caught by Purify; should be OK. */
-                free (tmpdata);
-
-		Img = XCreatePixmap(XtDisplay(hw),
-			XtWindow(hw->html.view),
-			img_info->width, img_info->height,
-			depth);
+	} else if (need_dither_color && BSCnum) {
+#ifndef DISABLE_TRACE
+		if (htmlwTrace) {
+			fprintf(stderr, "Dithering color or grayscale image\n");
+		}
+#endif
+		FS_Dither(img_info, tmpdata, BSColors, BSCnum);
+		cmap = BSColors;
+	} else {
+		for (i=0; i < size; i++) {
+			if (clip) { 
+				*ptr2++ = *ptr;
+			} else {
+				*ptr2++ = (unsigned char)Mapping[(int)*ptr];
+			}
+			ptr++;
+		}
 	}
+	tmpimage = MakeImage(XtDisplay(hw), tmpdata, depth,
+		img_info, cmap, clip);
+        free(tmpdata);
 
-	if ((tmpimage == NULL)||(Img == None))
-	{
-		if (tmpimage != NULL)
-		{
-			XDestroyImage(tmpimage);
+	/* Check if over dimension limits */
+	if ((img_info->width > LimDimX) || (img_info->height > LimDimY)) {
+		LimDim = -1;
+	} else {
+		LimDim = 0;
+	}
+	/* Instead of calling the get_pref_int() function all the time,
+	   store values in static variables */
+	if (MaxPixmapHeight < 0) {
+		MaxPixmapHeight = get_pref_int(eMAXPIXMAPHEIGHT);
+		MaxPixmapWidth  = get_pref_int(eMAXPIXMAPWIDTH);
+	}
+	if ((MaxPixmapWidth && (img_info->width > MaxPixmapWidth)) ||
+	    (MaxPixmapHeight && (img_info->height > MaxPixmapHeight))) {
+		Img = (Pixmap)NULL;
+	} else {
+		Img = XCreatePixmap(XtDisplay(hw), XtWindow(hw->html.view),
+			img_info->width, img_info->height, depth);
+
+		if (LimDim == -1) {
+			/* Wait for completion */
+			XSync(XtDisplay(hw), False);
 		}
-		if (Img != None)
-		{
+	}
+	if (!tmpimage || (Img == (Pixmap)NULL) || (LimDim == 1)) {
+		if (tmpimage)
+			XDestroyImage(tmpimage);
+		if (Img != (Pixmap)NULL)
 			XFreePixmap(XtDisplay(hw), Img);
+		if (img_info->fetched && !img_info->cached) {
+			free(img_info->image_data);
+			if (img_info->clip_data)
+				free(img_info->clip_data);
 		}
 		img_info->width = NoImage_width;
 		img_info->height = NoImage_height;
-		Img = NoImage(hw);
-	}
-	else
-	{
+		img_info->internal = 2;
+		img_info->fetched = 0;
+		img_info->transparent = 0;
+		Img = (NoImageData(hw))->image;
+	} else {
 		XPutImage(XtDisplay(hw), Img, hw->html.drawGC, tmpimage, 0, 0,
 			0, 0, img_info->width, img_info->height);
 		XDestroyImage(tmpimage);
 	}
-
-        /* Caught by Purify; should be OK. */
         free((char *)Mapping);
-
 	return(Img);
 }
 
+
+void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
+	int force_load)
+{
+	ImageInfo icbs;
+	ImageInfo *dlim;
+	ImageInfo *noim;
+	XColor colrs[256];
+	int i;
+	int width, height;
+
+	if (!strncmp(picd->src, "internal-", 9)) {   /* Internal images */
+		Pixel fg_pixel, bg_pixel;
+
+		fg_pixel = hw->manager.foreground;
+		bg_pixel = hw->core.background_pixel;
+
+		if (!strcmp(picd->src, "internal-cookie-image")) {
+			picd->image = internalCookie;
+			picd->width = 33;
+			picd->height = 32;
+			picd->req_width = -1;
+			picd->req_height = -1;
+			picd->image_data = NULL;
+			picd->internal = 1;
+			picd->fetched = 0;
+			picd->delayed = 0;
+			picd->cached = 0;
+			picd->num_colors = 8;
+			picd->ismap = 0;
+			picd->usemap = NULL;
+			picd->alt_text = NULL;
+			picd->text = NULL;
+			picd->transparent = 0;
+			picd->is_bg_image = 0;
+			picd->aligned = 0;
+		} else if (!strcmp(picd->src, "internal-gopher-image")) {
+			IMGINFO_FROM_BITMAP(gopher_image)
+		} else if (!strcmp(picd->src, "internal-gopher-movie")) {
+			IMGINFO_FROM_BITMAP(gopher_movie)
+		} else if (!strcmp(picd->src, "internal-gopher-menu")) {
+			IMGINFO_FROM_BITMAP(gopher_menu)
+		} else if (!strcmp(picd->src, "internal-gopher-text")) {
+			IMGINFO_FROM_BITMAP(gopher_text)
+		} else if (!strcmp(picd->src, "internal-gopher-sound")) {
+			IMGINFO_FROM_BITMAP(gopher_sound)
+		} else if (!strcmp(picd->src, "internal-gopher-index")) {
+			IMGINFO_FROM_BITMAP(gopher_index)
+		} else if (!strcmp(picd->src, "internal-gopher-telnet")) {
+			IMGINFO_FROM_BITMAP(gopher_telnet)
+		} else if (!strcmp(picd->src, "internal-gopher-binary")) {
+			IMGINFO_FROM_BITMAP(gopher_binary)
+		} else if (!strcmp(picd->src, "internal-gopher-unknown")) {
+			IMGINFO_FROM_BITMAP(gopher_unknown)
+		} else {
+			IMGINFO_FROM_BITMAP(gopher_unknown)
+		}
+		return;
+	}
+
+	icbs = *picd;
+	/* Not internal, maybe delayed or in cache? */
+	if ((hw->html.delay_image_loads || (currently_delaying_images == 1) ||
+			icbs.urldelayed) && !force_load) {
+		/* Only looks in cache */
+		XtCallCallbackList((Widget)hw, hw->html.image_callback,
+			(XtPointer) &icbs);
+		/* The image is not cached or blanked out. */
+		if (!icbs.fetched && (icbs.internal != 3)) {
+			/* Update picd from the correct delayed image */
+			if (!pcc->anchor_tag_ptr->anc_href) {
+				dlim = DelayedImageData(hw);
+			} else {
+				dlim = AnchoredImageData(hw);
+			}
+			*picd = icbs;
+			if (currently_delaying_images) {
+				picd->urldelayed = 1;
+			} else {
+				picd->urldelayed = 0;
+			}
+			picd->height = dlim->height;
+			picd->width = dlim->width;
+			picd->internal = 2;
+			picd->delayed = 1;
+			picd->fetched = 0;
+			picd->image_data = dlim->image_data;
+			picd->image = dlim->image; 
+                	return;
+		}
+	} else {	/* Load image from the cache or net */
+		XtCallCallbackList((Widget)hw, hw->html.image_callback,
+                                (XtPointer) &icbs);
+		/* Can't find image.  Put NoImage in picd unless blanked out */
+		if (!icbs.fetched && (icbs.internal != 3)) {
+			noim = NoImageData(hw);
+			*picd = icbs;
+			picd->height = noim->height;
+			picd->width = noim->width;
+			picd->internal = 2;
+			picd->delayed = 0;
+			picd->fetched = 0;
+			picd->image_data = noim->image_data;
+			picd->image = noim->image; 
+                	return;
+		}
+	}
+	/* A hack because I put blank image in img.c instead of above, GEC */
+	if (icbs.internal) {
+		*picd = icbs;
+		return;
+	}
+	/* A sanity check */
+	if (!(icbs.width * icbs.height) || !icbs.image_data) {
+			noim = NoImageData(hw);
+			picd->height = noim->height;
+			picd->width = noim->width;
+			picd->internal = 2;
+			picd->delayed = 0;
+			picd->fetched = 0;
+			picd->image_data = noim->image_data;
+			picd->image = noim->image; 
+                	return;
+	}
+
+/* Here we have an image from the cache or the net */
+/* data is in icbs */
+
+/* Fields set to const. are untouched  */
+/*	src alt_text align req_height req_width border hspace vspace	*/
+/*	usemap map ismap fptr						*/
+/*	internal = 0							*/
+/*	delayed = 0 							*/
+/*	cw_only	 							*/
+
+/* After the callback here is the modified field 			*/
+/*   	height = original height of image				*/
+/*	width = original width of image					*/
+/*	fetched = 1	if we are here					*/
+/*	cached = 1							*/
+/*	colrs (no more than 256 colors)					*/
+/*	bg_index							*/
+/*	image_data							*/
+/*	num_colors							*/
+/*	clip_data							*/
+/*	transparent							*/
+
+	/* Rescale image here */
+	if (icbs.anim_info) {
+		width = icbs.awidth;
+		height = icbs.aheight;
+	} else {
+		width = icbs.width;
+		height = icbs.height;
+	}
+	if ((icbs.req_width > 0) && (icbs.req_height < 1) &&
+	    (icbs.req_width != width)) {
+		int change = (icbs.req_width * 100) / width;
+
+		icbs.req_height = (icbs.height * change) / 100;
+	}
+	if (icbs.req_width < 1)
+		icbs.req_width = width;
+	if (icbs.req_height < 1)
+		icbs.req_height = height;
+	if (icbs.percent_width &&
+	    (((icbs.percent_width * pcc->cur_line_width) / 100) > 0)) {
+		icbs.req_width =
+			(icbs.percent_width * pcc->cur_line_width) / 100;
+	}
+	if (!icbs.cw_only &&
+	    ((icbs.req_width != width ) ||
+	     (icbs.req_height != height))) { /* Rescale */
+		int wchange = (icbs.req_width * 100) / width;
+		int hchange = (icbs.req_height * 100) / height;
+		int new_width = (icbs.width * wchange) / 100;
+		int new_height = (icbs.height * hchange) / 100;
+
+		RescalePic(hw, &icbs, (new_width ? new_width : 1),
+			(new_height ? new_height : 1));
+		for (i=0; i < icbs.num_colors; i++)
+			colrs[i] = icbs.colrs[i];
+		ProcessImageData(hw, &icbs, colrs);
+		if (icbs.x)
+			icbs.x = (icbs.x * wchange) / 100;
+		if (icbs.y)
+			icbs.y = (icbs.y * hchange) / 100;
+		icbs.cached = 0;
+		if (icbs.anim_info) {
+			ImageInfo *tmp;
+
+			tmp = icbs.next;
+			while (tmp) {
+				new_width = (tmp->width * wchange) / 100;
+				new_height = (tmp->height * hchange) / 100;
+				RescalePic(hw, tmp,
+					(new_width ? new_width : 1),
+					(new_height ? new_height : 1));
+				for (i=0; i < tmp->num_colors; i++)
+					colrs[i] = tmp->colrs[i];
+				ProcessImageData(hw, tmp, colrs);
+				/* Adjust image offset, if any */
+				if (tmp->x)
+					tmp->x = (tmp->x * wchange) / 100;
+				if (tmp->y)
+					tmp->y = (tmp->y * hchange) / 100;
+				tmp = tmp->next;
+			}
+			/* Adjust overall animation size */
+			icbs.awidth = (icbs.awidth * wchange) / 100;
+			icbs.aheight = (icbs.aheight * hchange) / 100;
+			icbs.awidth = icbs.awidth ? icbs.awidth : 1;
+			icbs.aheight = icbs.aheight ? icbs.aheight : 1;
+	 	}
+	}
+
+	*picd = icbs;
+
+	/* Fixup animation struct */
+	if (picd->anim_info) {
+		picd->anim_info->start = picd;
+	}
+	return;
+}
+
+/* Place an image.  Add an element record for it. */
+void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
+{
+	char *srcPtr, *altPtr, *alignPtr, *valignPtr, *heightPtr, *widthPtr;
+	char *borderPtr, *hspacePtr, *vspacePtr, *usemapPtr, *ismapPtr;
+	ElemInfo *eptr;
+	int width = 0;
+	int height = 0;
+	int baseline;
+	ImageInfo *picd;
+	int extra = 0;
+	ImageInfo lpicd;
+	ImageInfo *saved_picd = mptr->s_picd;
+	int orig_cur_baseline, orig_cur_line_height, orig_x;
+	int dir, ascent, descent;
+	XCharStruct all;
+	XFontStruct *alt_font;
+	char *tptr;
+	int absmiddle = 0;
+	int absbottom = 0;
+	int texttop = 0;
+	FloatRec *tmp_float;
+
+	/* Do progressive display of elements up to this point */
+	if (!pcc->cw_only && progressiveDisplayEnabled &&
+            hw->html.last_formatted_elem && ((hw->html.last_formatted_elem->y <
+	    (hw->html.scroll_y + hw->html.view_height)) ||
+	    (pcc->last_progressive_ele && pcc->last_progressive_ele->next &&
+	     (pcc->last_progressive_ele->next->y <
+	      (hw->html.scroll_y + hw->html.view_height))))) {
+		eptr = hw->html.last_formatted_elem;
+		if (pcc->last_progressive_ele) {
+			if (pcc->last_progressive_ele->next) {
+				eptr = pcc->last_progressive_ele->next;
+			}
+			ProgressiveDisplay(hw, eptr, pcc);
+		} else {
+			ProgressiveDisplay(hw, hw->html.formatted_elements,
+					   pcc);
+		}
+		pcc->last_progressive_ele = hw->html.last_formatted_elem;
+	}
+
+	srcPtr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
+	if (!srcPtr)
+		return;
+
+	altPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ALT");
+	alignPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ALIGN");
+	valignPtr = ParseMarkTag(mptr->start, MT_IMAGE, "VALIGN");
+	heightPtr = ParseMarkTag(mptr->start, MT_IMAGE, "HEIGHT");
+	widthPtr = ParseMarkTag(mptr->start, MT_IMAGE, "WIDTH");
+	borderPtr = ParseMarkTag(mptr->start, MT_IMAGE, "BORDER");
+	hspacePtr = ParseMarkTag(mptr->start, MT_IMAGE, "HSPACE");
+	vspacePtr = ParseMarkTag(mptr->start, MT_IMAGE, "VSPACE");
+	usemapPtr = ParseMarkTag(mptr->start, MT_IMAGE, "USEMAP");
+	ismapPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ISMAP");
+
+	lpicd.src = srcPtr;
+	lpicd.alt_text = altPtr;
+	lpicd.align = ALIGN_NONE;
+	lpicd.valign = VALIGN_BOTTOM;
+	lpicd.height = 0;
+	lpicd.req_height = -1;	/* No req_height */
+	lpicd.width = 0;
+	lpicd.req_width = -1;	/* No req_width */
+	lpicd.percent_width = 0;
+	lpicd.border = IMAGE_DEFAULT_BORDER; 
+	lpicd.has_border = 0;
+	lpicd.hspace = DEF_IMAGE_HSPACE;
+	lpicd.vspace = DEF_IMAGE_VSPACE;
+	lpicd.usemap = usemapPtr;
+	lpicd.map = NULL;
+	lpicd.ismap = 0;
+	lpicd.fptr = NULL; 
+	lpicd.internal = 0;
+	lpicd.delayed = hw->html.delay_image_loads;
+	if (saved_picd) {
+		lpicd.urldelayed = saved_picd->urldelayed;
+	} else {
+		lpicd.urldelayed = 0;
+	}
+	lpicd.fetched = 0;
+	lpicd.cached = 0;
+	lpicd.num_colors = 0;
+	lpicd.bg_index = 0;
+	lpicd.image_data = NULL;
+	lpicd.clip_data = NULL;
+	lpicd.transparent = 0; 
+	lpicd.image = None;
+	lpicd.clip = None;
+	lpicd.cw_only = pcc->cw_only;
+	lpicd.is_bg_image = 0;
+	lpicd.aligned = 0;
+	lpicd.text = NULL;
+	lpicd.anim_info = NULL;
+	lpicd.anim_image = None;
+	lpicd.has_anim_image = 0;
+	lpicd.disposal = 0;
+
+        if (valignPtr) {
+	        if (caseless_equal(valignPtr, "TOP")) {
+ 			lpicd.valign = VALIGN_TOP;
+		} else if (caseless_equal(valignPtr, "MIDDLE")) {
+  			lpicd.valign = VALIGN_MIDDLE;
+		} else if (caseless_equal(valignPtr, "BOTTOM")) {
+			lpicd.valign = VALIGN_BOTTOM;
+		}
+	        free(valignPtr);
+	}
+
+        if (alignPtr) {
+		if (caseless_equal(alignPtr, "LEFT")) {
+			lpicd.align = HALIGN_LEFT;
+		} else if (caseless_equal(alignPtr, "RIGHT")) {
+			lpicd.align = HALIGN_RIGHT;
+	        } else if (caseless_equal(alignPtr, "TOP")) {
+ 			lpicd.valign = VALIGN_TOP;
+	        } else if (caseless_equal(alignPtr, "TEXTTOP")) {
+ 			lpicd.valign = VALIGN_TOP;
+			texttop = 1;
+		} else if (caseless_equal(alignPtr, "MIDDLE")) {
+  			lpicd.valign = VALIGN_MIDDLE;
+		} else if (caseless_equal(alignPtr, "ABSMIDDLE")) {
+  			lpicd.valign = VALIGN_MIDDLE;
+			absmiddle = 1;
+		} else if (caseless_equal(alignPtr, "BOTTOM") ||
+			   caseless_equal(alignPtr, "BASELINE")) {
+			lpicd.valign = VALIGN_BOTTOM;
+		} else if (caseless_equal(alignPtr, "ABSBOTTOM")) {
+			lpicd.valign = VALIGN_BOTTOM;
+			absbottom = 1;
+		}
+	        free(alignPtr);
+	}
+
+	if (heightPtr) {
+		lpicd.req_height = atoi(heightPtr);
+		free(heightPtr);
+		if (lpicd.req_height < 1 ) 	/* Too small ... */
+			lpicd.req_height = -1;
+	}
+	if (widthPtr) {
+		lpicd.req_width = atoi(widthPtr);
+		if (strchr(widthPtr, '%')) {
+			lpicd.percent_width = lpicd.req_width;
+			lpicd.req_width = -1;
+		} else if (lpicd.req_width < 1 ) {
+			lpicd.req_width = -1;
+		}
+		free(widthPtr);
+	}
+
+	/* Use default border if in anchor */
+	if (!pcc->anchor_tag_ptr->anc_href)
+		lpicd.border = 0;
+	/* However, specified border overrides the default action */
+	if (borderPtr) {
+		lpicd.border = atoi(borderPtr);
+		free(borderPtr);
+		if (lpicd.border < 0) {
+			if (pcc->anchor_tag_ptr->anc_href) {
+				lpicd.border = IMAGE_DEFAULT_BORDER;
+			} else {
+				lpicd.border = 0;
+			}
+		} else if (lpicd.border > 0) {
+			lpicd.has_border = 1;
+		}
+	}
+
+	if (hspacePtr){
+		lpicd.hspace = atoi(hspacePtr);
+		free(hspacePtr);
+		if (lpicd.hspace < 0)
+			lpicd.hspace = 0;
+	}
+	if (vspacePtr) {
+		lpicd.vspace = atoi(vspacePtr);
+		free(vspacePtr);
+		if (lpicd.vspace < 0)
+			lpicd.vspace = 0;
+	}
+	if (ismapPtr) {
+		lpicd.ismap = 1;
+		free(ismapPtr);
+	}
+
+	/* Now initialize the image part */
+	picd = (ImageInfo *) malloc(sizeof(ImageInfo));
+	*picd = lpicd;		/* For work */
+
+	/* Skip load if possible so progressive loads work better */
+	if (pcc->cw_only && !hw->html.delay_image_loads &&
+	    !currently_delaying_images && !lpicd.urldelayed) {
+		if (lpicd.req_width > 0)
+			picd->width = lpicd.req_width;
+		if (lpicd.req_height > 0)
+			picd->height = lpicd.req_height;
+		if (lpicd.percent_width)
+			picd->width = (lpicd.percent_width *
+				pcc->cur_line_width) / 100;
+		if (!picd->width || !picd->height)
+			HtmlGetImage(hw, picd, pcc, False);
+	} else {
+		/* Get an image in picd */
+		HtmlGetImage(hw, picd, pcc, False); /* Don't force load */
+	}
+
+/* Now we have an image.  It is:
+ *	- an internal-gopher	(internal=1, fetched=0, delayed=0)
+ *	- a delayed image	(internal=2, fetched=0, delayed=1)
+ *	- a no (bad) image	(internal=2, fetched=0, delayed=0)
+ *	- a blank image		(internal=3, fetched=0, delayed=0)
+ *	- the requested image	(internal=0, fetched=1, delayed=0)
+ *	- didn't do it		(internal=0, fetched=0, delayed=X)
+ */
+
+	/* Save the work */
+	if (!pcc->cw_only)
+		mptr->s_picd = picd;
+
+	extra = 0;
+	if (pcc->anchor_tag_ptr->anc_href) {
+		extra = 2 * picd->border;
+	} else if (picd->ismap && pcc->cur_form && picd->fetched) {
+	/* SUPER SPECIAL CASE!
+ 	 * If you have an ISMAP image inside a form, and that form doesn't
+	 * already have an HREF by being inside an anchor, (Being a
+	 * DelayedHRef is considered no href) clicking in that image will
+	 * submit the form, adding the x,y coordinates of the click as part
+	 * of the list of name/value pairs.
+	 */
+		picd->fptr = pcc->cur_form;
+	}
+
+	if (!pcc->anchor_tag_ptr->anc_href && picd->has_border)
+		extra = 2 * picd->border;
+
+	/* Use animation size for formatting */
+	if (picd->anim_info) {
+		height = picd->aheight;
+		width = picd->awidth;
+	} else {
+		height = picd->height;
+		width = picd->width;
+	}
+
+	/* Do ALT text if delayed or bad image */
+	if (picd->internal == 2) {
+		int twidth;
+
+		PushFont(hw, pcc);
+		pcc->cur_font_size = 3;
+		pcc->cur_font_type = FONT;
+		SetFontSize(hw, pcc, 0);
+		XTextExtents(pcc->cur_font, " ", strlen(" "), &dir, &ascent,
+			&descent, &all);
+		if (!picd->alt_text) {
+			char *sptr;
+			char *tptr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
+
+			if (sptr = strrchr(tptr, '/')) {
+				picd->alt_text = strdup(sptr + 1);
+				free(tptr);
+			} else {
+				picd->alt_text = tptr;
+			}
+		}
+		twidth = XTextWidth(pcc->cur_font, picd->alt_text,
+			strlen(picd->alt_text)) + all.width + 2;
+		/* Don't do text for bad images in tables if not enough room */
+		if (pcc->in_table && !picd->delayed && !pcc->cw_only &&
+		    ((width + twidth) > pcc->cur_line_width)) {
+			twidth = 0;
+			free(picd->alt_text);
+			picd->alt_text = NULL;
+		}
+		width += twidth;
+		alt_font = pcc->cur_font;
+		pcc->cur_font = PopFont(hw, pcc);
+		SetFontSize(hw, pcc, 0);
+		/* Always have border */
+		if (!extra) {
+			picd->border = IMAGE_DEFAULT_BORDER;
+			extra = 2 * picd->border;
+			picd->has_border = 1;
+		}
+	} else {
+		alt_font = pcc->cur_font;
+	}
+
+	height += extra + picd->vspace;
+	width += extra;
+
+	if ((picd->align == HALIGN_LEFT) &&
+	    (height < (pcc->cur_font->ascent + pcc->cur_font->descent))) {
+		height = pcc->cur_font->ascent + pcc->cur_font->descent;
+	}
+	baseline = height + picd->vspace;
+
+	/* How is it aligned? */
+	if (picd->valign == VALIGN_TOP) {
+		if (!texttop) {
+			if (!pcc->cur_line_height) {
+				baseline = pcc->cur_font->ascent + picd->vspace;
+			} else {
+				baseline = pcc->cur_baseline;
+			}
+		} else {
+			baseline = -3;
+		}
+	} else if (picd->valign == VALIGN_MIDDLE) {
+		if (!absmiddle) {
+			baseline = (height + picd->vspace) / 2;
+		} else {
+			baseline = -1;
+		}
+	} else if (absbottom) {
+		baseline = -2;
+	}
+
+	height += picd->vspace;
+
+	/*
+	 * If we are starting an image in formatted
+	 * text, and it needs a preceeding space, add
+	 * that space now.
+	 */
+	XTextExtents(pcc->cur_font, " ", strlen(" "), &dir, &ascent,
+		&descent, &all);
+	extra = all.width;
+	if (!pcc->preformat && pcc->have_space_after && !pcc->is_bol) {
+		pcc->x += extra;
+	}
+
+	/* Left aligned images go at beginning of line */
+	if ((picd->align == HALIGN_LEFT) && !pcc->is_bol) {
+		ConditionalLineFeed(hw, 1, pcc);
+	}
+
+	width += picd->hspace;
+
+	/* Now look if the image is too wide, if so insert a linefeed. */
+	if (!pcc->preformat && !pcc->cw_only) {
+		int space = 0;
+
+		/* Ignore space in front of right aligned image */
+		if (pcc->float_right && (pcc->float_right->type == 1))
+			space = pcc->float_right->image_extra;
+
+		if ((!pcc->is_bol || pcc->float_right) &&
+		    ((pcc->x + width + picd->hspace - space) > (pcc->eoffsetx +
+		      pcc->left_margin + pcc->cur_line_width))) {
+			ConditionalLineFeed(hw, 1, pcc);
+			/* If still no room, then have a previous right
+			 * aligned image.  Force a linefeed past it. */
+			if (pcc->float_right &&
+			    ((pcc->x + width + picd->hspace - space) >
+			     (pcc->eoffsetx + pcc->left_margin +
+			      pcc->cur_line_width))) {
+				if (pcc->cur_line_height <
+				    (pcc->float_right->y - pcc->y + 1)) {
+					pcc->cur_line_height =
+					       pcc->float_right->y - pcc->y + 1;
+					LinefeedPlace(hw, pcc);
+				}
+			}
+		}
+	}
+	pcc->x += picd->hspace;
+
+	if (picd->align == HALIGN_RIGHT) {
+		orig_x = pcc->x - picd->hspace;
+		if (((pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width -
+		     (width + extra)) >= pcc->x) && ((width + picd->hspace) <=
+		    (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
+			pcc->x = pcc->eoffsetx + pcc->left_margin +
+				pcc->cur_line_width - width - picd->hspace;
+		} else {
+			ConditionalLineFeed(hw, 1, pcc);
+			orig_x = pcc->eoffsetx + pcc->left_margin;
+			if ((width + picd->hspace + extra) < (pcc->eoffsetx +
+			    pcc->left_margin + pcc->cur_line_width)) {
+				pcc->x = pcc->eoffsetx + pcc->left_margin +
+					pcc->cur_line_width - width -
+					picd->hspace;
+			} else {
+				/* No room to do any right alignment */
+				pcc->x += picd->hspace;
+				picd->align = ALIGN_NONE;
+			}
+		}
+	}
+
+	if (pcc->cw_only) {
+	    /* If percentage width, then could be made as short as 1 */
+	    if (picd->percent_width) {
+	        if ((pcc->eoffsetx + pcc->left_margin + 1 +
+		     (2 * picd->hspace)) > pcc->computed_min_x)
+			pcc->computed_min_x = pcc->eoffsetx +
+				pcc->left_margin + 1 + (2 * picd->hspace);
+	    } else {
+	        if ((pcc->eoffsetx + pcc->left_margin + width + picd->hspace) >
+		    pcc->computed_min_x)
+			pcc->computed_min_x = pcc->eoffsetx + pcc->left_margin +
+			picd->hspace + width;
+		if (pcc->nobr && (pcc->computed_min_x <
+		     (pcc->nobr_x + picd->hspace + width))) {
+			pcc->computed_min_x = pcc->nobr_x + picd->hspace +
+				width;
+		}
+	    }
+	    if ((pcc->x + width) > pcc->computed_max_x) {
+                pcc->computed_max_x = pcc->x + width;
+	    }
+	}
+
+	/* By default, a short image not in a table has space above it */
+	if (!pcc->in_table && !pcc->cur_line_height &&
+	    (height < pcc->cur_font->ascent) &&
+	    (lpicd.align == ALIGN_NONE) && (lpicd.valign == VALIGN_BOTTOM)) {
+		pcc->cur_line_height = pcc->cur_baseline =
+			pcc->cur_font->ascent;
+
+	}
+	orig_cur_baseline = pcc->cur_baseline;
+	orig_cur_line_height = pcc->cur_line_height;
+	if (!pcc->cw_only) {
+		eptr = CreateElement(hw, E_IMAGE, alt_font,
+			pcc->x, pcc->y + picd->vspace,
+			width, height, baseline, pcc);
+		eptr->underline_number = 0; /* Images can't be underlined! */
+		eptr->anchor_tag_ptr = pcc->anchor_tag_ptr;
+		eptr->pic_data = picd;
+		if ((picd->align != HALIGN_RIGHT) &&
+		    (picd->align != HALIGN_LEFT))
+			AdjustBaseLine(hw, eptr, pcc);
+		eptr->bwidth = picd->border;
+		if (picd->fptr) /* Special ISMAP in a form */
+			eptr->is_in_form = 1;
+	} else {
+		if (pcc->cur_line_height < height)
+			pcc->cur_line_height = height;
+		if (picd->src)
+			free(picd->src);
+		if (picd->usemap)
+			free(picd->usemap);
+     		if (picd->alt_text)
+			free(picd->alt_text);
+		free(picd);
+	}
+
+	/* Do floating images if room on line */
+	picd->hspace += extra;
+	if (picd->align == HALIGN_LEFT) {
+		if (((pcc->x + width + extra) <
+		    (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
+			pcc->left_margin += width + picd->hspace;
+			pcc->cur_line_width -= width + picd->hspace;
+			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
+			tmp_float->next = pcc->float_left;
+			pcc->float_left = tmp_float;
+			tmp_float->type = 1;
+			tmp_float->marg = width + picd->hspace;
+			pcc->cur_baseline = orig_cur_baseline;
+			pcc->cur_line_height = orig_cur_line_height;
+			pcc->is_bol = True;
+			pcc->pf_lf_state = 1;
+			pcc->x += width + extra;
+			if (pcc->cw_only) {
+				tmp_float->y = pcc->y + height;
+			} else {
+				tmp_float->y = eptr->y + height;
+				/* Keep Adjustbaseline from messing it up */
+				picd->aligned = 2;
+				eptr = CreateElement(hw, E_CR, pcc->cur_font,
+					pcc->x, pcc->y, 0, pcc->cur_line_height,
+					pcc->cur_baseline, pcc);
+			}
+			if (pcc->in_paragraph)
+				pcc->in_paragraph++;
+		} else {
+			if (!pcc->cw_only)
+				AdjustBaseLine(hw, eptr, pcc);
+			pcc->is_bol = False;
+			pcc->pf_lf_state = 0;
+			pcc->x += width;
+		}
+	} else if (picd->align == HALIGN_RIGHT) {
+		if (((orig_x + width + picd->hspace) <
+		    (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
+			pcc->right_margin += width + picd->hspace;
+			pcc->cur_line_width -= width + picd->hspace;
+			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
+			tmp_float->next = pcc->float_right;
+			pcc->float_right = tmp_float;
+			tmp_float->type = 1;
+			tmp_float->marg = width + picd->hspace;
+			tmp_float->image_extra = picd->hspace;
+			if (pcc->cw_only) {
+				tmp_float->y = pcc->y + height;
+			} else {
+				tmp_float->y = eptr->y + height;
+				/* Keep it from being messed with */
+				picd->aligned = 1;
+			}
+			pcc->cur_baseline = orig_cur_baseline;
+			pcc->cur_line_height = orig_cur_line_height;
+			pcc->x = orig_x;
+			if (pcc->in_paragraph)
+				pcc->in_paragraph++;
+		} else {
+			if (!pcc->cw_only)
+				AdjustBaseLine(hw, eptr, pcc);
+			pcc->is_bol = False;
+			pcc->pf_lf_state = 0;
+			pcc->x += width;
+		}
+	} else {
+		pcc->is_bol = False;
+		pcc->pf_lf_state = 0;
+		pcc->x += width;
+		if (pcc->cw_only && pcc->nobr)
+			pcc->nobr_x += width;
+	}
+	pcc->have_space_after = 0;
+}
+
+/*
+ * Redraw a formatted image element.
+ * The color of the image border reflects whether it is an active anchor or not.
+ * Actual Pixmap creation was put off until now to make sure we
+ * had a window.  If it hasn't been already created, make the Pixmap now.
+ * If iptr != NULL, then was called by animation timer routine.
+ */
+void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
+{
+	ImageInfo *pic_data, *epic_data, *pic;
+	unsigned long valuemask;
+	XGCValues values;
+	int x, y, ax, ay, axe, aye, extra;
+	int height, width;
+	int timer_refresh;
+
+	epic_data = eptr->pic_data;
+
+	/* Don't refresh background image */
+	if (epic_data->is_bg_image)
+		return;
+
+	if (iptr) {
+		timer_refresh = 1;
+		pic_data = iptr;
+	} else {
+		timer_refresh = 0;
+		pic_data = epic_data;
+		/* If done running, refresh last image of animation */
+		if (epic_data->fetched && epic_data->anim_info &&
+		    (epic_data->running == 2)) {
+			pic_data = epic_data->last;
+		}
+	}
+
+	if ((eptr->anchor_tag_ptr->anc_href || epic_data->has_border) &&
+	    (!epic_data->internal || (epic_data->internal == 2))) {
+		extra = eptr->bwidth;
+	} else {
+		extra = 0;
+	}
+	ax = x = eptr->x - hw->html.scroll_x;
+	ay = y = eptr->y - hw->html.scroll_y;
+	axe = ax + extra;
+	aye = ay + extra;
+
+	/* Compute offset of animation image, if any */
+	if (epic_data->fetched && epic_data->anim_info) {
+		x += pic_data->x;
+		y += pic_data->y;
+		height = epic_data->aheight;
+		width = epic_data->awidth;
+	} else {
+		height = pic_data->height;
+		width = pic_data->width;
+	}
+	XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->fg);
+	XSetBackground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
+	/* Do ALT text if delayed or bad image */
+	if ((epic_data->internal == 2) && epic_data->alt_text &&
+	    *epic_data->alt_text) {
+		XSetFont(XtDisplay(hw), hw->html.drawGC, eptr->font->fid);
+		XDrawString(XtDisplay(hw), XtWindow(hw->html.view),
+			hw->html.drawGC,
+			axe + epic_data->width + 1,
+			aye + (height/2) + (eptr->font->max_bounds.ascent/2) -2,
+			epic_data->alt_text, strlen(epic_data->alt_text));
+		/* Compute new width so text inside border */
+		width = eptr->width - epic_data->hspace - (2 * extra);
+	}
+	/* Draw border */
+	if (extra && !timer_refresh) {
+		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view), 
+				hw->html.drawGC,
+				axe, ay,
+				width, extra);
+		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view), 
+				hw->html.drawGC,
+				axe, (aye + height),
+				width, extra);
+		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view),
+				hw->html.drawGC,
+				ax, ay,
+				extra, (height + (2 * extra)));
+		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view),
+				hw->html.drawGC,
+				(axe + width), ay,
+				extra, (height + (2 * extra)));
+	}
+	/* Don't refresh an animation while running unless it has
+	 * a saved animation image.
+	 */
+	if (!timer_refresh && epic_data->fetched && epic_data->anim_info &&
+	    epic_data->running) {
+		if (epic_data->has_anim_image == 1) {
+			/* Don't display if incomplete background image */
+			if ((epic_data->running == 1) && epic_data->bg_image &&
+			    !epic_data->bg_visible)
+				return;
+			XCopyArea(XtDisplay(hw),
+				epic_data->anim_image,
+				XtWindow(hw->html.view),
+				hw->html.drawGC,
+		  		0, 0,
+		  		epic_data->awidth,
+		  		epic_data->aheight,
+		  		axe, aye);
+			return;
+		} else if (epic_data->running == 1) {
+			return;
+		}
+	}
+	if (pic_data->image == (Pixmap)NULL) {
+		pic_data->image = InfoToImage(hw, pic_data, 0);
+		if (pic_data->image != (Pixmap)NULL) {
+			if (pic_data->transparent &&
+			    pic_data->clip == None) {
+				pic_data->clip =
+					XCreatePixmapFromBitmapData(
+						XtDisplay(hw),
+						XtWindow(hw->html.view),
+						(char*) pic_data->clip_data,
+						pic_data->width,
+						pic_data->height,
+						1, 0, 1);
+			} else {
+				if (!pic_data->transparent)
+					pic_data->clip = None;
+			}
+		}
+		/* Force background overwrite the first time. */
+		pic_data->background_pixel = (Pixmap) 0xFFFFFFFF;
+	}
+	if (pic_data->image) {
+ 		/*
+		** If (image is transparent and within max clip size)
+		** and (there is a background image) then use clip mask.
+		** Also clip if transparent animation image.
+ 		*/
+		if ((pic_data->transparent == 1) &&
+		    (hw->html.bgmap_SAVE || epic_data->has_anim_image)) {
+			unsigned long valuemask;
+			XGCValues values;
+
+			values.clip_mask = pic_data->clip;
+			if (epic_data->has_anim_image) {
+				values.clip_x_origin = pic_data->x;
+				values.clip_y_origin = pic_data->y;
+				/* Get background in animation image */
+				if (epic_data->has_anim_image != 1) {
+					if (hw->html.bgmap_SAVE) {
+					    if (!epic_data->bg_image) {
+						epic_data->bg_image =
+						    XCreatePixmap(XtDisplay(hw),
+							XtWindow(hw),
+							epic_data->awidth,
+							epic_data->aheight,
+							DefaultDepthOfScreen(
+							    XtScreen(hw)));
+					    }
+					    /* Save the background, but must */
+					    /* be fully visible to get it all */
+					    if (!epic_data->bg_visible &&
+						((aye + epic_data->aheight) >
+						 0) &&
+						(aye < hw->html.view_height) &&
+						((axe + epic_data->awidth) >
+						 0) &&
+						(axe < hw->html.view_width)) {
+						HTMLDrawBackgroundImage(
+						    (Widget)hw,
+			 		 	    axe, aye,
+					  	    epic_data->awidth,
+					  	    epic_data->aheight);
+						XCopyArea(XtDisplay(hw),
+						    XtWindow(hw->html.view),
+						    epic_data->bg_image,
+						    hw->html.drawGC,
+						    axe, aye,
+						    epic_data->awidth,
+						    epic_data->aheight,
+						    0, 0);
+						/* Is it fully visible? */
+						if ((aye >= 0) &&
+			    			    ((aye + epic_data->aheight) <=
+						     hw->html.view_height) &&
+						    (axe >= 0) &&
+						    ((axe + epic_data->awidth) <= 
+						     hw->html.view_width)) {
+						    epic_data->bg_visible = 1;
+						}
+					    }
+					    if (epic_data == pic_data) {
+						/* Redisplay it all for first image */
+						XCopyArea(XtDisplay(hw),
+						    epic_data->bg_image,
+						    epic_data->anim_image,
+						    hw->html.drawGC,
+						    0, 0,
+						    epic_data->awidth,
+						    epic_data->aheight,
+						    0, 0);
+					    } else {
+						XCopyArea(XtDisplay(hw),
+						    epic_data->bg_image,
+						    epic_data->anim_image,
+						    hw->html.drawGC,
+						    pic_data->x,
+						    pic_data->y,
+						    pic_data->width,
+						    pic_data->height,
+						    pic_data->x,
+						    pic_data->y);
+						/* Clear previous image's area */
+						if (epic_data->prev) {
+						    pic = epic_data->prev;
+						    XCopyArea(XtDisplay(hw),
+							epic_data->bg_image,
+							epic_data->anim_image,
+							hw->html.drawGC,
+							pic->x, pic->y,
+							pic->width,
+							pic->height,
+							pic->x, pic->y);
+						}
+					    }
+					} else {
+					    /* Get background color */
+					    XSetForeground(XtDisplay(hw),
+						hw->html.drawGC,
+						eptr->bg);
+					    if (epic_data == pic_data) {
+						XFillRectangle(XtDisplay(hw),
+						    epic_data->anim_image,
+						    hw->html.drawGC,
+						    0, 0,
+						    epic_data->awidth,
+						    epic_data->aheight);
+					    } else {
+						XFillRectangle(
+						    XtDisplay(hw),
+						    epic_data->anim_image,
+						    hw->html.drawGC,
+						    pic_data->x,
+						    pic_data->y,
+						    pic_data->width,
+						    pic_data->height);
+						/* Redo previous area */
+						if (epic_data->prev) {
+						    pic = epic_data->prev;
+						    XFillRectangle(
+							XtDisplay(hw),
+							epic_data->anim_image,
+							hw->html.drawGC,
+							pic->x, pic->y,
+							pic->width,
+							pic->height);
+						}
+					    }
+					}
+				}
+			} else {
+				values.clip_x_origin = x + extra;
+				values.clip_y_origin = y + extra;
+			}
+
+			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
+			XChangeGC(XtDisplay(hw), 
+				  hw->html.drawGC,
+				  valuemask, &values);
+
+			if (epic_data->has_anim_image) {
+				XCopyArea(XtDisplay(hw),
+					pic_data->image,
+					epic_data->anim_image,
+					hw->html.drawGC,
+					0, 0,
+					pic_data->width, pic_data->height,
+					pic_data->x, pic_data->y);
+				epic_data->has_anim_image = 1;
+			} else {
+				XCopyArea(XtDisplay(hw),
+					pic_data->image,
+					XtWindow(hw->html.view),
+					hw->html.drawGC,
+					0, 0,
+					pic_data->width, pic_data->height,
+					(x + extra),
+					(y + extra));
+			}
+			values.clip_mask = None;
+			values.clip_x_origin = 0;
+			values.clip_y_origin = 0;
+			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
+			XChangeGC(XtDisplay(hw),
+				  hw->html.drawGC,
+				  valuemask, &values);
+
+			/* Now display the animation image if visible */
+			if (epic_data->has_anim_image &&
+			    (((aye + epic_data->aheight) > 0) &&
+			    (aye < hw->html.view_height))) {
+				XCopyArea(XtDisplay(hw),
+					epic_data->anim_image,
+					XtWindow(hw->html.view),
+					hw->html.drawGC,
+			  		0, 0,
+			  		epic_data->awidth,
+			  		epic_data->aheight,
+			  		axe, aye);
+			}
+		}
+ 		/*
+		** If (image is transparent) and (background is solid
+		** and color is different from transparent color used
+		** in image) then change image to match background
+		** color.
+ 		*/
+		else {
+			if (pic_data->transparent &&
+			    (pic_data->background_pixel !=
+			     hw->core.background_pixel)) {
+
+				/* Create a GC if not already done. */
+				if (maskGC == NULL) {
+					maskGC = XCreateGC(XtDisplay(hw),
+						XtWindow(hw->html.view), 0, 0);
+					XCopyGC(XtDisplay(hw),
+						hw->html.drawGC, 0xFFFFFFFF,
+						maskGC);
+				}
+
+				/* Clear the background pixels to 0 */
+				values.foreground = 0xFFFFFFFF;
+				values.background = 0;
+				values.function = GXand;
+				valuemask = GCForeground|GCBackground|GCFunction;
+				XChangeGC(XtDisplay(hw),
+					  maskGC,
+					  valuemask,
+					  &values);
+				XCopyPlane (XtDisplay(hw),
+					    pic_data->clip,
+					    pic_data->image,
+					    maskGC,
+					    0, 0,
+					    pic_data->width,
+					    pic_data->height,
+					    0, 0, 1);
+				/* Set background pixels to background color */
+				values.foreground = 0;
+				values.background = hw->core.background_pixel;
+				values.function = GXor;
+				valuemask = GCForeground|GCBackground|GCFunction;
+				XChangeGC(XtDisplay(hw),
+					  maskGC,
+					  valuemask,
+					  &values);
+				XCopyPlane (XtDisplay(hw),
+					    pic_data->clip,
+					    pic_data->image,
+					    maskGC,
+					    0, 0,
+					    pic_data->width,
+					    pic_data->height,
+					    0, 0, 1);
+				pic_data->background_pixel =
+					hw->core.background_pixel;
+                        }
+
+			values.clip_mask = None;
+			values.clip_x_origin = 0;
+			values.clip_y_origin = 0;
+			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
+			XChangeGC(XtDisplay(hw),
+				  hw->html.drawGC,
+				  valuemask, &values);
+
+			/* If has animation image, then need to save */
+			if (epic_data->has_anim_image) {
+				/* If image is empty, put background in */
+				if (epic_data->has_anim_image != 1) {
+					if (hw->html.bgmap_SAVE) {
+						XCopyArea(XtDisplay(hw),
+							XtWindow(hw->html.view),
+							epic_data->anim_image,
+							hw->html.drawGC,
+							axe, aye,
+							epic_data->awidth,
+							epic_data->aheight,
+							0, 0);
+					} else {
+						XSetForeground(XtDisplay(hw),
+							hw->html.drawGC,
+							eptr->bg);
+						XFillRectangle(XtDisplay(hw),
+							epic_data->anim_image,
+							hw->html.drawGC,
+							0, 0,
+							epic_data->awidth,
+							epic_data->aheight);
+					}
+				}
+				XCopyArea(XtDisplay(hw),
+					pic_data->image,
+					epic_data->anim_image,
+					hw->html.drawGC,
+				  	0, 0,
+			 	 	pic_data->width,
+					pic_data->height,
+					pic_data->x, pic_data->y);
+				epic_data->has_anim_image = 1;
+			}
+			XCopyArea(XtDisplay(hw),
+				  pic_data->image,
+				  XtWindow(hw->html.view),
+				  hw->html.drawGC,
+				  0,
+				  0,
+				  pic_data->width,
+				  pic_data->height,
+				  (x + extra),
+				  (y + extra));
+		}
+	}
+	/* Is it the first image in an animation? */
+	if (!timer_refresh && epic_data->fetched && epic_data->anim_info &&
+	    !epic_data->running) {
+		epic_data->anim_info->current = pic_data;
+		epic_data->anim_info->eptr = eptr;
+		/* Because of refresh sequence, need to start over */
+		epic_data->anim_info->next = epic_data->anim_info->start;
+		if (pic_data->delay)
+			epic_data->timer = XtAppAddTimeOut(app_context,
+				pic_data->delay * 10,
+				(XtTimerCallbackProc)ImageAnimate,
+				(XtPointer) epic_data->anim_info);
+		else
+			epic_data->timer = XtAppAddTimeOut(app_context, 10,
+				(XtTimerCallbackProc)ImageAnimate,
+				(XtPointer) epic_data->anim_info);
+		/* We don't want to start it again until a reformat */
+		epic_data->running = 1;
+	}
+}
+
+/* Timer routine to display next GIF animation image.  It frees the
+ * animation data record when done.
+ */
+void ImageAnimate(XtPointer cld, XtIntervalId *id)
+{
+	AnimInfo *anim_info = (AnimInfo *) cld;
+	ImageInfo *pic_data = anim_info->next;
+	ImageInfo *current, *epic;
+	int sx, sy, width, height, extra;
+	HTMLWidget hw = anim_info->hw;
+	ElemInfo *eptr = anim_info->eptr;
+	unsigned long save_bg;
+
+	/* Check if window still exists */
+	if (!*anim_info->window || !XtIsRealized((Widget) hw)) {
+		free(anim_info);
+		return;
+	}
+
+	eptr->pic_data->timer = 0;
+
+	/* Check if window has been refreshed or animation stopped */
+	if (anim_info->drawing != hw->html.draw_count) {
+		free(anim_info);
+		return;
+	}
+	if (!pic_data) {	/* At end of images */
+		/* Zero is infinite */
+		if (anim_info->count) {
+			anim_info->count--;
+			/* Interations finished */
+			if (!anim_info->count) {
+				anim_info->start->running = 2;
+				anim_info->start->last = anim_info->current;
+				free(anim_info);
+				return;
+			}
+		}
+		pic_data = anim_info->start;
+		/* Reset the animation image */
+		if (pic_data->has_anim_image)
+			pic_data->has_anim_image = -1;
+	}
+	epic = eptr->pic_data;
+	epic->prev = NULL;
+	current = anim_info->current;
+	/* Replace background covered by previous image, if requested */
+	if (current->disposal == 2) {
+		if (epic->has_anim_image) {
+			epic->has_anim_image = -1;
+			if (pic_data->transparent == 1) {
+				if ((current->x != pic_data->x) ||
+				    (current->y != pic_data->y) ||
+				    (current->width > pic_data->width) ||
+				    (current->height > pic_data->height)) {
+					/* Previous one was a different size */
+					epic->prev = current;
+				}
+				/* Animation image will handle the background */
+				goto skipped_it;
+			}
+		}
+		/* Skip if next image completely covers previous one */
+		if ((current->x != pic_data->x) ||
+		    (current->y != pic_data->y) ||
+		    (current->width > pic_data->width) ||
+		    (current->height > pic_data->height)) {
+			/* Get border width, if any */
+			if (eptr->anchor_tag_ptr->anc_href &&
+			    (!epic->internal || (epic->internal == 2))) {
+				extra = eptr->bwidth;
+			} else {
+				extra = 0;
+			}
+			sx = eptr->x + current->x + extra - hw->html.scroll_x;
+			sy = eptr->y + current->y + extra - hw->html.scroll_y;
+			if ((current->x + current->width) > epic->awidth) {
+				width = epic->awidth -
+					(current->x + current->width);
+			} else {
+				width = current->width;
+			}
+			if ((current->y + current->height) > epic->aheight) {
+				height = epic->aheight -
+					(current->y + current->height);
+			} else {
+				height = current->height;
+			}
+			if ((width > 0) && (height > 0)) {
+				if (hw->html.bgmap_SAVE) {
+					/* There is a background image */
+					HTMLDrawBackgroundImage((Widget)hw,
+						sx, sy, width, height);
+				} else {
+					/* Get correct background color */
+					XSetForeground(XtDisplay(hw),
+						hw->html.drawGC,
+						eptr->bg);
+					XFillRectangle(XtDisplay(hw),
+						XtWindow(hw->html.view),
+						hw->html.drawGC, sx, sy,
+						width, height);
+				}
+			}
+		}
+	}
+skipped_it:
+
+	anim_info->current = pic_data;
+	anim_info->next = pic_data->next;
+
+	sy = hw->html.scroll_y;
+
+	/* Only refresh if visible or has animation image */
+	if (epic->has_anim_image ||
+	    (((eptr->y + eptr->height) > sy) &&
+	     (eptr->y < (sy + hw->html.view_height)))) {
+		/* Get correct background in case in table cell */
+		save_bg = hw->core.background_pixel;
+		hw->core.background_pixel = eptr->bg;
+
+		ImageRefresh(hw, eptr, pic_data);
+
+		hw->core.background_pixel = save_bg;
+	}
+
+	if (hw->html.drawing && (pic_data->delay < 500))
+		/* If still formatting window, them slow down animations */
+		epic->timer = XtAppAddTimeOut(app_context, 500,
+			(XtTimerCallbackProc)ImageAnimate,
+			(XtPointer)anim_info);
+	else if (pic_data->delay)
+		epic->timer = XtAppAddTimeOut(app_context, pic_data->delay * 10,
+			(XtTimerCallbackProc)ImageAnimate,
+			(XtPointer)anim_info);
+	else
+		epic->timer = XtAppAddTimeOut(app_context, 10,
+			(XtTimerCallbackProc)ImageAnimate,
+			(XtPointer)anim_info);
+}

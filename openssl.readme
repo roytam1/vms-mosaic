@@ -1,0 +1,57 @@
+The versions of OpenSSL currently supported for use with Mosaic are
+0.9.4 and 0.9.5.  DEC C is required to build Mosaic with OpenSSL
+(GNU C and VAX C are still supported for non-OpenSSL builds).
+
+The OpenSSL package is available at http://www.openssl.org/source/
+and various mirrors around the world.  Note that it is your
+responsibility to follow any applicable import/export restrictions
+(using a mirror site within your country may avoid this issue).
+
+If OpenSSL is installed just for use by Mosaic, then a complete
+OpenSSL build is not required.  Mosaic only requires the following
+OpenSSL build steps (the tcp/ip package can be specified with
+parameter five):
+
+OpenSSL 0.9.4
+	@MAKEVMS BUILDINF NORSAREF NODEBUG DECC
+	@MAKEVMS SOFTLINKS NORSAREF NODEBUG DECC
+	@MAKEVMS CRYPTO NORSAREF NODEBUG DECC
+	@MAKEVMS SSL NORSAREF NODEBUG DECC
+
+OpenSSL 0.9.5
+	@MAKEVMS BUILDINF NORSAREF NODEBUG DECC
+	@MAKEVMS SOFTLINKS NORSAREF NODEBUG DECC
+	@MAKEVMS CONFIG NORSAREF NODEBUG DECC
+	@MAKEVMS CRYPTO NORSAREF NODEBUG DECC
+	@MAKEVMS SSL NORSAREF NODEBUG DECC
+
+	Note:  The following fix to the 0.9.5 MAKEVMS.COM is
+	required for the above build steps.  Change line
+
+	.OR.(P1.EQS."TEST").OR.(P1.EQS."APPS")
+
+	to
+
+	.OR.(P1.EQS."TEST").OR.(P1.EQS."APPS").OR.(P1.EQS."CONFIG")
+
+Once the build is complete, then
+
+	@INSTALL <root>
+
+where <root> is the directory in which the built OpenSSL will be
+placed.  Then in [.VMS] of that directory
+
+	@OPENSSL_STARTUP
+or
+	@OPENSSL_STARTUP "/SYSTEM"    ! Logicals defined /SYSTEM
+
+to define the logicals needed by the Mosaic build.  Once Mosaic
+is built, the OpenSSL package can be removed from the system.
+However, the files in the <root> directory should be kept so that
+Mosaic can be rebuilt, as needed, in the future.
+
+--------------------------------------------------------------------
+Each user of VMS Mosaic built with OpenSSL is responsible for
+their compliance with all legal issues concerning that use.  The
+developer takes no responsibility for any mis-use.
+--------------------------------------------------------------------

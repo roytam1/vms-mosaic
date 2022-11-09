@@ -51,668 +51,193 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
 #include "../config.h"
+
 #include "mosaic.h"
-#include "gui.h"
-#include "img.h"
 #include "mo-www.h"
 #include "globalhist.h"
+#include "../libhtmlw/HTMLp.h"
 #include "picread.h"
-#include "libhtmlw/HTML.h"
+#ifdef CCI
 #include "cci.h"
+#include "ccibindings2.h"
 extern int cci_event;
+#endif
+#include "gifread.h"
+#include "medcut.h"
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
+extern int cacheTrace;
 #endif
-
-#include "bitmaps/gopher_image.xbm"
-#include "bitmaps/gopher_movie.xbm"
-#include "bitmaps/gopher_menu.xbm"
-#include "bitmaps/gopher_text.xbm"
-#include "bitmaps/gopher_sound.xbm"
-#include "bitmaps/gopher_index.xbm"
-#include "bitmaps/gopher_telnet.xbm"
-#include "bitmaps/gopher_binary.xbm"
-#include "bitmaps/gopher_unknown.xbm"
-
-ImageInfo *scaleImage(ImageInfo *img_data,char *width,char *height);
-
-static ImageInfo *gopher_image = NULL;
-static ImageInfo *gopher_movie = NULL;
-static ImageInfo *gopher_menu = NULL;
-static ImageInfo *gopher_text = NULL;
-static ImageInfo *gopher_sound = NULL;
-static ImageInfo *gopher_index = NULL;
-static ImageInfo *gopher_telnet = NULL;
-static ImageInfo *gopher_binary = NULL;
-static ImageInfo *gopher_unknown = NULL;
-
-
-/* for selective image loading */
-#define blank_width 8
-#define blank_height 8
-static unsigned char blank_bits[] = {
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
-static ImageInfo *blank = NULL;
-
-extern char **imagekill_sites;
-
-/*******************************/
-
 
 /* Defined in gui.c */
 extern char *cached_url;
-extern mo_window *current_win;
+extern int browserSafeColors;
+extern int BSCnum;
+         
 /* Defined in gui-documents.c */
 extern int interrupted;
-extern int loading_inlined_images;
-extern int installed_colormap;
-extern Colormap installed_cmap;
 
-/*
-          (dsp, DefaultRootWindow (dsp), \
-*/
+extern int Vclass;
 
-#if defined(__STDC__) || defined(__sgi)
-#define MAKE_IMGINFO_FROM_BITMAP(name) \
-  if (!name) \
-    { \
-      name = (ImageInfo *)malloc (sizeof (ImageInfo)); \
-      name->ismap = 0; \
-      name->width = name##_width; \
-      name->height = name##_height; \
-      name->image_data = NULL; \
-      /* Bandaid for bug in Eric's code. */ \
-      name->internal = 1; \
-      name->transparent = 0; \
-      name->image = \
-        XCreatePixmapFromBitmapData \
-          (XtDisplay(swin), XtWindow(view), \
-           name##_bits,  \
-           name##_width, name##_height, \
-           fg_pixel, bg_pixel, DefaultDepth(dsp, DefaultScreen(dsp))); \
-    } \
-  if (!name->image) \
-    { \
-      name->image = \
-        XCreatePixmapFromBitmapData \
-          (XtDisplay(swin), XtWindow(view), \
-           name##_bits,  \
-           name##_width, name##_height, \
-           fg_pixel, bg_pixel, DefaultDepth(dsp, DefaultScreen(dsp))); \
-    }
-#else
-#define MAKE_IMGINFO_FROM_BITMAP(name) \
-  if (!name) \
-    { \
-      name = (ImageInfo *)malloc (sizeof (ImageInfo)); \
-      name->ismap = 0; \
-      name->width = name/**/_width; \
-      name->height = name/**/_height; \
-      name->image_data = NULL; \
-      /* Bandaid for bug in Eric's code. */ \
-      name->internal = 1; \
-      name->transparent = 0; \
-      name->image = \
-        XCreatePixmapFromBitmapData \
-          (XtDisplay(swin), XtWindow(view), \
-           name/**/_bits,  \
-           name/**/_width, name/**/_height, \
-           fg_pixel, bg_pixel, DefaultDepth(dsp, DefaultScreen(dsp))); \
-    } \
-  if (!name->image) \
-    { \
-      name->image = \
-        XCreatePixmapFromBitmapData \
-          (XtDisplay(swin), XtWindow(view), \
-           name/**/_bits,  \
-           name/**/_width, name/**/_height, \
-           fg_pixel, bg_pixel, DefaultDepth(dsp, DefaultScreen(dsp))); \
-    }
-#endif /* __STDC__ */
+/* Used in libwww2 */
+int force_image_load = 0;
+char *image_file_fnam = NULL;
+extern char *HTReferer;
 
-#define RETURN_IMGINFO_FROM_BITMAP(x) \
-{ \
-  MAKE_IMGINFO_FROM_BITMAP(x); \
-  if (cci_event) MoCCISendEventOutput(IMAGE_LOADED); \
-  return x; \
-}
+/* For selective image loading */
+#define BlankImage_width 8
+#define BlankImage_height 8
+static unsigned char BlankImage_bits[] = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
+static ImageInfo *blank_image = NULL;
 
-/* ------------------------------------------------------------------------ */
+extern char **imagekill_sites;
 
-
-ImageInfo *scaleImage(ImageInfo *img_data,char *width,char *height) {
-/*
-int widthInt,heightInt;
-
-        if (!width) {
-                widthInt=img_data->width;
-	}
-        else {
-                if (strchr(width,'%')) {
-                        widthInt=(atoi(width)/100)*img_data->width;
-		}
-                else {
-                        widthInt=atoi(width);
-		}
-	}
-
-        if (!height) {
-                heightInt=img_data->height;
-	}
-        else {
-                heightInt=atoi(height);
-	}
-
-        for (i=0; i<256; i++) {
-                convertRed[i]=(byte)img_data->reds[i];
-                convertGreen[i]=(byte)img_data->greens[i];
-                convertBlue[i]=(byte)img_data->blues[i];
-	}
-
-        img_data->image_data=SmoothResize(img_data->image_data,0,
-                                          img_data->width,img_data->height,
-                                          widthInt,heightInt,
-                                          convertRed,convertGreen,convertBlue,
-                                          newRed,newGreen,newBlue,256);
-*/
-
-	return NULL;
-}
-
-/* ------------------------------------------------------------------------ */
-
-unsigned char nums[]={
-	1,
-	2,
-	4,
-	8,
-	16,
-	32,
-	64,
-	128
-};
-
-/* Cache Load Hack: (BJS)
-   char *ir_hack_string, *diskfile, *url;
-   sprintf(ir_hack_string,"%s\0%s",diskfile,url);
-   ImageResolve(NULL,ir_hack_string,0,NULL,NULL);
-   */
-
-/* Width and Height Hack: (SWP)
-	Added "width" and "height" to the parameter list. These are used to
-	resize the image when we are done decoding. This'll be fun when we
-	start processing on a line-by-line basis.
-	If NULLs are passed, the width and height are not used.
-	*/
-
-/* Image resolution function. */
-/*static*/
-ImageInfo *ImageResolve (Widget w, char *src, int noload, char *wid, char *hei)
+ImageInfo *BlankImageData(HTMLWidget w)
 {
-    extern Widget view; /*hw->html.view*/
-    Widget swin = current_win->scrolled_win;
-    int i, cnt;
-    unsigned char *data;
-    unsigned char *bg_map;
-    unsigned char *bgptr;
-    unsigned char *cptr;
-    unsigned char *ptr;
-    int width, height;
-    int Used[256];
-    XColor colrs[256];
-    ImageInfo *img_data;
-/*  char *txt;*/
-    int widthbyheight = 0;
-    char *fnam;
-    int rc;
-    int bg, bg_red, bg_green, bg_blue;
-#ifdef HAVE_HDF
-    int ishdf = 0;
-    char *hdfref = NULL;
-#endif
-    mo_window *win = NULL;
-    extern int Vclass;
-    static Pixel fg_pixel, bg_pixel;
-    static int done_fetch_colors = 0;
-    int j,bcnt;
+	static Pixel fg_pixel, bg_pixel;
 
-  /* Cache Load Hack - BJS 1/18/96 */ /* Fixed - SWP 02/01/96 */
-    if(!w) {
-        fnam = src;
-        while(*src != '\n') src++;
-        *src='\0';
-        src++;
-        
-        goto stuffcache;
-    }
-          
-#ifndef DISABLE_TRACE
-    if (srcTrace)
-        fprintf (stderr,
-                 "[ImageResolve] I'm entering, src '%s', noload %d!\n",
-                 src, noload);
-#endif
-  
-    if (!src)
-        return NULL;
-
-    if (current_win && current_win->scrolled_win == w)
-    {
-#ifndef DISABLE_TRACE
-        if (srcTrace)
-            fprintf (stderr, "[ImageResolve] already have current_win\n");
-#endif
-
-        goto foundit;
-    }
-
-    while (win = mo_next_window (win))
-    {
-        if (win->scrolled_win == w)
-        {
-            mo_set_current_cached_win (win);
-            
-            cached_url = win->current_node ? win->current_node->url : "lose";
-            win->cached_url = cached_url;
-          
-            goto foundit;
-        }
-    }
-  
-  /* Shit outta luck. */
-#ifndef DISABLE_TRACE
-    if (srcTrace)
-        fprintf (stderr, "[ImageResolve] aaaaaaaaaaaaaaaaaaaaagh\n");
-#endif
-
-    return NULL;
-  
-foundit:
-#ifndef DISABLE_TRACE
-    if (srcTrace)
-        fprintf (stderr, "[ImageResolve] hello! win 0x%08x\n",
-                 win);
-#endif
-
-
-        /* Here is one place we do image_kill */
-    if(src){
-        if(imagekill_sites != NULL) {
-            for(i = 0; imagekill_sites[i]; i++) {
-                if(strstr(cached_url, imagekill_sites[i])) {
-                    extern Widget view; /*hw->html.view*/
-                    Widget swin = current_win->scrolled_win;
-              
-                    if (!done_fetch_colors){
-                        if (!view)
-                            return NULL;
-                            /* First, go fetch the pixels. */
-                        XtVaGetValues(view,
-                                      XtNforeground, &fg_pixel,
-                                      XtNbackground, &bg_pixel,
-                                      NULL);
-                        done_fetch_colors = 1;
-                    }    
-                    RETURN_IMGINFO_FROM_BITMAP(blank);
-                }
-            }
-        }
-    }
-  
-  
-  /* Internal images. */
-  if (strncmp (src, "internal-", 9) == 0)
-    {    
-
-      if (!done_fetch_colors)
-        {
-
-          if (!view)
-            return NULL;
-          
-          /* First, go fetch the pixels. */
-	  XtVaGetValues(view,
-			XtNforeground, &fg_pixel,
-			XtNbackground, &bg_pixel,
-			NULL);
-
-          done_fetch_colors = 1;
-        }
-
-      if (strcmp (src, "internal-gopher-image") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_image);
-      if (strcmp (src, "internal-gopher-movie") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_movie);
-      if (strcmp (src, "internal-gopher-menu") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_menu);
-      if (strcmp (src, "internal-gopher-text") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_text);
-      if (strcmp (src, "internal-gopher-sound") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_sound);
-      if (strcmp (src, "internal-gopher-index") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_index);
-      if (strcmp (src, "internal-gopher-telnet") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_telnet);
-      if (strcmp (src, "internal-gopher-binary") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_binary);
-      if (strcmp (src, "internal-gopher-unknown") == 0)
-        RETURN_IMGINFO_FROM_BITMAP(gopher_unknown);
-    }
-
-#ifdef HAVE_HDF
-  /* Incoming HDF image references will only be anchors,
-     so we can determine that they are in fact HDF image references
-     by doing strncmp here. */
-  if (strncmp (src, "#hdfref;", 8) == 0)
-    ishdf = 1;
-
-  /* OK, src is the URL we have to go hunt down.
-     First, we go get it. */
-  /* We can use cached_url here, since we set it in do_window_text. */
-  if (ishdf)
-    {
-      hdfref = &(src[8]);
-      src = mo_url_canonicalize_keep_anchor (src, cached_url);
-    }
-  else
-#endif
-
-stuffcache:
-  src = mo_url_canonicalize (src, cached_url);
-
-  /* Go see if we already have the image info hanging around. */
-  img_data = mo_fetch_cached_image_data (src);
-  if (img_data && img_data->image_data)
-  {
-	unsigned long bg_pixel;
-	XColor tmpcolr;
-
-	if (img_data->bg_index>=0) {
-		/* This code copied from xpmread.c.  I could almost
-		 * delete the code from there, but I suppose an XPM
-		 * file could pathalogially have multiple transparent
-		 * colour indicies. -- GWP
-		 */
-		XtVaGetValues(view, XtNbackground, &bg_pixel, NULL);
-		tmpcolr.pixel = bg_pixel;
-		XQueryColor(XtDisplay(view),
-			    (installed_colormap ?
-			     installed_cmap :
-			     DefaultColormap(XtDisplay(view), DefaultScreen(XtDisplay(view)))),
-			    &tmpcolr);
-		img_data->reds[img_data->bg_index]=tmpcolr.red;
-		img_data->greens[img_data->bg_index]=tmpcolr.green;
-		img_data->blues[img_data->bg_index]=tmpcolr.blue;
+        if (blank_image == NULL) {
+		blank_image = (ImageInfo *)malloc(sizeof(ImageInfo));
+		blank_image->usemap = NULL;
+		blank_image->map = NULL;
+		blank_image->ismap = 0;
+		blank_image->fptr = NULL;
+		blank_image->internal = 3;
+		blank_image->delayed = 0;
+		blank_image->fetched = 0;
+		blank_image->cached = 0;
+		blank_image->width = BlankImage_width;
+		blank_image->height = BlankImage_height;
+		blank_image->num_colors = 2;
+		blank_image->bg_index = 0;
+		blank_image->image_data = (unsigned char*)BlankImage_bits;
+		blank_image->clip_data = NULL;
+		blank_image->transparent = 0;
+		blank_image->clip = None;
+		blank_image->alt_text = NULL;
+		blank_image->src = NULL;
+		blank_image->is_bg_image = 0;
+		blank_image->aligned = 0;
+		fg_pixel = w->manager.foreground;
+		bg_pixel = w->core.background_pixel;
+                blank_image->image = XCreatePixmapFromBitmapData(XtDisplay(w),
+                        XtWindow(w), (char*) BlankImage_bits,
+                        BlankImage_width, BlankImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(w)));
+	}
+	if ((fg_pixel != w->manager.foreground) ||
+	    (bg_pixel != w->core.background_pixel)) {
+		fg_pixel = w->manager.foreground;
+		bg_pixel = w->core.background_pixel;
+                blank_image->image = XCreatePixmapFromBitmapData(XtDisplay(w),
+                        XtWindow(w), (char*) BlankImage_bits,
+                        BlankImage_width, BlankImage_height,
+                        fg_pixel,
+                        bg_pixel,
+                        DefaultDepthOfScreen(XtScreen(w)));
 	}
 
-        img_data->src = strdup(src);
-	free (src);
-	if (cci_event) MoCCISendEventOutput(IMAGE_LOADED);
+	return(blank_image);
+}
 
-	return (ImageInfo *)img_data;
-/*
-	if (!wid && !hei) {
-		return (ImageInfo *)img_data;
+static unsigned char nums[] = { 1, 2, 4, 8, 16, 32, 64, 128 };
+
+void ProcessImageData (HTMLWidget hw, ImageInfo *img_info, XColor *colrs)
+{
+	int bg = img_info->bg_index;
+	int i, j, cnt, bcnt, pnum;
+	int Used[256];
+	int transition_count;
+	int widthbyheight;
+	unsigned short bg_red, bg_green, bg_blue;
+	unsigned char *bg_map;
+	unsigned char *bgptr;
+	unsigned char *cptr;
+	unsigned char *ptr;
+	static int clipping;
+	static int max_clip;
+	static int max_colors;
+	static int init = 0;
+
+	if (!init) {
+		clipping = get_pref_boolean(eCLIPPING);
+		max_clip = get_pref_int(eMAX_CLIP_TRANSITIONS);
+		max_colors = get_pref_int(eCOLORS_PER_INLINED_IMAGE);
+		init = 1;
 	}
+	/* If we have a transparent background, prepare for it */
+	bg_map = NULL;
 
-	return(scaleImage(img_data,wid,hei));
-*/
-  }
-
-  /* If we don't have the image cached and noload is high,
-     then just return NULL to avoid doing a network load. */
-  /* Also return if interrupted is high. */
-  if (noload || interrupted)
-    {
-#ifndef DISABLE_TRACE
-      if (srcTrace)
-        fprintf (stderr, "RETURNING Null noload %d interrupted %d\n",
-                 noload, interrupted);
-#endif
-      free (src);
-
-      return NULL;
-    }
-
-    
-#ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "GOING ON THROUGH...\n");
-#endif
-
-  /*
-   * No transparent background by default
-   */
-  bg = -1;
-  bg_map = NULL;
-#ifdef HAVE_HDF
-  if (ishdf)
-    {
-      img_data =
-        (ImageInfo *)hdfGrokImage 
-          (mo_hdf_fetch_local_filename (src), 
-           hdfref,
-           &bg);
-
-#ifndef DISABLE_TRACE
-      if (srcTrace)
-        fprintf (stderr, "[ImageResolve] Did hdfGrokImage, got back 0x%08x\n", 
-                 img_data);
-#endif
-
-      if (!img_data)
-        return NULL;
-
-      /* Yet another bandaid... */
-      img_data->internal = 0;
-
-      /* Fill out colrs array. */
-      for (i = 0; i < 256; i++)
-        {
-          colrs[i].red = img_data->reds[i];
-          colrs[i].green = img_data->greens[i];
-          colrs[i].blue = img_data->blues[i];
-          colrs[i].pixel = i;
-          colrs[i].flags = DoRed|DoGreen|DoBlue;
-        }
-
-      if (bg >= 0)
-          {
-              bg_red = colrs[bg].red;
-              bg_green = colrs[bg].green;
-              bg_blue = colrs[bg].blue;
-              bg_map = (unsigned char *)malloc(img_data->width * img_data->height);
-          }
-  }
-  else
-#endif /* HAVE_HDF */
-  {
-
-            /* if w is NULL we're stuffing the cache with our own info...
-                BJS */
-        if(w) {
-                
-		/* We have to load the image. */
-		fnam = mo_tmpnam(src);
-
-		interrupted = 0;
-		rc = mo_pull_er_over_virgin (src, fnam);
-		if (!rc)
-		{
-#ifndef DISABLE_TRACE
-			if (srcTrace)
-			fprintf (stderr, "mo_pull_er_over_virgin returned %d; bonging\n",
-				 rc);
-#endif
-			free (fnam);
-
-			return NULL;
-		}
-      
-#ifndef DISABLE_TRACE
-		if (srcTrace)
-		fprintf (stderr, 
-			 "[ImageResolve] Got through mo_pull_er_over_virgin, rc %d\n", 
-			 rc);
-#endif
-
-#if 0
-		/* This causes problems. */
-		{
-			/* Check use_this_url_instead from HTAccess.c. */
-			extern char *use_this_url_instead;
-			if (use_this_url_instead)
-			{
-				free (src);
-				src = use_this_url_instead;
-			}
-		}
-#endif
-
-		/*********************************************/
-		/* Send it through CCI if need be            */
-		MoCCISendBrowserViewFile(src, "unknown", fnam);
-	}
-        
-	data = ReadBitmap(fnam, &width, &height, colrs, &bg);
-
-#ifndef DISABLE_TRACE
-	if (srcTrace)
-		fprintf (stderr,
-			 "[ImageResolve] Did ReadBitmap, got 0x%08x\n", data);
-#endif
-
-	/* if we have a transparent background, prepare for it */
-	if ((bg >= 0)&&(data != NULL))
-        {
+	if (bg >= 0) {
 		unsigned long bg_pixel;
 		XColor tmpcolr;
 
-		/* This code copied from xpmread.c.  I could almost
-		 * delete the code from there, but I suppose an XPM
-		 * file could pathalogially have multiple transparent
-		 * colour indicies. -- GWP
-		 */
-		XtVaGetValues(view, XtNbackground, &bg_pixel, NULL);
+/* This code copied from xpmread.c.  I could almost delete the code from there,
+ * but I suppose an XPM file could pathologically have multiple transparent
+ * colour indicies. -- GWP
+ */
+		bg_pixel = hw->core.background_pixel;
 		tmpcolr.pixel = bg_pixel;
-		XQueryColor(XtDisplay(view),
-			    (installed_colormap ?
-			     installed_cmap :
-			     DefaultColormap(XtDisplay(view), DefaultScreen(XtDisplay(view)))),
-			    &tmpcolr);
-
+		XQueryColor(XtDisplay(hw), hw->core.colormap, &tmpcolr);
 		bg_red = colrs[bg].red = tmpcolr.red;
 		bg_green = colrs[bg].green = tmpcolr.green;
 		bg_blue = colrs[bg].blue = tmpcolr.blue;
 		colrs[bg].flags = DoRed|DoGreen|DoBlue;
-
-		bg_map = (unsigned char *)malloc(width * height);
-	}
-      
-	/* Now delete the file. */
-	unlink(fnam); 
-	{
-		char *hfnam = (char *)malloc ((strlen (fnam) + strlen(".html") + 5) * sizeof (char));
-		sprintf (hfnam, "%s.html", fnam);
-		unlink(hfnam); 
-		free(hfnam);
+		bg_map = (unsigned char *)malloc(img_info->width *
+			img_info->height);
 	}
 
-	if (w) {
-		free (fnam);
+	if ((bg >= 0 ) && clipping) {
+		img_info->transparent = 1;
+		img_info->clip_data = (unsigned char *)malloc(
+			((img_info->width + 7)/8) * img_info->height);
+		memset(img_info->clip_data, 0, ((img_info->width + 7)/8) *
+			img_info->height);
+	} else {
+		img_info->transparent = 0;
+		img_info->clip_data = NULL;
+		bg = img_info->bg_index = (-1);
 	}
 
-	if (data == NULL)
-	{
-#ifndef DISABLE_TRACE
-		if (srcTrace)
-			fprintf (stderr, "[ImageResolve] data == NULL; punting...\n");
-#endif
-
-		return NULL;
-	}
-
-{
-int found_bg=0;
-
-	if (data!=NULL) {
-		for (i=0; i<width*height; i++) {
-			if ((int)(data[i])==bg) {
-				found_bg=1;
-				break;
-			}
-		}
-		if (!found_bg) {
-			bg=(-1);
-		}
-	}
-}
-
-      img_data = (ImageInfo *)malloc(sizeof(ImageInfo));
-      if ((bg >= 0)&&(data != NULL) &&
-	  get_pref_boolean(eCLIPPING) &&
-	  (get_pref_int(eMAX_CLIPPING_SIZE_X)==(-1) ||
-	   get_pref_int(eMAX_CLIPPING_SIZE_X)>=width) &&
-	  (get_pref_int(eMAX_CLIPPING_SIZE_Y)==(-1) ||
-	   get_pref_int(eMAX_CLIPPING_SIZE_Y)>=height)) {
-	img_data->transparent=1;
-	img_data->clip_data=(unsigned char *)malloc(width * height);
-	memset(img_data->clip_data,0,(width*height));
-	img_data->bg_index=bg;
-      }
-      else {
-	img_data->transparent=0;
-	img_data->clip_data=NULL;
-	img_data->bg_index=(-1);
-      }
-
-      img_data->width = width;
-      img_data->height = height;
-      img_data->image_data = data;
-      img_data->image = 0;
-      img_data->clip = 0;
-      img_data->src = strdup(src);
-      /* Bandaid for bug afflicting Eric's code, apparently. */
-      img_data->internal = 0;
-    }
-
-	widthbyheight = img_data->width * img_data->height;
-
-	/* Fill out used array. */
-	for (i=0; i < 256; i++) {
+	widthbyheight = img_info->width * img_info->height;
+	for (i=0; i < 256; i++)          /* Fill out used color array. */
 		Used[i] = 0;
-	}
-
 	cnt = 1;
 	bgptr = bg_map;
-	cptr = img_data->clip_data;
-	ptr = img_data->image_data;
-
-	/*This sets the bg map and also creates bitmap data for the
-		clip mask when there is a bg image */
-	for (i=0; i<img_data->height; i++) {
-		for (j=0,bcnt=0; j<img_data->width; j++) {
-			if (Used[(int)*ptr] == 0) {
-				Used[(int)*ptr] = cnt;
+	cptr = img_info->clip_data;
+	ptr = img_info->image_data;
+	transition_count = 0;
+ 
+	/* This sets the bg map, creates bitmap data for the clip mask
+         * when there is a bg image and counts the colors
+	 */
+	for (i = 0; i < img_info->height; i++) {
+		for (j = 0, bcnt = 0; j < img_info->width; j++) {
+			if (Used[*ptr] == 0) {
+				Used[*ptr] = cnt;
 				cnt++;
 			}
-			if (bg>=0) {
+			if (bg >= 0) {
 				if (*ptr == bg) {
 					*bgptr = 1;
-				}
-				else {
+					if (transition_count & 1)
+						transition_count++;
+				} else {
 					*bgptr = 0;
-					if (img_data->transparent) {
-						*cptr += nums[(bcnt % 8)];
-					}
+					if (!(transition_count & 1))
+						transition_count++;
+					*cptr += nums[bcnt % 8];
 				}
-				if (img_data->transparent &&
-				    ((bcnt % 8)==7 ||
-				     j==(img_data->width-1))) {
+				if ((bcnt % 8) == 7 || j == (img_info->width-1))
 					cptr++;
-				}
 				bgptr++;
 				bcnt++;
 			}
@@ -721,228 +246,637 @@ int found_bg=0;
 	}
 	cnt--;
 
-  /*
-   * If the image has too many colors, apply a median cut algorithm to
-   * reduce the color usage, and then reprocess it.
-   * Don't cut colors for direct mapped visuals like TrueColor.
-   */
-  if ((cnt > get_pref_int(eCOLORS_PER_INLINED_IMAGE))&&(Vclass != TrueColor))
-    {
-      MedianCut(img_data->image_data, &img_data->width, 
-                &img_data->height, colrs, 256, 
-                get_pref_int(eCOLORS_PER_INLINED_IMAGE));
-      
-      for (i=0; i < 256; i++)
-        Used[i] = 0;
-      cnt = 1;
-      ptr = img_data->image_data;
-      for (i=0; i < widthbyheight; i++)
-        {
-          if (Used[(int)*ptr] == 0)
-            {
-              Used[(int)*ptr] = cnt;
-              cnt++;
-            }
-          ptr++;
-        }
-      cnt--;
-
-      /* if we had a transparent bg, MedianCut used it.  Get a new one */
-      if (bg >= 0)
-      {
-	cnt++;
-	bg = 256;
-      }
-    }
-
-  img_data->num_colors = cnt;
-
-#ifdef HAVE_HDF
-  if (!ishdf)
-#endif
-    {
-      img_data->reds = (int *)malloc(sizeof(int) * cnt);
-      img_data->greens = (int *)malloc(sizeof(int) * cnt);
-      img_data->blues = (int *)malloc(sizeof(int) * cnt);
-    }
-
-  /* bg is not set in here if it gets munged by MedCut */
-  for (i=0; i < 256; i++)
-    {
-      int indx;
-      
-      if (Used[i] != 0)
-        {
-          indx = Used[i] - 1;
-          img_data->reds[indx] = colrs[i].red;
-          img_data->greens[indx] = colrs[i].green;
-          img_data->blues[indx] = colrs[i].blue;
-	  /* squeegee in the background color */
-	  if ((bg >= 0)&&(i == bg))
-            {
-              img_data->reds[indx] = bg_red;
-              img_data->greens[indx] = bg_green;
-              img_data->blues[indx] = bg_blue;
-	      img_data->bg_index=indx;
-            }
-        }
-    }
-
-    /* if MedianCut ate our background, add the new one now. */
-    if (bg == 256)
-      {
-	img_data->reds[cnt - 1] = bg_red;
-	img_data->greens[cnt - 1] = bg_green;
-	img_data->blues[cnt - 1] = bg_blue;
-	img_data->bg_index=(cnt-1);
-      }
-  
-  bgptr = bg_map;
-  cptr = img_data->clip_data;
-  ptr = img_data->image_data;
-  for (i=0; i < widthbyheight; i++)
-    {
-      *ptr = (unsigned char)(Used[(int)*ptr] - 1);
-      /* if MedianCut ate the background, enforce it here */
-      if (bg == 256)
-        {
-          if (*bgptr)
-            {
-              *ptr = (unsigned char)(cnt - 1);
-            }
-          bgptr++;
-        }
-      ptr++;
-    }
-
-  /* free the background map if we have one */
-  if (bg_map != NULL)
-  {
-    free (bg_map);
-  }
-
 #ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "[ImageResolve] Doing mo_cache_data on '%s', 0x%08x\n",
-             src, img_data);
+	if (srcTrace && (transition_count > 0))
+		fprintf(stderr, "[IMG] transparency transition count = %d\n",
+			 transition_count);
 #endif
 
-  mo_cache_data (src, (void *)img_data, 0);
+	/* The background color was never used */
+	if (transition_count == 1) {
+		img_info->transparent = 0;
+		free(img_info->clip_data);
+		img_info->clip_data = NULL;
+		bg = img_info->bg_index = (-1);
+	}
 
-  free (src);
+	if (img_info->transparent && (max_clip >= 0) &&
+	    (transition_count > max_clip)) {
+		img_info->transparent = 2;  /* Transparent but no clipmask */
+	}
+ 
+	/* If the image has too many colors, apply a median cut algorithm to
+	 * reduce the color usage, and then reprocess it.
+	 * Don't cut colors for direct mapped visuals like TrueColor.
+	 * Also, cut colors less for internal image viewer files.
+	 * If using browser safe colors, then cut to number of safe colors.
+	 */
+	pnum = max_colors;
+	if (image_file_fnam && (pnum < 144))
+		/* Internal image viewer file */
+		pnum = 144;
+	if (browserSafeColors && (pnum < BSCnum))
+		pnum = BSCnum;
+	if ((cnt > pnum) && (Vclass != TrueColor) && (Vclass != DirectColor)) {
+		MedianCut(img_info->image_data, img_info->width,
+			  img_info->height, colrs, 256, pnum);
+		for (i=0; i < 256; i++)
+			Used[i] = 0;
+		cnt = 1;
+		ptr = img_info->image_data;
+		for (i=0; i < widthbyheight; i++) {
+			if (Used[(int)*ptr] == 0) {
+				Used[*ptr] = cnt;
+				cnt++;
+			}
+			ptr++;
+		}
+		cnt--;
 
-#ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "[ImageResolve] Leaving...\n");
-#endif
+		/* If had a transparent bg, MedianCut used it.  Get a new one */
+		if (bg >= 0) {
+			cnt++;
+			bg = 256;
+		}
+	}
+	img_info->num_colors = cnt;
 
-  if (cci_event) MoCCISendEventOutput(IMAGE_LOADED);
+	/* bg is not set in here if it gets munged by MedCut */
+	for (i=0; i < 256; i++) {
+		int indx;
 
-  return img_data;
-/*
-  if (!wid && !hei) {
-	return img_data;
-  }
+		if (Used[i] != 0) {
+			indx = Used[i] - 1;
+			img_info->colrs[indx] = colrs[i];
+			/* squeegee in the background color */
+			if ((bg >= 0) && (i == bg)) {
+				img_info->colrs[indx].red = bg_red;
+				img_info->colrs[indx].green = bg_green;
+				img_info->colrs[indx].blue = bg_blue;
+				img_info->bg_index = indx;
+			}
+		}
+	}
 
-  return(scaleImage(img_data,wid,hei));
-*/
+	/* If MedianCut ate our background, add the new one now. */
+	if (bg == 256) {
+		img_info->colrs[cnt - 1].red = bg_red;
+		img_info->colrs[cnt - 1].green = bg_green;
+		img_info->colrs[cnt - 1].blue = bg_blue;
+		img_info->bg_index = (cnt-1); 
+	}                              
+	bgptr = bg_map;
+	ptr = img_info->image_data;
+	for (i=0; i < widthbyheight; i++) {
+		*ptr = (unsigned char)(Used[*ptr] - 1);
+		/* If MedianCut ate the background, enforce it here */
+		if (bg == 256) {
+			if (*bgptr)
+				*ptr = (unsigned char) img_info->bg_index;
+			bgptr++;
+		}
+		ptr++;
+	}
+	if (bg_map)      /* Free the background map if we have one */
+		free (bg_map);
+
 }
 
-static ImageInfo *DelayedImageResolve (Widget w, char *src)
+/* Image resolution function. */
+void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 {
-  ImageInfo *img;
+	ImageInfo *img_info = (ImageInfo *) calld;
+	mo_window *win = (mo_window *) clid;
+	mo_window *load_win;
+	HTMLWidget hw = (HTMLWidget) w;
+	ImageInfo *cache_info;
+	ImageInfo *ainfo, *previous, *tmp;
+	AnimInfo *anim_info;
+	char *src = NULL;
+	int width, height, aw, ah;
+	int x, y, ax, ay;
+	XColor colrs[256];
+	XColor acolrs[256];
+	char *filename;
+	char *url;
+	char *ptr;
+	int rc;
+	int bg, abg;
+	unsigned char *bit_data;
+	unsigned char *adata;
+	int animated;
+	int delay;
+	int disposal, adisposal;
+	int i, count;
+	FILE *gif_fp = NULL;
+	static char *referer = NULL;
 
+        img_info->fetched = 0;
+        img_info->internal = 0;
+        img_info->cached = 0;
+        img_info->width = 0;
+        img_info->height = 0;
+        img_info->num_colors = 0;
+        img_info->image_data = NULL;
+        img_info->clip_data = NULL;
+	img_info->transparent = 0;
+	img_info->bg_index = -1;
+	img_info->image = (Pixmap)NULL;
+	img_info->anim_image = (Pixmap)NULL;
+	img_info->text = NULL;
+	img_info->is_bg_image = 0;
+	img_info->aligned = 0;
+	img_info->anim_info = NULL;
+	img_info->prev = NULL;
+
+	if (!w) {
+		fprintf(stderr, "[IMG] No Widget!\n");
+		return;
+	}
+
+	if (img_info->src)
+		src = strdup(img_info->src);
+	if (!src)
+		return;
+
+	/* Now strip off leading blanks and convert newlines */
+	src = mo_convert_newlines_to_spaces(src);
+
+	/* Now strip out any spaces and CRs */
+	if (strchr(src, ' ') || strchr(src, '\r')) {
+		filename = src;
+		for (ptr = src; *ptr; ptr++, filename++) {
+  		      	while (*ptr && ((*ptr == ' ') || (*ptr == '\r')))
+				ptr++;
+			*filename = *ptr;
+		}
+		*filename = '\0';
+	}
 #ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "[DelayedImageResolve] I'm entering, src '%s'\n", src);
+        if (srcTrace)
+            fprintf(stderr, "[IMG] Processing src = '%s'\n", src);
 #endif
 
-  interrupted = 0;
+	load_win = win;
+	/* Get top level mo_window */
+	while (win->is_frame) {
+		win = win->parent;
+	}
+	if (!load_win->cached_url || !cached_url ||
+	    strcmp(load_win->cached_url, cached_url)) {
+		if (cached_url)
+			free(cached_url);
+		cached_url = strdup(load_win->cached_url ?
+				    load_win->cached_url : "lose");
+		if (load_win->cached_url)
+			free(load_win->cached_url);
+		load_win->cached_url = strdup(cached_url);
+	}
 
-  loading_inlined_images = 1;
-  img = ImageResolve (w, src, 0, NULL, NULL);
-  loading_inlined_images = 0;
+	url = mo_url_canonicalize(src, load_win->cached_url);
 
-  if (interrupted == 1)
-    {
-#ifndef DISABLE_TRACE
-      if (srcTrace)
-        fprintf (stderr, "[DelayedImageResolve] Interrupted...\n");
+	free(img_info->src);
+	img_info->src = strdup(url);
+	free(src);
+
+	/* First, should we just kill it? */
+        if (imagekill_sites) {
+            for (i = 0; imagekill_sites[i]; i++) {
+                if (strstr(url, imagekill_sites[i])) {
+		    ImageInfo *bim;
+
+		    bim = BlankImageData(hw);
+		    img_info->width = bim->width;
+		    img_info->height = bim->height;
+		    img_info->internal = 3;
+		    img_info->delayed = 0;
+		    img_info->fetched = 0;
+		    img_info->image_data = bim->image_data;
+		    img_info->image = bim->image;
+#ifdef CCI
+		    if (cci_event) 
+			MoCCISendEventOutput(IMAGE_LOADED);
 #endif
+#ifndef DISABLE_TRACE
+	            if (srcTrace)
+			fprintf(stderr, "[IMG] Killed it\n");
+#endif
+		    free(url);
+		    return;
+                }
+            }
+        }
 
-      interrupted = 0;
-    }
+	/* Second, look in the cache */
+        cache_info = mo_fetch_cached_image_data(url);
+        if (cache_info && cache_info->image_data) {
+        	img_info->internal = 0;
+        	img_info->delayed = 0;
+        	img_info->fetched = 1;
+		img_info->cached = 1;
+                img_info->image_data = cache_info->image_data;
+                img_info->clip_data = cache_info->clip_data;
+		img_info->awidth = cache_info->awidth;
+		img_info->aheight = cache_info->aheight;
+		if (img_info->cw_only) {
+			if (win->image_animation)
+				img_info->anim_info = cache_info->anim_info;
+			else
+				img_info->anim_info = NULL;
+			img_info->next = NULL;
+		} else if (cache_info->anim_info && win->image_animation) {
+			img_info->anim_info =
+				(AnimInfo *)malloc(sizeof(AnimInfo));
+			img_info->anim_info->hw = hw;
+			img_info->anim_info->drawing =
+				img_info->anim_info->hw->html.draw_count;
+			img_info->anim_info->count = cache_info->iterations;
+			img_info->anim_info->start = img_info;
+			img_info->anim_info->next = NULL;
+			img_info->anim_info->window = (int *)(&win->base);
+			img_info->running = 0;
+			img_info->has_anim_image = cache_info->has_anim_image;
+			img_info->timer = 0;
+			if (img_info->has_anim_image) {
+				img_info->anim_image = XCreatePixmap(
+					XtDisplay(hw),
+					XtWindow(hw),
+					img_info->awidth, img_info->aheight,
+	                        	DefaultDepthOfScreen(XtScreen(hw)));
+				img_info->bg_image = (Pixmap)NULL;
+				img_info->bg_visible = 0;
+			} else {
+				img_info->anim_image = (Pixmap)NULL;
+			}
+			tmp = cache_info->next;
+			previous = img_info;
+			while (tmp) {
+				ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+				previous->next = ainfo;
+				previous = ainfo;
+				ainfo->next = NULL;
+		  	     	ainfo->transparent = tmp->transparent;        
+		  	     	ainfo->bg_index = tmp->bg_index;        
+				ainfo->width = tmp->width;
+				ainfo->height = tmp->height;
+				ainfo->x = tmp->x;
+				ainfo->y = tmp->y;
+				ainfo->disposal = tmp->disposal;
+				ainfo->image_data = tmp->image_data;
+		                ainfo->clip_data = tmp->clip_data;
+				ainfo->delay = tmp->delay;
+				ainfo->image = (Pixmap)NULL;
+				ainfo->clip = None;
+				ainfo->internal = 0;
+				ainfo->anim_info = NULL;
+				ainfo->num_colors = tmp->num_colors;
+				for (i = 0; i < ainfo->num_colors; i++)
+					ainfo->colrs[i] = tmp->colrs[i];
+				tmp = tmp->next;
+			}
+		} else {
+			img_info->next = NULL;
+			img_info->anim_info = NULL;
+			img_info->has_anim_image = 0;
+		}
+		img_info->delay = cache_info->delay;
+		img_info->disposal = cache_info->disposal;
+		img_info->iterations = cache_info->iterations;
+                img_info->transparent = cache_info->transparent;
+		img_info->bg_index = cache_info->bg_index;
+		img_info->width = cache_info->width;
+		img_info->height = cache_info->height;
+		img_info->x = cache_info->x;
+		img_info->y = cache_info->y;
+		img_info->num_colors = cache_info->num_colors;
+		for (i = 0; i < img_info->num_colors; i++)
+			img_info->colrs[i] = cache_info->colrs[i];
+#ifdef CCI
+		if (cci_event) 
+			MoCCISendEventOutput(IMAGE_LOADED);
+#endif
+		free(url);
+#ifndef DISABLE_TRACE
+	        if (srcTrace || cacheTrace)
+			fprintf(stderr, "[IMG] Found it in cache.\n");
+#endif
+		return;
+	}
+
+	/* If we don't have the image cached, return if interrupted is high. */
+	if (interrupted) {
+		free (url);
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+			fprintf(stderr, "[IMG] Returning Null interrupted %d\n",
+				interrupted);
+#endif
+		return;
+	}
+
+	/* Is it delayed? */
+	if (!force_image_load && (win->delay_image_loads ||
+	    img_info->urldelayed)) {
+		free(url);
+		return;
+	} else {
+		force_image_load = 0;
+	}
+
+	/* Free previous referer, if any */
+	if (referer) {
+		free(referer);
+	}
+	referer = strdup(load_win->cached_url);
+	/* Pass the value to libwww */
+	HTReferer = referer;
+
+	filename = mo_tmpnam(url);
+        rc = mo_pull_er_over_virgin(url, filename);
+
+	if (!rc) {
+#ifndef DISABLE_TRACE
+                if (srcTrace)
+		    fprintf(stderr, "mo_pull_er_over_virgin returned %d\n", rc);
+#endif
+		free(filename);
+		free(url);
+		return;
+	}
+
+#ifdef CCI
+	/* Send it through CCI if need be */
+	MoCCISendBrowserViewFile(url, "unknown", filename);
+#endif
+	bit_data = ReadBitmap(w, filename, &width, &height, &x, &y, colrs, &bg,
+		&animated, &delay, &disposal, &gif_fp);
+
+	if (!bit_data) {
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+		    fprintf(stderr, "[IMG] data == NULL; punting...\n");
+#endif
+		remove(filename);
+		free(filename);
+		free(url);
+		return;
+	}
+
+	if (gif_fp && win->image_animation) {
+		count = 2;
+		if (win->min_animation_delay > delay) {
+			img_info->delay = win->min_animation_delay;
+		} else {
+			img_info->delay = delay;
+		}
+		Get_GIF_ScreenSize(&img_info->awidth, &img_info->aheight);
+		if (img_info->awidth < width)
+			img_info->awidth = width;
+		if (img_info->aheight < height)
+			img_info->aheight = height;
+		img_info->disposal = disposal;
+		/* Use animation image if disposal is 1 */
+		if (disposal == 1)
+			adisposal = 1;
+		else
+			adisposal = 0;
+		img_info->running = 0;
+		anim_info = (AnimInfo *)malloc(sizeof(AnimInfo));
+		anim_info->hw = (HTMLWidget) w;
+		anim_info->drawing = anim_info->hw->html.draw_count;
+		anim_info->start = img_info;
+		anim_info->next = NULL;
+		anim_info->window = (int *)(&win->base);
+		previous = img_info;
+		previous->next = NULL;
+		while (adata = ReadGIF(gif_fp, &aw, &ah, acolrs, &abg, count,
+		       &i, &delay, &ax, &ay, &disposal, NULL)) {
+			ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+			previous->next = ainfo;
+			previous = ainfo;
+			ainfo->next = NULL;
+		       	ainfo->bg_index = abg;        
+			ainfo->width = aw;
+			ainfo->height = ah;
+			if (img_info->awidth < aw)
+				img_info->awidth = aw;
+			if (img_info->aheight < ah)
+				img_info->aheight = ah;
+			/* If mixed sizes, then use animation image */
+			if (!adisposal && ((aw != width) || (ah != height)))
+				adisposal = 1;
+			ainfo->x = ax;
+			ainfo->y = ay;
+			ainfo->disposal = disposal;
+			if (disposal == 1)
+				adisposal = 1;
+			ainfo->image_data = adata;
+			if (win->min_animation_delay > delay) {
+				ainfo->delay = win->min_animation_delay;
+			} else {
+				ainfo->delay = delay;
+			}
+			ainfo->image = (Pixmap)NULL;
+			ainfo->clip = None;
+			ainfo->internal = 0;
+			ainfo->anim_info = NULL;
+			ProcessImageData((HTMLWidget) w, ainfo, acolrs);
+			/* Force animation image if transparent */
+			if (!adisposal && ainfo->transparent && (disposal == 2))
+				adisposal = 1;
+			count++;
+		}
+		if (animated >= 0) {
+			anim_info->count = img_info->iterations = animated;
+		} else {
+			anim_info->count = img_info->iterations = 1;
+		}
+		if (count == 2) { /* Not animated */
+			img_info->iterations = -1;
+			img_info->next = NULL;
+			if (anim_info)
+				free(anim_info);
+			anim_info = NULL;
+		} else if (adisposal) {
+			/* Has at least one disposal == 1 or has mixed
+			 * image sizes or has transparent image with
+			 * disposal == 2 */
+			if (!img_info->cw_only)
+				img_info->anim_image = XCreatePixmap(
+					XtDisplay(hw),
+					XtWindow(hw),
+					img_info->awidth, img_info->aheight,
+					DefaultDepthOfScreen(XtScreen(hw)));
+			else
+				img_info->anim_image = (Pixmap)NULL;
+			img_info->has_anim_image = -1;
+			img_info->bg_image = (Pixmap)NULL;
+			img_info->bg_visible = 0;
+		} else {
+			img_info->anim_image = (Pixmap)NULL;
+			img_info->has_anim_image = 0;
+		}
+	} else {
+		img_info->iterations = animated;
+		img_info->next = NULL;
+		anim_info = NULL;
+	}
+
+	if (gif_fp && (gif_fp != stdin))
+		fclose(gif_fp);
 
 #ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "[DelayedImageResolve] Returning 0x%08x\n", img);
+	if (srcTrace) {
+		fprintf(stderr, "GIF animation iterations = %d\n",
+			img_info->iterations);
+		fprintf(stderr, "bg = %d\n", bg);
+	}
 #endif
+	/* Now delete the file. */
+	remove(filename);
+	free(filename);
 
-/* need this here now...but may make other stuff look cheeeezy -- SWP */
-  mo_gui_done_with_icon ();
-  mo_gui_check_icon(-1);
+       	img_info->bg_index = bg;        
+       	img_info->internal = 0;
+       	img_info->delayed = 0;
+	img_info->fetched = 1;
+	img_info->cached = 1;
+	img_info->width = width;
+	img_info->height = height;
+	img_info->x = x;
+	img_info->y = y;
+	img_info->image_data = bit_data;
+	img_info->anim_info = anim_info;
+	img_info->timer = 0;
 
-  return img;
+	ProcessImageData((HTMLWidget) w, img_info, colrs);
+
+	/* Save internal image viewer file for later deletion and
+	 * delete any previous one for this node */
+	if (image_file_fnam) {
+		if (win->current_node) {
+			if (win->current_node->image_file) {
+				remove(win->current_node->image_file);
+				free(win->current_node->image_file);
+			}
+			win->current_node->image_file = image_file_fnam;
+		} else {
+			/* Only happens if window started up with it */
+			win->image_file = image_file_fnam;
+		}
+		image_file_fnam = NULL;
+	}
+
+	cache_info = (ImageInfo *)malloc(sizeof(ImageInfo));
+        cache_info->bg_index = img_info->bg_index;        
+       	cache_info->internal = 0;
+       	cache_info->delayed = 0;
+	cache_info->width = width;
+	cache_info->height = height;
+	cache_info->awidth = img_info->awidth;
+	cache_info->aheight = img_info->aheight;
+	cache_info->x = x;
+	cache_info->y = y;
+        cache_info->image_data = img_info->image_data;
+        cache_info->iterations = img_info->iterations;
+        cache_info->delay = img_info->delay;
+        cache_info->disposal = img_info->disposal;
+	cache_info->has_anim_image = img_info->has_anim_image;
+	cache_info->fetched = 1;
+	cache_info->cached = 1;
+        cache_info->num_colors = img_info->num_colors;
+        cache_info->clip_data = img_info->clip_data;
+	cache_info->transparent = img_info->transparent;
+	for (i = 0; i < img_info->num_colors; i++)
+		cache_info->colrs[i] = img_info->colrs[i];
+	cache_info->anim_info = anim_info;
+	if (img_info->cw_only) {
+		if (anim_info) {
+			cache_info->next = img_info->next;
+			img_info->next = NULL;
+		} else {
+			cache_info->next = NULL;
+		}
+	} else if (anim_info) {
+		tmp = img_info->next;
+		previous = cache_info;
+		while (tmp) {
+			ainfo = (ImageInfo *)malloc(sizeof(ImageInfo));
+			previous->next = ainfo;
+			previous = ainfo;
+			ainfo->next = NULL;
+	  	     	ainfo->transparent = tmp->transparent;        
+	  	     	ainfo->bg_index = tmp->bg_index;        
+			ainfo->width = tmp->width;
+			ainfo->height = tmp->height;
+			ainfo->x = tmp->x;
+			ainfo->y = tmp->y;
+			ainfo->disposal = tmp->disposal;
+			ainfo->image_data = tmp->image_data;
+	                ainfo->clip_data = tmp->clip_data;
+			ainfo->delay = tmp->delay;
+			ainfo->image = (Pixmap)NULL;
+			ainfo->clip = None;
+			ainfo->internal = 0;
+			ainfo->anim_info = NULL;
+			ainfo->num_colors = tmp->num_colors;
+			for (i = 0; i < ainfo->num_colors; i++)
+				ainfo->colrs[i] = tmp->colrs[i];
+			tmp = tmp->next;
+		}
+	} else {
+		cache_info->next = NULL;
+	}
+#ifndef DISABLE_TRACE
+	if (srcTrace || cacheTrace)
+		fprintf(stderr, "[IMG] Doing mo_cache_data on '%s', 0x%08x\n",
+			url, cache_info);
+#endif
+	mo_cache_data(url, (void *)cache_info, 0);
+
+	free(url);
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "[IMG] Leaving...\n");
+#endif
+#ifdef CCI
+	if (cci_event) MoCCISendEventOutput(IMAGE_LOADED);
+#endif
+	return;
 }
 
+/* Used only by globalhist.c */
 mo_status mo_free_image_data (void *ptr)
 {
-  ImageInfo *img = (ImageInfo *)ptr;
-  Widget swin=current_win->scrolled_win;
+	ImageInfo *img = (ImageInfo *)ptr;
+	ImageInfo *next = img->next;
+	ImageInfo *tmp;
 
 #ifndef DISABLE_TRACE
-  if (srcTrace)
-    fprintf (stderr, "[mo_free_image_info] Freeing 0x%08x\n", img);
+	if (srcTrace || cacheTrace)
+		fprintf(stderr, "[mo_free_image_info] Freeing 0x%08x\n", img);
 #endif
 
-  if (!img)
-    return mo_fail;
+	if (!img)
+		return mo_fail;
 
-  if (img->reds)
-    {
-      free (img->reds);
-      img->reds = NULL;
-    }
-  if (img->greens)
-    {
-      free (img->greens);
-      img->greens = NULL;
-    }
-  if (img->blues)
-    {
-      free (img->blues);
-      img->blues = NULL;
-    }
-  if (img->image_data)
-    {
-      free (img->image_data);
-      img->image_data = NULL;
-    }
-  if (img->clip_data) {
-      free (img->clip_data);
-      img->clip_data = NULL;
-  }
-  if (img->src) {
-	free(img->src);
-	img->src=NULL;
-  }
-  if (img->image!=None) {
-	XFreePixmap(XtDisplay(swin),img->image);
-	img->image=None;
-  }
-  if (img->clip!=None) {
-	XFreePixmap(XtDisplay(swin),img->clip);
-	img->clip=None;
-  }
+	if (img->image_data)
+		free(img->image_data);
+	if (img->clip_data)
+		free(img->clip_data);
+	/* Free any animation */
+	while (next) {
+		tmp = next;
+		next = tmp->next;
+		if (tmp->image_data)
+			free(tmp->image_data);
+		if (tmp->clip_data)
+			free(tmp->clip_data);
+		free(tmp);
+	}
 
-  return mo_succeed;
+	free(img);  /* Free the struc also */
+
+	return mo_succeed;
 }
-
-mo_status mo_register_image_resolution_function (mo_window *win)
-{
-  XmxSetArg (WbNresolveImageFunction, (long)ImageResolve);
-  XmxSetArg (WbNresolveDelayedImage, (long)DelayedImageResolve);
-  XmxSetValues (win->scrolled_win);
-  return mo_succeed;
-}
-

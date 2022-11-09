@@ -52,20 +52,17 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
 #ifndef HTMLP_H
 #define HTMLP_H
 
-#include "HTML.h"
+#include "../libhtmlw/HTML.h"
 
-#ifdef MOTIF
 #include <Xm/XmP.h>
-# ifdef MOTIF1_2
-#  include <Xm/ManagerP.h>
-# endif /* MOTIF1_2 */
-#else
-#include <X11/IntrinsicP.h>
-#include <X11/ConstrainP.h>
-#endif /* MOTIF */
+#ifdef MOTIF1_2
+#include <Xm/ManagerP.h>
+#endif
 
 #include <X11/Xatom.h>
 #ifndef VMS
@@ -74,37 +71,162 @@
 #include <XMU/Atoms.h>
 #endif
 
-/*
- * Used for special images
- */
-#define INTERNAL_IMAGE	"internal-"
-
-
-/*  New fields for the HTML widget class */
-typedef struct _HTMLClassPart
-{
-	int none;	/* no extra HTML class stuff */
+/* New fields for the HTML widget class */
+typedef struct _HTMLClassPart {
+	int none;		/* No extra HTML class stuff */
 } HTMLClassPart;
 
-
-typedef struct _HTMLClassRec
-{
+typedef struct _HTMLClassRec {
 	CoreClassPart		core_class;
 	CompositeClassPart	composite_class;
 	ConstraintClassPart	constraint_class;
-#ifdef MOTIF
 	XmManagerClassPart	manager_class;
-#endif /* MOTIF */
 	HTMLClassPart		html_class;
 } HTMLClassRec;
 
 
 extern HTMLClassRec htmlClassRec;
 
+#define MARGIN_DEFAULT		20
+#define IMAGE_DEFAULT_BORDER	2
+#define DEF_IMAGE_HSPACE	0
+#define DEF_IMAGE_VSPACE	0
+#define D_INDENT_SPACES		40
+
+#define D_NONE          0
+#define D_TITLE         1
+#define D_TEXT          2
+#define D_OLIST         3
+#define D_ULIST         4
+#define D_DESC_LIST_START 5
+
+/*
+ * To allow arbitrary nesting of lists
+ */
+typedef struct dtype_rec {
+        int type;               /* D_NONE, D_TITLE, D_TEXT, D_OLIST, D_ULIST */
+        int count;
+        int compact;
+	int indent;
+	char style;		/* 1, A, a, I, i */
+	int in_title;
+	int save_indent_level;
+        struct dtype_rec *next;
+} DescRec;
+ 
+/*
+ * To allow arbitrary nesting of alignment changes
+ */
+typedef struct align_rec {
+        DivAlignType align;
+        struct align_rec *next;
+} AlignRec;
+
+/*
+ * To allow arbitrary nesting of alignment changes
+ */
+typedef struct float_rec {
+	int		type;		/* 1 is image, 2 is table */
+	int		marg;
+	int		y;
+	int		table_extra;	/* Size of extra space after table */
+	int		image_extra;	/* Space before right floating image */
+        struct float_rec *next;
+} FloatRec;
+
+/* A struc to maintain current HTML formatting context */
+typedef struct _PhotoComposeContext {
+	int width_of_viewable_part; /* Never change during computation */
+	int right_margin;
+	int left_margin;
+	int eoffsetx;	      /* The element offset relative to View */
+	int cur_line_width;   /* WidthOfViewablePart-right_margin-left_margin */
+	int x;		      /* x, y relative to View, Where to put next */
+	int y;		      /* Element */
+
+	/* When cw_only we never create Element but compute 3 values:
+	 *    computed_min_x, computed_max_x, computed_maxmin_x
+	 * This part is for first pass of table to compute cell sizes
+	 */
+	Boolean cw_only;	/* Compute width only if True */
+	int computed_min_x;	/* Minimum cell width for this line */
+	int computed_maxmin_x;	/* Max of all min_x in cell */
+	int computed_max_x;	/* Maximum cell width */
+
+	int margin_height;
+	int cur_baseline;	/* All objects in a line must have the same */
+				/* baseline.  If baseline changes then adjust */
+				/* the element's y and cur_line_height and */
+				/* the y or height of each element on line */
+	int cur_line_height;
+	int element_id;    	/* Unique number */
+	int is_bol;      	/* At begin of line if 1 */
+				/* Right after list bullet if 2 */
+	char have_space_after;  /* Word has a space after */
+	XFontStruct	*cur_font;
+	int		cur_font_size;
+	int		cur_font_base;
+	CurFontFamily	cur_font_family;
+	CurFontType	cur_font_type;
+	MarkInfo	*anchor_tag_ptr;     /* Anchor info */
+	int max_width_return;	/* Compute the MaxWidth of hyper text to */
+				/* adjust scrollbar */
+				/* Initial value is WidthOfViewablePart */
+	int	pf_lf_state; 	/* Linefeed state */
+	int	preformat;	/* In <PRE>? */
+	DivAlignType	div;	/* Current horizontal alignment */
+	AlignType	valign;	/* Current vertical alignment */
+	unsigned long	fg;	/* Current foreground */
+	unsigned long	bg;	/* Current background */
+	unsigned long	cur_font_color;
+	int		underline_number;
+	int		in_underlined;
+	Boolean		dashed_underlines;
+	FormInfo	*cur_form;	/* Current form */
+	Boolean		in_form;	/* In form? */
+	int		widget_id;
+	int		aprog_id;
+	int		applet_id;
+	int		superscript;
+	int		subscript;
+	int		indent_level;
+	char		*text_area_buf;	 /* Buffer for Form TextArea */
+	int		ignore;		 /* Ignore some tags when formating */
+	SelectInfo	*current_select; /* SELECT in FORM */
+	Boolean		in_select;	 /* A select? */
+	int		is_index;
+	int		Width;
+	Boolean		Strikeout;
+	DescRec		DescType;
+	int		InDocHead;
+	char		*TitleText;
+	Boolean		in_table;	/* In a table? */
+	int		in_paragraph;   /* In a paragraph? */
+	Boolean		in_script;	/* In a script? */
+	Boolean		in_style;	/* In a style sheet? */
+	Boolean		in_div_hidden;	/* Visibility:hidden in DIV? */
+	ElemInfo	*last_progressive_ele;	/* Last element displayed progressively */
+	Boolean		anchor_start;	/* Mark start of anchor in text */
+	Boolean		at_top;		/* At top of a page or cell? */
+	Boolean		in_anchor;	/* In an anchor? */
+	FloatRec	*float_left;	/* Current float stacks */
+	FloatRec	*float_right;
+	Boolean		ignore_float;
+	Boolean		nobr;		/* In <NOBR>? */
+	int		nobr_x;		/* Starting x of <NOBR> */
+	int		blockquote;	/* <BLOCKQUOTE> counter */
+	int		frameset;	/* <FRAMESET> counter */
+	int		noframes;	/* <NOFRAMES> counter */
+	int		blink;
+	int		max_line_ascent;
+	int		para_y;		/* Starting x of paragraph */
+	Boolean		noformat;	/* Are we formatting? */
+	int		sub_or_sup;	/* Is it subscript or superscript? */
+	char		*basetarget;	/* Target set by <BASE> */
+} PhotoComposeContext;
 
 /* New fields for the HTML widget */
-typedef struct _HTMLPart
-{
+typedef struct _HTMLPart {
 	/* Resources */
 	Dimension		margin_width;
 	Dimension		margin_height;
@@ -112,12 +234,9 @@ typedef struct _HTMLPart
 	Widget			view;
 	Widget			hbar;
 	Widget			vbar;
-        Widget                  frame;
-	Boolean			hbar_top;
-	Boolean			vbar_right;
 
 	XtCallbackList		anchor_callback;
-	XtCallbackList		link_callback;
+	XtCallbackList		base_callback;
 	XtCallbackList		form_callback;
 
 	char			*title;
@@ -125,12 +244,9 @@ typedef struct _HTMLPart
 	char			*header_text;
 	char			*footer_text;
 /*
- * Without motif we have to define our own forground resource
+ * Without Motif we have to define our own foreground resource
  * instead of using the manager's
  */
-#ifndef MOTIF
-	Pixel			foreground;
-#endif
 	Pixel			anchor_fg;
 	Pixel			visitedAnchor_fg;
 	Pixel			activeAnchor_fg;
@@ -138,9 +254,13 @@ typedef struct _HTMLPart
 
         Boolean                 body_colors;
         Boolean                 body_images;
+        Boolean                 font_colors;
+	Boolean			font_sizes;
+	CurFontFamily		font_family;
+	int			font_base;
 
+	int			max_colors_in_image;
 	int			bg_image;
-
 	Pixmap			bgmap_SAVE;
 	Pixmap			bgclip_SAVE;
         int                     bg_height;
@@ -160,14 +280,13 @@ typedef struct _HTMLPart
 	Boolean			dashed_anchor_lines;
 	Boolean			dashed_visitedAnchor_lines;
 	Boolean			fancy_selections;
-	Boolean			border_images;
-	Boolean			delay_images;
 	Boolean			is_index;
 	int			percent_vert_space;
 
 	XFontStruct		*font;
 	XFontStruct		*italic_font;
 	XFontStruct		*bold_font;
+	XFontStruct		*bolditalic_font;
 	XFontStruct		*meter_font;
 	XFontStruct		*toolbar_font;
 	XFontStruct		*fixed_font;
@@ -184,17 +303,20 @@ typedef struct _HTMLPart
 	XFontStruct		*plainbold_font;
 	XFontStruct		*plainitalic_font;
 	XFontStruct		*listing_font;
-/* amb */
-        XFontStruct             *supsub_font;
-/* end amb */
 
         XtPointer		previously_visited_test;
-        XtPointer		resolveImage;
-        XtPointer		resolveDelayedImage;
-        
-        XtPointer               pointer_motion_callback;
+	XtCallbackList		image_callback;
+	Boolean			delay_image_loads;
+	XtCallbackList		get_url_data_cb;
+        XtCallbackList		pointer_motion_callback;
+	Boolean			blinking_text;
+	int			blink_time;
+	Boolean			frame_support;
+	XtCallbackList		frame_callback;
+	Boolean			is_frame;
+	FrameScrolling		scroll_bars;
 
-	/* PRIVATE */
+	/* Private */
 	Dimension		max_pre_width;
 	Dimension		view_width;
 	Dimension		view_height;
@@ -204,67 +326,82 @@ typedef struct _HTMLPart
 	int			scroll_y;
 	Boolean			use_hbar;
 	Boolean			use_vbar;
-	struct ele_rec		*formatted_elements;
-	int			line_count;
-	struct ele_rec		**line_array;
-	struct ele_rec		*select_start;
-	struct ele_rec		*select_end;
+	ElemInfo		*formatted_elements;
+	ElemInfo		*select_start;
+	ElemInfo		*select_end;
 	int			sel_start_pos;
 	int			sel_end_pos;
-	struct ele_rec		*new_start;
-	struct ele_rec		*new_end;
+	ElemInfo		*new_start;
+	ElemInfo		*new_end;
 	int			new_start_pos;
 	int			new_end_pos;
-	struct ele_rec		*active_anchor;
+	ElemInfo		*active_anchor;
 	GC			drawGC;
 	int			press_x;
 	int			press_y;
 	Time			but_press_time;
 	Time			selection_time;
-	struct mark_up		*html_objects;
-	struct mark_up		*html_header_objects;
-	struct mark_up		*html_footer_objects;
-	struct ref_rec		*my_visited_hrefs;
-	struct delay_rec	*my_delayed_images;
+	MarkInfo		*html_objects;
+	MarkInfo		*html_header_objects;
+	MarkInfo		*html_footer_objects;
 	WidgetInfo		*widget_list;
 	FormInfo		*form_list;
-	MapInfo			*map_list;
-        struct ele_rec          *cached_tracked_ele;
+	MapInfo                 *map_list;
+        Boolean 		drawing;
+        unsigned int		draw_count;
         Boolean                 focus_follows_mouse;
-	Boolean			obscured;
+        ElemInfo                *cached_tracked_ele;
+	ElemInfo		*last_formatted_elem;
+	ElemInfo		*last_formatted_line;
+	ElemInfo		*first_formatted_line;
+	MapInfo			*cur_map;	/* usemap being parsed */
+	AreaInfo		*cur_area;	/* usemap area last parsed */
+	Boolean			cursor_in_anchor;
+	int			underline_yoffset;
+	Boolean			table_cell_has_bg;
+	int			redisplay_x;
+	int			redisplay_y;
+	int			redisplay_width;
+	int			redisplay_height;
+        unsigned int		refresh_count;
+	Boolean			changing_font;
+	int			pushfont_count;
+	FontRec			*fontstack;
+	Boolean			ignore_setvalues;
+	ElemInfo		*blinking_elements;
+	XtIntervalId		refresh_timer;
+	RefreshInfo		*refreshdata;
+	XtIntervalId		blink_timer;
+	BlinkInfo		*blinkdata;
+	XtWorkProcId		workprocid;
+	WorkInfo		*workprocdata;
+	int			allocation_index[256];
+
+	/* Frame resources */
+	FrameInfo	**frames;
+	int		nframe;		/* Number of frames */
+	int		node_count;	/* Number of history node cached in */
+	FrameInfo	*iframe_list;	/* iframe list */
 } HTMLPart;
 
 
-typedef struct _HTMLRec
-{
+typedef struct _HTMLRec {
 	CorePart		core;
 	CompositePart		composite;
 	ConstraintPart		constraint;
-#ifdef MOTIF
 	XmManagerPart		manager;
-#endif /* MOTIF */
 	HTMLPart		html;
 } HTMLRec;
 
-/*
- * to reduce the number of MOTIF/ATHENA ifdefs around the code
- * we use some generalized constants
-x */
-#ifdef MOTIF
-#   define XxNx      XmNx
-#   define XxNy      XmNy
-#   define XxNwidth  XmNwidth
-#   define XxNheight XmNheight
-#   define XxNset    XmNset
-#   define XxNvalue  XmNvalue
-#else
-#   define XxNx      XtNx
-#   define XxNy      XtNy
-#   define XxNwidth  XtNwidth
-#   define XxNheight XtNheight
-#   define XxNset    XtNstate
-#   define XxNvalue  XtNstring
-#endif /* MOTIF */
+extern int FormatAll(HTMLWidget hw, int *Fwidth);
+extern ElemInfo *RefreshElement(HTMLWidget hw, ElemInfo *eptr);
+extern void HtmlGetImage (HTMLWidget w, ImageInfo *picd,
+				PhotoComposeContext *pcc, int force_load);
+extern MarkInfo *HTMLParse(HTMLWidget hw, char *str);
+extern void RefreshURL(XtPointer cld, XtIntervalId *id);
 
+extern void _FreeAprogStruct(AprogInfo *aps);
+extern void _FreeAppletStruct(AppletInfo *ats);
+extern void _FreeTableStruct(TableInfo *t);
 
 #endif /* HTMLP_H */

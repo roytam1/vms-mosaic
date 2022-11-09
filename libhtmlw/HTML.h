@@ -52,22 +52,38 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-#ifndef HTML_H
-#define HTML_H
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
 
-#ifdef MOTIF
+#ifndef HTMLW_HTML_H
+#define HTMLW_HTML_H
+
 #include <Xm/Xm.h>
 #if (XmVERSION == 1)&&(XmREVISION >= 2)
 #undef MOTIF1_2
 #define MOTIF1_2
 #endif
-#else
-#include <X11/Intrinsic.h>
-#include <X11/Constraint.h>
-#endif /* MOTIF */
+
 #include <X11/StringDefs.h>
 
-typedef int (*visitTestProc)();
+#ifndef HTML_PARSE_H
+#include "../libhtmlw/HTMLparse.h"
+#endif
+
+/* Defines and structures used for the HTML parser, and parsed object list. */
+
+typedef struct _HTMLClassRec *HTMLWidgetClass;
+typedef struct _HTMLRec      *HTMLWidget;
+
+extern WidgetClass htmlWidgetClass;
+
+typedef enum {
+	DIV_ALIGN_NONE,
+	DIV_ALIGN_LEFT,
+	DIV_ALIGN_CENTER,
+	DIV_ALIGN_RIGHT
+} DivAlignType;
+
+typedef int (*visitTestProc)(Widget, char*);
 typedef void (*pointerTrackProc)();
 
 typedef struct ele_ref_rec {
@@ -76,155 +92,195 @@ typedef struct ele_ref_rec {
 
 typedef struct link_rec {
 	char *href;
-	char *role;
 } LinkInfo;
+
+#ifndef DISABLE_TRACE
+extern int htmlwTrace;
+extern int reportBugs;
+#endif
 
 /*
  * Public functions
  */
-#ifdef _NO_PROTO
-extern char *HTMLGetText ();
-extern char *HTMLGetTextAndSelection ();
-extern char **HTMLGetHRefs ();
-extern char **HTMLGetImageSrcs ();
-extern void *HTMLGetWidgetInfo ();
-extern void HTMLFreeWidgetInfo ();
-extern void HTMLFreeImageInfo ();
-extern LinkInfo *HTMLGetLinks ();
-extern int HTMLPositionToId ();
-extern int HTMLIdToPosition ();
-extern int HTMLAnchorToPosition ();
-extern int HTMLAnchorToId ();
-extern void HTMLGotoId ();
-extern void HTMLRetestAnchors ();
-extern void HTMLClearSelection ();
-extern void HTMLSetSelection ();
-extern void HTMLSetText ();
-extern void HTMLSetAppInsensitive();
-extern int HTMLSearchText ();
-extern int HTMLSearchNews();
-extern void HTMLSetAppSensitive();
-extern void HTMLTraverseTabGroups();
-extern void HTMLDrawBackgroundImage();
-extern void HTMLSetFocusPolicy();
-#else
 extern char *HTMLGetText (Widget w, int pretty, char *url, char *time_str);
 extern char *HTMLGetTextAndSelection (Widget w, char **startp, char **endp,
-					char **insertp);
+				      char **insertp);
 extern char **HTMLGetHRefs (Widget w, int *num_hrefs);
 extern char **HTMLGetImageSrcs (Widget w, int *num_srcs);
 extern void *HTMLGetWidgetInfo (Widget w);
+extern void *HTMLGetFormInfo (Widget w);
 extern void HTMLFreeWidgetInfo (void *ptr);
-extern void HTMLFreeImageInfo (Widget w);
+extern void HTMLFreeFormInfo (void *ptr);
 extern LinkInfo *HTMLGetLinks (Widget w, int *num_links);
 extern int HTMLPositionToId(Widget w, int x, int y);
 extern int HTMLIdToPosition(Widget w, int element_id, int *x, int *y);
 extern int HTMLAnchorToPosition(Widget w, char *name, int *x, int *y);
 extern int HTMLAnchorToId(Widget w, char *name);
-extern void HTMLGotoId(Widget w, int element_id, int correction);
+extern void HTMLGotoId(Widget w, int element_idi, int correction);
+extern int HTMLLastId(Widget w);
 extern void HTMLRetestAnchors(Widget w, visitTestProc testFunc);
-extern void HTMLClearSelection (Widget w);
-extern void HTMLSetSelection (Widget w, ElementRef *start, ElementRef *end);
-extern void HTMLSetText (Widget w, char *text, char *header_text,
+extern void HTMLClearSelection(Widget w);
+extern void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end);
+extern void HTMLSetText(Widget w, char *text, char *header_text,
 			char *footer_text, int element_id,
 			char *target_anchor, void *ptr);
-extern int HTMLSearchNews(Widget w,ElementRef *m_start, ElementRef *m_end);
-extern int HTMLSearchText (Widget w, char *pattern,
+extern int HTMLSearchText(Widget w, char *pattern,
 	ElementRef *m_start, ElementRef *m_end, int backward, int caseless);
-extern void HTMLSetAppInsensitive(Widget hw);
-extern void HTMLSetAppSensitive(Widget hw);
+extern int HTMLSearchNews(Widget w, ElementRef *m_start, ElementRef *m_end);
 extern void HTMLTraverseTabGroups();
-extern void HTMLDrawBackgroundImage(Widget w, int x, int y, int width, 
-				    int height);
 extern void HTMLSetFocusPolicy(Widget w, int to);
-#endif /* _NO_PROTO */
-
+extern void HTMLDrawBackgroundImage(Widget w, int x, int y, int width,
+				    int height);
+extern void HTMLFreeWidget(HTMLWidget hw);
 
 /*
  * Public Structures
  */
 typedef struct acall_rec {
 	XEvent *event;
-	int element_id;
 	char *text;
 	char *href;
+	char *title;
+	char *frame;
+	Boolean refresh;	/* If true, reload if URL is same as current */
 } WbAnchorCallbackData;
-
 
 typedef struct fcall_rec {
 	XEvent *event;
 	char *href;
+	char *target;
         char *method;
         char *enctype;
-        char *enc_entity;
-	char *format;
 	int attribute_count;
 	char **attribute_names;
 	char **attribute_values;
 } WbFormCallbackData;
 
-
 typedef struct form_rec {
 	Widget hw;
 	char *action;
+	char *target;
         char *method;
         char *enctype;
-        char *enc_entity;
-	char *format;
 	int start, end;
-        Widget button_pressed; /* match button pressed to one of submits */
+        Widget button_pressed; /* Match button pressed to one of submits */
+	int cw_only;	       /* Mark it as belonging to EstimateMinMaxTable */
+	int cached;
 	struct form_rec *next;
 } FormInfo;
 
-
-/* Client-Side Ismap -- SWP */
+/* Client-Side Ismap */
 typedef struct coord_rec {
-	int coord;
-	struct coord_rec *next;
+      int x;
+      int y;
+      struct coord_rec *next;
 } CoordInfo;
 
-
 typedef struct area_rec {
-	int shape;
-	CoordInfo *coordList;
-	CoordInfo *currentCoord;
-	char *href;
-	char *alt;
-	struct area_rec *next;
+      int shape;
+      CoordInfo *coordList;
+      char *href;
+      char *alt;
+      char *target;
+      struct area_rec *next;
 } AreaInfo;
 
-
 typedef struct map_rec {
-	char *name;
-	AreaInfo *areaList;
-	AreaInfo *currentArea;
-	struct map_rec *next;
+      char *name;
+      AreaInfo *areaList;
+      struct map_rec *next;
 } MapInfo;
+        
+/*      
+ * Defines for client-side ismap
+ */     
+#define AREA_RECT 0 
+#define AREA_CIRCLE 1  
+#define AREA_POLY 2 
 
+/* Define alignment values */
+typedef enum {
+	ALIGN_NONE,
+	VALIGN_BOTTOM,
+	VALIGN_MIDDLE,
+	VALIGN_TOP,
+	HALIGN_LEFT,
+	HALIGN_CENTER,
+	HALIGN_RIGHT
+} AlignType;
 
 typedef struct image_rec {
-	char *usemap;
-	MapInfo *map;
+        char *src;
+	char *alt_text;		/* Alternative text */
+	AlignType align;
+	AlignType valign;
+	int height;
+	int req_height;		/* Requested height specified in HEIGHT=nnn */
+	int width;
+	int req_width;		/* Requested width specified in WIDTH=nnn */
+	int percent_width;	/* Width specified with WIDTH=nn% */
+	int border;
+	int has_border;
+	int hspace;
+	int vspace;
+	char *usemap; 
+        MapInfo *map;
+        AreaInfo *area;
 	int ismap;
 	FormInfo *fptr;
 	int internal;
 	int delayed;
+	int urldelayed;
 	int fetched;
-	int width, height;
+	int cached;
 	int num_colors;
-	int *reds;
-	int *greens;
-	int *blues;
-	int bg_index;
+	XColor colrs[256];
+        int bg_index;
 	unsigned char *image_data;
 	unsigned char *clip_data;
 	int transparent;
+	Pixel background_pixel;
 	Pixmap image;
 	Pixmap clip;
-	char *text;
-        char *src;
+	int cw_only;
+	char *text;		/* Special ISMAP Form NAME text */
+	int is_bg_image;	/* Is it the background image? */
+	struct anim_rec *anim_info; /* Animation stuff */
+	int delay;		/* Image display time */
+	int disposal;		/* GIF image disposal */
+	int iterations;		/* Animation cycles */
+	int x;			/* x and y offsets for animations */
+	int y;
+	int awidth;		/* Animation screen size */
+	int aheight;
+	int running;		/* 1 = running, 2 = ran, 0 = not started */
+	Pixmap anim_image;	/* Current animation Pixmap */
+	Pixmap bg_image;	/* Saved background Pixmap for animation */
+	int bg_visible;		/* Is the background fully within view? */
+	int has_anim_image;	/* 0 = None, -1 = empty, 1 = in use */
+	struct image_rec *last;	/* Last image of animation */	
+	struct image_rec *prev;
+	struct image_rec *next;	/* Linked list of animation images */
+	int aligned;
+	XtIntervalId timer;	/* Animation timer id */
 } ImageInfo;
 
+typedef struct anim_rec {
+	HTMLWidget hw;
+	struct ele_rec *eptr;
+	int drawing;
+	ImageInfo *start;
+	ImageInfo *next;
+	ImageInfo *current;
+	int count;
+	int *window;
+} AnimInfo;
+
+typedef struct refresh_rec {
+	HTMLWidget hw;
+	unsigned int refresh;
+	char *url;
+} RefreshInfo;
 
 typedef struct wid_rec {
 	Widget w;
@@ -232,60 +288,108 @@ typedef struct wid_rec {
 	int id;
 	int x, y;
 	int width, height;
-	int seeable;
+        Boolean seeable;
+	int extra_before;
 	char *name;
 	char *value;
 	char *password;
 	char **mapping;
 	Boolean checked;
 	Boolean mapped;
+	unsigned long bgcolor;
+	unsigned long fgcolor;
+	int cache_count;
+	int cache_invalid;
+	FormInfo *cached_forms;
+	struct ele_rec *eptr;
 	struct wid_rec *next;
 	struct wid_rec *prev;
 } WidgetInfo;
 
+typedef struct _CellStruct {
+        MarkType cell_type;
+        int td_count;
+        int tr_count;
+        int colspan;
+        int rowspan;
+        int is_colspan;
+        int is_rowspan;
+	int back_cs;
+	int back_rs;
+        MarkInfo *td_start;
+        MarkInfo *td_end;
+        MarkInfo *tr_start;
+	struct ele_rec *start_elem;
+	struct ele_rec *end_elem;
+	int x;
+	int y;
+        int height;
+        int width;
+        int max_width;
+        int min_width;          
+	int relative_width;
+	int absolute_width;
+	int req_height;
+	int treq_height;
+	int line_bottom;
+        AlignType valignment;
+        AlignType halignment;
+	int nowrap;
+	Boolean has_content;
+	int content_height;
+} CellStruct;
+                                
+typedef struct _ColumnList {
+        CellStruct *cells;
+        int cell_count;
+        int max_row_span;
+} ColumnList;
+                        
+typedef struct _RowList {
+        CellStruct **cells_lines;
+        int row_count; 
+        int max_cell_count_in_line;
+        int low_cur_line_num;
+} RowList;
 
-typedef enum { F_NONE, F_TEXT, F_IMAGE, F_WIDGET} FieldType;
-
-typedef struct table_field {
-        int colSpan;            /* number of cells this spans vertically */
-        int rowSpan;            /* number of cells this spans horizontally */
-        Boolean contVert;       /* does this cell continue from previous */
-        Boolean contHoriz;      /* does this cell continue from previous */
-        int alignment;          /* contents alignment */
-        int maxWidth;
-        int minWidth;
-        int maxHeight;
-        int minHeight;
-        int colWidth;           /* uniform width for all element in this col*/
-        int rowHeight;          /* uniform hieght for all element in the row*/
-	Boolean	header;		/* is this field created with <TH> or <TD> */
-	
-	/* contents */
-	FieldType	type;
-	char		*text;
-	XFontStruct	*font;
-	char		**formattedText;
-	int		numLines;	/* for formatted text */
-
-	ImageInfo	*image;
-	WidgetInfo	*winfo;
-} TableField;
-
-typedef struct table_rec {
-	Boolean	borders;
-	char	*caption;
+typedef struct _TableRec {
+	int	borders;
+	int	outer_border;	     /* Outer border width */
+	unsigned int relative_width; /* For <table width=50%> */
+				     /* it's relative to window width */
+	unsigned int absolute_width; /* Width in pixels */
+	int	num_col;
+	int	num_row;
+	MarkInfo *caption_start_mark;
+	MarkInfo *caption_end_mark;
 	int	captionAlignment;
-	struct	mark_up *mptr;
-	int	width,height;
-	int	bwidth,bheight;
-	int	numColumns;
-	int	numRows;
-	TableField *table;
+	MarkInfo *tb_start_mark;
+	MarkInfo *tb_end_mark;
+	MarkInfo *start_other_mark;
+	MarkInfo *end_other_mark;
+	int	other_before_caption;
+	MarkInfo *first_tr_mark;
+	RowList  *row_list;
+	int	width, height;
+	int	min_width, max_width;
+	int    *col_max_w;	/* Min and max widths of each columns */
+	int    *col_min_w;
+	int    *col_w;		/* Definitive size of columns */
+	int    *col_req_w;	/* Requested width, (0 if none, -1 if */
+				/* absolute, percentage if relative) */
+	int    *col_abs_w;	/* Suggested absolute width */
+	int	is_tint;	/* Is table in table? */
+	int 	estimate_height; /* Computed estimated height */
+	DivAlignType align;
+	int	align_adjx;	/* x alignment adjustment */
+	int	valign_adjx;	/* y alignment adjustment */
+	int	cellpadding;
+	int	cellspacing;
 } TableInfo;
 
 typedef struct sel_rec {
 	Widget hw;
-	struct mark_up *mptr;
+	MarkInfo *mptr;
 	int is_value;
 	char *retval_buf;
 	char *option_buf;
@@ -296,18 +400,10 @@ typedef struct sel_rec {
 	int value_cnt;
 } SelectInfo;
 
-
 typedef ImageInfo *(*resolveImageProc)();
 
 /*
- * defines for client-side ismap -- SWP
- */
-#define AREA_RECT 0
-#define AREA_CIRCLE 1
-#define AREA_POLYGON 2
-
-/*
- * defines and structures used for the formatted element list
+ * Defines and structures used for the formatted element list
  */
 #define E_TEXT		(1 << 0)
 #define E_BULLET	(1 << 1)
@@ -317,214 +413,243 @@ typedef ImageInfo *(*resolveImageProc)();
 #define E_HRULE		(1 << 5)
 #define E_TABLE		(1 << 6)
 #define E_ANCHOR	(1 << 7)
-#define E_MAP		(1 << 8)
+#define E_SPACER	(1 << 8)
+#define E_CR		(1 << 9)
+#define E_CELL_TABLE	(1 << 10)
+#define E_APROG		(1 << 11)
+#define E_APPLET	(1 << 12)
+#define E_IFRAME	(1 << 13)
 
-/* define alignment values */
-#define ALIGN_BOTTOM    0
-#define ALIGN_MIDDLE    1
-#define ALIGN_TOP       2
+typedef enum {
+	CODE_TYPE_UNKNOW,
+	CODE_TYPE_BIN,
+	CODE_TYPE_SRC,
+	CODE_TYPE_APPLET
+} CodeType;
 
-#define ALIGN_LEFT	3
-#define ALIGN_CENTER	4
-#define ALIGN_RIGHT	5
-
-
-struct ele_rec {
-	int type;
-	ImageInfo *pic_data;
-	WidgetInfo *widget_data;
-	TableInfo *table_data;
-	XFontStruct *font;
-	int alignment;
-	Boolean internal;
-	Boolean selected;
-	int indent_level;
-	int start_pos, end_pos;
-	int x, y;
-	int bwidth;
-	int y_offset;
+typedef struct _AppletRec {
+	CodeType ctype;
+	char *src;
 	int width;
-	int line_number;
-	int line_height;
+	int height;
+	int x;
+	int y;
+	int border_width;
+	AlignType valignment;
+	int param_count;
+	char **param_name_t;
+	char **param_value_t;
+	int url_arg_count;
+	char **url_arg;
+	char **ret_filenames;
+	Boolean cw_only;
+	Widget w;
+	Widget frame;
+} AppletInfo;
+
+typedef struct _AprogRec {
+	CodeType ctype;
+	char *src;
+	char *name;
+	int width;
+	int height;
+	int x;
+	int y;
+	int border_width;
+	AlignType valignment;
+	int param_count;
+	char **param_name_t;
+	char **param_value_t;
+	int url_arg_count;
+	char **url_arg;
+	char **ret_filenames;
+	Boolean cw_only;
+	Widget w;
+	Widget frame;
+} AprogInfo;
+
+typedef struct _EODataStruct {
+	char *src;
+	char *ret_filename;
+	Boolean cw_only;
+} EODataStruct;
+
+typedef enum {
+	TIMES,
+	HELVETICA,
+	CENTURY,
+	LUCIDA,
+	SYMBOL
+} CurFontFamily;
+
+typedef enum {
+	FONT,
+	ITALIC_FONT,
+	BOLD_FONT,
+	BOLDITALIC_FONT,
+	FIXED_FONT,
+	FIXEDBOLD_FONT,
+	FIXEDITALIC_FONT,
+	HEADER1_FONT,
+	HEADER2_FONT,
+	HEADER3_FONT,
+	HEADER4_FONT,
+	HEADER5_FONT,
+	HEADER6_FONT,
+	ADDRESS_FONT,
+	PLAIN_FONT,
+	PLAINBOLD_FONT,
+	PLAINITALIC_FONT,
+	LISTING_FONT
+} CurFontType;
+
+/*
+ * To allow arbitrary nesting of font changes
+ */
+typedef struct font_rec {
+        XFontStruct *font;
+	int size;
+	CurFontType type;
+	CurFontFamily family;
+	unsigned long color;
+	Boolean color_ch;
+        struct font_rec *next;
+} FontRec;
+
+/*****  
+* Possible types of frame sizes
+*****/               
+typedef enum {
+        FRAME_SIZE_FIXED = 1,                 /* Size specified in pixels */
+        FRAME_SIZE_RELATIVE,                  /* Size is relative */
+        FRAME_SIZE_OPTIONAL                   /* Size is optional */
+} FrameSize;
+
+/***** 
+* What type of scrolling a frame should employ.
+*****/                                
+typedef enum {                         
+        FRAME_SCROLL_NONE = 1,        
+        FRAME_SCROLL_AUTO,            
+        FRAME_SCROLL_YES              
+} FrameScrolling;
+
+/*****  
+* Possible Frame layout policies
+*****/  
+typedef enum {
+        FRAMESET_LAYOUT_ROWS = 1,	/* Rows only */      
+        FRAMESET_LAYOUT_COLS = 2,	/* Columns only */      
+        FRAMESET_LAYOUT_ROW_COLS = 4    /* Left to right, top to bottom */
+} FramesetLayout;
+
+#define	FRAME_TYPE    1	/* This is a frame with HTML inside */
+#define	FRAMESET_TYPE 2	/* HTML begins with frameset tag */
+/* Note:
+	A frameset may have the FRAME_TYPE because son of frameset
+	The upper level frameset does not set the FRAME_TYPE
+*/
+
+typedef struct frame_rec {
+	int		frame_type;	/* FRAMESET_TYPE, FRAME_TYPE */
+	FrameScrolling	frame_scroll_type; /* Frame scrolling */
+	int             frame_border;   /* Add a border to the frames? */
+        int		frame_x;        /* Computed frame x-position */
+        int		frame_y;        /* Computed frame y-position */
+        Dimension	frame_width;    /* Computed frame width */
+        Dimension	frame_height;   /* Computed frame height */
+	Dimension       frame_size_s;	/* Saved frame size */
+	FrameSize       frame_size_type; /* Horizontal frame size spec */
+        String   	frame_src;      /* Source document */
+        String   	frame_name;     /* Internal frame name */
+        Dimension	frame_margin_width;   /* Frame margin width */
+        Dimension	frame_margin_height;  /* Frame margin height */
+        Boolean  	frame_resize;   /* May we resize this frame? */
+	struct frame_rec *frame_parent_frameset; /* Parent frameset, if any */
+        struct frame_rec *frame_next;   /* Next frame child, if any */
+        struct frame_rec *frame_children; /* List of frames */
+        FramesetLayout  frame_layout;	/* frameset layout policy */
+	/* IFRAME stuff */
+	Widget		iframe;
+        Boolean		seeable;
+	Boolean 	mapped;
+	Boolean		aligned;	/* Is it left/right aligned? */
+} FrameInfo;
+
+typedef struct ele_rec {
+	int type;
+	ImageInfo 	*pic_data;
+	WidgetInfo 	*widget_data;
+	TableInfo 	*table_data;
+	CellStruct 	*cell_data;
+	AprogInfo	*aps;
+	AppletInfo 	*ats;
+	XFontStruct 	*font;
+	AlignType 	valignment;
+	AlignType 	halignment;
+	Boolean 	selected;
+	Boolean 	is_in_form; /* Used to indicate special ISMAP in form */
+	int 		indent_level;
+	int start_pos, end_pos;
+	int x, y;		/* The upper left corner of Bounding box */
+	int baseline;		/* Baseline for alignment */
+	int bwidth;
+	int width;
+	int height;
 	int ele_id;
+	int aprog_id;
+	int applet_id;
 	int underline_number;
 	Boolean dashed_underline;
 	Boolean strikeout;
 	unsigned long fg;
 	unsigned long bg;
-	char *anchorName;
-	char *anchorHRef;
-	char *anchorSubject;
+	MarkInfo *anchor_tag_ptr; /* Put it in struct mark_up */
 	char *edata;
 	int edata_len;
 	struct ele_rec *next;
 	struct ele_rec *prev;
-};
+	struct ele_rec *line_next;
+	int preallo;
+	int font_size;
+	CurFontFamily font_family;
+	CurFontType font_type;
+	Boolean blink;
+	struct ele_rec *blink_next;
+	int underline_yoffset;
+	FrameInfo *frame;
+} ElemInfo;
 
-struct ref_rec {
-	char *anchorHRef;
-	struct ref_rec *next;
-};
+typedef struct {
+        ElemInfo *eptr;
+        int drawing;
+        HTMLWidget hw;
+} WorkInfo;
 
-struct delay_rec {
-	char *src;
-	struct delay_rec *next;
-};
+typedef struct {
+        int drawing;
+        HTMLWidget hw;
+} BlinkInfo;
 
-
-/*
- * defines and structures used for the HTML parser, and the
- * parsed object list.
- */
-
-/* Mark types */
-#define	M_UNKNOWN	-1
-#define	M_NONE		0
-#define	M_TITLE		1
-#define	M_HEADER_1	2
-#define	M_HEADER_2	3
-#define	M_HEADER_3	4
-#define	M_HEADER_4	5
-#define	M_HEADER_5	6
-#define	M_HEADER_6	7
-#define	M_ANCHOR	8
-#define	M_PARAGRAPH	9
-#define	M_ADDRESS	10
-#define	M_PLAIN_TEXT	11
-#define	M_UNUM_LIST	12
-#define	M_NUM_LIST	13
-#define	M_LIST_ITEM	14
-#define	M_DESC_LIST	15
-#define	M_DESC_TITLE	16
-#define	M_DESC_TEXT	17
-#define	M_PREFORMAT	18
-#define	M_PLAIN_FILE	19
-#define M_LISTING_TEXT	20
-#define M_INDEX		21
-#define M_MENU		22
-#define M_DIRECTORY	23
-#define M_IMAGE		24
-#define M_FIXED		25
-#define M_BOLD		26
-#define M_ITALIC	27
-#define M_EMPHASIZED	28
-#define M_STRONG	29
-#define M_CODE		30
-#define M_SAMPLE	31
-#define M_KEYBOARD	32
-#define M_VARIABLE	33
-#define M_CITATION	34
-#define M_BLOCKQUOTE	35
-#define M_STRIKEOUT	36
-#define M_INPUT		37
-#define M_FORM		38
-#define M_HRULE		39
-#define M_LINEBREAK	40
-#define M_BASE		41
-#define M_SELECT	42
-#define M_OPTION	43
-#define M_TEXTAREA	44
-#define M_TABLE		45
-#define M_CAPTION	46
-#define M_TABLE_HEADER	47
-#define M_TABLE_ROW	48
-#define M_TABLE_DATA	49
-#define M_SUP           50  
-#define M_SUB           51 
-#define M_FIGURE        52 
-#define M_COMMENT       53
-#define M_DOC_HEAD      54 /* amb 2 */
-#define M_UNDERLINED    55 /* amb 2 */
-#define M_DOC_BODY      56 /* amb 2 */
-#define M_FRAME		57
-#define M_MAP		58 /* swp - client side ismap */
-#define M_AREA		59 /* swp - client side ismap */
-
-/* syntax of Mark types */
-#define	MT_TITLE	"title"
-#define	MT_HEADER_1	"h1"
-#define	MT_HEADER_2	"h2"
-#define	MT_HEADER_3	"h3"
-#define	MT_HEADER_4	"h4"
-#define	MT_HEADER_5	"h5"
-#define	MT_HEADER_6	"h6"
-#define	MT_ANCHOR	"a"
-#define	MT_PARAGRAPH	"p"
-#define	MT_ADDRESS	"address"
-#define	MT_PLAIN_TEXT	"xmp"
-#define	MT_UNUM_LIST	"ul"
-#define	MT_NUM_LIST	"ol"
-#define	MT_LIST_ITEM	"li"
-#define	MT_DESC_LIST	"dl"
-#define	MT_DESC_TITLE	"dt"
-#define	MT_DESC_TEXT	"dd"
-#define	MT_PREFORMAT	"pre"
-#define	MT_PLAIN_FILE	"plaintext"
-#define MT_LISTING_TEXT	"listing"
-#define MT_INDEX	"isindex"
-#define MT_MENU		"menu"
-#define MT_DIRECTORY	"dir"
-#define MT_IMAGE	"img"
-#define MT_FIGURE	"fig"
-#define MT_FIXED	"tt"
-#define MT_BOLD		"b"
-#define MT_ITALIC	"i"
-#define MT_EMPHASIZED	"em"
-#define MT_STRONG	"strong"
-#define MT_CODE		"code"
-#define MT_SAMPLE	"samp"
-#define MT_KEYBOARD	"kbd"
-#define MT_VARIABLE	"var"
-#define MT_CITATION	"cite"
-#define MT_BLOCKQUOTE	"blockquote"
-#define MT_STRIKEOUT	"strike"
-#define MT_INPUT	"input"
-#define MT_FORM		"form"
-#define MT_HRULE	"hr"
-#define MT_LINEBREAK	"br"
-#define MT_BASE		"base"
-#define MT_SELECT	"select"
-#define MT_OPTION	"option"
-#define MT_TEXTAREA	"textarea"
-#define MT_TABLE	"table"
-#define MT_CAPTION	"caption"
-#define MT_TABLE_ROW	"tr"
-#define MT_TABLE_HEADER	"th"
-#define MT_TABLE_DATA	"td"
-#define MT_SUP          "sup"
-#define MT_SUB          "sub"
-#define MT_DOC_HEAD     "head" /* amb 2 */
-#define MT_UNDERLINED   "u"    /* amb 2 */
-#define MT_DOC_BODY     "body"
-#define MT_FRAME	"frame"
-#define MT_MAP		"map" /* swp - client side ismap */
-#define MT_AREA		"area" /* swp - client side ismap */
-
-/* anchor tags */
+/* Anchor tags */
 #define	AT_NAME		"name"
 #define	AT_HREF		"href"
-#define	AT_SUBJECT	"subject"
 #define	AT_TITLE	"title"
 
-
-struct mark_up {
-	int type;
-	int is_end;
-	char *start;
-	char *text;
-	char *end;
-	struct mark_up *next;
-};
-
+typedef struct HTMLFrameCallbackStruct { 
+	int reason;	/* 0 = create, 1 = delete */
+} FrameCbData;
 
 /*
  * New resource names
  */
+
 #define	WbNmarginWidth		"marginWidth"
 #define	WbNmarginHeight		"marginHeight"
 #define	WbNtext			"text"
 #define	WbNheaderText		"headerText"
 #define	WbNfooterText		"footerText"
+#define	WbNfooterAnnoText	"footerAnnoText"
 #define	WbNtitleText		"titleText"
 #define	WbNanchorUnderlines	"anchorUnderlines"
 #define	WbNvisitedAnchorUnderlines	"visitedAnchorUnderlines"
@@ -540,6 +665,7 @@ struct mark_up {
 #define	WbNisIndex		"isIndex"
 #define	WbNitalicFont		"italicFont"
 #define	WbNboldFont		"boldFont"
+#define	WbNboldItalicFont	"boldItalicFont"
 #define	WbNfixedFont		"fixedFont"
 #define	WbNmeterFont		"meterFont"
 #define	WbNtoolbarFont		"toolbarFont"
@@ -557,21 +683,31 @@ struct mark_up {
 #define	WbNplainitalicFont	"plainitalicFont"
 #define	WbNlistingFont		"listingFont"
 #define	WbNanchorCallback	"anchorCallback"
-#define	WbNlinkCallback		"linkCallback"
+#define	WbNbaseCallback		"baseCallback"
 #define	WbNsubmitFormCallback	"submitFormCallback"
 #define	WbNpreviouslyVisitedTestFunction "previouslyVisitedTestFunction"
-#define	WbNresolveImageFunction "resolveImageFunction"
-#define	WbNresolveDelayedImage "resolveDelayedImage"
+#define WbNmaxColorsInImage	"maxColorsInImage"
+#define WbNimageCallback	"imageCallback"
+#define WbNgetUrlDataCB		"getUrlDataCB"
+
 #define	WbNpercentVerticalSpace "percentVerticalSpace"
 #define WbNpointerMotionCallback "pointerMotionCallback"
-#define WbNverticalScrollOnRight "verticalScrollOnRight"
-#define WbNhorizontalScrollOnTop "horizontalScrollOnTop"
 #define WbNview			 "view"
 #define WbNverticalScrollBar	 "verticalScrollBar"
 #define WbNhorizontalScrollBar	 "horizontalScrollBar"
-#define WbNsupSubFont            "supSubFont"    /* amb */
 #define WbNbodyColors            "bodyColors"
 #define WbNbodyImages            "bodyImages"
+#define WbNbodyBG                "bodyBG"
+#define WbNfontColors            "fontColors"
+#define WbNfontSizes             "fontSizes"
+#define WbNfontBase              "fontBase"
+#define WbNfontFamily            "fontFamily"
+#define WbNblinkingText          "blinkingText"
+#define WbNblinkTime             "blinkTime"
+#define WbNframeCallback	 "frameCallback"
+#define WbNframeSupport		 "frameSupport"
+#define WbNisFrame		 "isFrame"
+#define WbNscrollBars		 "scrollBars"
 /*
  * New resource classes
  */
@@ -580,6 +716,7 @@ struct mark_up {
 #define	WbCText			"Text"
 #define	WbCHeaderText		"HeaderText"
 #define	WbCFooterText		"FooterText"
+#define	WbCFooterAnnoText	"FooterAnnoText"
 #define	WbCTitleText		"TitleText"
 #define	WbCAnchorUnderlines	"AnchorUnderlines"
 #define	WbCVisitedAnchorUnderlines	"VisitedAnchorUnderlines"
@@ -595,6 +732,7 @@ struct mark_up {
 #define	WbCIsIndex		"IsIndex"
 #define	WbCItalicFont		"ItalicFont"
 #define	WbCBoldFont		"BoldFont"
+#define	WbCBoldItalicFont	"BoldItalicFont"
 #define	WbCFixedFont		"FixedFont"
 #define	WbCMeterFont		"MeterFont"
 #define	WbCToolbarFont		"ToolbarFont"
@@ -612,8 +750,10 @@ struct mark_up {
 #define	WbCPlainitalicFont	"PlainitalicFont"
 #define	WbCListingFont		"ListingFont"
 #define	WbCPreviouslyVisitedTestFunction "PreviouslyVisitedTestFunction"
-#define	WbCResolveImageFunction "ResolveImageFunction"
-#define	WbCResolveDelayedImage "ResolveDelayedImage"
+#define WbCMaxColorsInImage	"MaxColorsInImage"
+#define WbCImageCallback	"ImageCallback"
+#define WbCGetUrlDataCB		"GetUrlDataCB"
+
 #define	WbCPercentVerticalSpace "PercentVerticalSpace"
 #define WbCPointerMotionCallback "PointerMotionCallback"
 #define WbCVerticalScrollOnRight "VerticalScrollOnRight"
@@ -621,16 +761,18 @@ struct mark_up {
 #define WbCView			 "View"
 #define WbCVerticalScrollBar	 "VerticalScrollBar"
 #define WbCHorizontalScrollBar	 "HorizontalScrollBar"
-#define WbCSupSubFont            "SupSubFont"  /* amb */
 #define WbCBodyColors            "BodyColors"
 #define WbCBodyImages            "BodyImages"
+#define WbCBodyBG                "BodyBG"
+#define WbCFontColors            "FontColors"
+#define WbCFontSizes             "FontSizes"
+#define WbCFontBase              "FontBase"
+#define WbCFontFamily            "FontFamily"
+#define WbCBlinkingText          "BlinkingText"
+#define WbCBlinkTime             "BlinkTime"
+#define WbCFrameCallback	 "FrameCallback"
+#define WbCFrameSupport		 "FrameSupport"
+#define WbCIsFrame		 "IsFrame"
+#define WbCScrollBars		 "ScrollBars"
 
-
-typedef struct _HTMLClassRec *HTMLWidgetClass;
-typedef struct _HTMLRec      *HTMLWidget;
-
-extern WidgetClass htmlWidgetClass;
-
-
-#endif /* HTML_H */
-
+#endif /* HTMLW_HTML_H */

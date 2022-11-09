@@ -58,12 +58,13 @@
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
 #ifndef __GUI_H__
 #define __GUI_H__
+
+#ifdef VMS
+/* VMS does not permit long names, so to avoid compilation warnings ... */
+#define mo_gui_check_security_icon_in_win       mo_gui_check_security_icon_in_w
+#endif /* VMS, BSN */
 
 
 void mo_process_external_directive (char *directive, char *url);
@@ -72,11 +73,9 @@ mo_window *mo_next_window (mo_window *);
 mo_window *mo_fetch_window_by_id (int);
 mo_status mo_add_window_to_list (mo_window *);
 char *mo_assemble_help_url (char *);
-mo_status mo_busy (void);
-mo_status mo_not_busy (void);
+char *mo_assemble_help_url_vms (char *);
 mo_status mo_redisplay_window (mo_window *);
 mo_status mo_set_current_cached_win (mo_window *);
-mo_status mo_set_dtm_menubar_functions (mo_window *);
 mo_status mo_delete_window (mo_window *);
 mo_window *mo_open_window (Widget, char *, mo_window *);
 mo_window *mo_duplicate_window (mo_window *);
@@ -89,16 +88,10 @@ void mo_gui_done_with_icon (void);
 void kill_splash();
 void MoCCINewConnection();
 void mo_gui_update_meter(int level,char *text);
-int animateCursor();
-void createBusyCursors(Widget bob);
-void stopBusyAnimation();
 char *MakeFilename();
 long GetCardCount(char *fname);
 int anchor_visited_predicate (Widget, char *);
 char *HTDescribeURL (char *);
-mo_status mo_post_access_document (mo_window *win, char *url,
-                                          char *content_type,
-                                          char *post_data);
 XmxCallbackPrototype (menubar_cb);
 void mo_make_popup();
 
@@ -107,16 +100,11 @@ void mo_gui_check_security_icon(int type);
 
 void mo_assemble_controls(mo_window *win, int detach);
 
-
-
-#ifdef HAVE_DTM
-mo_status mo_register_dtm_blip (void);
-#endif
-
-void mo_do_gui (int, char **);
-
-
-
+void mo_do_gui(int, char **);
+void mo_switch_mode(mo_window *);
+void mo_flush_passwd_cache(mo_window *);
+void pub_anchor_ltd(char *);
+void mo_gui_apply_default_icon(void);
+void mo_delete_frames(mo_window *);
 
 #endif /* not __GUI_H__ */
-

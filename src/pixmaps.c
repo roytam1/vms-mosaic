@@ -52,24 +52,138 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
+#include "../config.h"
 #include "mosaic.h"
 #include "comment.h"
 #include "pixmaps.h"
 #include "xpmread.h"
 #include "xpm.h"
 
-/*for memcpy*/
+/* For memcpy */
+#ifndef VMS
 #include <memory.h>
+#else
+#include <string.h>
+#endif
 
-/*extern unsigned char *ProcessXpm3Data();*/
+#ifdef VMSLOGO
+#include "pixmaps/icon_vms.xpm"
+#else
+#include "pixmaps/icon_1.xpm"
+#endif
+#include "pixmaps/icon_2.xpm"
+#include "pixmaps/icon_3.xpm"
+#include "pixmaps/icon_4.xpm"
+#include "pixmaps/icon_5.xpm"
+#include "pixmaps/icon_6.xpm"
+#include "pixmaps/icon_7.xpm"
+#include "pixmaps/icon_8.xpm"
+#include "pixmaps/icon_9.xpm"
+#include "pixmaps/icon_10.xpm"
+#include "pixmaps/icon_11.xpm"
+#include "pixmaps/icon_12.xpm"
+#include "pixmaps/icon_13.xpm"
+#include "pixmaps/icon_14.xpm"
+#include "pixmaps/icon_15.xpm"
+#include "pixmaps/icon_16.xpm"
+#include "pixmaps/icon_17.xpm"
+#include "pixmaps/icon_18.xpm"
+#include "pixmaps/icon_19.xpm"
+#include "pixmaps/icon_20.xpm"
+#include "pixmaps/icon_21.xpm"
+#include "pixmaps/icon_22.xpm"
+#include "pixmaps/icon_23.xpm"
+#include "pixmaps/icon_24.xpm"
+#include "pixmaps/icon_25.xpm"
+
+#ifdef VMSLOGO
+#include "pixmaps/s_icon_vms.xpm"
+#else
+#include "pixmaps/s_icon_1.xpm"
+#endif
+#include "pixmaps/s_icon_2.xpm"
+#include "pixmaps/s_icon_3.xpm"
+#include "pixmaps/s_icon_4.xpm"
+#include "pixmaps/s_icon_5.xpm"
+#include "pixmaps/s_icon_6.xpm"
+#include "pixmaps/s_icon_7.xpm"
+#include "pixmaps/s_icon_8.xpm"
+#include "pixmaps/s_icon_9.xpm"
+#include "pixmaps/s_icon_10.xpm"
+#include "pixmaps/s_icon_11.xpm"
+#include "pixmaps/s_icon_12.xpm"
+#include "pixmaps/s_icon_13.xpm"
+#include "pixmaps/s_icon_14.xpm"
+#include "pixmaps/s_icon_15.xpm"
+#include "pixmaps/s_icon_16.xpm"
+#include "pixmaps/s_icon_17.xpm"
+#include "pixmaps/s_icon_18.xpm"
+#include "pixmaps/s_icon_19.xpm"
+#include "pixmaps/s_icon_20.xpm"
+#include "pixmaps/s_icon_21.xpm"
+#include "pixmaps/s_icon_22.xpm"
+#include "pixmaps/s_icon_23.xpm"
+#include "pixmaps/s_icon_24.xpm"
+#include "pixmaps/s_icon_25.xpm"
+
+#include "pixmaps/unlock_none.xpm"
+#include "pixmaps/unlock_unknown.xpm"
+#include "pixmaps/lock_kerberos4.xpm"
+#include "pixmaps/lock_kerberos5.xpm"
+#include "pixmaps/lock_basic.xpm"
+#include "pixmaps/lock_domain.xpm"
+#include "pixmaps/lock_md5.xpm"
+#include "pixmaps/lock_login.xpm"
+
+#include "pixmaps/toolbar_back_1.xpm"
+#include "pixmaps/toolbar_forw_1.xpm"
+#include "pixmaps/toolbar_home_1.xpm"
+#include "pixmaps/toolbar_reload_1.xpm"
+#include "pixmaps/toolbar_open_1.xpm"
+#include "pixmaps/toolbar_save_1.xpm"
+#include "pixmaps/toolbar_open_window_1.xpm"
+#include "pixmaps/toolbar_clone_window_1.xpm"
+#include "pixmaps/toolbar_close_window_1.xpm"
+#include "pixmaps/toolbar_hotlist_1.xpm"
+#include "pixmaps/toolbar_news_groups_1.xpm"
+#include "pixmaps/toolbar_news_list_1.xpm"
+#include "pixmaps/toolbar_next_art_1.xpm"
+#include "pixmaps/toolbar_next_thr_1.xpm"
+#include "pixmaps/toolbar_prev_art_1.xpm"
+#include "pixmaps/toolbar_prev_thr_1.xpm"
+#include "pixmaps/toolbar_post_1.xpm"
+#include "pixmaps/toolbar_followup_1.xpm"
+#include "pixmaps/toolbar_search_1.xpm"
+#include "pixmaps/toolbar_print_1.xpm"
+#include "pixmaps/toolbar_ftp_put_1.xpm"
+#include "pixmaps/toolbar_ftp_mkdir_1.xpm"
+#include "pixmaps/tearv.xpm"
+#include "pixmaps/tearh.xpm"
+#include "pixmaps/xm_error.xpm"
+#include "pixmaps/xm_question.xpm"
+#include "pixmaps/xm_information.xpm"
+#include "pixmaps/xm_warning.xpm"
+#include "pixmaps/not_secure.xpm"
+#include "pixmaps/cookie.xpm"
+#include "pixmaps/cookie_large.xpm"
+
+#if !defined(VMS) || defined(__DECC) || defined(__GNUC__)
+#include "pixmaps/splash.xpm"
+#else
+#include "pixmaps/splash_vaxc.xpm"
+#endif /* Big file has too many problems for VAX C, GEC */
 
 extern int installed_colormap;
 extern Colormap installed_cmap;
+extern int Vclass;
+extern Visual *theVisual;
 
-Pixmap IconsBig[25], IconsSmall[25], IconsTom[21], IconsEaster[8];
+Pixmap IconsBig[25], IconsSmall[25];
 
 /* Icons Exported to gui.c */
-Pixmap *IconPix=NULL,*IconPixBig,*IconPixTom,*IconPixSmall,*IconPixEaster;
+Pixmap *IconPix = NULL, *IconPixBig, *IconPixSmall;
 int IconsMade = 0;
 
 Pixmap dialogError, dialogInformation, dialogQuestion, dialogWarning;
@@ -81,12 +195,15 @@ Pixmap toolbarBack, toolbarForward, toolbarHome, toolbarReload,
     tearv, tearh, toolbarPostGRAY, toolbarFollowGRAY,
     toolbarNewsFwd, toolbarNewsFFwd, toolbarNewsRev, toolbarNewsFRev,
     toolbarNewsIndex, toolbarNewsGroups,
-    toolbarNewsFwdGRAY, toolbarNewsFFwdGRAY, toolbarNewsRevGRAY, toolbarNewsFRevGRAY,
-    toolbarNewsIndexGRAY,
-    toolbarFTPput, toolbarFTPmkdir;
+    toolbarNewsFwdGRAY, toolbarNewsFFwdGRAY, toolbarNewsRevGRAY,
+    toolbarNewsFRevGRAY, toolbarNewsIndexGRAY,
+    toolbarFTPput, toolbarFTPmkdir, toolbarCookie;
 
 Pixmap securityKerberos4, securityKerberos5, securityBasic, securityMd5,
-	securityNone, securityUnknown, securityDomain, securityLogin, enc_not_secure;
+    securityNone, securityUnknown, securityDomain, securityLogin,
+    enc_not_secure;
+
+Pixmap internalCookie;
 
 struct pixload_info {
     char **raw;
@@ -144,30 +261,6 @@ struct pixload_info {
     {s_icon24,&IconsSmall[23],0},
     {s_icon25,&IconsSmall[24],0},
 
-    {mag_1_xpm,&IconsTom[0],0},
-    {mag_2_xpm,&IconsTom[1],0},
-    {mag_3_xpm,&IconsTom[2],0},
-    {mag_4_xpm,&IconsTom[3],0},
-    {mag_5_xpm,&IconsTom[4],0},
-    {mag_6_xpm,&IconsTom[5],0},
-    {mag_7_xpm,&IconsTom[6],0},
-    {mag_8_xpm,&IconsTom[7],0},
-    {mag_9_xpm,&IconsTom[8],0},
-    {mag_10_xpm,&IconsTom[9],0},
-    {mag_11_xpm,&IconsTom[10],0},
-    {mag_12_xpm,&IconsTom[11],0},
-    {mag_13_xpm,&IconsTom[12],0},
-    {mag_14_xpm,&IconsTom[13],0},
-    {mag_15_xpm,&IconsTom[14],0},
-    {mag_16_xpm,&IconsTom[15],0},
-    {mag_17_xpm,&IconsTom[16],0},
-    {mag_18_xpm,&IconsTom[17],0},
-    {mag_19_xpm,&IconsTom[18],0},
-    {mag_20_xpm,&IconsTom[19],0},
-    {mag_21_xpm,&IconsTom[20],0},
-
-    EASTER_ARRAY
-
     {unlock_none_xpm,&securityNone,0},
     {unlock_unknown_xpm,&securityUnknown,0},
     {lock_kerberos4_xpm,&securityKerberos4,0},
@@ -207,6 +300,7 @@ struct pixload_info {
     {toolbar_print_1_xpm,&toolbarPrint,0},
     {toolbar_ftp_put_1_xpm,&toolbarFTPput,0},
     {toolbar_ftp_mkdir_1_xpm,&toolbarFTPmkdir,0},
+    {toolbar_cookie_xpm,&toolbarCookie,0},
     
     {tearv_xpm,&tearv,0},        
     {tearh_xpm,&tearh,0},        
@@ -217,9 +311,11 @@ struct pixload_info {
     {xm_warning_xpm,&dialogWarning,0},        
 
     {not_secure_xpm, &enc_not_secure, 0},
-    {NULL, NULL,0}
-};
 
+    {cookie_large_xpm,&internalCookie,0},
+
+    {NULL, NULL, 0}
+};
     
 static GC DrawGC = NULL;
 int IconWidth = 0;
@@ -242,71 +338,71 @@ static int highbit(unsigned long ul);
 static Pixmap PixmapFromData(Widget wid, unsigned char *data, int width,
                              int height, XColor *colrs, int gray);
 
-
 #define PBUF 1024
 /* Quick 'n Dirty XPM reader */
 static char **LoadPixmapFile(char *file)
 {
     char **pdata;
-    char buf[256],*p;
-    int j;
+    char buf[256], *p;
     
     FILE *fp;
 
-    int x,y,c,i;
+    int x, y, c, i;
 
-    if(!(fp = fopen(file,"r"))) {
+    if (!(fp = fopen(file, "r"))) {
         return NULL;
     }
 
-    if(!fgets(buf,PBUF,fp) && strncmp("/* XPM */",buf,9)) {
+    if (!fgets(buf, PBUF, fp) && strncmp("/* XPM */", buf, 9)) {
         return NULL;
     }
 
-    while(!feof(fp)) {
-        if(!fgets(buf,PBUF,fp)) return NULL;
-        if(buf[0]=='"') {
-            
-            if(sscanf(&buf[1],"%d %d %d ",&x,&y,&c) != 3) {
+    while (!feof(fp)) {
+        if (!fgets(buf, PBUF, fp))
+	    return NULL;
+        if (buf[0] == '"') {
+
+            if (sscanf(&buf[1], "%d %d %d ", &x, &y, &c) != 3) {
                 fclose(fp);
                 return NULL;
             }
             
 
-            for(p=&buf[1];*p && *p!='"';p++);
-            if(!*p) {
+            for (p = (&buf[1]); *p && (*p != '"'); p++);
+            if (!*p) {
                 fclose(fp);
                 return NULL;
             } else {  
-                *p=0;
+                *p = 0;
             }
             
             pdata = (char **) malloc(sizeof(char *) * (y+c+2));
             pdata[0] = strdup(&buf[1]);
 
-            for(i=1;i<(y+c+1);i++) {
-                if(feof(fp) || !fgets(buf,PBUF,fp)){
+            for (i=1; i < (y+c+1); i++) {
+                if (feof(fp) || !fgets(buf, PBUF, fp)) {
                     fclose(fp);
                     return NULL;
                 }
                 
-                if(buf[0]=='"') {
-                    for(p=&buf[1];*p && *p!='"';p++);
-                    if(!*p) {
-                        while(i<0) free(pdata[--i]);
+                if (buf[0] == '"') {
+                    for (p = (&buf[1]); *p && (*p != '"'); p++);
+                    if (!*p) {
+                        while (i < 0)
+			    free(pdata[--i]);
                         free(pdata);    
                         fclose(fp);
                         return NULL;
                     } else {
-                        *p=0;
+                        *p = 0;
                     }
                     pdata[i] = strdup(&buf[1]);
                 } else {
-                    i--; /* skip comments, etc */
+                    i--; /* Skip comments, etc */
                 }
                 
             }
-            pdata[y+c+1]=NULL; /*for ease of deletion - trust me. -bjs */
+            pdata[y+c+1] = NULL; /* For ease of deletion - trust me. -bjs */
             fclose(fp);
             
             return pdata;
@@ -316,9 +412,6 @@ static char **LoadPixmapFile(char *file)
 }
 
             
-                
-        
-                
 static XColor def_colrs[256];
 static int init_colors = 1;
 
@@ -333,11 +426,9 @@ FindIconColor(Display *dsp, Colormap colormap, XColor *colr)
 	int rd, gd, bd, dist, mindist;
 	int cindx;
 
-	if (init_colors)
-	{
-		for (i=0; i<256; i++)
-		{
-			def_colrs[i].pixel = -1;
+	if (init_colors) {
+		for (i=0; i < 256; i++) {
+			def_colrs[i].pixel = 2000000000;
 			def_colrs[i].red = 0;
 			def_colrs[i].green = 0;
 			def_colrs[i].blue = 0;
@@ -346,17 +437,11 @@ FindIconColor(Display *dsp, Colormap colormap, XColor *colr)
 	}
 
 	match = XAllocColor(dsp, colormap, colr);
-	if (match == 0)
-	{
+	if (match == 0) {
 		mindist = 196608;		/* 256 * 256 * 3 */
-/*
-		cindx = colr->pixel;
-*/
-		cindx = (-1);
-		for (i=0; i<256; i++)
-		{
-			if (def_colrs[i].pixel == -1)
-			{
+		cindx = -1;
+		for (i=0; i < 256; i++) {
+			if (def_colrs[i].pixel == 2000000000) {
 				continue;
 			}
 			rd = ((int)(def_colrs[i].red >> 8) -
@@ -368,30 +453,24 @@ FindIconColor(Display *dsp, Colormap colormap, XColor *colr)
 			dist = (rd * rd) +
 				(gd * gd) +
 				(bd * bd);
-			if (dist < mindist)
-			{
+			if (dist < mindist) {
 				mindist = dist;
 				cindx = def_colrs[i].pixel;
-				if (dist == 0)
-				{
+				if (dist == 0) {
 					break;
 				}
 			}
 		}
-		if (cindx<0) {
-			colr->pixel=BlackPixel(dsp,
-					       DefaultScreen(dsp));
+		if (cindx < 0) {
+			colr->pixel = BlackPixel(dsp, DefaultScreen(dsp));
 			colr->red = colr->green = colr->blue = 0;
-		}
-		else {
+		} else {
 			colr->pixel = cindx;
 			colr->red = def_colrs[cindx].red;
 			colr->green = def_colrs[cindx].green;
 			colr->blue = def_colrs[cindx].blue;
 		}
-	}
-	else
-	{
+	} else {
 		def_colrs[colr->pixel].pixel = colr->pixel;
 		def_colrs[colr->pixel].red = colr->red;
 		def_colrs[colr->pixel].green = colr->green;
@@ -402,10 +481,9 @@ FindIconColor(Display *dsp, Colormap colormap, XColor *colr)
 
 #define PixFindHash(red, green, blue, h_ptr) \
 	h_ptr = Hash[((((red * 306) + (green * 601) + (blue * 117)) >> 10) >> 8)]; \
-	while(h_ptr != NULL) \
-	{ \
-		if ((h_ptr->pixel[0] == red)&& \
-		    (h_ptr->pixel[1] == green)&& \
+	while (h_ptr) { \
+		if ((h_ptr->pixel[0] == red) && \
+		    (h_ptr->pixel[1] == green) && \
 		    (h_ptr->pixel[2] == blue)) \
 		{ \
 			break; \
@@ -423,8 +501,7 @@ PixAddHash(int red, int green, int blue, int pixval)
 	lum = ((((red * 306) + (green * 601) + (blue * 117)) >> 10) >> 8);
 
 	hash_ptr = (struct color_rec *)XtMalloc(sizeof(struct color_rec));
-	if (hash_ptr == NULL)
-	{
+	if (!hash_ptr) {
 		return;
 	}
 	hash_ptr->pixel[0] = red;
@@ -441,8 +518,7 @@ InitHash(void)
 {
 	int i;
 
-	for (i=0; i<256; i++)
-	{
+	for (i=0; i < 256; i++) {
 		Hash[i] = NULL;
 	}
 }
@@ -461,77 +537,55 @@ highbit(unsigned long ul)
 	return i;
 }
 
-
-
 static Pixmap
 PixmapFromData(Widget wid, unsigned char *data, int width, int height,
                XColor *colrs, int gray)
 {
-	int i,t;
-	int linepad, shiftnum;
-	int shiftstart, shiftstop, shiftinc;
-	int bytesperline;
+	int i, t;
+	int bpp;
+	int shiftnum, shiftstart, shiftstop, shiftinc;
 	int temp;
 	int w, h;
 	XImage *newimage;
-	unsigned char *bit_data, *bitp, *datap;
+	unsigned char *bit_data, *bitp, *datap, *endofline;
 	unsigned char *tmpdata;
 	Pixmap pix;
 	int Mapping[256];
 	XColor tmpcolr;
 	int size;
 	int depth;
-	int Vclass;
-	XVisualInfo vinfo, *vptr;
-	Visual *theVisual;
-	int bmap_order;
 	unsigned long c;
 	int rshift, gshift, bshift;
-
+	int rmask, gmask, bmask;
         
-	if (data == NULL)
-	{
+	if (!data) {
 		return(0);
 	}
 
-	/* find the visual class. */
-	vinfo.visualid = XVisualIDFromVisual(DefaultVisual(XtDisplay(wid),
-		DefaultScreen(XtDisplay(wid))));
-	vptr = XGetVisualInfo(XtDisplay(wid), VisualIDMask, &vinfo, &i);
-	Vclass = vptr->class;
-	XFree((char *)vptr);
-
 	depth = DefaultDepthOfScreen(XtScreen(wid));
 
-        for (i=0; i < 256; i++)
-        {
+        for (i=0; i < 256; i++) {
 		struct color_rec *hash_ptr;
 
                 tmpcolr.red = colrs[i].red;
                 tmpcolr.green = colrs[i].green;
                 tmpcolr.blue = colrs[i].blue;
                 tmpcolr.flags = DoRed|DoGreen|DoBlue;
-                if ((Vclass == TrueColor) || (Vclass == DirectColor))
-                {
+                if ((Vclass == TrueColor) || (Vclass == DirectColor)) {
                         Mapping[i] = i;
-                }
-                else
-                {
+                } else {
 			PixFindHash(tmpcolr.red, tmpcolr.green, tmpcolr.blue,
 				hash_ptr);
-			if (hash_ptr == NULL)
-			{
+			if (!hash_ptr) {
 				FindIconColor(XtDisplay(wid),
-					(installed_colormap ?
-					 installed_cmap :
-					 DefaultColormapOfScreen(XtScreen(wid))),
-					&tmpcolr);
+				       (installed_colormap ?
+					installed_cmap :
+					DefaultColormapOfScreen(XtScreen(wid))),
+				       &tmpcolr);
 				PixAddHash(colrs[i].red, colrs[i].green,
 					colrs[i].blue, tmpcolr.pixel);
 				Mapping[i] = tmpcolr.pixel;
-			}
-			else
-			{
+			} else {
 				Mapping[i] = hash_ptr->pixelval;
 			}
                 }
@@ -541,190 +595,187 @@ PixmapFromData(Widget wid, unsigned char *data, int width, int height,
 	tmpdata = (unsigned char *)malloc(size);
 	datap = data;
 	bitp = tmpdata;
-        if(gray) {
+        if (gray) {
             t = Mapping[(int)*datap];
-            for (i=0; i < size; i++)
-                {
-                    *bitp++ = (i+((i/width)%2))%2?(unsigned char)Mapping[(int)*datap]:t;
+            for (i=0; i < size; i++) {
+                    *bitp++ = (i + ((i/width)%2))%2 ?
+			(unsigned char)Mapping[(int)*datap] : t;
                     datap++;
-                }
+           }
         } else {
-            for (i=0; i < size; i++)
-                {
+            for (i=0; i < size; i++) {
                     *bitp++ = (unsigned char)Mapping[(int)*datap];
                     datap++;
-                }
+            }
         }
               
 	free((char *)data);
 	data = tmpdata;
 
-	switch(depth)
-	{
-	    case 6:
-	    case 8:
-		bit_data = (unsigned char *)malloc(size);
-/*		bcopy(data, bit_data, size);*/
-		memcpy(bit_data, data, size);
-		bytesperline = width;
-		newimage = XCreateImage(XtDisplay(wid),
-			DefaultVisual(XtDisplay(wid),
-				DefaultScreen(XtDisplay(wid))),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 8, bytesperline);
-		break;
-	    case 1:
-	    case 2:
-	    case 4:
-		if (BitmapBitOrder(XtDisplay(wid)) == LSBFirst)
-		{
-			shiftstart = 0;
-			shiftstop = 8;
-			shiftinc = depth;
-		}
-		else
-		{
-			shiftstart = 8 - depth;
-			shiftstop = -depth;
-			shiftinc = -depth;
-		}
-		linepad = 8 - (width % 8);
-		bit_data = (unsigned char *)malloc(((width + linepad) * height)
-				+ 1);
-		bitp = bit_data;
-		datap = data;
-		*bitp = 0;
-		shiftnum = shiftstart;
-		for (h=0; h<height; h++)
-		{
-			for (w=0; w<width; w++)
-			{
-				temp = *datap++ << shiftnum;
-				*bitp = *bitp | temp;
-				shiftnum = shiftnum + shiftinc;
-				if (shiftnum == shiftstop)
-				{
-					shiftnum = shiftstart;
-					bitp++;
-					*bitp = 0;
-				}
-			}
-			for (w=0; w<linepad; w++)
-			{
-				shiftnum = shiftnum + shiftinc;
-				if (shiftnum == shiftstop)
-				{
-					shiftnum = shiftstart;
-					bitp++;
-					*bitp = 0;
-				}
-			}
-		}
-		bytesperline = (width + linepad) * depth / 8;
-		newimage = XCreateImage(XtDisplay(wid),
-			DefaultVisual(XtDisplay(wid),
-				DefaultScreen(XtDisplay(wid))),
-			depth, ZPixmap, 0, (char *)bit_data,
-			(width + linepad), height, 8, bytesperline);
-		break;
-	    /*
-	     * WARNING:  This depth-16 code is donated code for 16-bit
-	     * TrueColor displays.  I have no access to such displays, so I
-	     * can't really test it.
-	     * Donated by:  andrew@icarus.demon.co.uk
-	     * Fixed version donated by:  nosmo@ximage.com (Vince Kraemer)
-	     * ...and patched by GRR
-	     */
-	    case 16:
-		bit_data = (unsigned char *)malloc(size * 2);
-		bitp = bit_data;
-		datap = data;
+	/* This is just about the same as MakeImage in HTMLimages.c ...
+	 * except the color info is in an XColor[] array.
+	 */
 
-		theVisual = DefaultVisual(XtDisplay(wid),
-			DefaultScreen(XtDisplay(wid)));
-		rshift = 15 - highbit(theVisual->red_mask);
-		gshift = 15 - highbit(theVisual->green_mask);
-		bshift = 15 - highbit(theVisual->blue_mask);
-		bmap_order = BitmapBitOrder(XtDisplay(wid));
-
-		for (w = size; w > 0; w--)
-		{
-			temp = (((colrs[(int)*datap].red >> rshift) &
-					theVisual->red_mask) |
-				((colrs[(int)*datap].green >> gshift) &
-					theVisual->green_mask) |
-				((colrs[(int)*datap].blue >> bshift) &
-					theVisual->blue_mask));
-			if (bmap_order == MSBFirst)
-			{
-				*bitp++ = (temp >> 8) & 0xff;
-				*bitp++ = temp & 0xff;
-			}
-			else
-			{
-				*bitp++ = temp & 0xff;
-				*bitp++ = (temp >> 8) & 0xff;
-			}
-
-			datap++;
-		}
-
-		newimage = XCreateImage(XtDisplay(wid),
-			DefaultVisual(XtDisplay(wid),
-				DefaultScreen(XtDisplay(wid))),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 16, 0);
-		break;
-	    case 24:
-		bit_data = (unsigned char *)malloc(size * 4);
-
-		theVisual = DefaultVisual(XtDisplay(wid),
-			DefaultScreen(XtDisplay(wid)));
-		rshift = highbit(theVisual->red_mask) - 7;
-		gshift = highbit(theVisual->green_mask) - 7;
-		bshift = highbit(theVisual->blue_mask) - 7;
-		bmap_order = BitmapBitOrder(XtDisplay(wid));
-
-		bitp = bit_data;
-		datap = data;
-		for (w = size; w > 0; w--)
-		{
-			c =
-			  (((colrs[(int)*datap].red >> 8) & 0xff) << rshift) |
-			  (((colrs[(int)*datap].green >> 8) & 0xff) << gshift) |
-			  (((colrs[(int)*datap].blue >> 8) & 0xff) << bshift);
-
-			datap++;
-
-			if (bmap_order == MSBFirst)
-			{
-				*bitp++ = (unsigned char)((c >> 24) & 0xff);
-				*bitp++ = (unsigned char)((c >> 16) & 0xff);
-				*bitp++ = (unsigned char)((c >> 8) & 0xff);
-				*bitp++ = (unsigned char)(c & 0xff);
-			}
-			else
-			{
-				*bitp++ = (unsigned char)(c & 0xff);
-				*bitp++ = (unsigned char)((c >> 8) & 0xff);
-				*bitp++ = (unsigned char)((c >> 16) & 0xff);
-				*bitp++ = (unsigned char)((c >> 24) & 0xff);
-			}
-		}
-
-		newimage = XCreateImage(XtDisplay(wid),
-			DefaultVisual(XtDisplay(wid),
-				DefaultScreen(XtDisplay(wid))),
-			depth, ZPixmap, 0, (char *)bit_data,
-			width, height, 32, 0);
-		break;
-	    default:
-		newimage = NULL;
+	/* We create the XImage first so that we can rely on Xlib to choose
+	 * the correct bits_per_pixel and scanline width for the image.
+	 * It's OK to pass a NULL data pointer to XCreateImage.
+	 * Note we use a worst-case assumption of bitmap_pad = 32.
+	 */
+	newimage = XCreateImage(XtDisplay(wid), theVisual,
+				depth, ZPixmap, 0, (char *) NULL,
+				width, height, 32, 0);
+	if (newimage) {
+	  /* Allocate data space using scanline width from XCreateImage. */
+	  bit_data = (unsigned char *)malloc(newimage->bytes_per_line * height);
+	  newimage->data = (char *) bit_data;
+	  if (!bit_data) {
+	    XDestroyImage(newimage);
+	    newimage = NULL;
+	  }
 	}
+
+       if (newimage) {
+	/* Fill in the image data. */
+	bpp = newimage->bits_per_pixel;	/* Not always the same as depth! */
+
+	switch (bpp) {
+	case 1:
+	case 2:
+	case 4:
+	  /* FIXME: this code assumes byte_order == bitmap_bit_order */
+	  if (newimage->bitmap_bit_order == LSBFirst) {
+	    shiftstart = 0;
+	    shiftstop = 8;
+	    shiftinc = bpp;
+	  } else {
+	    shiftstart = 8 - bpp;
+	    shiftstop = (-bpp);
+	    shiftinc = (-bpp);
+	  }
+	  datap = data;
+	  bitp = bit_data;
+	  for (h=0; h < height; h++) {
+	    endofline = bitp + newimage->bytes_per_line;
+	    temp = 0;
+	    shiftnum = shiftstart;
+	    for (w=0; w < width; w++) {
+	      temp |= (*datap++)<<shiftnum;
+	      shiftnum += shiftinc;
+	      if (shiftnum == shiftstop) {
+		*bitp++ = (unsigned char) temp;
+		temp = 0;
+		shiftnum = shiftstart;
+	      }
+	    }
+	    if (bitp != endofline) {
+	      /* Dump out last partial byte */
+	      *bitp++ = (unsigned char) temp;
+	      /* zero-pad; probably not really necessary */
+	      while (bitp != endofline)
+		*bitp++ = 0;
+	    }
+	  }
+	  break;
+
+	case 8:
+	  if (newimage->bytes_per_line == width) {
+	    /* Easy if no padding needed */
+	    memcpy(bit_data, data, (width * height));
+	  } else {
+	    /* Copy a scanline at a time; don't bother to fill pad bytes */
+	    datap = data;
+	    bitp = bit_data;
+	    for (h=0; h < height; h++) {
+	      memcpy(bitp, datap, width);
+	      datap += width;
+	      bitp += newimage->bytes_per_line;
+	    }
+	  }
+	  break;
+
+	  /*
+	   * Donated by - nosmo@ximage.com
+	   */
+	case 16:
+	  rmask = theVisual->red_mask;
+	  gmask = theVisual->green_mask;
+	  bmask = theVisual->blue_mask;
+	  rshift = 15-highbit(rmask);
+	  gshift = 15-highbit(gmask);
+	  bshift = 15-highbit(bmask);
+
+	  datap = data;
+	  bitp = bit_data;
+	  if (newimage->byte_order == MSBFirst) {
+	    for (h=0; h < height; h++) {
+	      endofline = bitp + newimage->bytes_per_line;
+	      for (w = width; w > 0; w--) {
+		temp = (int) *datap++;
+		temp = ((colrs[temp].red>>rshift)&rmask)|
+		  ((colrs[temp].green>>gshift)&gmask)|
+		  ((colrs[temp].blue>>bshift)&bmask);
+		*bitp++ = (temp>>8)&0xff;
+		*bitp++ = temp&0xff;
+	      }
+	      bitp = endofline;
+	    }
+	  } else {
+	    for (h=0; h < height; h++) {
+	      endofline = bitp + newimage->bytes_per_line;
+	      for (w = width; w > 0; w--) {
+		temp = (int) *datap++;
+		temp = ((colrs[temp].red>>rshift)&rmask)|
+		  ((colrs[temp].green>>gshift)&gmask)|
+		  ((colrs[temp].blue>>bshift)&bmask);
+		*bitp++ = temp&0xff;
+		*bitp++ = (temp>>8)&0xff;
+	      }
+	      bitp = endofline;
+	    }
+	  }
+	  break;
+
+	case 32:
+	  /* bletcherous code ... assumes masks are 8 bits wide. */
+	  rshift = highbit(theVisual->red_mask)-7;
+	  gshift = highbit(theVisual->green_mask)-7;
+	  bshift = highbit(theVisual->blue_mask)-7;
+
+	  datap = data;
+	  bitp = bit_data;
+	  for (h=0; h < height; h++) {
+	    endofline = bitp + newimage->bytes_per_line;
+	    for (w = width; w > 0; w--) {
+	      temp = (int) *datap++;
+	      c = (((colrs[temp].red>>8)&0xff)<<rshift)|
+		(((colrs[temp].green>>8)&0xff)<<gshift)|
+		(((colrs[temp].blue>>8)&0xff)<<bshift);
+
+	      if (newimage->byte_order == MSBFirst) {
+		*bitp++ = (unsigned char)((c>>24)&0xff);
+		*bitp++ = (unsigned char)((c>>16)&0xff);
+		*bitp++ = (unsigned char)((c>>8)&0xff);
+		*bitp++ = (unsigned char)(c&0xff);
+	      } else {
+		*bitp++ = (unsigned char)(c&0xff);
+		*bitp++ = (unsigned char)((c>>8)&0xff);
+		*bitp++ = (unsigned char)((c>>16)&0xff);
+		*bitp++ = (unsigned char)((c>>24)&0xff);
+	      }
+	    }
+	    bitp = endofline;
+	  }
+	  break;
+
+	default:
+	  XDestroyImage(newimage);
+	  newimage = NULL;
+	}
+       }
+
 	free((char *)data);
 
-	if (newimage != NULL)
-	{
+	if (newimage) {
 		GC drawGC;
 
 		pix = XCreatePixmap(XtDisplay(wid), XtWindow(wid),
@@ -737,53 +788,49 @@ PixmapFromData(Widget wid, unsigned char *data, int width, int height,
 		XFreeGC(XtDisplay(wid), drawGC);
 		XDestroyImage(newimage);
 		return(pix);
-	}
-	else
-	{
+	} else {
 		return(0);
 	}
 }
 
-static int been_here=0;
+static int been_here = 0;
 
 static unsigned long p[256];
 static int j;
 
 void ReleaseSplashColors(Widget wid)
 {
-    XFreeColors(dsp,(installed_colormap ?
+    XFreeColors(dsp, (installed_colormap ?
 		     installed_cmap :
-		     DefaultColormapOfScreen(XtScreen(wid))),p,j,0);
+		     DefaultColormapOfScreen(XtScreen(wid))), p, j, 0);
 }
-
     
 
-/* try to alloc *colorcount colors.
-   set *colorcount to 1 if ok.
-   free colors if allocated.
-   load a pixmap and then free its colors if *colorcount = 0*/
-
+/* Try to alloc *colorcount colors.
+   Set *colorcount to 1 if ok.
+   Free colors if allocated.
+   Load a pixmap and then free its colors if *colorcount = 0
+*/
 Pixmap LoadSplashXPM(Widget wid, int *colorcount)
 {
     unsigned char *data;
-    int indx, w, h, bg;
+    int w, h, bg;
     XColor colrs[256];
     int i;
-    
     Pixmap r;
 
-        /* try to grab *colorcount colors */
-    if(XAllocColorCells(dsp,(installed_colormap ?
+    /* Try to grab *colorcount colors */
+    if (XAllocColorCells(dsp, (installed_colormap ?
 			     installed_cmap :
 			     DefaultColormapOfScreen(XtScreen(wid))),
-                        False ,NULL,0, p, *colorcount)){
-        XFreeColors(dsp,(installed_colormap ?
+                        False, NULL, 0, p, *colorcount)) {
+        XFreeColors(dsp, (installed_colormap ?
 			 installed_cmap :
 			 DefaultColormapOfScreen(XtScreen(wid))),
-                    p,*colorcount,0);
+                    p, *colorcount, 0);
         *colorcount = 1;
     } else {
-	if(DefaultDepthOfScreen(XtScreen(wid))==24)
+	if (DefaultDepthOfScreen(XtScreen(wid)) == 24)
             *colorcount = 1;
         else
             *colorcount = 0;
@@ -792,59 +839,58 @@ Pixmap LoadSplashXPM(Widget wid, int *colorcount)
     InitHash();
     
     data = ProcessXpm3Data(wid, splash_xpm, &w, &h, colrs, &bg);
-    r = PixmapFromData(wid, data, w, h, colrs,0);
+    r = PixmapFromData(wid, data, w, h, colrs, 0);
     init_colors = 1;
-    for(i=0,j=0;i<256;i++)
-        if(def_colrs[i].pixel != -1)
+    for (i=0, j=0; i < 256; i++) {
+        if (def_colrs[i].pixel != 2000000000)
             p[j++] = def_colrs[i].pixel;
-    if(!*colorcount)
-        XFreeColors(dsp,(installed_colormap ?
+    }
+    if (!*colorcount)
+        XFreeColors(dsp, (installed_colormap ?
 			 installed_cmap :
-			 DefaultColormapOfScreen(XtScreen(wid))),p,j,0);
+			 DefaultColormapOfScreen(XtScreen(wid))), p, j, 0);
     return r;
 }
 
 
 void MakePixmaps(Widget wid)
 {
-    int i,j;
+    int i, j;
     unsigned char *data;
     char **pdata;
-    int indx, w, h, bg;
+    int w, h, bg;
     XColor colrs[256];
 
     int pix_count = get_pref_int(ePIX_COUNT);
     char *pix_basename = get_pref_string(ePIX_BASENAME);
     int number_of_frames = NUMBER_OF_FRAMES;
     
-
     if (!been_here) {
-        been_here=1;        
+        been_here = 1;        
         InitHash();
     }
     
-        /* load pixmaps */
-    for(i=0;pix_info[i].raw;i++) {
+    /* Load pixmaps */
+    for (i=0; pix_info[i].raw; i++) {
         data = ProcessXpm3Data(wid, pix_info[i].raw, &w, &h, colrs, &bg);
-        *(pix_info[i].handle) = PixmapFromData(wid, data, w, h, colrs, pix_info[i].gray);
+        *(pix_info[i].handle) = PixmapFromData(wid, data, w, h, colrs,
+		pix_info[i].gray);
     }
 
     IconPixSmall = IconsSmall;
     IconPixBig = IconsBig;
-    IconPixTom = IconsTom;
-    IconPixEaster = IconsEaster;
 
-    if(pix_basename && strcmp("default",pix_basename) && (pix_count > 0)) {
+    if (pix_basename && strcmp("default", pix_basename) && (pix_count > 0)) {
 
         char *fname;
 
-        IconPixBig = (Pixmap *) malloc(sizeof(Pixmap)*pix_count);
-        fname = (char *) malloc(strlen(pix_basename)+8);
+        IconPixBig = (Pixmap *) malloc(sizeof(Pixmap) * pix_count);
+        fname = (char *) malloc(strlen(pix_basename) + 8);
         
-        for (i=0; i<pix_count; i++) {
-            sprintf(fname,"%s%d.xpm",pix_basename,i+1);
-            if(!(pdata=LoadPixmapFile(fname))){
-                fprintf(stderr,"Could not load pixmap '%s'.\n",fname);
+        for (i=0; i < pix_count; i++) {
+            sprintf(fname, "%s%d.xpm", pix_basename, i+1);
+            if (!(pdata = LoadPixmapFile(fname))) {
+                fprintf(stderr, "Could not load pixmap '%s'.\n", fname);
                 free(IconPixBig);
                 IconPixBig = IconsBig;
                 set_pref(ePIX_COUNT, (void *)&number_of_frames);
@@ -854,17 +900,17 @@ void MakePixmaps(Widget wid)
             data = ProcessXpm3Data(wid, pdata, &w, &h, colrs, &bg);
             IconPixBig[i] = PixmapFromData(wid, data, w, h, colrs,0);
             
-            if ((IconWidth == 0)||(IconHeight == 0)) { 
+            if ((IconWidth == 0) || (IconHeight == 0)) { 
                 IconWidth = w; IconHeight = h; 
             }
             
-                /* delete the temp pixmap data */
-            for(j=0;pdata[j];j++) free(pdata[j]);
+            /* Delete the temp pixmap data */
+            for (j=0; pdata[j]; j++)
+		free(pdata[j]);
             free(pdata);
         }
         free(fname);   
-    }
-    else {
+    } else {
         set_pref(ePIX_COUNT, &number_of_frames);
     }
 
@@ -878,7 +924,6 @@ void DrawSecurityPixmap(Widget wid, Pixmap pix) {
 /*
 	XmxApplyPixmapToLabelWidget(wid,pix);
 */
-
 	XtVaSetValues(wid,
 		      XmNlabelPixmap,
 		      pix,
@@ -897,8 +942,7 @@ AnimatePixmapInWidget(Widget wid, Pixmap pix)
 	Arg arg[5];
 	int x, y;
 
-	if ((WindowWidth == 0)||(WindowHeight == 0))
-	{
+	if ((WindowWidth == 0) || (WindowHeight == 0)) {
 		Dimension w, h;
 
 		argcnt = 0;
@@ -909,19 +953,16 @@ AnimatePixmapInWidget(Widget wid, Pixmap pix)
 		WindowHeight = h;
 	}
 
-	if (DrawGC == NULL)
-	{
+	if (DrawGC == NULL) {
 		DrawGC = XCreateGC(XtDisplay(wid), XtWindow(wid), 0, NULL);
 		XSetFunction(XtDisplay(wid), DrawGC, GXcopy);
 	}
 	x = (WindowWidth - IconWidth) / 2;
-	if (x < 0)
-	{
+	if (x < 0) {
 		x = 0;
 	}
 	y = (WindowHeight - IconHeight) / 2;
-	if (y < 0)
-	{
+	if (y < 0) {
 		y = 0;
 	}
 	XCopyArea(XtDisplay(wid),
