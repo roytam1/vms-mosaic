@@ -24,46 +24,41 @@
 extern int www2Trace;
 #endif
 
-PRIVATE HTAtom * hash_table[HASH_SIZE];
+PRIVATE HTAtom *hash_table[HASH_SIZE];
 PRIVATE BOOL initialised = NO;
 
-#ifdef __STDC__
-PUBLIC HTAtom * HTAtom_for(char * string)
-#else
-PUBLIC HTAtom * HTAtom_for(string)
-    char * string;
-#endif
+PUBLIC HTAtom *HTAtom_for(char *string)
 {
     int hash;
-    WWW_CONST char * p;
-    HTAtom * a;
+    WWW_CONST char *p;
+    HTAtom *a;
 
     /* Bug hack. */
     if (!string || !*string)
-      string = strdup ("blargh");
+        string = strdup("blargh");
     
     /*		First time around, clear hash table
     */
     if (!initialised) {
         int i;
-	for (i=0; i<HASH_SIZE; i++)
+
+	for (i = 0; i < HASH_SIZE; i++)
 	    hash_table[i] = (HTAtom *) 0;
 	initialised = YES;
     }
     
     /*		Generate hash function
     */
-    for(p=string, hash=0; *p; p++) {
+    for (p = string, hash = 0; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
-    }
     
     /*		Search for the string in the list
     */
-    for (a=hash_table[hash]; a; a=a->next) {
-	if (0==strcmp(a->name, string)) {
+    for (a = hash_table[hash]; a; a = a->next) {
+	if (!strcmp(a->name, string)) {
 #ifndef DISABLE_TRACE
-    	    if (www2Trace) fprintf(stderr,
-	    	"HTAtom: Old atom %p for `%s'\n", a, string);
+    	    if (www2Trace)
+		fprintf(stderr,	"HTAtom: Old atom %p for `%s'\n", a, string);
 #endif
 	    return a;				/* Found: return it */
 	}
@@ -72,46 +67,41 @@ PUBLIC HTAtom * HTAtom_for(string)
     /*		Generate a new entry
     */
     a = (HTAtom *)malloc(sizeof(*a));
-    if (a == NULL) outofmem(__FILE__, "HTAtom_for");
-    a->name = (char *)malloc(strlen(string)+1);
-    if (a->name == NULL) outofmem(__FILE__, "HTAtom_for");
+    if (a == NULL)
+	outofmem(__FILE__, "HTAtom_for");
+    a->name = (char *)malloc(strlen(string) + 1);
+    if (a->name == NULL)
+	outofmem(__FILE__, "HTAtom_for");
     strcpy(a->name, string);
     a->next = hash_table[hash];		/* Put onto the head of list */
     hash_table[hash] = a;
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr, "HTAtom: New atom %p for `%s'\n", a, string);
+    if (www2Trace)
+	fprintf(stderr, "HTAtom: New atom %p for `%s'\n", a, string);
 #endif
     return a;
 }
 
 
-#ifdef __STDC__
-PUBLIC HTAtom * HTAtom_exists(char * string)
-#else
-PUBLIC HTAtom * HTAtom_exists(string)
-    char * string;
-#endif
+PUBLIC HTAtom *HTAtom_exists(char *string)
 {
     int hash;
-    WWW_CONST char * p;
-    HTAtom * a;
+    WWW_CONST char *p;
+    HTAtom *a;
     
-    if (!initialised) {
-      return NULL;
-    }
+    if (!initialised)
+        return NULL;
     
     /*		Generate hash function
     */
-    for(p=string, hash=0; *p; p++) {
+    for (p = string, hash = 0; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
-    }
     
     /*		Search for the string in the list
     */
-    for (a=hash_table[hash]; a; a=a->next) {
-	if (0==strcmp(a->name, string)) {
+    for (a = hash_table[hash]; a; a = a->next) {
+	if (!strcmp(a->name, string))
 	    return a;				/* Found: return it */
-	}
     }
     
     return NULL;

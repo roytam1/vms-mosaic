@@ -446,3 +446,198 @@ From VMS 3.6 to VMS 3.6-1
  o Changed to use TrueColor when default visual is DirectColor
  o Improved table width calculations
  o Various bug and file leak fixes
+
+From VMS 3.6-1 to VMS 3.6-2
+...............
+
+ o Added file LOCAL.CONFIG for local configuration changes
+ o Added preference setting for the image delay file name
+ o Added support for 8 bit (or less) uncompressed BMP images
+ o Changed to save binary files as fixed 512 instead of stream LF
+ o URL: window is now updated before page finishes loading
+ o Improved cookie support
+ o Improved font size and color support in tables
+ o Fixed News XOVER support
+ o Various bug and memory leak fixes
+
+From VMS 3.6-2 to VMS 3.7
+...............
+
+ o Added support for IA64
+ o Added support for Compaq/HP SSL
+ o Added support for Motif 1.2-6, 1.3, 1.3-1 and 1.4-1
+ o Added support for 24 bit uncompressed BMP images
+ o Added support for BMP images to internal image viewer
+ o Added support for FACE in <BASEFONT> tags
+ o Added preference and menu option to enable/disable hotkeys
+ o Added preference setting for maximum number of cookies
+ o Added preference setting for maximum cookies per domain
+ o Added preference for invalid cookie prompts
+ o Added preference to override browser safe colors if TrueColor visual
+ o Added support for &tilde
+ o Added partial support for &rarr, &larr, &uarr, &darr and &bull
+ o Added detection of <?xml tags
+ o Fixed problem where inline frames displayed on top of the scroll bars
+ o Fixed scroll bar tracking during reloads
+ o Upgraded PNG library to version 1.0.14
+ o Upgraded ZLIB library to version 1.2.1
+ o Updated the DOCUMENTS.MENU file and the online help
+ o Updated default Usenet search and List directory URLs
+ o Removed CCI option from Debug Menu
+ o Various bug fixes
+
+From VMS 3.7 to VMS 3.8
+...............
+
+ o Added support for Motif 1.5
+ o Added Stop button to toolbar to stop loading or animations. 
+ o Added open in new window option to Open Document dialog
+ o Added support for ID in all tags
+ o Added support for image alpha channel transparency
+ o Added support for compressed (4 and 8 bit) BMP images
+ o Added support for OS/2, 16 bit, and 32 bit BMP images
+ o Added support for MIME types "image/x-bmp" and "image/x-ms-bmp"
+ o Added cookie permissions file (MOSAIC.HOSTPERM) and preference 
+ o Added Cookie Jar Manager option to update the cookie files
+ o Added cookie and cookie domain counters to Cookie Jar Manager
+ o Added Map and Auction search selections to Navigate menu
+ o Added support for crimson and indigo as named colors 
+ o Added support for &apos, &circ, &minus and &ndash
+ o Added partial support for &dagger, &lowast, &ldquo, &lsaquo,
+   &lsquo, &rdquo, &rsaquo and &rsquo
+ o Added preference setting for text blink time
+ o Added preference setting for form button background color
+ o Changed the default background color from gray to white 
+ o Changed cookie domain list to a balanced binary tree
+ o Changed to display and store cookie domains in alphabetical order
+ o Changed to strip carriage returns, linefeeds and tabs out of URLs
+ o Changed to escape blanks in image URLs
+ o Changed default web search engine to Google
+ o Fixed problem with busy cursor not resetting after window resize
+ o Improved the about: URL feature
+ o Improved news memory allocation
+ o Updated the comment card
+ o Eliminated several Informational compiler error messages in LIBJPEG
+ o Corrected problems in MAKE_MOSAIC.COM detected by DCL_CHECK
+ o Speeded up table width calculation
+
+From VMS 3.8 to VMS 3.8-1
+...............
+
+ o Added architecture type to /VERSION information
+ o MAKE_MOSAIC.COM sets DCL parse style to TRADITIONAL
+ o Fixed crashes caused by empty cookie file
+ o Various bug fixes
+
+From VMS 3.8-1 to VMS 3.9
+...............
+
+ o Window title is now updated as soon as <TITLE> is processed
+ o Added verification of SSL server certificates
+ o Added preference and menu option for SSL certificate verification
+ o Added support for HTTP refresh headers
+ o Added detection of UTF-8 encoded pages
+ o Added support for UTF-8 encoded ASCII characters
+ o Added partial support for UTF-8 encoded left/right arrows, dagger,
+   em/en dashes, bullet, ellipsis, euro, trademark and quote marks
+ o Added native color quantization with Floyd-Steinberg dithering
+   for PNG and BMP RGB images 
+ o Added support for Version 4 and 5 Windows BMP images
+ o Added support for transparent BMP images
+ o Added support for inline frames in tables
+ o Added preference settings for the hotlist menu's height and width 
+ o Changed default hotlist menu height to 502
+ o Changed the Document Links scroll window height to 200
+ o Added support for "about:blank" for use by Google Groups
+ o Added partial support for &Dagger, &euro, &hellip, &mdash and &trade
+ o Improved support for &bull, &larr and &rarr
+ o Added workaround for bug in the ProFTPD ftp server
+ o Added cookieTrace trace option
+ o Changed alpha channel transparancy processing to use 24 bit
+   color quantization with Floyd-Steinberg dithering 
+ o Changed to escape spaces and control characters in URLs
+ o Increased the default ftp filename display length to 26
+ o Fixed crash caused by background images with very large dimensions
+ o Fixed printing of pages with inline frames
+ o Fixed problem with username/password prompts on secure pages
+ o Fixed problem with form button background color in tables
+ o Rewrote and improved performance of ParseMarkType routine
+ o Overhauled the ftp support code including many bug fixes
+ o Reworked XPM image support using LibXpm version 3.4k code
+ o Upgraded PNG library to version 1.0.18
+ o Upgraded ZLIB library to version 1.2.3
+ o Colorized the FTP toolbar icons
+ o Colorized the Error and Question dialog pixmaps
+ o Optimized preallocation of memory for markup and formatting elements
+ o Added preference settings for markup and element preallocation
+ o Restored support for Motif 1.1
+ o Cleaned up history file processing
+ o Cleaned up mailto code
+ o Various bug, memory leak and socket leak fixes
+ o Various source reformating and cleanups
+
+From VMS 3.9 to VMS 4.0
+...............
+
+ o Added support for <FIELDSET>, <LEGEND>, <LABEL>, <OPTGROUP>,
+   <COL>, <COLGROUP>, <DEL> and <INS> tags
+ o Added support for <BUTTON> tags (text content only)
+ o Added support for LABEL in <OPTION> tags
+ o Added support for FRAME and RULES in <TABLE> tags
+ o Added detection of UTF-8 character set specified in <META> tags
+ o Added support and preference setting for MenuBar tearoff menus
+ o Added tooltip (aka balloon) help for the toolbar, cookie jar manager
+   and various menus
+ o Added tooltip support for TITLE in span, image, anchor and form tags
+ o Added preference and menu option to enable/disable tooltip help
+ o Added preference settings for tooltip foreground and background
+   colors, font face, shape and popup/popdown delay times
+ o Added Postscript printing of form text content and button labels
+ o Added Postscript printing support for the Symbol font
+ o Added Postscript printing support for SIZE and NOSHADE in <HR> tags
+ o Added Postscript printing of square and block bullets
+ o Added support and preference setting for duplex Postscript printing
+ o Added support for HTML tags as text in form text areas 
+ o Added full support for &hellip, &mdash, &trade, &harr, &larr,
+   &rarr, &uarr, &darr, &lozenge, &prime, &Prime, &fnof, &clubs,
+   &diams, &hearts and &spades
+ o Added full support for UTF-8 encoded left/right arrows, em dash,
+   ellipsis and trademark
+ o Added feedback messages for images which are too large
+ o Added 32x32 and 75x75 pixmaps for the desktop icon
+ o Added detection of missing MOSAIC.DAT
+ o Added support for the XHTML <BR/> tag with missing space
+ o Added the LIBLITECLUE library
+ o Fixed slow drag scrolling of pages with lots of form widgets
+ o Fixed DCL qualifiers which didn't work with preferences enabled
+ o Fixed major GC (Graphics Context) leak and reduced GC allocations 
+ o Fixed hangs caused by broken https servers doing keepalive
+   on redirects
+ o Eliminated progress meter flickering
+ o Changed to limit Mosaic's size preferences to the screen size
+ o Automatically rescales large images to the maximum pixmap dimension
+   preferences if they are set non-zero
+ o Fixed failure of frame loading to abort
+ o Fixed failure of animations in inline frames to abort
+ o Fixed size calculation problems with inline frames in tables
+ o Improved support for NOSHADE in <HR> tags
+ o Improved search text positioning in source view window
+ o Eliminated underlining and overstriking of leading spaces
+ o Reduced space between captions and tables
+ o Changed to display large option menus as scrolled lists
+ o Changed to not rewrite unmodified hotlist at exit
+ o Changed to allow form elements outside of forms
+ o Changed NOTRACE builds to use separate work directories
+ o Changed to ignore non-standard <NOINDEX> tags
+ o Colorized the Information and Warning dialog pixmaps
+ o Made minor changes to the Menubar to make it more consistant with
+   the Motif 1.2 Style Guide
+ o Replaced Topica with Yahoo Groups on the navigation menu
+ o Disabled mouse button 2 "drag and drop" on icons and form buttons
+ o Registers the "default" language procedure with XtSetLanguageProc
+ o Progress meter now works with Motif 1.1
+ o Eliminated use of Motif gadgets in the MenuBar
+ o Reduced by ten the number of types sent in http Accept: headers
+ o Eliminated all use of the caddr_t C type
+ o Various bug and memory leak fixes
+ o Various source reformating and cleanups

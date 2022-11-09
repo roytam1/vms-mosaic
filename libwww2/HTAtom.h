@@ -23,26 +23,14 @@
 
 typedef struct _HTAtom HTAtom;
 struct _HTAtom {
-        HTAtom *        next;
-        char *          name;
-}; /* struct _HTAtom */
+        HTAtom *next;
+        char   *name;
+};
 
+extern HTAtom *HTAtom_for(char *string);
 
-#ifdef __STDC__
-extern HTAtom * HTAtom_for(char * string);
-#else
-extern HTAtom * HTAtom_for();
-#endif
-
-#ifdef __STDC__
-extern HTAtom * HTAtom_exists(char * string);
-#else
-extern HTAtom * HTAtom_exists();
-#endif
+extern HTAtom *HTAtom_exists(char *string);
 
 #define HTAtom_name(a) ((a)->name)
 
-#endif  /* HTATOM_H */
-/*
-
-    */
+#endif

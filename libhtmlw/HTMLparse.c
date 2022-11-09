@@ -54,7 +54,9 @@
 #include "../config.h"
 
 /* Copyright (C) 1997 - G.Dauphin
- * Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project
+ *
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+ * The VMS Mosaic Project
  */
 
 #include <stdio.h>
@@ -66,6 +68,11 @@
 #include "HTMLmiscdefs.h"
 #include "HTMLP.h"
 #include "HTMLPutil.h"
+
+#if defined(MULTINET) && defined(__DECC) && (__VMS_VER >= 70000000)
+#define strdup  decc$strdup
+#endif
+extern char *strdup();
 
 #include "../libnut/str-tools.h"
 
@@ -101,126 +108,164 @@ unsigned char map_table[256] = {
     254,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,
     239,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255};
 
-#define TOLOWER(x)	(map_table[x])
+#define TOLOWER(x)  (map_table[x])
 
 /* Locale-independent /Stellan */
-#define ISSPACE(x)	( (x)>0 && ( (x)<=' ' ) || ((x)>=127) && ((x)<160) )
+#define ISSPACE(x)  ((x) > 0 && ((x) <= ' ') || ((x) >= 127) && ((x) < 160))
 
 typedef struct amp_esc_rec {
 	char *tag;
 	char value;
+	char *string;
 } AmpEsc;
+
+static char *basetarget;
+static MarkInfo *mlist;
+static MarkInfo *currentmark;
+static charset_is_UTF8 = 0;
 
 #if (defined(VMS) && (__DECC_VER >= 50790004))
 #pragma message disable(INTCONSTTRUNC)
 #endif
 static AmpEsc AmpEscapes[] = {
-	{"lt", '<'},
-	{"LT", '<'},
-	{"gt", '>'},
-	{"GT", '>'},
-	{"amp", '&'},
-	{"AMP", '&'},
-	{"quot", QUOT_CONST},
-	{"QUOT", QUOT_CONST},
-	{"nbsp", NBSP_CONST},
-	{"iexcl", '\241'},
-	{"cent", '\242'},
-	{"pound", '\243'},
-	{"curren", '\244'},
-	{"yen", '\245'},
-	{"brvbar", '\246'},
-	{"sect", '\247'},
-	{"uml", '\250'},
-	{"copy", '\251'},
-	{"ordf", '\252'},
-	{"laquo", '\253'},
-	{"not", '\254'},
-	{"shy", '\255'},
-	{"reg", '\256'},
-	{"macr", '\257'},
-	{"hibar", '\257'},
-	{"deg", '\260'},
-	{"plusmn", '\261'},
-	{"sup2", '\262'},
-	{"sup3", '\263'},
-	{"acute", '\264'},
-	{"micro", '\265'},
-	{"para", '\266'},
-	{"middot", '\267'},
-	{"cedil", '\270'},
-	{"sup1", '\271'},
-	{"ordm", '\272'},
-	{"raquo", '\273'},
-	{"frac14", '\274'},
-	{"frac12", '\275'},
-	{"frac34", '\276'},
-	{"iquest", '\277'},
-	{"Agrave", '\300'},
-	{"Aacute", '\301'},
-	{"Acirc", '\302'},
-	{"Atilde", '\303'},
-	{"Auml", '\304'},
-	{"Aring", '\305'},
-	{"AElig", '\306'},
-	{"Ccedil", '\307'},
-	{"Egrave", '\310'},
-	{"Eacute", '\311'},
-	{"Ecirc", '\312'},
-	{"Euml", '\313'},
-	{"Igrave", '\314'},
-	{"Iacute", '\315'},
-	{"Icirc", '\316'},
-	{"Iuml", '\317'},
-	{"ETH", '\320'},
-	{"Ntilde", '\321'},
-	{"Ograve", '\322'},
-	{"Oacute", '\323'},
-	{"Ocirc", '\324'},
-	{"Otilde", '\325'},
-	{"Ouml", '\326'},
-	{"times", '\327'},
-	{"Oslash", '\330'},
-	{"Ugrave", '\331'},
-	{"Uacute", '\332'},
-	{"Ucirc", '\333'},
-	{"Uuml", '\334'},
-	{"Yacute", '\335'},
-	{"THORN", '\336'},
-	{"szlig", '\337'},
-	{"agrave", '\340'},
-	{"aacute", '\341'},
-	{"acirc", '\342'},
-	{"atilde", '\343'},
-	{"auml", '\344'},
-	{"aring", '\345'},
-	{"aelig", '\346'},
-	{"ccedil", '\347'},
-	{"egrave", '\350'},
-	{"eacute", '\351'},
-	{"ecirc", '\352'},
-	{"euml", '\353'},
-	{"igrave", '\354'},
-	{"iacute", '\355'},
-	{"icirc", '\356'},
-	{"iuml", '\357'},
-	{"eth", '\360'},
-	{"ntilde", '\361'},
-	{"ograve", '\362'},
-	{"oacute", '\363'},
-	{"ocirc", '\364'},
-	{"otilde", '\365'},
-	{"ouml", '\366'},
-	{"divide", '\367'},
-	{"oslash", '\370'},
-	{"ugrave", '\371'},
-	{"uacute", '\372'},
-	{"ucirc", '\373'},
-	{"uuml", '\374'},
-	{"yacute", '\375'},
-	{"thorn", '\376'},
-	{"yuml", '\377'},
-	{NULL, '\0'},
+	{"lt", '<', NULL},
+	{"LT", '<', NULL},
+	{"gt", '>', NULL},
+	{"GT", '>', NULL},
+	{"amp", '&', NULL},
+	{"AMP", '&', NULL},
+	{"apos", '\47', NULL},
+	{"circ", '^', NULL},
+	{"dagger", '+', NULL},
+	{"Dagger", '+', "++"},
+	{"ndash", '-', NULL},
+	{"ldquo", QUOT_CONST, NULL},
+	{"lsaquo", '<', NULL},
+	{"lsquo", '\47', NULL},
+	{"lowast", '*', NULL},
+	{"minus", '-', NULL},
+	{"quot", QUOT_CONST, NULL},
+	{"QUOT", QUOT_CONST, NULL},
+	{"rdquo", QUOT_CONST, NULL},
+	{"rsaquo", '>', NULL},
+	{"rsquo", '\47', NULL},
+	{"tilde", '\176', NULL},
+	{"nbsp", NBSP_CONST, NULL},	/* '\240' */
+	{"iexcl", '\241', NULL},
+	{"cent", '\242', NULL},
+	{"pound", '\243', NULL},
+	{"curren", '\244', NULL},
+	{"yen", '\245', NULL},
+	{"brvbar", '\246', NULL},
+	{"sect", '\247', NULL},
+	{"uml", '\250', NULL},
+	{"copy", '\251', NULL},
+	{"ordf", '\252', NULL},
+	{"laquo", '\253', NULL},
+	{"not", '\254', NULL},
+	{"shy", '\255', NULL},
+	{"reg", '\256', NULL},
+	{"macr", '\257', NULL},
+	{"hibar", '\257', NULL},
+	{"deg", '\260', NULL},
+	{"plusmn", '\261', NULL},
+	{"sup2", '\262', NULL},
+	{"sup3", '\263', NULL},
+	{"acute", '\264', NULL},
+	{"micro", '\265', NULL},
+	{"para", '\266', NULL},
+	{"middot", '\267', NULL},
+	{"cedil", '\270', NULL},
+	{"sup1", '\271', NULL},
+	{"ordm", '\272', NULL},
+	{"raquo", '\273', NULL},
+	{"frac14", '\274', NULL},
+	{"frac12", '\275', NULL},
+	{"frac34", '\276', NULL},
+	{"iquest", '\277', NULL},
+	{"Agrave", '\300', NULL},
+	{"Aacute", '\301', NULL},
+	{"Acirc", '\302', NULL},
+	{"Atilde", '\303', NULL},
+	{"Auml", '\304', NULL},
+	{"Aring", '\305', NULL},
+	{"AElig", '\306', NULL},
+	{"Ccedil", '\307', NULL},
+	{"Egrave", '\310', NULL},
+	{"Eacute", '\311', NULL},
+	{"Ecirc", '\312', NULL},
+	{"Euml", '\313', NULL},
+	{"Igrave", '\314', NULL},
+	{"Iacute", '\315', NULL},
+	{"Icirc", '\316', NULL},
+	{"Iuml", '\317', NULL},
+	{"ETH", '\320', NULL},
+	{"Ntilde", '\321', NULL},
+	{"Ograve", '\322', NULL},
+	{"Oacute", '\323', NULL},
+	{"Ocirc", '\324', NULL},
+	{"Otilde", '\325', NULL},
+	{"Ouml", '\326', NULL},
+	{"times", '\327', NULL},
+	{"Oslash", '\330', NULL},
+	{"Ugrave", '\331', NULL},
+	{"Uacute", '\332', NULL},
+	{"Ucirc", '\333', NULL},
+	{"Uuml", '\334', NULL},
+	{"Yacute", '\335', NULL},
+	{"THORN", '\336', NULL},
+	{"szlig", '\337', NULL},
+	{"agrave", '\340', NULL},
+	{"aacute", '\341', NULL},
+	{"acirc", '\342', NULL},
+	{"atilde", '\343', NULL},
+	{"auml", '\344', NULL},
+	{"aring", '\345', NULL},
+	{"aelig", '\346', NULL},
+	{"ccedil", '\347', NULL},
+	{"egrave", '\350', NULL},
+	{"eacute", '\351', NULL},
+	{"ecirc", '\352', NULL},
+	{"euml", '\353', NULL},
+	{"igrave", '\354', NULL},
+	{"iacute", '\355', NULL},
+	{"icirc", '\356', NULL},
+	{"iuml", '\357', NULL},
+	{"eth", '\360', NULL},
+	{"ntilde", '\361', NULL},
+	{"ograve", '\362', NULL},
+	{"oacute", '\363', NULL},
+	{"ocirc", '\364', NULL},
+	{"otilde", '\365', NULL},
+	{"ouml", '\366', NULL},
+	{"divide", '\367', NULL},
+	{"oslash", '\370', NULL},
+	{"ugrave", '\371', NULL},
+	{"uacute", '\372', NULL},
+	{"ucirc", '\373', NULL},
+	{"uuml", '\374', NULL},
+	{"yacute", '\375', NULL},
+	{"thorn", '\376', NULL},
+	{"yuml", '\377', NULL},
+	{"bull", '*', "MOSAIC BULLET"},
+	{"mdash", '-', "SYM 45"},
+	{"prime", '-', "SYM 162"},
+	{"fnof", 'f', "SYM 166"},
+	{"clubs", '-', "SYM 167"},
+	{"diams", '-', "SYM 168"},
+	{"hearts", '-', "SYM 169"},
+	{"spades", '-', "SYM 170"},
+	{"harr", '-', "SYM 171"},
+	{"larr", '<', "SYM 172"},
+	{"uarr", '^', "SYM 173"},
+	{"rarr", '>', "SYM 174"},
+	{"darr", 'V', "SYM 175"},
+	{"Prime", '-', "SYM 178"},
+	{"hellip", '.', "SYM 188"},
+	{"trade", '-', "SYM 212"},
+	{"lozenge", '-', "SYM 224"},
+	{"euro", '-', "EUR"},
+	{NULL, '\0', NULL},
 };
 #if (defined(VMS) && (__DECC_VER >= 50790004))
 #pragma message enable(INTCONSTTRUNC)
@@ -236,17 +281,14 @@ int caseless_equal(char *str1, char *str2)
 	if (!str1 || !str2)
 		return(0);
 	while (*str1 && *str2) {
-		if (TOLOWER(*str1) != TOLOWER(*str2))
+		if (TOLOWER(*str1++) != TOLOWER(*str2++))
 			return(0);
-		str1++;
-		str2++;
 	}
 	if (!*str1 && !*str2)
 		return(1);
 	return(0);
 }
 
-#if 0
 /* Check if two strings are equal in the first count characters, ignoring case.
  * The strings must both be at least of length count to be equal.
  * return 1 if equal, 0 otherwise.
@@ -259,15 +301,46 @@ static int caseless_equal_prefix(char *str1, char *str2, int cnt)
 		return(0);
 	if (cnt < 1)
 		return(1);
-	for (i=0; i < cnt; i++) {
-		if (TOLOWER(*str1) != TOLOWER(*str2))
+	for (i = 0; i < cnt; i++) {
+		if (TOLOWER(*str1++) != TOLOWER(*str2++))
 			return(0);
-		str1++;
-		str2++;
 	}
 	return(1);
 }
-#endif
+
+/* Add an object to the parsed object list.  Return a pointer to the
+ * current (end) position in the list.  If the object is a normal text object
+ * containing nothing but white space, throw it out, unless we have been
+ * told to keep white space.
+ */
+static MarkInfo *AddObj(MarkInfo **listp, MarkInfo *current, MarkInfo *mark)
+{
+	if (!mark)
+		return(current);
+
+	/* Add object to either the head of the list for a new list,
+	 * or at the end after the current pointer.
+	 */
+	if (*listp == NULL) {
+		*listp = mark;
+		current = *listp;
+	} else {
+		current->next = mark;
+		current = current->next;
+	}
+	current->next = NULL;
+	return(current);
+}
+
+/* Add a text mark to the list */
+static void text_mark(char *text, int is_white) {
+	MarkInfo *mark = GetMarkRec();
+
+	mark->type = M_NONE;    /* It's text */
+	mark->text = text;
+	mark->is_white_text = is_white;
+	currentmark = AddObj(&mlist, currentmark, mark);
+}
 
 /* Clean up the white space in a string.  Remove all leading and trailing
  * whitespace, and turn all internal whitespace into single spaces separating
@@ -323,18 +396,11 @@ void clean_white_space(char *txt)
 }
 
 /*
- * Parse an amperstand escape, and return the appropriate character, or
- * '\0' on error.
- * We should really only use caseless_equal_prefix for unterminated, and use
- * caseless_equal otherwise, but since there are so many escapes, and I
- * don't want to type everything twice, I always use caseless_equal_prefix.
- * Turns out the escapes are case sensitive, use strncmp.
+ * Parse an amperstand escape, and return the appropriate character, string,
+ * or '\0' on error.
  */
-char ExpandEscapes(esc, endp)
-	char *esc;
-	char **endp;
+static char ExpandEscape(char *esc, char **endp, int terminated, char **new)
 {
-	int cnt;
 	char val;
 
 	esc++;
@@ -343,34 +409,47 @@ char ExpandEscapes(esc, endp)
 		char tchar;
 
 		tptr = (char *)(esc + 1);
-		while (isdigit((int)*tptr)) {
+		while (isdigit((int)*tptr))
 			tptr++;
-		}
 		tchar = *tptr;
 		*tptr = '\0';
 		val = (char)atoi((esc + 1));
+		*new = NULL;
 		*tptr = tchar;
 		*endp = tptr;
 	} else {
-		int escLen, ampLen;
-		cnt = 0;
-		escLen = strlen(esc);	
-		while (AmpEscapes[cnt].tag) {
-			ampLen = strlen(AmpEscapes[cnt].tag);
-			if (!strncmp(esc, AmpEscapes[cnt].tag, ampLen)) {
-				val = AmpEscapes[cnt].value;
-				*endp = (char *)(esc + ampLen);
-				break;
+		int cnt = 0;
+		int len;
+
+		if (terminated) {
+			while (AmpEscapes[cnt].tag) {
+				if (!strcmp(esc, AmpEscapes[cnt].tag)) {
+					val = AmpEscapes[cnt].value;
+					*new = AmpEscapes[cnt].string;
+					*endp = (char *)(esc + strlen(esc));
+					break;
+				}
+				cnt++;
 			}
-			cnt++;
+		} else {
+			while (AmpEscapes[cnt].tag) {
+				len = strlen(AmpEscapes[cnt].tag);
+				if (!strncmp(esc, AmpEscapes[cnt].tag, len)) {
+					val = AmpEscapes[cnt].value;
+					*new = AmpEscapes[cnt].string;
+					*endp = (char *)(esc + len);
+					break;
+				}
+				cnt++;
+			}
 		}
 		if (AmpEscapes[cnt].tag == NULL) {
 #ifndef DISABLE_TRACE
-			if (htmlwTrace) {
-				fprintf(stderr, "Error bad & string\n");
-			}
+			if (htmlwTrace)
+				fprintf(stderr, "Unknown & string\n");
 #endif
 			val = '\0';
+			*new = NULL;
 			*endp = (char *)NULL;
 		}
 	}
@@ -378,6 +457,24 @@ char ExpandEscapes(esc, endp)
 	return(val);
 }
 
+/* Create Symbol font tags for symbol */
+static void symbol_marks(int sym)
+{
+	unsigned char *symbol = calloc(2, 1);
+	MarkInfo *mark = GetMarkRec();
+
+	/* Make marks for the symbol */
+	mark->type = M_FONT;
+	mark->start = strdup("FONT FACE=SYMBOL");
+	currentmark = AddObj(&mlist, currentmark, mark);
+	*symbol = (unsigned char)sym;
+	text_mark((char *)symbol, 0);
+	mark = GetMarkRec();
+	mark->type = M_FONT;
+	mark->end = strdup("/FONT");
+	mark->is_end = True;
+	currentmark = AddObj(&mlist, currentmark, mark);
+}
 
 /*
  * Clean the special HTML character escapes out of the text and replace
@@ -386,22 +483,16 @@ char ExpandEscapes(esc, endp)
  * GAG:  apparently &lt etc. can be left unterminated, what a nightmare.
  * The '&' character must be immediately followed by a letter to be
  * a valid escape sequence.  Other &'s are left alone.
- * The cleaning is done by rearranging chars in the passed txt buffer.
- * If any escapes are replaced, the string becomes shorter.
+ * The cleaning is done by rearranging chars into a new buffer.
+ * If any escapes are replaced, the string changes in length.
  */
-void clean_text(txt)
-	char *txt;
+static char *expand_escapes(char *txt, int expand, int is_white)
 {
-	char *ptr;
-	char *ptr2;
-	char *start;
-	char *text;
-	char *tend;
-	char tchar;
-	char val;
-
-	if (!txt)
-		return;
+	char *ptr, *ptr2;
+	char *new, *newtext, *start, *text, *tend;
+	char tchar, val;
+	int terminated;
+	int cnt = 0;
 
 	/*
 	 * Quick scan to find escape sequences.
@@ -411,39 +502,42 @@ void clean_text(txt)
 	ptr = txt;
 	while (*ptr) {
 		if ((*ptr == '&') &&
-			((isalpha((int)*(ptr + 1))) || (*(ptr + 1) == '#'))) {
+		    ((isalpha((int)*(ptr + 1))) || (*(ptr + 1) == '#')))
 			break;
-		}
 		ptr++;
+		cnt++;
 	}
+
 	if (!*ptr)
-		return;
+		return(txt);
 
 	/*
-	 * Loop, replacing escape sequences, and moving up remaining text.
+	 * Get replacement string started.
 	 */
-	ptr2 = ptr;
+	new = ptr2 = strdup(txt);
+	ptr2 += cnt;
+	/*
+	 * Loop replacing escape sequences into new buffer.
+	 */
 	while (*ptr) {
-
 		/*
 		 * Extract the escape sequence from start to ptr
 		 */
 		start = ptr;
 		ptr++;
 		while ((*ptr != ';') && !ISSPACE((int)*ptr) &&
-		       *ptr && (*ptr != '&')) {
+		       *ptr && (*ptr != '&'))
 			ptr++;
-		}
 		if (!*ptr || (*ptr != ';')) {
+			terminated = 0;
 #ifndef DISABLE_TRACE
-			if (htmlwTrace) {
+			if (htmlwTrace)
 				fprintf(stderr,
-					"Warning: unterminated & (%s)\n",
-					start);
-			}
+				       "Warning: unterminated & (%s)\n", start);
 #endif
+		} else {
+			terminated = 1;
 		}
-
 		/*
 		 * Copy the escape sequence into a separate buffer.
 		 * Then clean spaces so the "& lt ;" = "&lt;" etc.
@@ -454,58 +548,268 @@ void clean_text(txt)
 		text = (char *)malloc(strlen(start) + 1);
 		if (!text) {
 #ifndef DISABLE_TRACE
-			if (htmlwTrace || reportBugs) {
-				fprintf(stderr,
-					"Cannot malloc space for & text\n");
-			}
+			if (htmlwTrace || reportBugs)
+				fprintf(stderr, "Cannot malloc & text\n");
 #endif
 			*ptr = tchar;
-			return;
+			return(NULL);
 		}
 		strcpy(text, start);
 		*ptr = tchar;
 		clean_white_space(text);
-
 		/*
-		 * Replace escape sequence with appropriate character
+		 * Replace escape sequence with appropriate string
 		 */
-		val = ExpandEscapes(text, &tend);
+		val = ExpandEscape(text, &tend, terminated, &newtext);
 		if (val) {
 			*tend = '\0';
 			ptr = (char *)(start + strlen(text));
-			if (*ptr == ';') {
-				ptr++;
+			if (*ptr == ';')
+			    ptr++;
+
+			if (newtext && expand) {
+			    if (!strncmp(newtext, "MOS", 3)) {
+				/* Special MOSAIC tag */
+				MarkInfo *mark = GetMarkRec();
+
+				/* Make mark for previous text */
+				*ptr2 = '\0';
+				text_mark(strdup(new), is_white);
+				/* Restart output text string */
+				free(new);
+				ptr2 = new = malloc(strlen(ptr) + 1);
+
+				/* Make special mark */
+				mark->type = M_MOSAIC;
+				mark->start = strdup(newtext);
+				currentmark = AddObj(&mlist, currentmark, mark);
+			    } else if (!strncmp(newtext, "SYM", 3)) {
+				/* Create Symbol font tags for symbol */
+				unsigned char *symbol = calloc(2, 1);
+				MarkInfo *mark = GetMarkRec();
+
+				/* Make mark for previous text */
+				*ptr2 = '\0';
+				text_mark(strdup(new), is_white);
+				/* Restart output text string */
+				free(new);
+				ptr2 = new = malloc(strlen(ptr) + 1);
+
+				symbol_marks(atoi(newtext + 4));
+			    } else {
+				int newlen = strlen(newtext);
+
+				if (newlen > strlen(text)) {
+				    int offset = ptr2 - new;
+
+				    new = realloc(new, strlen(new) + 1 +
+						  (newlen - strlen(text)));
+				    ptr2 = new + offset;
+				}
+				*ptr2 = '\0';
+				strcat(new, newtext);
+				ptr2 += newlen;
+			    }
+			} else {
+			    *ptr2++ = val;
 			}
-			*ptr2 = val;
 		} else {
 		/*
 		 * Invalid escape sequence.  Skip it.
 		 */
 #ifndef DISABLE_TRACE
-			if (htmlwTrace) {
-				fprintf(stderr, "Error bad & string\n");
-			}
+			if (htmlwTrace)
+				fprintf(stderr, "Invalid & string\n");
 #endif
 			ptr = start;
-			*ptr2 = *ptr;
-			ptr++;
+			*ptr2++ = *ptr++;
 		}
 		free(text);
-
 		/*
 		 * Copy forward remaining text until the next
 		 * escape sequence
 		 */
-		ptr2++;
 		while (*ptr) {
 			if ((*ptr == '&') &&
-			    (isalpha((int)*(ptr + 1)) || (*(ptr + 1) == '#'))) {
+			    (isalpha((int)*(ptr + 1)) || (*(ptr + 1) == '#')))
 				break;
-			}
 			*ptr2++ = *ptr++;
 		}
 	}
 	*ptr2 = '\0';
+	free(txt);
+
+	return(new);
+}
+
+static void trace_utf8(char *ptr)
+{
+#ifndef DISABLE_TRACE
+	if (reportBugs || htmlwTrace)
+		fprintf(stderr, "Unknown UTF-8 code (%X,%X,%X)\n",
+			(unsigned char)*ptr, (unsigned char)*(ptr + 1),
+			(unsigned char)*(ptr + 2));
+#endif
+	return; 
+}
+
+static char *clean_text(char *txt, int expand, int is_white)
+{
+	char *ptr;
+	char *ptr2;
+
+	if (!txt)
+		return(NULL);
+
+	/* Fixup UTF-8 encoding of ASCII characters 160 thru 255 and specials */
+	if (charset_is_UTF8) {
+	    char *newtext;
+
+	    ptr = ptr2 = txt;
+	    while (*ptr) {
+		unsigned char c1 = (unsigned char)*ptr;
+		unsigned char c2 = (unsigned char)*(ptr + 1);
+
+		if (!c2) {	/* At end */
+		    *ptr2++ = *ptr++;
+		    break;
+		}
+		if (c1 == 0xC2) {
+		    /* 160 thru 191 */
+		    if ((c2 >= 0xA0) && (c2 <= 0xBF)) {
+			*ptr2++ = c2;
+		    } else {
+			trace_utf8(ptr);
+			/* Probably a control, so skip it */
+		    }
+		    ptr += 2;
+		} else if (c1 == 0xC3) {
+		    /* 192 thru 255 */
+		    if ((c2 >= 0x80) &&	(c2 <= 0xBF)) {
+			*ptr2++ = 64 + c2;
+		    } else {
+			trace_utf8(ptr);
+			/* Encoding error, so display it */
+			*ptr2++ = c1;
+			*ptr2++ = c2;
+		    }
+		    ptr += 2;
+		} else if (c1 == 0xE2) {
+		    unsigned char c3 = (unsigned char)*(ptr + 2);
+		    int do_symbol = 0;
+
+		    switch (c2) {
+		      case 0x80:
+			switch (c3) {
+			  case 0x93:
+			    /* En dash */
+			    *ptr2++ = '-';
+			    ptr += 3;
+			    break;
+			  case 0x94:
+			    /* Em dash */
+			    do_symbol = 45;
+			    break;
+			  case 0x99:
+			    /* Right single quote */
+			    *ptr2++ = '\47';
+			    ptr += 3;
+			    break;
+			  case 0x9C:
+			    /* Left double quote */
+			    *ptr2++ = QUOT_CONST;
+			    ptr += 3;
+			    break;
+			  case 0x9D:
+			    /* Right double quote */
+			    *ptr2++ = QUOT_CONST;
+			    ptr += 3;
+			    break;
+			  case 0xA0:
+			    /* Dagger */
+			    *ptr2++ = '+';
+			    ptr += 3;
+			    break;
+			  case 0xA2:
+			    /* Bullet */
+			    *ptr2++ = '*';
+			    ptr += 3;
+			    break;
+			  case 0xA6:
+			    /* ellipsis */
+			    do_symbol = 188;
+			    break;
+			  default:
+			    trace_utf8(ptr);
+			    *ptr2++ = *ptr++;
+			}
+			break;
+		      case 0x82:
+			if (c3 == 0xAC) {
+			    /* Euro */
+			    *ptr2++ = 'E';
+			    *ptr2++ = 'U';
+			    *ptr2++ = 'R';
+			    ptr += 3;
+			} else {
+			    trace_utf8(ptr);
+			    *ptr2++ = *ptr++;
+			}
+			break;
+		      case 0x84:
+			if (c3 == 0xA2) {
+			    /* Trademark */
+			    do_symbol = 212;
+			} else {
+			    trace_utf8(ptr);
+			    *ptr2++ = *ptr++;
+			}
+			break;
+		      case 0x86:
+			if (c3 == 0x90) {
+			    /* Left arrow */
+			    do_symbol = 172;
+			} else if (c3 == 0x92) {
+			    /* Right arrow */
+			    do_symbol = 174;
+			} else {
+			    trace_utf8(ptr);
+			    *ptr2++ = *ptr++;
+			}
+			break;
+		      default:
+			trace_utf8(ptr);
+			/* Let others thru for now */
+			*ptr2++ = *ptr++;
+		    }
+		    if (do_symbol) {
+			*ptr = '\0';
+			newtext = expand_escapes(strdup(txt), expand, is_white);
+			text_mark(newtext, is_white);
+			txt = ptr = ptr2 += 3;
+			symbol_marks(do_symbol);
+		    }
+		} else if (c1 == 0xEF) {
+		    if ((c2 == 0xBB) && ((unsigned char)*(ptr + 2) == 0xBF)) {
+			/* Zero width NBSP */
+			ptr += 3;
+			break;
+		    } else {
+			trace_utf8(ptr);
+			*ptr2++ = *ptr++;
+		    }
+		} else if (c1 > 0xC3) {
+		    trace_utf8(ptr);
+		    /* Let others thru for now */
+		    *ptr2++ = *ptr++;
+		} else {
+		    *ptr2++ = *ptr++;
+		}
+	    }
+	    *ptr2 = '\0';
+	}
+
+	return expand_escapes(txt, expand, is_white);
 }
 
 /* Get a block of text from an HTML document.  All text from start to the end,
@@ -526,9 +830,11 @@ static char *get_text(char *start, char **endp, int *is_white)
 	while (*ptr) {
 		if ((*ptr == '<') &&
 		    (isalpha((int)*(ptr + 1)) || (*(ptr + 1) == '!') ||
+		     (*(ptr + 1) == '?') ||
 		     ((*(ptr + 1) == '/') && (isalpha((int)*(ptr + 2)) ||
-		      (*(ptr + 2) == '!') ||
-		      ((*(ptr + 2) == '\n') && isalpha((int)*(ptr + 3)))))))
+		      (*(ptr + 2) == '!') || 
+		      (((*(ptr + 2) == '\n') || (*(ptr + 2) == ' ')) &&
+		       isalpha((int)*(ptr + 3)))))))
 			break;
 		if (!ISSPACE(*ptr))
 			*is_white = 0;
@@ -543,7 +849,7 @@ static char *get_text(char *start, char **endp, int *is_white)
 	CHECK_OUT_OF_MEM(text);
 	strncpy(text, start, len);
 	text[len] = '\0';
-	clean_text(text);
+	text = clean_text(text, 1, *is_white);
 	return(text);
 }
 
@@ -552,8 +858,6 @@ static char *get_text(char *start, char **endp, int *is_white)
  * its type, and fill in a mark_up structure to return.  Also returns
  * endp pointing to the trailing '>' in the original string.
  */
-static char *basetarget = NULL;
-
 static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 {
 	char *ptr;
@@ -588,27 +892,23 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 				/* Found double dash(--) */
 				ptr += 2;
 				while (*ptr && ((*ptr == ' ') || 
-				       (*ptr == '\n') || (*ptr == '-') ))
+				       (*ptr == '\n') || (*ptr == '-')))
 					ptr++;      /* Skip spaces and LFs */ 
 				if (*ptr == '>') {  /* Completed end comment */
 					*endp = ptr;
 					mark->is_end = 1;
 					mark->type = M_COMMENT;
-					mark->start = NULL;
-					mark->text = NULL;
-					mark->end = NULL;
-					mark->next = NULL;
 					return(mark);
 				}
 			} else {  /* If no double dash (--) found */
 				ptr++;
 			}
-		} /* If we get here, this document must use the old broken
-		   * comment style */
-		if (first_gt) {
-			ptr = first_gt;
 		}
-	} /* End of: if (comment) */
+		/* If we get here, this document must use the old broken
+		 * comment style */
+		if (first_gt)
+			ptr = first_gt;
+	}
 
 	/* Find end of mark while ignoring <> in quotes */
 	while (*ptr) {
@@ -671,17 +971,18 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 	CHECK_OUT_OF_MEM(text);
 	strcpy(text, start);
 	*ptr = tchar;
-	clean_text(text);
+	text = clean_text(text, 0, 0);
 
 	/* Set whether this is the start or end of a mark
 	 * block, as well as determine its type.
 	 */
 	if (*text == '/') {
 		mark->is_end = 1;
-		if (*(text + 1) == '\n')
+		if ((*(text + 1) == '\n') || (*(text + 1) == ' ')) {
 			mark->type = ParseMarkType((char *)(text + 2));
-		else
+		} else {
 			mark->type = ParseMarkType((char *)(text + 1));
+		}
 		mark->start = NULL;
 		mark->text = NULL;
 		mark->end = text;
@@ -695,13 +996,14 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 	     * map allocation.  Ignore body tag here since it comes early
 	     * enough in the formatting to get its colors okay.  Also
 	     * do USEMAPs here since fools tend to put them where they
-	     * are hard to process later (like between table cells).
+	     * are hard to process later (like between table cells) and
+	     * check Meta tags for character set.
 	     */
-	     if (hw) switch(mark->type) { /* hw is NULL when in hotfile.c */
+	     if (hw) switch(mark->type) {   /* hw is NULL when in hotfile.c */
 		case M_FONT:
 			if (hw->html.font_colors) {
 				tptr = ParseMarkTag(mark->start, MT_FONT,
-						"color");
+						    "color");
 				if (tptr) {
 					hw_do_color(hw,	"preallo", tptr, NULL);
 					free(tptr);
@@ -711,7 +1013,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_BASE:
 			if (!basetarget) {
 				if (basetarget = ParseMarkTag(mark->start,
-					 	MT_BASE, "target")) {
+					 	           MT_BASE, "target")) {
 					if (!*basetarget) {
 						free(basetarget);
 						basetarget = NULL;
@@ -722,7 +1024,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_BASEFONT:
 			if (hw->html.font_colors) {
 				tptr = ParseMarkTag(mark->start, MT_BASEFONT,
-						"color");
+						    "color");
 				if (tptr) {
 					hw_do_color(hw,	"preallo", tptr, NULL);
 					free(tptr);
@@ -732,7 +1034,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_TABLE:
 			if (hw->html.body_colors) {
 				tptr = ParseMarkTag(mark->start, MT_TABLE,
-						"bgcolor");
+						    "bgcolor");
 				if (tptr) {
 					hw_do_color(hw,	"preallo", tptr, NULL);
 					free(tptr);
@@ -742,7 +1044,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_TABLE_DATA:
 			if (hw->html.body_colors) {
 				tptr = ParseMarkTag(mark->start, MT_TABLE_DATA,
-						"bgcolor");
+						    "bgcolor");
 				if (tptr) {
 					hw_do_color(hw,	"preallo", tptr, NULL);
 					free(tptr);
@@ -752,7 +1054,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_TABLE_HEADER:
 			if (hw->html.body_colors) {
 				tptr = ParseMarkTag(mark->start,
-						MT_TABLE_HEADER, "bgcolor");
+						    MT_TABLE_HEADER, "bgcolor");
 				if (tptr) {
 					hw_do_color(hw, "preallo", tptr, NULL);
 					free(tptr);
@@ -762,11 +1064,42 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		case M_TABLE_ROW:
 			if (hw->html.body_colors) {
 				tptr = ParseMarkTag(mark->start, MT_TABLE_ROW,
-						"bgcolor");
+						    "bgcolor");
 				if (tptr) {
 					hw_do_color(hw,	"preallo", tptr, NULL);
 					free(tptr);
 				}
+			}
+			break;
+		case M_TEXTAREA:
+			currentmark = AddObj(&mlist, currentmark, mark);
+			/* Create <XMP> to keep markup as text */
+			mark = GetMarkRec();
+			mark->type = M_PLAIN_TEXT;
+			mark->start = strdup("XMP TEXTAREA=1");
+			/* GetMarkRec zeros the rest of the structure */
+			break;
+		case M_META:
+			tptr = ParseMarkTag(mark->start, MT_META, "http-equiv");
+			if (tptr) {
+			    if (!my_strcasecmp(tptr, "Content-Type")) {
+				char *cptr;
+
+				cptr = ParseMarkTag(mark->start, MT_META,
+						    "content");
+				if (cptr) {
+				    char *cset;
+
+				    cset = ParseMarkTag(cptr, "", "charset");
+				    if (cset) {
+					if (!my_strcasecmp(cset, "UTF-8"))
+					    charset_is_UTF8 = 1;
+					free(cset);
+				    }
+				    free(cptr);
+				}
+			    }
+			    free(tptr);
 			}
 			break;
 		case M_AREA:
@@ -783,14 +1116,15 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 			hw->html.cur_area = area;
 			tptr = ParseMarkTag(mark->start, MT_AREA, "shape");
 			if (tptr) {
-				if (caseless_equal(tptr, "rect"))
+				if (caseless_equal(tptr, "rect")) {
 					area->shape = AREA_RECT;
-				else if (caseless_equal(tptr, "circle"))
+				} else if (caseless_equal(tptr, "circle")) {
 					area->shape = AREA_CIRCLE;
-				else if (!my_strncasecmp(tptr, "poly", 4))
+				} else if (!my_strncasecmp(tptr, "poly", 4)) {
 					area->shape = AREA_POLY;
-				else
+				} else {
 					area->shape = -1;
+				}
 				free(tptr);
 			} else {
 				area->shape = AREA_RECT;
@@ -799,9 +1133,8 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 			area->href = ParseMarkTag(mark->start, MT_AREA, "href");
 			area->target = ParseMarkTag(mark->start, MT_AREA,
 						    "target");
-			if (!area->target && basetarget) {
+			if (!area->target && basetarget)
 				area->target = strdup(basetarget);
-			}
 			tptr = ParseMarkTag(mark->start, MT_AREA, "nohref");
 			if (tptr) {
 				area->href = NULL;
@@ -825,7 +1158,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 				coord->x = atoi(x);
 				coord->y = atoi(y);
 				coord->next = (CoordInfo *)malloc(
-					sizeof(CoordInfo));
+							     sizeof(CoordInfo));
 				coord = coord->next;
 				coord->next = NULL;
 				/* Must have at least another x */
@@ -856,7 +1189,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 					if (y = strtok(NULL, ", ")) {
 						coord->next =
 						    (CoordInfo *)malloc(
-							sizeof(CoordInfo));
+							     sizeof(CoordInfo));
 						coord = coord->next;
 						coord->x = atoi(x);
 						coord->y = atoi(y);
@@ -870,7 +1203,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 				}
 				/* Mark the end of the polygon coords */
 				coord->next = (CoordInfo *)malloc(
-					sizeof(CoordInfo));
+							     sizeof(CoordInfo));
 				coord = coord->next;
 				coord->x = -1;
 				coord->next = NULL;
@@ -887,8 +1220,9 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 		    break;
 	    }
 	}
-	/* Do MAP here because has both start and end tags */
-	if (hw && (mark->type == M_MAP)) {
+	/* Do these here because have both start and end tags to deal with */
+	if (hw) switch(mark->type) {
+	    case M_MAP:
 		if (mark->is_end) {
 			hw->html.cur_map = NULL;
 		} else {
@@ -901,8 +1235,41 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 			hw->html.map_list = hw->html.cur_map;
 			hw->html.cur_map->areaList = NULL;
 			hw->html.cur_map->name = ParseMarkTag(mark->start,
-				MT_MAP, "name");
+							      MT_MAP, "name");
 		}
+		break;
+	    case M_FIELDSET:
+		mark->type = M_TABLE;
+		if (mark->is_end) {
+			free(mark->end);
+			mark->end = strdup("</TABLE>");
+		} else {
+			free(mark->start);
+			mark->start = strdup("<TABLE FIELDSET=1 BORDER=1>");
+		}
+		break;
+	    case M_LEGEND:
+		mark->type = M_CAPTION;
+		if (mark->is_end) {
+			free(mark->end);
+			mark->end = strdup("/CAPTION");
+			currentmark = AddObj(&mlist, currentmark, mark);
+			/* Table marks to make table code not complain */
+			mark = GetMarkRec();
+			mark->type = M_TABLE_ROW;
+			mark->start = strdup("TR");
+			/* GetMarkRec zeros the rest of the structure */
+			currentmark = AddObj(&mlist, currentmark, mark);
+			mark = GetMarkRec();
+			mark->type = M_TABLE_DATA;
+			mark->start = strdup("TD");
+		} else {
+			free(mark->start);
+			mark->start = strdup("CAPTION LEGEND=1 ALIGN=LEFT");
+		}
+		break;
+	    default:
+		break;
 	}
 	mark->text = NULL;
 	mark->next = NULL;
@@ -912,11 +1279,13 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 /* Special version of get_text.  It reads all text up to the
  * end of the plain text mark, or the end of the file.
  */
-static char *get_plain_text(HTMLWidget hw, char *start, char **endp)
+static char *get_plain_text(HTMLWidget hw, char *start, char **endp,
+			    int textarea)
 {
 	char *ptr;
 	char *text;
 	char tchar;
+	MarkInfo *mp;
 
 	if (!start)
 		return(NULL);
@@ -931,7 +1300,6 @@ static char *get_plain_text(HTMLWidget hw, char *start, char **endp)
 		    (isalpha((int)(*(ptr + 1))) ||
 		     (*(ptr + 1) == '!') ||
 		     ((*(ptr + 1) == '/') && (isalpha((int)(*(ptr + 2))))))) {
-			MarkInfo *mp;
 			char *ep;
 
 			/* We think we found a mark.  If it is the end of
@@ -940,10 +1308,10 @@ static char *get_plain_text(HTMLWidget hw, char *start, char **endp)
 			mp = get_mark(hw, ptr, &ep);
 			if (mp) {
 				if (((mp->type == M_PLAIN_TEXT) ||
-				     (mp->type == M_LISTING_TEXT)) &&
-				    (mp->is_end)) {
-					if (mp->end)
-						free((char *)mp->end);
+				     (mp->type == M_LISTING_TEXT) ||
+				     ((mp->type == M_TEXTAREA) && textarea)) &&
+				    mp->is_end) {
+					free((char *)mp->end);
 					free((char *)mp);
 					break;
 				}
@@ -966,45 +1334,19 @@ static char *get_plain_text(HTMLWidget hw, char *start, char **endp)
 	CHECK_OUT_OF_MEM(text);
 	strcpy(text, start);
 	*ptr = tchar;
-	clean_text(text);
+	text = clean_text(text, 1, 0);
 	return(text);
-}
-
-/* Add an object to the parsed object list.  Return a pointer to the
- * current (end) position in the list.  If the object is a normal text object
- * containing nothing but white space, throw it out, unless we have been
- * told to keep white space.
- */
-static MarkInfo *AddObj(MarkInfo **listp, MarkInfo *current, MarkInfo *mark)
-{
-	if (!mark)
-		return(current);
-
-	/* Add object to either the head of the list for a new list,
-	 * or at the end after the current pointer.
-	 */
-	if (*listp == NULL) {
-		*listp = mark;
-		current = *listp;
-	} else {
-		current->next = mark;
-		current = current->next;
-	}
-	current->next = NULL;
-	return(current);
 }
 
 /* Main parser of HTML text.  Takes raw text, and produces a linked
  * list of mark objects.  Mark objects are either text strings, or
  * starting and ending mark delimiters.
  */
-MarkInfo *HTMLParse(HTMLWidget hw, char *str)
+MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 {
 	char *start, *end;
 	char *text, *tptr;
 	MarkInfo *mark = NULL;
-	MarkInfo *list = NULL;
-	MarkInfo *current = NULL;
 	int is_white = 0;		/* Is white text? */
 
 	if (!str)
@@ -1015,15 +1357,23 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str)
 		hw->html.cur_area = NULL;
 	}
 
+	if (charset && !my_strcasecmp(charset, "UTF-8")) {
+		charset_is_UTF8 = 1;
+	} else {
+		charset_is_UTF8 = 0;
+	}
+	basetarget = NULL;
+	mlist = NULL;
+	currentmark = NULL;
+
 	start = str;
 	end = str;
 	while (*start) {
-
-	/* Get some text (if any).  If our last mark was a begin plain text
-	 * we call a different function.  If last mark was <PLAINTEXT> we
-	 * lump all the rest of the text in.
-	 */
-		if (mark && (mark->type == M_PLAIN_FILE) && (!mark->is_end)) {
+	        /* Get some text (if any).  If our last mark was a begin plain
+		 * text we call a different function.  If last mark was
+		 * <PLAINTEXT> we lump all the rest of the text in.
+	         */
+		if (mark && (mark->type == M_PLAIN_FILE) && !mark->is_end) {
 			text = start;
 			end = text;
 			while (*end)
@@ -1034,37 +1384,26 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str)
 			CHECK_OUT_OF_MEM(tptr);
 			strcpy(tptr, text);
 			text = tptr;
-		} else {
-			if (mark && ((mark->type == M_PLAIN_TEXT) ||
-			     (mark->type == M_LISTING_TEXT)) &&
-			    (!mark->is_end)) {
-				is_white = 0;
-				text = get_plain_text(hw, start, &end);
-			} else {
-				text = get_text(start, &end, &is_white);
+		} else if (mark && ((mark->type == M_PLAIN_TEXT) ||
+				    (mark->type == M_LISTING_TEXT)) &&
+			   !mark->is_end) {
+			int ta = 0;
+
+			/* Special XMP tag for TEXTAREA */ 
+			if ((mark->type == M_PLAIN_TEXT) &&
+			    (tptr = ParseMarkTag(mark->start, MT_PLAIN_TEXT,
+						 "textarea"))) {
+				ta = 1;
+				free(tptr);
 			}
+			is_white = 0;
+			text = get_plain_text(hw, start, &end, ta);
+		} else {
+			text = get_text(start, &end, &is_white);
 		}
-		/* If text is OK, put it into a mark structure,
-		 * and add it to the linked list. */
-		if (text) {
-			mark = GetMarkRec();
-			mark->type = M_NONE;	/* It's text */
-			mark->is_end = 0;
-			mark->start = NULL;
-			mark->text = text;
-			mark->is_white_text = is_white;
-			mark->end = NULL;
-			mark->next = NULL;
-			mark->s_aps = NULL;
-			mark->s_ats = NULL;
-			mark->s_picd = NULL;
-			mark->t_p1 = NULL;
-			mark->anc_name = NULL;
-			mark->anc_href = NULL;
-			mark->anc_title = NULL;
-			mark->anc_target = NULL;
-			current = AddObj(&list, current, mark);
-		}
+		/* If text is OK, create a text mark */
+		if (text)
+			text_mark(text, is_white);
 		/* end is on '<' or '\0' */
 		start = end;
 		if (!*start)
@@ -1074,41 +1413,31 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str)
 		 * add it to the linked list.  start is on '<'
 		 * Loop until valid mark or end of string.
 		 */
-		while (!(mark = get_mark(hw, start, &end))) {
+		if (!(mark = get_mark(hw, start, &end))) {
 #ifndef DISABLE_TRACE
-			if (htmlwTrace || reportBugs) {
+			if (htmlwTrace || reportBugs)
 				fprintf(stderr,
 					"Error parsing, missing final '>'\n");
-			}
 #endif
-			return(list);
+			return(mlist);
 		}
 		/* end is on '>' or character prior to '<' if no '>' */
 
 		mark->is_white_text = is_white = 0;
-		mark->next = NULL;
-		mark->s_aps = NULL;
-		mark->s_ats = NULL;
-		mark->s_picd = NULL;
-		mark->t_p1 = NULL;
-		mark->anc_name = NULL;
-		mark->anc_href = NULL;
-		mark->anc_title = NULL;
-		mark->anc_target = NULL;
-		current = AddObj(&list, current, mark);
+		currentmark = AddObj(&mlist, currentmark, mark);
 		start = (char *)(end + 1);
 		/* start is a pointer after the '>' character */
 		if (mark && (mark->type == M_PLAIN_FILE || 
-		     mark->type == M_PLAIN_TEXT || mark->type == M_PREFORMAT ||
-		     mark->type == M_LISTING_TEXT) && (!mark->is_end)) {
-		     /* A linefeed immediately after a <PLAINTEXT>, <XMP>, <PRE>
-		      * or <LISTING> mark is to be ignored.
-		      */
+		    mark->type == M_PLAIN_TEXT || mark->type == M_PREFORMAT ||
+		    mark->type == M_LISTING_TEXT) && (!mark->is_end)) {
+		        /* A linefeed immediately after a <PLAINTEXT>, <XMP>,
+			 * <PRE> or <LISTING> mark is to be ignored.
+		         */
 			if (*start == '\n')
 				start++;
 		} 
 	}
-	return(list);
+	return(mlist);
 }
 
 /* Determine mark type from the identifying string passed */
@@ -1117,223 +1446,306 @@ static MarkType ParseMarkType(char *str)
 	MarkType type;
 	char *tptr;
 	char tchar;
-#if defined(VAXC) && !defined(__DECC)
-	int vaxc_hack = 0;
-#endif
+
 	if (!str)
-		return(M_NONE);
-	type = M_UNKNOWN;
+	    return(M_NONE);
+
+	/* Find end of mark type */
 	tptr = str;
 	while (*tptr) {
-		if (ISSPACE((int)*tptr))
-			break;
-		tptr++;
+	    if (ISSPACE((int)*tptr))
+		break;
+	    tptr++;
 	}
 	tchar = *tptr;
 	*tptr = '\0';
-	if (caseless_equal(str, MT_ANCHOR)) {
-		type = M_ANCHOR;
-	} else if (caseless_equal(str, MT_TITLE)) {
-		type = M_TITLE;
-	} else if (caseless_equal(str, MT_FIXED)) {
-		type = M_FIXED;
-	} else if (caseless_equal(str, MT_BOLD)) {
-		type = M_BOLD;
-	} else if (caseless_equal(str, MT_ITALIC)) {
-		type = M_ITALIC;
-	} else if (caseless_equal(str, MT_EMPHASIZED)) {
-		type = M_EMPHASIZED;
-	} else if (caseless_equal(str, MT_STRONG)) {
-		type = M_STRONG;
-	} else if (caseless_equal(str, MT_CODE)) {
-		type = M_CODE;
-	} else if (caseless_equal(str, MT_SAMPLE)) {
-		type = M_SAMPLE;
-	} else if (caseless_equal(str, MT_KEYBOARD)) {
-		type = M_KEYBOARD;
-	} else if (caseless_equal(str, MT_VARIABLE)) {
-		type = M_VARIABLE;
-	} else if (caseless_equal(str, MT_CITATION)) {
-		type = M_CITATION;
-	} else if (caseless_equal(str, MT_DEFINE)) {
-		type = M_DEFINE;
-	} else if (caseless_equal(str, MT_STRIKEOUT) ||
-		   caseless_equal(str, MT_STRIKEOUT2)) {
-		type = M_STRIKEOUT;
-	} else if (caseless_equal(str, MT_HEADER_1)) {
-		type = M_HEADER_1;
-	} else if (caseless_equal(str, MT_HEADER_2)) {
-		type = M_HEADER_2;
-	} else if (caseless_equal(str, MT_HEADER_3)) {
-		type = M_HEADER_3;
-	} else if (caseless_equal(str, MT_HEADER_4)) {
-		type = M_HEADER_4;
-	} else if (caseless_equal(str, MT_HEADER_5)) {
-		type = M_HEADER_5;
-	} else if (caseless_equal(str, MT_HEADER_6)) {
-		type = M_HEADER_6;
-	} else if (caseless_equal(str, MT_ADDRESS)) {
-		type = M_ADDRESS;
-	} else if (caseless_equal(str, MT_LISTING_TEXT)) {
-		type = M_LISTING_TEXT;
-	} else if (caseless_equal(str, MT_PLAIN_TEXT)) {
-		type = M_PLAIN_TEXT;
-	} else if (caseless_equal(str, MT_PLAIN_FILE)) {
-		type = M_PLAIN_FILE;
-	} else if (caseless_equal(str, MT_PARAGRAPH)) {
-		type = M_PARAGRAPH;
-	} else if (caseless_equal(str, MT_UNUM_LIST)) {
-		type = M_UNUM_LIST;
-	} else if (caseless_equal(str, MT_NUM_LIST)) {
-		type = M_NUM_LIST;
-	} else if (caseless_equal(str, MT_MENU)) {
-		type = M_MENU;
-	} else if (caseless_equal(str, MT_DIRECTORY)) {
-		type = M_DIRECTORY;
-	} else if (caseless_equal(str, MT_LIST_ITEM)) {
-		type = M_LIST_ITEM;
-	} else if (caseless_equal(str, MT_DESC_LIST)) {
-		type = M_DESC_LIST;
-	} else if (caseless_equal(str, MT_DESC_TITLE)) {
-		type = M_DESC_TITLE;
-	} else if (caseless_equal(str, MT_DESC_TEXT)) {
-		type = M_DESC_TEXT;
-	} else if (caseless_equal(str, MT_PREFORMAT)) {
-		type = M_PREFORMAT;
-	} else if (caseless_equal(str, MT_BLOCKQUOTE)) {
-		type = M_BLOCKQUOTE;
-	} else if (caseless_equal(str, MT_INDEX)) {
-		type = M_INDEX;
-	} else if (caseless_equal(str, MT_HRULE)) {
-		type = M_HRULE;
-	} else if (caseless_equal(str, MT_BASE)) {
-		type = M_BASE;
-	} else if (caseless_equal(str, MT_LINEBREAK)) {
-		type = M_LINEBREAK;
-	} else if (caseless_equal(str, MT_IMAGE) ||
-		/* Hack to handle mis-spelled "img" */
-		   caseless_equal(str, "image")) {
-		type = M_IMAGE;
-	} else if (caseless_equal(str, MT_FIGURE)) {
-		type = M_FIGURE;
-	} else if (caseless_equal(str, MT_SELECT)) {
-		type = M_SELECT;
-	} else if (caseless_equal(str, MT_OPTION)) {
-		type = M_OPTION;
-	} else if (caseless_equal(str, MT_INPUT)) {
-		type = M_INPUT;
-	} else if (caseless_equal(str, MT_TEXTAREA)) {
-		type = M_TEXTAREA;
-	} else if (caseless_equal(str, MT_FORM)) {
-		type = M_FORM;
-	} else if (caseless_equal(str, MT_SUP)) {
-                type = M_SUP;
-        } else if (caseless_equal(str, MT_SUB)) {
-                type = M_SUB;
-        } else if (caseless_equal(str, MT_DOC_HEAD)) {
-	        type = M_DOC_HEAD;
-        } else if (caseless_equal(str, MT_UNDERLINED)) {
-	        type = M_UNDERLINED;
-        } else if (caseless_equal(str, MT_DOC_BODY)) {
-	        type = M_DOC_BODY;
-        } else if (caseless_equal(str, MT_TABLE)) {
-		if (tableSupportEnabled) {
+
+	type = M_UNKNOWN;
+
+	switch (TOLOWER(*str)) {
+	    case '!':
+		if (caseless_equal(str, MT_DOCTYPE))         /* <!DOCTYPE> */
+		    type = M_DOCTYPE;
+		break;
+	    case 'a':
+		if (caseless_equal(str, MT_ADDRESS)) {
+		    type = M_ADDRESS;
+		} else if (caseless_equal(str, MT_ANCHOR)) {
+		    type = M_ANCHOR;
+		} else if (caseless_equal(str, MT_AREA)) {
+		    type = M_AREA;
+		} else if (caseless_equal(str, MT_APROG)) {
+		    type = M_APROG;
+		} else if (caseless_equal(str, MT_APPLET)) {
+		    if (appletSupportEnabled)
+                        type = M_APPLET;
+		}
+		break;
+	    case 'b':
+		if (caseless_equal(str, MT_LINEBREAK) ||         /* <BR> */
+		    caseless_equal(str, "br/")) {                /* XHTML */
+		    type = M_LINEBREAK;
+		} else if (caseless_equal(str, MT_DOC_BODY)) {   /* <BODY> */
+		    type = M_DOC_BODY;
+		} else if (caseless_equal(str, MT_BLINK)) {
+		    type = M_BLINK;
+		} else if (caseless_equal(str, MT_BOLD)) {
+		    type = M_BOLD;
+		} else if (caseless_equal(str, MT_BASE)) {
+		    type = M_BASE;
+		} else if (caseless_equal(str, MT_BASEFONT)) {
+		    type = M_BASEFONT;
+		} else if (caseless_equal(str, MT_BIG)) {
+		    type = M_BIG;
+		} else if (caseless_equal(str, MT_BLOCKQUOTE)) {
+		    type = M_BLOCKQUOTE;
+		} else if (caseless_equal(str, MT_BUTTON)) {
+		    type = M_BUTTON;
+		}
+		break;
+	    case 'c':
+		if (caseless_equal(str, MT_CENTER)) {
+		    type = M_CENTER;
+		} else if (caseless_equal(str, MT_CODE)) {
+		    type = M_CODE;
+		} else if (caseless_equal(str, MT_COL)) {
+		    type = M_COL;
+		} else if (caseless_equal(str, MT_COLGROUP)) {
+		    type = M_COLGROUP;
+		} else if (caseless_equal(str, MT_CITATION)) {
+		    type = M_CITATION;
+		} else if (caseless_equal(str, MT_CAPTION)) {
+		    type = M_CAPTION;
+		}
+		break;
+	    case 'd':
+		if (caseless_equal(str, MT_DIV)) {
+		    type = M_DIV;
+		} else if (caseless_equal(str, MT_DEFINE)) {
+		    type = M_DEFINE;
+		} else if (caseless_equal(str, MT_DELETED)) {
+		    type = M_STRIKEOUT;
+		} else if (caseless_equal(str, MT_DESC_LIST)) {
+		    type = M_DESC_LIST;
+		} else if (caseless_equal(str, MT_DESC_TEXT)) {
+		    type = M_DESC_TEXT;
+		} else if (caseless_equal(str, MT_DESC_TITLE)) {
+		    type = M_DESC_TITLE;
+		} else if (caseless_equal(str, MT_DIRECTORY)) {
+		    type = M_DIRECTORY;
+		}
+		break;
+	    case 'e':
+		if (caseless_equal(str, MT_EMPHASIZED))
+		    type = M_EMPHASIZED;
+		break;
+	    case 'f':
+		if (caseless_equal(str, MT_FONT)) {
+		    type = M_FONT;
+		} else if (caseless_equal(str, MT_FORM)) {
+		    type = M_FORM;
+		} else if (caseless_equal(str, MT_FRAME)) {
+		    type = M_FRAME;
+		} else if (caseless_equal(str, MT_FRAMESET)) {
+		    type = M_FRAMESET;
+		} else if (caseless_equal(str, MT_FIELDSET)) {
+		    type = M_FIELDSET;
+		} else if (caseless_equal(str, MT_FIGURE)) {
+		    type = M_FIGURE;
+		}
+		break;
+	    case 'h':
+		if (tptr == (str + 2)) {
+		    /* H followed by single character */
+		    switch (TOLOWER(*(str + 1))) {
+			case '1':
+			    type = M_HEADER_1;
+			    break;
+			case '2':
+			    type = M_HEADER_2;
+			    break;
+			case '3':
+			    type = M_HEADER_3;
+			    break;
+			case '4':
+			    type = M_HEADER_4;
+			    break;
+			case '5':
+			    type = M_HEADER_5;
+			    break;
+			case '6':
+			    type = M_HEADER_6;
+			    break;
+			case 'r':
+			    type = M_HRULE;
+			    break;
+		    }
+		} else if (caseless_equal(str, MT_HTML)) {
+		    type = M_HTML;
+		} else if (caseless_equal(str, MT_DOC_HEAD)) {    /* <HEAD> */
+		    type = M_DOC_HEAD;
+		}
+		break;
+	    case 'i':
+		if (caseless_equal(str, MT_IMAGE) ||
+		    /* Hack to handle mis-spelled "img" */
+		    caseless_equal(str, "image")) {
+		    type = M_IMAGE;
+		} else if (caseless_equal(str, MT_IFRAME)) {
+		    type = M_IFRAME;
+		} else if (caseless_equal(str, MT_ITALIC)) {
+		    type = M_ITALIC;
+		} else if (caseless_equal(str, MT_INPUT)) {
+		    type = M_INPUT;
+		} else if (caseless_equal(str, MT_INDEX)) {
+		    type = M_INDEX;
+		} else if (caseless_equal(str, MT_INSERTED)) {
+		    type = M_UNDERLINED;
+		}
+		break;
+	    case 'k':
+		if (caseless_equal(str, MT_KEYBOARD))
+		    type = M_KEYBOARD;
+		break;
+	    case 'l':
+		if (caseless_equal(str, MT_LINK)) {
+		    type = M_LINK;
+		} else if (caseless_equal(str, MT_LISTING_TEXT)) {
+		    type = M_LISTING_TEXT;
+		} else if (caseless_equal(str, MT_LIST_ITEM)) {
+		    type = M_LIST_ITEM;
+		} else if (caseless_equal(str, MT_LABEL)) {
+		    type = M_LABEL;
+		} else if (caseless_equal(str, MT_LEGEND)) {
+		    type = M_LEGEND;
+		}
+		break;
+	    case 'm':
+		if (caseless_equal(str, MT_MENU)) {
+		    type = M_MENU;
+		} else if (caseless_equal(str, MT_META)) {
+		    type = M_META;
+		} else if (caseless_equal(str, MT_MAP)) {
+		    type = M_MAP;
+		}
+		break;
+	    case 'n':
+		if (caseless_equal(str, MT_NOBR)) {
+		    type = M_NOBR;
+		} else if (caseless_equal(str, MT_NOFRAMES) ||
+			   /* Hack to handle mis-spelled "noframes" */
+			   caseless_equal(str, "noframe")) {
+		    type = M_NOFRAMES;
+		} else if (caseless_equal(str, MT_NOSCRIPT)) {
+		    type = M_NOSCRIPT;
+		/* NCSA annotation tag */
+		} else if (caseless_equal_prefix(str, MT_NCSA, 5)) {
+		    type = M_NCSA;
+		/* Non_standard Atomz tag */ 
+		} else if (caseless_equal(str, MT_NOINDEX)) {
+		    type = M_NOINDEX;
+		}
+		break;
+	    case 'o':
+		if (caseless_equal(str, MT_OPTION)) {
+		    type = M_OPTION;
+		} else if (caseless_equal(str, MT_OPTGROUP)) {
+		    type = M_OPTGROUP;
+		} else if (caseless_equal(str, MT_NUM_LIST)) {   /* <OL> */
+		    type = M_NUM_LIST;
+		}
+		break;
+	    case 'p':
+		if (caseless_equal(str, MT_PARAGRAPH)) {
+		    type = M_PARAGRAPH;
+		} else if (caseless_equal(str, MT_PLAIN_FILE)) {
+		    type = M_PLAIN_FILE;
+		} else if (caseless_equal(str, MT_PREFORMAT)) {
+		    type = M_PREFORMAT;
+		} else if (caseless_equal(str, MT_PARAM)) {
+		    type = M_PARAM;
+		}
+		break;
+	    case 's':
+		if (caseless_equal(str, MT_SCRIPT)) {
+		    type = M_SCRIPT;
+		} else if (caseless_equal(str, MT_STYLE)) {
+		    type = M_STYLE;
+		} else if (caseless_equal(str, MT_SPACER)) {
+		    type = M_SPACER;
+		} else if (caseless_equal(str, MT_SPAN)) {
+		    type = M_SPAN;
+		} else if (caseless_equal(str, MT_SMALL)) {
+		    type = M_SMALL;
+		} else if (caseless_equal(str, MT_STRONG)) {
+		    type = M_STRONG;
+		} else if (caseless_equal(str, MT_SAMPLE)) {
+		    type = M_SAMPLE;
+		} else if (caseless_equal(str, MT_SELECT)) {
+		    type = M_SELECT;
+		} else if (caseless_equal(str, MT_STRIKEOUT)) {
+		    type = M_STRIKEOUT;
+		} else if (caseless_equal(str, MT_STRIKEOUT2)) {
+		    type = M_STRIKEOUT;
+		} else if (caseless_equal(str, MT_SUB)) {
+		    type = M_SUB;
+		} else if (caseless_equal(str, MT_SUP)) {
+		    type = M_SUP;
+		}
+		break;
+	    case 't':
+		if (caseless_equal(str, MT_TABLE)) {
+		    if (tableSupportEnabled) {
 			type = M_TABLE;
-		} else {
-			type = M_UNKNOWN;
-		}
-	} else if (caseless_equal(str, MT_CAPTION)) {
-		type = M_CAPTION;
-	} else if (caseless_equal(str, MT_TABLE_ROW)) {
-		if (tableSupportEnabled) {
+		    } else {
+			type = M_COMMENT;
+		    }
+		} else if (caseless_equal(str, MT_TABLE_ROW)) {
+		    if (tableSupportEnabled) {
 			type = M_TABLE_ROW;
-		} else {
+		    } else {
 			type = M_LINEBREAK;
-		}
-	} else if (caseless_equal(str, MT_TABLE_HEADER)) {
-		if (tableSupportEnabled) {
-			type = M_TABLE_HEADER;
-		} else {
-			type = M_UNKNOWN;
-		}
-	} else if (caseless_equal(str, MT_TABLE_DATA)) {
-		if (tableSupportEnabled) {
+		    }
+		} else if (caseless_equal(str, MT_TABLE_DATA)) {
+		    if (tableSupportEnabled) {
 			type = M_TABLE_DATA;
-		} else {
-			type = M_UNKNOWN;
+		    } else {
+			type = M_COMMENT;
+		    }
+		} else if (caseless_equal(str, MT_TABLE_HEADER)) {
+		    if (tableSupportEnabled) {
+			type = M_TABLE_HEADER;
+		    } else {
+			type = M_COMMENT;
+		    }
+		} else if (caseless_equal(str, MT_TITLE)) {
+		    type = M_TITLE;
+		} else if (caseless_equal(str, MT_FIXED)) {      /* <TT> */
+		    type = M_FIXED;
+		} else if (caseless_equal(str, MT_TEXTAREA)) {
+		    type = M_TEXTAREA;
 		}
-	} else if (caseless_equal(str, MT_FRAME)) {
-		type = M_FRAME;
-	} else if (caseless_equal(str, MT_FRAMESET)) {
-		type = M_FRAMESET;
-	} else if (caseless_equal(str, MT_NOFRAMES) ||
-		/* Hack to handle mis-spelled "noframes" */
-		   caseless_equal(str, "noframe")) {
-		type = M_NOFRAMES;
-	} else if (caseless_equal(str, MT_APROG)){
-		type = M_APROG;
-	} else if (caseless_equal(str, MT_APPLET)){
-		if (appletSupportEnabled) {
-			type = M_APPLET;
-		} else {
-			type = M_UNKNOWN;
+		break;
+	    case 'u':
+		if (caseless_equal(str, MT_UNUM_LIST)) {
+		    type = M_UNUM_LIST;
+		} else if (caseless_equal(str, MT_UNDERLINED)) {
+		    type = M_UNDERLINED;
 		}
-	} else if (caseless_equal(str, MT_PARAM)) {
-		type = M_PARAM;
-	} else if (caseless_equal(str, MT_HTML)) {
-		type = M_HTML;
-	} else if (caseless_equal(str, MT_CENTER)) {
-		type = M_CENTER;
-	} else if (caseless_equal(str, MT_DIV)) {
-		type = M_DIV;
-	} else if (caseless_equal(str, MT_DOCTYPE)) {
-		type = M_DOCTYPE;
-	} else if (caseless_equal(str, MT_BIG)) {
-		type = M_BIG;
-	} else if (caseless_equal(str, MT_SMALL)) {
-		type = M_SMALL;
-	} else if (caseless_equal(str, MT_FONT)) {
-		type = M_FONT;
-	} else if (caseless_equal(str, MT_BASEFONT)) {
-		type = M_BASEFONT;
-#if defined(VAXC) && !defined(__DECC)
-	/* Hack to prevent compiler stack overflow */
-	} else {
-		vaxc_hack = 1;
+		break;
+	    case 'v':
+		if (caseless_equal(str, MT_VARIABLE))
+		    type = M_VARIABLE;
+		break;
+	    case 'x':
+		if (caseless_equal(str, MT_PLAIN_TEXT))         /* <XMP> */
+		    type = M_PLAIN_TEXT;
+		break;
 	}
-	if (!vaxc_hack) {
-		/* We found it already */
-#endif
-	} else if (caseless_equal(str, MT_MAP)) {
-		type = M_MAP;
-	} else if (caseless_equal(str, MT_AREA)) {
-		type = M_AREA;
-	} else if (caseless_equal(str, MT_LINK)) {
-		type = M_LINK;
-	} else if (caseless_equal(str, MT_META)) {
-		type = M_META;
-	} else if (caseless_equal(str, MT_SCRIPT)) {
-		type = M_SCRIPT;
-	} else if (caseless_equal(str, MT_NOSCRIPT)) {
-		type = M_NOSCRIPT;
-	} else if (caseless_equal(str, MT_STYLE)) {
-		type = M_STYLE;
-	} else if (caseless_equal(str, MT_NOBR)) {
-		type = M_NOBR;
-	} else if (caseless_equal(str, MT_SPACER)) {
-		type = M_SPACER;
-	} else if (caseless_equal(str, MT_BLINK)) {
-		type = M_BLINK;
-	} else if (caseless_equal(str, MT_IFRAME)) {
-		type = M_IFRAME;
-	} else {
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) {
-			fprintf(stderr, "Warning: unknown mark (%s)\n", str);
-		}
+	if ((type == M_UNKNOWN) && (htmlwTrace || reportBugs))
+	    fprintf(stderr, "Warning: unknown mark (%s)\n", str);
 #endif
-		type = M_UNKNOWN;
-	}
 	*tptr = tchar;
 	return(type);
 }
@@ -1346,7 +1758,7 @@ static MarkType ParseMarkType(char *str)
  * after the end of the tag's name in the original anchor string.
  * Finally the function returns the tag value in a malloced buffer.
  */
-static char *AnchorTag( char **ptrp, char **startp, char **endp)
+static char *AnchorTag(char **ptrp, char **startp, char **endp)
 {
 	char *tag_val;
 	char *ptr;
@@ -1368,11 +1780,11 @@ static char *AnchorTag( char **ptrp, char **startp, char **endp)
 	if (!*ptr) {
 		*ptrp = ptr;
 	} else {    	/* Move to the start of tag value, if there is one. */
-            while ((ISSPACE((int)*ptr)) || (*ptr == '=')) {
-		if (*ptr == '=')
-                    has_value = 1;
-		ptr++;
-            }
+        	while ((ISSPACE((int)*ptr)) || (*ptr == '=')) {
+			if (*ptr == '=')
+                		has_value = 1;
+			ptr++;
+        	}
         }
 	/* For a tag with no value, this is a boolean flag.
 	 * Return the string "" so we know the tag is there.

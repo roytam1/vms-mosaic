@@ -14,7 +14,7 @@
 #define HTAAoACL        HTAA_openAcl
 #define HTAAcACL        HTAA_closeAcl
 #define HTAAgAEn        HTAA_getAclEntry
-#endif /* SHORT_NAMES */
+#endif
 
 /*
 
@@ -32,7 +32,7 @@ Opening Access Control List File
 **      returns         the FILE* to open ACL.
 **                      NULL, if ACL not found.
 */
-PUBLIC FILE *HTAA_openAcl PARAMS((WWW_CONST char * pathname));
+PUBLIC FILE *HTAA_openAcl PARAMS((WWW_CONST char *pathname));
 
 
 /* PUBLIC                                               HTAA_closeAcl()
@@ -43,7 +43,7 @@ PUBLIC FILE *HTAA_openAcl PARAMS((WWW_CONST char * pathname));
 ** ON EXIT:
 **      returns nothing.
 */
-PUBLIC void HTAA_closeAcl PARAMS((FILE * acl_file));
+PUBLIC void HTAA_closeAcl PARAMS((FILE *acl_file));
 /*
 
 Getting ACL Entry
@@ -95,14 +95,9 @@ Getting ACL Entry
 **      HTAA_readGroupFile()) and after that access authorization
 **      can be checked with function HTAA_userAndInetGroup().
 */
-PUBLIC GroupDef *HTAA_getAclEntry PARAMS((FILE *        acl_file,
-                                          WWW_CONST char *  pathname,
-                                          HTAAMethod    method));
-/*
-
- */
+PUBLIC GroupDef *HTAA_getAclEntry PARAMS((FILE           *acl_file,
+                                          WWW_CONST char *pathname,
+                                          HTAAMethod      method));
 
 #endif /* not HTACL_H */
-/*
 
-   End of file HTACL.h.  */

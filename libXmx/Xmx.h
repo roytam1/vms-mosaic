@@ -52,47 +52,42 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #ifndef __XMX_H__
 #define __XMX_H__
 
 /* --------------------------- SYSTEM INCLUDES ---------------------------- */
 
 /* Generic X11/Xt/Xm includes. */
+
+#if defined(__DECC) && defined(MULTINET) && defined(VAX) && defined(TCP_INCLUDES_DONE)
+#define _POSIX_C_SOURCE  /* Work around the inclusion of types.h, GEC */
+#endif /* VMS, work around tcp.h previously being included, GEC */
+
 #include <X11/Intrinsic.h>
+
+#if defined(__DECC) && defined(MULTINET) && defined(VAX) && defined(TCP_INCLUDES_DONE)
+#undef _POSIX_C_SOURCE
+#undef _ANSI_C_SOURCE  /* Gets defined because of _POSIX_C_SOURCE */
+#endif /* VMS, undo the tcp.h workaround, GEC */
+
 #include <X11/StringDefs.h>
 #include <X11/Xutil.h>
 #include <X11/cursorfont.h>
 #include <Xm/Xm.h>
 
-#if (XmVERSION == 1)&&(XmREVISION >= 2)
+#if (XmVERSION == 1) && (XmREVISION >= 2)
 #ifndef MOTIF1_2
 #define MOTIF1_2
 #endif
 #endif
 
 #ifdef VMS
-/* VMS does not permit > 31 char names, so to avoid compilation warnings ... */
-#define XmxMakeFormAndTwoButtonsSqueezed    XmxMakeFormAndTwoButtonsSqueeze
-#define XmxMakeFormAndThreeButtonsSqueezed  XmxMakeFormAndThreeButtonsSquee
-#if (XmVERSION == 1)&&(XmREVISION >= 2)
+#if (XmVERSION == 1) && (XmREVISION >= 2)
 #include <X11/Reptype.h>
 #endif
 #endif /* VMS, BSN */
-
-#if 0
-
-#ifdef __sgi
-/* Fast malloc. */
-#include <malloc.h>
-/* For GLXconfig type. */
-#include <X11/Xirisw/GlxMDraw.h>
-#endif
-
-#ifdef _IBMR2
-/* nothing that I know of */
-#endif /* _IBMR2 */
-
-#endif /* if 0 */
 
 /* --------------------------- INTERNAL DEFINES --------------------------- */
 
@@ -159,8 +154,7 @@ extern int Xmx_uniqid;
 /* Struct used by app when loading option menu.  The 'set_state'
    parameter is used to indicate menu history for the option menu;
    the entry with 'XmxSet' is used. */
-typedef struct _XmxOptionMenuStruct
-{
+typedef struct _XmxOptionMenuStruct {
   String namestr;
   int data;
   int set_state;
@@ -170,8 +164,7 @@ typedef struct _XmxOptionMenuStruct
 typedef XmxOptionMenuStruct XmxToggleMenuStruct;
 
 /* Menubar uses a recursive struct. */
-typedef struct _XmxMenubarStruct
-{
+typedef struct _XmxMenubarStruct {
   String namestr;
   char mnemonic;
   void (*func)();
@@ -186,16 +179,14 @@ typedef struct _XmxMenubarStruct
 
 /* A single entry in a menu (menubar, toggle menu, or option menu),
    tagged by the integer token used as callback_data. */
-typedef struct _XmxMenuEntry
-{
+typedef struct _XmxMenuEntry {
   Widget w;
   int token;
   struct _XmxMenuEntry *next;
 } XmxMenuEntry;
 
 /* A menu (menubar, toggle menu, or option menu). */
-typedef struct _XmxMenuRecord
-{
+typedef struct _XmxMenuRecord {
   Widget base;
   XmxMenuEntry *first_entry;
 } XmxMenuRecord;
@@ -204,20 +195,20 @@ typedef struct _XmxMenuRecord
 
 /* Callback definitions and prototypes. */
 #define XmxCallback(name)						      \
-  void name (Widget w, XtPointer client_data, XtPointer call_data)
+  void name(Widget w, XtPointer client_data, XtPointer call_data)
 #define XmxCallbackPrototype(name)                                            \
-  extern void name (Widget, XtPointer, XtPointer)
+  extern void name(Widget, XtPointer, XtPointer)
 
 /* Event handler functions and prototypes. */
 #define XmxEventHandler(name)						      \
-  void name (Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
+  void name(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
 #define XmxEventHandlerPrototype(name) 				              \
-  extern void name (Widget, XtPointer, XEvent *, Boolean *)
+  extern void name(Widget, XtPointer, XEvent *, Boolean *)
 
 /* Shortcut for XtAppInitialize --- of dubious value. */
 #define XmxInit()							      \
-  XtAppInitialize (&app_context, "XmxApplication", NULL, 0, &argc, argv,      \
-                   NULL, Xmx_wargs, Xmx_n);
+  XtAppInitialize(&app_context, "XmxApplication", NULL, 0, &argc, argv,       \
+                  NULL, Xmx_wargs, Xmx_n);
 
 /* ------------------------------ PROTOTYPES ------------------------------ */
 
@@ -239,7 +230,8 @@ extern void XmxManageRemanage (Widget);
 extern void XmxSetSensitive (Widget, int);
 
 extern Widget XmxMakePushButton (Widget, String, XtCallbackProc, int);
-extern Widget XmxMakeNamedPushButton (Widget, String, String, XtCallbackProc, int);
+extern Widget XmxMakeNamedPushButton (Widget, String, String, XtCallbackProc,
+				      int);
 extern Widget XmxMakeBlankButton (Widget, XtCallbackProc, int);
 extern Widget XmxMakeCommand (Widget, String, XtCallbackProc, int);
 extern Widget XmxMakeScrolledList (Widget, XtCallbackProc, int);
@@ -271,7 +263,13 @@ extern Widget XmxMakeLabel (Widget, String);
 extern Widget XmxMakeNamedLabel (Widget, String, String);
 extern Widget XmxMakeBlankLabel (Widget);
 extern Widget XmxMakeErrorDialog (Widget, String, String);
+extern void   XmxMakeErrorDialogWait (Widget, XtAppContext, char *, 
+                                      char *, char *);
+extern void   XmxMakeWarningDialogWait (Widget, XtAppContext, char *, 
+                                        char *, char *);
 extern Widget XmxMakeInfoDialog (Widget, String, String);
+extern void   XmxMakeInfoDialogWait (Widget, XtAppContext, char *, 
+                                     char *, char *);
 extern Widget XmxMakeQuestionDialog (Widget, String, String, XtCallbackProc, 
                                      int, int);
 extern XmString XmxMakeXmstrFromFile (String);
@@ -295,27 +293,6 @@ extern void XmxTextInsertString (Widget, String);
 extern String XmxTextGetString (Widget);
 extern void XmxAddCallbackToText (Widget, XtCallbackProc, int);
 
-#if 0
-
-#ifdef __sgi
-extern Widget XmxMakeDrawingVolume 
-  (Widget, int, int, GLXconfig *, XtCallbackProc, XtCallbackProc,
-   XtCallbackProc);
-extern void XmxInstallColormaps (Widget, Widget);
-extern void XmxInstallColormapsWithOverlay (Widget, Widget);
-extern void XmxWinset (Widget);
-#endif
-
-#ifdef _IBMR2
-extern Widget XmxMakeDrawingVolume 
-  (Widget, int, int, XtCallbackProc, XtCallbackProc,
-   XtCallbackProc);
-extern void XmxInstallColormaps (Widget, Widget);
-extern void XmxWinset (Widget);
-#endif
-
-#endif /* if 0 */
-
 extern void XmxApplyBitmapToLabelWidget (Widget, String, unsigned int, 
                                          unsigned int);
 extern Pixmap XmxCreatePixmapFromBitmap (Widget, String, unsigned int,
@@ -325,14 +302,14 @@ extern void XmxApplyPixmapToLabelWidget (Widget, Pixmap);
 extern Widget XmxMakeFormAndOneButton (Widget, XtCallbackProc, String, int);
 extern Widget XmxMakeFormAndTwoButtons (Widget, XtCallbackProc, String, 
                                         String, int, int);
-extern Widget XmxMakeFormAndTwoButtonsSqueezed (Widget, XtCallbackProc, String, 
-                                                String, int, int);
+extern Widget XmxMakeFormAndTwoButtonsTight (Widget, XtCallbackProc, String, 
+                                             String, int, int);
 extern Widget XmxMakeFormAndThreeButtons (Widget, XtCallbackProc, String, 
                                           String, String, int, int, int);
-extern Widget XmxMakeFormAndThreeButtonsSqueezed (Widget, XtCallbackProc, String, 
-                                                  String, String, int, int, int);
-extern Widget XmxMakeFormAndFourButtons (Widget, XtCallbackProc, String, 
-                                         String, String, String, int, int, int, int);
+extern Widget XmxMakeFormAndThreeButtonsTight (Widget, XtCallbackProc, String, 
+                                               String, String, int, int, int);
+extern Widget XmxMakeFormAndFourButtons (Widget, XtCallbackProc, String, String,
+					 String, String, int, int, int, int);
 extern Widget XmxMakeFormAndFiveButtons (Widget, XtCallbackProc, String,
                                          String, String, String, String,
 					 int, int, int, int, int);
@@ -346,6 +323,29 @@ extern char *XmxModalPromptForString (Widget parent, XtAppContext app,
 extern char *XmxModalPromptForPassword (Widget parent, XtAppContext app, 
                                         char *questionstr, char *yesstr, 
                                         char *nostr);
+extern int XmxDoFourButtons (Widget parent, XtAppContext app, String, String,
+			     String, String, String, String, int width);
+extern int XmxDoFiveButtons (Widget parent, XtAppContext app, String, String,
+			     String, String, String, String, String, int width);
+
+extern Widget XmxInitClue (Widget, Boolean);
+extern void XmxSetButtonClueText (String, String, String, String, String);
+extern void XmxSetButtonClue (String, String, String, String, String);
+extern void XmxClearButtonClue (String, String, String, String, String);
+extern void XmxAddClue (Widget, String);
+extern void XmxDeleteClue (Widget);
+extern void XmxDeleteClueGroup (void);
+extern void XmxClueForeground (unsigned long);
+extern void XmxClueBackground (unsigned long);
+extern void XmxClueTimers (int, int, int);
+extern void XmxClueFont (String);
+extern void XmxClueOval (Boolean);
+extern void XmxClueRounded (Boolean);
+extern void XmxClueActive (Boolean);
+extern Boolean XmxClueIsActive (void);
+extern void XmxClueOncePopup (Widget, String, int, int, Boolean);
+extern void XmxClueOncePopdown (void);
+extern Boolean XmxClueOnceIsUp (void);
 
 /* Xmx2.c */
 extern void XmxRSetSensitive (XmxMenuRecord *, int, int);
@@ -359,6 +359,6 @@ extern XmxMenuRecord *XmxRMakeOptionMenu (Widget, String, XtCallbackProc,
                                           XmxOptionMenuStruct *);
 extern XmxMenuRecord *XmxRMakeToggleMenu (Widget, int, XtCallbackProc, 
                                           XmxToggleMenuStruct *);
-extern XmxMenuRecord *XmxRMakeMenubar (Widget, XmxMenubarStruct *);
+extern XmxMenuRecord *XmxRMakeMenubar (Widget, XmxMenubarStruct *, Boolean);
 
 #endif /* __XMX_H__ */

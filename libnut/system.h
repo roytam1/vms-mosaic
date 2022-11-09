@@ -1,3 +1,8 @@
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
+#ifndef NUT_SYSTEM_H
+#define NUT_SYSTEM_H
+
 #define SYS_SUCCESS 0
 #define SYS_NO_COMMAND 1
 #define SYS_FORK_FAIL 2
@@ -14,6 +19,7 @@
 #define SYS_WRITE_FAIL 13
 #define SYS_INTERNAL_FAIL 14
 
+int my_sleep(int length, int interrupt);
 int my_system(char *cmd, char *retBuf, int bufsize);
 int my_move(char *src, char *dest, char *retBuf, int bufsize, int overwrite);
 char *my_strerror(int errornum);
@@ -21,3 +27,5 @@ char **buildArgv(char *cmd, int *new_argc);
 int my_copy(char *, char *, char *, int, int);
 int file_exists(char *);
 int get_home(char **);
+
+#endif

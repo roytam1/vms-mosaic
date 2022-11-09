@@ -14,16 +14,15 @@
 #define HTAApGrD        HTAA_printGroupDef
 #define HTAAGD_d        GroupDef_delete
 #define HTAAuIIG        HTAA_userAndInetInGroup
-#endif /* SHORT_NAMES */
+#endif
 
 typedef HTList GroupDefList;
 typedef HTList ItemList;
 
 typedef struct {
-    char *      group_name;
-    ItemList *  item_list;
+    char     *group_name;
+    ItemList *item_list;
 } GroupDef;
-
 
 /*
 ** Access Authorization failure reasons
@@ -104,19 +103,18 @@ Group definition grammar
   PARSE GROUP DEFINITION
   
  */
+PUBLIC GroupDef *HTAA_parseGroupDef PARAMS((FILE *fp));
 
-PUBLIC GroupDef *HTAA_parseGroupDef PARAMS((FILE * fp));
 /*
 
 Fill in Pointers to referenced Group Definitions in a Group Definition
 
-   References to groups (by their name) are resolved from group_def_list and pointers to
-   those structures are added to group_def.
+   References to groups (by their name) are resolved from group_def_list
+   and pointers to those structures are added to group_def.
    
  */
-
-PUBLIC void HTAA_resolveGroupReferences PARAMS((GroupDef *     group_def,
-                                                GroupDefList * group_def_list));
+PUBLIC void HTAA_resolveGroupReferences PARAMS((GroupDef     *group_def,
+                                                GroupDefList *group_def_list));
 /*
 
 Read Group File (and do caching)
@@ -125,25 +123,25 @@ Read Group File (and do caching)
    list.
    
  */
+PUBLIC GroupDefList *HTAA_readGroupFile PARAMS((WWW_CONST char *filename));
 
-PUBLIC GroupDefList *HTAA_readGroupFile PARAMS((WWW_CONST char * filename));
 /*
 
 Delete Group Definition
 
-   Groups in cache should never be freed by this function. This should only be used to
-   free group definitions read by HTAA_parseGroupDef.
+   Groups in cache should never be freed by this function.  This should only
+   be used to free group definitions read by HTAA_parseGroupDef.
    
  */
+PUBLIC void GroupDef_delete PARAMS((GroupDef *group_def));
 
-PUBLIC void GroupDef_delete PARAMS((GroupDef * group_def));
 /*
 
 Print Out Group Definition (for trace purposes)
 
  */
+PUBLIC void HTAA_printGroupDef PARAMS((GroupDef *group_def));
 
-PUBLIC void HTAA_printGroupDef PARAMS((GroupDef * group_def));
 /*
 
 Does a User Belong to a Given Set of Groups
@@ -151,7 +149,6 @@ Does a User Belong to a Given Set of Groups
    This function checks both the username and the internet address.
    
  */
-
 /* PUBLIC                                       HTAA_userAndInetInGroup()
 **              CHECK IF USER BELONGS TO TO A GIVEN GROUP
 **              AND THAT THE CONNECTION COMES FROM AN
@@ -170,15 +167,8 @@ Does a User Belong to a Given Set of Groups
 **                      to the group.
 **                      HTAA_OK if both IP address and user are ok.
 */
-PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup PARAMS((GroupDef * group,
-                                                          char *     username,
-                                                          char *     ip_number,
-                                                          char *     ip_name));
-/*
-
- */
-
+PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup PARAMS((GroupDef *group,
+                                                          char     *username,
+                                                          char     *ip_number,
+                                                          char     *ip_name));
 #endif /* not HTGROUP_H */
-/*
-
-   End of file HTGroup.h.  */

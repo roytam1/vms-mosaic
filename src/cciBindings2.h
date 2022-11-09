@@ -52,16 +52,13 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2006 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
-
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
 
 #ifndef __CCIBINDINGS2_H__
 #define __CCIBINDINGS2_H__
@@ -79,28 +76,30 @@ void MoCCISendAnchorToCCI(char *url, int beforeAfter);
 void MoCCISendEvent(MCCIPort client, int on);
 void MoCCISendMouseAnchor(MCCIPort client, int on);
 void MoCCISendBrowserView(MCCIPort client, int on);
-void MoCCIForm(MCCIPort client, char *actionID, int status, int close_connection);
+void MoCCIForm(MCCIPort client, char *actionID, int status,
+	       int close_connection);
 int MoCCIPreInitialize();
 int MoCCIInitialize(int portNumber);
-int MoCCITerminateAllConnections();
-int MoCCITerminateAConnection(MCCIPort client);
+void MoCCITerminateAllConnections();
+void MoCCITerminateAConnection(MCCIPort client);
 void MoCCIHandleInput(MCCIPort client,int source);
-void MoCCINewConnection(XtAppContext app_context,int *source,XtInputId *inputID);
+void MoCCINewConnection(XtAppContext app_context, int *source,
+			XtInputId *inputID);
 static XmxCallback (MoCCIWindowCallBack);
 mo_status MoDisplayCCIWindow(mo_window *win);
-void MoCCISendOutputToClient(char *contentType,char *fileName);
+void MoCCISendOutputToClient(char *contentType, char *fileName);
 int MoCCIFormToClient(char *actionID, char *query, char *contentType, 
-char *post_data, int status);
-void MoCCISendOutput(MCCIPort client,Boolean sendIt,char *contentType);
-void MoCCIStartListening(Widget w,int port);
+		      char *post_data, int status);
+void MoCCISendOutput(MCCIPort client, Boolean sendIt, char *contentType);
+void MoCCIStartListening(Widget w, int port);
 void MoCCISendEventOutput(CCI_events event_type);
 void MoCCISendMouseAnchorOutput(char *anchor);
 void MoCCISendBrowserViewOutput(char *url, char *contentType, 
-char *data, int dataLength);
+				char *data, int dataLength);
 int MoCCISendBrowserViewFile(char *url, char *contentType, char *filename);
-int MoCCIMaxNumberOfConnectionsAllowed();
+int MoCCIMaxConnectionsAllowed();
 int MoCCICurrentNumberOfConnections();
-void MoCCIAddFileURLToList(char *fileName,char *url);
+void MoCCIAddFileURLToList(char *fileName, char *url);
 char *MoReturnURLFromFileName(char *fileName);
 void MoCCIAddAnchorToURL(char *url, char *urlAndAnchor);
 

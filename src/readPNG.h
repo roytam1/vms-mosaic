@@ -52,10 +52,10 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2004, 2006 - The VMS Mosaic Project */
+
 /* Author: DXP */
 
-#include "png.h"
-
-unsigned char *
-ReadPNG(FILE *infile,int *width, int *height, XColor *colrs);
+unsigned char *ReadPNG(Widget hw, FILE *infile, int *width, int *height,
+		       XColor *colrs, int *bg, unsigned char **alpha);
 

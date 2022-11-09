@@ -52,15 +52,13 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* This file is Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
-
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
 
 #ifndef __MAIN_H__
 #define __MAIN_H__
@@ -77,7 +75,13 @@
 #define MO_SIGHANDLER_ARGS void
 #endif
 
-void mo_exit (void);
+extern void mo_exit(void);
 
+#ifdef VMS
+extern void InitExternalDirective(int grp_mbx, char *mbx_name_in);
+extern void ProcessExternalDirective(XtPointer cd, int *s, XtInputId *id);
+#else
+extern MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective(MO_SIGHANDLER_ARGS);
+#endif
 
-#endif /* not  __MAIN_H__ */
+#endif

@@ -3,17 +3,18 @@
 **
 */
 #include "../config.h"
-/* Connection: Keep-Alive support -bjs */
-#include "HTMIME.h"
 
+#include "HTMIME.h"
 #include "HTFormat.h"
+
+#ifdef HAVE_SSL
+#include <openssl/ssl.h>
+#endif
 
 PUBLIC float HTMaxSecs = 1e10;		/* No effective limit */
 PUBLIC float HTMaxLength = 1e10;	/* No effective limit */
 
-#include "HTUtils.h"
-#include "tcp.h"
-
+#include "HTTCP.h"
 #include "HTMLDTD.h"
 #include "HText.h"
 #include "HTAlert.h"
@@ -33,27 +34,28 @@ extern int www2Trace;
 #endif
 
 PUBLIC	BOOL HTOutputSource = NO;	/* Flag: shortcut parser to stdout */
+#ifndef VMS
 extern  BOOL interactive;
+#endif /* Not used, BSN */
 
 struct _HTStream {
-      WWW_CONST HTStreamClass*	isa;
+      WWW_CONST HTStreamClass *isa;
       /* ... */
 };
 
 
 /* Whoooooooooooooa ugly!!! */
 int loading_length = -1;
-int noLength=1;
 
-/*SWP -- Even Uglier*/
+/* Even Uglier */
 extern int ftpKludge;
 
 /*	Presentation methods
 **	--------------------
 */
 
-PUBLIC  HTList * HTPresentations = 0;
-PUBLIC  HTPresentation* default_presentation = 0;
+PUBLIC  HTList *HTPresentations = 0;
+PUBLIC  HTPresentation *default_presentation = 0;
 
 
 /*	Define a presentation system command for a content-type
@@ -64,25 +66,31 @@ PUBLIC void HTSetPresentation ARGS5(
 	WWW_CONST char *, command,
 	float,	quality,
 	float,	secs, 
-	float,	secs_per_byte
-){
-
-    HTPresentation * pres = (HTPresentation *)malloc(sizeof(HTPresentation));
+	float,	secs_per_byte)
+{
+    HTPresentation *pres = (HTPresentation *)malloc(sizeof(HTPresentation));
+    static init = 0;
+    static HTAtom *www_present;
     
+    if (!init) {
+	www_present = WWW_PRESENT;
+	init = 1;
+    }
     pres->rep = HTAtom_for(representation);
-    pres->rep_out = WWW_PRESENT;		/* Fixed for now ... :-) */
+    pres->rep_out = www_present;		/* Fixed for now ... :-) */
     pres->converter = HTSaveAndExecute;		/* Fixed for now ...     */
     pres->quality = quality;
     pres->secs = secs;
     pres->secs_per_byte = secs_per_byte;
-    pres->rep = HTAtom_for(representation);
     pres->command = 0;
     StrAllocCopy(pres->command, command);
     
-    if (!HTPresentations) HTPresentations = HTList_new();
+    if (!HTPresentations)
+	HTPresentations = HTList_new();
     
-    if (strcmp(representation, "*")==0) {
-        if (default_presentation) free(default_presentation);
+    if (!strcmp(representation, "*")) {
+        if (default_presentation)
+	    free(default_presentation);
 	default_presentation = pres;
     } else {
         HTList_addObjectAtEnd(HTPresentations, pres);
@@ -96,13 +104,12 @@ PUBLIC void HTSetPresentation ARGS5(
 PUBLIC void HTSetConversion ARGS6(
 	WWW_CONST char *, representation_in,
 	WWW_CONST char *, representation_out,
-	HTConverter*,	converter,
+	HTConverter *,	  converter,
 	float,	quality,
 	float,	secs, 
-	float,	secs_per_byte
-){
-
-    HTPresentation * pres = (HTPresentation *)malloc(sizeof(HTPresentation));
+	float,	secs_per_byte)
+{
+    HTPresentation *pres = (HTPresentation *)malloc(sizeof(HTPresentation));
     
     pres->rep = HTAtom_for(representation_in);
     pres->rep_out = HTAtom_for(representation_out);
@@ -111,12 +118,13 @@ PUBLIC void HTSetConversion ARGS6(
     pres->quality = quality;
     pres->secs = secs;
     pres->secs_per_byte = secs_per_byte;
-    pres->command = 0;
     
-    if (!HTPresentations) HTPresentations = HTList_new();
+    if (!HTPresentations)
+	HTPresentations = HTList_new();
     
-    if (strcmp(representation_in, "*")==0) {
-        if (default_presentation) free(default_presentation);
+    if (!strcmp(representation_in, "*")) {
+        if (default_presentation)
+	    free(default_presentation);
 	default_presentation = pres;
     } else {
         HTList_addObject(HTPresentations, pres);
@@ -124,7 +132,6 @@ PUBLIC void HTSetConversion ARGS6(
 }
 
 
-/********************ddt*/
 /*
 ** Remove a conversion routine from the presentation list.
 ** The conversion routine must match up with the given args.
@@ -132,13 +139,12 @@ PUBLIC void HTSetConversion ARGS6(
 PUBLIC void HTRemoveConversion ARGS3(
 	WWW_CONST char *, representation_in,
 	WWW_CONST char *, representation_out,
-	HTConverter*,	converter
-){
-int numberOfPresentations; 
-HTPresentation * pres;
-HTAtom *rep_in, *rep_out;
-int x;
-
+	HTConverter *,	  converter)
+{
+    int numberOfPresentations; 
+    HTPresentation *pres;
+    HTAtom *rep_in, *rep_out;
+    int x;
 
     numberOfPresentations = HTList_count(HTPresentations);
 
@@ -148,17 +154,14 @@ int x;
     for (x = 0; x < numberOfPresentations; x++) {
         pres = HTList_objectAt(HTPresentations, x);
 	if (pres) {
-		if ((!strcmp(pres->rep->name,rep_in->name)) &&
-		    (!strcmp(pres->rep_out->name,rep_out->name)) &&
-		    (pres->converter == converter)) {
-			HTList_removeObject(HTPresentations,pres);
-			}
-		}
-	
+	    if ((!strcmp(pres->rep->name, rep_in->name)) &&
+		(!strcmp(pres->rep_out->name, rep_out->name)) &&
+		(pres->converter == converter))
+		HTList_removeObject(HTPresentations, pres);
 	}
+	
+    }
 }
-
-/***************** end ddt*/
 
 
 /*	File buffering
@@ -169,10 +172,14 @@ int x;
 **	The input buffer size, if large will give greater efficiency and
 **	release the server faster, and if small will save space on PCs etc.
 */
+#ifndef VMS
 #define INPUT_BUFFER_SIZE 65536
+#else
+#define INPUT_BUFFER_SIZE 16384
+#endif /* VMS, BSN */
 PRIVATE char input_buffer[INPUT_BUFFER_SIZE];
-PRIVATE char * input_pointer;
-PRIVATE char * input_limit;
+PRIVATE char *input_pointer;
+PRIVATE char *input_limit;
 PRIVATE int input_file_number;
 
 
@@ -182,138 +189,150 @@ PRIVATE int input_file_number;
 **	many parsers, and on PCs and Macs we should not duplicate
 **	the static buffer area.
 */
-PUBLIC void HTInitInput ARGS1 (int,file_number)
+PUBLIC void HTInitInput ARGS1 (int, file_number)
 {
     input_file_number = file_number;
     input_pointer = input_limit = input_buffer;
 }
 
 PUBLIC int interrupted_in_htgetcharacter = 0;
+
 PUBLIC char HTGetCharacter NOARGS
 {
   char ch;
+
   interrupted_in_htgetcharacter = 0;
-  do 
-    {
-      if (input_pointer >= input_limit) 
-        {
-          int status = 
-            NETREAD(input_file_number, input_buffer, INPUT_BUFFER_SIZE);
-          if (status <= 0) 
-            {
+
+  do {
+      if (input_pointer >= input_limit) {
+          int status =
+	      NETREAD(input_file_number, input_buffer, INPUT_BUFFER_SIZE);
+
+          if (status <= 0)  {
               if (status == 0) 
-                return (char)EOF;
-              if (status == HT_INTERRUPTED)
-                {
+                  return (char)EOF;
+              if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
                   if (www2Trace)
-                    fprintf (stderr, "HTFormat: Interrupted in HTGetCharacter\n");
+                      fprintf(stderr,
+			      "HTFormat: Interrupted in HTGetCharacter\n");
 #endif
                   interrupted_in_htgetcharacter = 1;
                   return (char)EOF;
-                }
+              }
 #ifndef DISABLE_TRACE
               if (www2Trace) 
-                fprintf(stderr,
-                        "HTFormat: File read error %d\n", status);
+                  fprintf(stderr, "HTFormat: File read error %d\n", status);
 #endif
               return (char)EOF;
-	    }
+          }
           input_pointer = input_buffer;
           input_limit = input_buffer + status;
-	}
+      }
       ch = *input_pointer++;
-    }
-  while (ch == (char) 13); /* Ignore ASCII carriage return */
-  
+  } while (ch == (char) 13); /* Ignore ASCII carriage return */
+
   return ch;
 }
 
+#ifdef NEED_HTOutputBinary
 /*	Stream the data to an ouput file as binary
 */
 PUBLIC int HTOutputBinary ARGS2( int, 		input,
-				  FILE *, 	output)
+				 FILE *, 	output)
 {
-  do 
-    {
+  do {
       int status = NETREAD(input, input_buffer, INPUT_BUFFER_SIZE);
-      if (status <= 0) 
-        {
+
+      if (status <= 0) {
           if (status == 0) 
-            return 0;
+              return 0;
 #ifndef DISABLE_TRACE
-          if (www2Trace) fprintf(stderr,
-                             "HTFormat: File read error %d\n", status);
+          if (www2Trace)
+	      fprintf(stderr, "HTFormat: File read error %d\n", status);
 #endif
           return 2;			/* Error */
-        }
+      }
+#ifndef VMS
       fwrite(input_buffer, sizeof(char), status, output);
-    } while (YES);
+#else
+      if (fwrite(input_buffer, sizeof(char), status, output) != status) {
+          char *str;
+
+          str = (char *)malloc(128 * sizeof(char));
+          sprintf(str, "VMS I/O error in HTOutputBinary:\n%s\0",
+                  strerror(errno, vaxc$errno));
+          application_user_feedback(str);
+          free(str);
+      }
+#endif /* VMS, BSN */
+  } while (YES);
 }
+#endif
 
 
 static int partial_wildcard_matches (HTFormat r1, HTFormat r2)
 {
   /* r1 is the presentation format we're currently looking at out
-     of the list we understand.  r2 is the one we need to get to. */
-  char *s1, *s2, *subtype1 = NULL, *subtype2 = NULL;
+   * of the list we understand.  r2 is the one we need to get to. */
+  char *s1, *s2;
+  char *subtype1 = NULL, *subtype2 = NULL;
   int i;
 
-  s1 = HTAtom_name (r1);
-  s2 = HTAtom_name (r2);
+  s1 = HTAtom_name(r1);
+  s2 = HTAtom_name(r2);
 
   if (!s1 || !s2)
-    return 0;
+      return 0;
   
-  s1 = strdup (s1);
-  s2 = strdup (s2);
+  s1 = strdup(s1);
+  s2 = strdup(s2);
 
-  for (i = 0; i < strlen (s1); i++)
-    if (s1[i] == '/')
-      {
-        s1[i] = '\0';
-        subtype1 = &(s1[i+1]);
-        /* Now s1 contains the main type and subtype1 contains
-           the subtype. */
-        goto done1;
+  for (i = 0; i < strlen(s1); i++) {
+      if (s1[i] == '/') {
+          s1[i] = '\0';
+          subtype1 = &(s1[i + 1]);
+          /* Now s1 contains the main type and subtype1 contains
+           * the subtype. */
+          goto done1;
       }
+  }
 
  done1:
   if (!subtype1)
-    goto nope;
+      goto nope;
   
   /* Bail if we don't have a wildcard possibility. */
   if (subtype1[0] != '*')
-    goto nope;
+      goto nope;
 
-  for (i = 0; i < strlen (s2); i++)
-    if (s2[i] == '/')
-      {
-        s2[i] = '\0';
-        subtype2 = &(s2[i+1]);
-        /* Now s2 contains the main type and subtype2 contains
-           the subtype. */
-        goto done2;
+  for (i = 0; i < strlen(s2); i++) {
+      if (s2[i] == '/') {
+          s2[i] = '\0';
+          subtype2 = &(s2[i + 1]);
+          /* Now s2 contains the main type and subtype2 contains
+           * the subtype. */
+          goto done2;
       }
-
+  }
  done2:
   if (!subtype2)
-    goto nope;
+      goto nope;
 
   /* Bail if s1 and s2 aren't the same and s1[0] isn't '*'. */
-  if (strcmp (s1, s2) && s1[0] != '*')
-    goto nope;
+  if (strcmp(s1, s2) && s1[0] != '*')
+      goto nope;
 
   /* OK, so now either we have the same main types or we have a wildcard
-     type for s1.  We also know that we have a wildcard possibility in
-     s1.  Therefore, at this point, we have a match. */
-  free (s1);
-  free (s2);
+   * type for s1.  We also know that we have a wildcard possibility in
+   * s1.  Therefore, at this point, we have a match. */
+  free(s1);
+  free(s2);
   return 1;
 
  nope:
-  free (s1);
-  free (s2);
+  free(s1);
+  free(s2);
   return 0;
 }
   
@@ -323,114 +342,104 @@ static int partial_wildcard_matches (HTFormat r1, HTFormat r2)
 **
 **	If a wildcard match is made, a temporary HTPresentation
 **	structure is made to hold the destination format while the
-**	new stack is generated. This is just to pass the out format to
+**	new stack is generated.  This is just to pass the out format to
 **	MIME so far.  Storing the format of a stream in the stream might
 **	be a lot neater.
 */
-PUBLIC HTStream * HTStreamStack ARGS5(
+PUBLIC HTStream *HTStreamStack ARGS5(
 	HTFormat,		format_in,
 	HTFormat,		rep_out,
         int,                    compressed,
-	HTStream*,		sink,
-	HTParentAnchor*,	anchor)
+	HTStream *,		sink,
+	HTParentAnchor *,	anchor)
 {
-  HTAtom * wildcard = HTAtom_for("*");
+  HTAtom *wildcard = HTAtom_for("*");
   HTPresentation temp;
 
   /* Inherit force_dump_to_file from mo-www.c. */
   extern int force_dump_to_file;
 
 #ifndef DISABLE_TRACE
-  if (www2Trace) 
-    fprintf(stderr,
-            "[HTStreamStack] Constructing stream stack for %s to %s\n",
-            HTAtom_name(format_in),	
-            HTAtom_name(rep_out));
-#endif
-#ifndef DISABLE_TRACE
-  if (www2Trace)
-    fprintf (stderr,
-             "               Compressed is %d\n", compressed);
+  if (www2Trace) {
+      fprintf(stderr,
+              "[HTStreamStack] Constructing stream stack for %s to %s\n",
+              HTAtom_name(format_in), HTAtom_name(rep_out));
+      fprintf(stderr, "               Compressed is %d\n", compressed);
+  }
 #endif
     
-  if (rep_out == WWW_SOURCE ||
-      rep_out == format_in) 
-    {
+  if (rep_out == WWW_SOURCE || rep_out == format_in) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr,
-                 "[HTStreamStack] rep_out == WWW_SOURCE | rep_out == format_in; returning sink\n");
+          fprintf(stderr,
+          "[HTStreamStack] rep_out = WWW_SOURCE | rep_out = format_in; returning sink\n");
 #endif
       return sink;
-    }
+  }
   
   if (!HTPresentations) 
-    HTFormatInit();	/* set up the list */
+      HTFormatInit();	/* Set up the list */
   
   if (force_dump_to_file && format_in != WWW_MIME)
-    {
-      return HTSaveAndExecute (NULL, anchor, sink, format_in, compressed);
-    }
+      return HTSaveAndExecute(NULL, anchor, sink, format_in, compressed);
   
   {
     int n = HTList_count(HTPresentations);
     int i;
-    HTPresentation * pres;
-    for(i=0; i<n; i++) 
-      {
+    HTPresentation *pres;
+
+    for (i = 0; i < n; i++) {
         pres = HTList_objectAt(HTPresentations, i);
 #ifndef DISABLE_TRACE
-        if (www2Trace)
-          {
-            fprintf (stderr, "HTFormat: looking at pres '%s'\n",
-                     HTAtom_name (pres->rep));
-            if (pres->command)
-              fprintf (stderr, "HTFormat: pres->command is '%s'\n",
-                       pres->command);
-            else
-              fprintf (stderr, "HTFormat: pres->command doesn't exist\n");
-          }
+        if (www2Trace) {
+            fprintf(stderr, "HTFormat: looking at pres '%s'\n",
+                    HTAtom_name(pres->rep));
+            if (pres->command) {
+                fprintf(stderr, "HTFormat: pres->command is '%s'\n",
+                        pres->command);
+            } else {
+                fprintf(stderr, "HTFormat: pres->command doesn't exist\n");
+	    }
+        }
 #endif
         if (pres->rep == format_in ||
-            partial_wildcard_matches (pres->rep, format_in))
-          {
-            if (pres->command && strstr (pres->command, "mosaic-internal-present"))
-              {
+            partial_wildcard_matches(pres->rep, format_in)) {
+            if (pres->command &&
+		strstr(pres->command, "mosaic-internal-present")) {
 #ifndef DISABLE_TRACE
                 if (www2Trace)
-                  fprintf (stderr, "[HTStreamStack] HEY HEY HEY caught internal-present\n");
+                    fprintf(stderr, "[HTStreamStack] Found internal-present\n");
 #endif
-                return HTPlainPresent (pres, anchor, sink, format_in, compressed);
-              }
-            if (pres->rep_out == rep_out)
-              {
+                return HTPlainPresent(pres, anchor, sink, format_in,
+				      compressed);
+            }
+            if (pres->rep_out == rep_out) {
 #ifndef DISABLE_TRACE
                 if (www2Trace)
-                  fprintf (stderr,
-                           "[HTStreamStack] pres->rep_out == rep_out\n");
+                    fprintf(stderr,
+                            "[HTStreamStack] pres->rep_out = rep_out\n");
 #endif
-                return (*pres->converter)(pres, anchor, sink, format_in, compressed);
-              }
-            if (pres->rep_out == wildcard) 
-              {
+                return
+		  (*pres->converter)(pres, anchor, sink, format_in, compressed);
+            }
+            if (pres->rep_out == wildcard) {
 #ifndef DISABLE_TRACE
                 if (www2Trace)
-                  fprintf (stderr,
-                           "[HTStreamStack] pres->rep_out == wildcard\n");
+                    fprintf(stderr,
+                            "[HTStreamStack] pres->rep_out = wildcard\n");
 #endif
-                temp = *pres;/* make temp conversion to needed fmt */
+                temp = *pres; /* Make temp conversion to needed fmt */
                 temp.rep_out = rep_out;		/* yuk */
-                return (*pres->converter)(&temp, anchor, sink, format_in, compressed);
-              }
-          }
-      }
+                return
+		 (*pres->converter)(&temp, anchor, sink, format_in, compressed);
+            }
+        }
+    }
   }
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    {
-      fprintf (stderr, "[HTStreamStack] Returning NULL at bottom.\n");
-    }
+      fprintf(stderr, "[HTStreamStack] Returning NULL at bottom.\n");
 #endif
   
   return NULL;
@@ -451,32 +460,34 @@ PUBLIC float HTStackValue ARGS4(
 	float,			initial_value,
 	long int,		length)
 {
-    HTAtom * wildcard = HTAtom_for("*");
+    HTAtom *wildcard = HTAtom_for("*");
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr,
-    	"HTFormat: Evaluating stream stack for %s worth %.3f to %s\n",
-	HTAtom_name(format_in),	initial_value,
-	HTAtom_name(rep_out));
+    if (www2Trace)
+	fprintf(stderr,
+    	        "HTFormat: Evaluating stream stack for %s worth %.3f to %s\n",
+	        HTAtom_name(format_in), initial_value, HTAtom_name(rep_out));
 #endif
 		
-    if (rep_out == WWW_SOURCE ||
-    	rep_out == format_in) return 0.0;
+    if (rep_out == WWW_SOURCE || rep_out == format_in)
+	return 0.0;
 
-    if (!HTPresentations) HTFormatInit();	/* set up the list */
+    if (!HTPresentations)
+	HTFormatInit();	/* Set up the list */
     
     {
 	int n = HTList_count(HTPresentations);
 	int i;
-	HTPresentation * pres;
-	for(i=0; i<n; i++) {
+	HTPresentation *pres;
+
+	for (i = 0; i < n; i++) {
 	    pres = HTList_objectAt(HTPresentations, i);
-	    if (pres->rep == format_in && (
-	    		pres->rep_out == rep_out ||
-			pres->rep_out == wildcard)) {
+	    if (pres->rep == format_in &&
+	    	(pres->rep_out == rep_out || pres->rep_out == wildcard)) {
 	        float value = initial_value * pres->quality;
+
 		if (HTMaxSecs != 0.0)
-		value = value - (length*pres->secs_per_byte + pres->secs)
+		    value = value - (length * pres->secs_per_byte + pres->secs)
 			                 /HTMaxSecs;
 		return value;
 	    }
@@ -499,12 +510,10 @@ PUBLIC float HTStackValue ARGS4(
 **   when the format is textual.
 **
 */
-
-#define SWP_HACK
-
-PUBLIC int HTCopy ARGS3(int,			file_number,
-                         HTStream*,		sink,
-                         int,                   bytes_already_read)
+PUBLIC int HTCopy ARGS4(int,		file_number,
+                        HTStream *,	sink,
+                        int,            bytes_already_read,
+			void *,		handle)
 {
   HTStreamClass targetClass;    
   char line[256];
@@ -513,147 +522,128 @@ PUBLIC int HTCopy ARGS3(int,			file_number,
   extern int twirl_increment;
   int next_twirl = twirl_increment;
   int rv = 0;
+  int left = -1;
+  int total_read = bytes_already_read;
+  int hdr_len;
+  int status, intr;
 
-  int left = -1, total_read = bytes_already_read, hdr_len = 0;
-
-/*  if(loading_length != -1) left = loading_length;*/
-
-  HTClearActiveIcon();
-
-  /*	Push the data down the stream
-   **
+  /*
+   * Push the data down the stream
    */
   targetClass = *(sink->isa);	/* Copy pointers to procedures */
   
   hdr_len = HTMIME_get_header_length(sink);
 
-      /*	Push binary from socket down sink */
-  for(;;) 
-    {
-      int status, intr;
-
-      if (bytes > next_twirl)
-        {
+  /* Push binary from socket down sink */
+  for (;;) {
+      if (bytes > next_twirl) {
           intr = HTCheckActiveIcon(1);
           next_twirl += twirl_increment;
-        }
-      else
-        {
+      } else {
           intr = HTCheckActiveIcon(0);
-        }
-      if (intr)
-        {
-#ifdef SWP_HACK
-	  loading_length=(-1);
-#endif
-          HTProgress ("Data transfer interrupted.");
-	  noLength=0;
-	  HTMeter(100,NULL);
-	  noLength=1;
+      }
+      if (intr) {
+	  loading_length = -1;
+          HTProgress("Data transfer interrupted.");
+	  HTMeter(100, NULL);
           (*targetClass.handle_interrupt)(sink);
           rv = -1;
           goto ready_to_leave;
-        }
+      }
       
-      if(loading_length == -1) {
+      if (loading_length == -1) {
 	  left = -1;
+#ifdef HAVE_SSL
+	  if (handle) {
+	      status = SSL_read((SSL *)handle, input_buffer, INPUT_BUFFER_SIZE);
+	  } else {
+	      status = NETREAD(file_number, input_buffer, INPUT_BUFFER_SIZE);
+	  }
+#else
 	  status = NETREAD(file_number, input_buffer, INPUT_BUFFER_SIZE);
+#endif
       } else {
-	  left = (loading_length+hdr_len)-total_read;
-	  if(left>0) status = NETREAD(file_number, input_buffer, 
-                                      (left>INPUT_BUFFER_SIZE?
-                                       INPUT_BUFFER_SIZE:left));
-          else status=0;
+	  left = (loading_length + hdr_len) - total_read;
+	  if (left > 0) {
+#ifdef HAVE_SSL
+	      if (handle) {
+		  status = SSL_read((SSL *)handle, input_buffer, 
+                                    (left > INPUT_BUFFER_SIZE ?
+                                     INPUT_BUFFER_SIZE : left));
+	      } else {
+		  status = NETREAD(file_number, input_buffer, 
+                                   (left > INPUT_BUFFER_SIZE ?
+                                    INPUT_BUFFER_SIZE : left));
+	      }
+#else
+	      status = NETREAD(file_number, input_buffer, 
+                               (left > INPUT_BUFFER_SIZE ?
+                                INPUT_BUFFER_SIZE : left));
+#endif
+          } else {
+	      status = 0;
+	  }
       }
 
       if (status > 0)
 	  total_read += status;
       
-/*      fprintf(stderr,"ll = %d status = %d left = %d hdr = %d tr = %d\n",
-              loading_length,status,left,hdr_len,total_read);
-              */		  
-
-/*
-      status = NETREAD(file_number, input_buffer, INPUT_BUFFER_SIZE);
-*/
-      if (status <= 0) 
-        {
+      if (status <= 0) {
           if (status == 0) 
-            break;
-          if (status == HT_INTERRUPTED)
-            {
-#ifdef SWP_HACK
-	      loading_length=(-1);
-#endif
-              HTProgress ("Data transfer interrupted.");
-	      noLength=0;
-	      HTMeter(100,NULL);
-	      noLength=1;
+              break;
+          if (status == HT_INTERRUPTED) {
+	      loading_length = -1;
+              HTProgress("Data transfer interrupted.");
+	      HTMeter(100, NULL);
               (*targetClass.handle_interrupt)(sink);
               rv = -1;
               goto ready_to_leave;
-            }
-          if (errno == ENOTCONN || errno == ECONNRESET || errno == EPIPE)
-            {
-              /* Arrrrgh, HTTP 0/1 compability problem, maybe. */
+          }
+#ifndef MULTINET
+          if (errno == ENOTCONN || errno == ECONNRESET || errno == EPIPE) {
+#else
+          if (socket_errno == ENOTCONN || socket_errno == ECONNRESET ||
+              socket_errno == EPIPE) {
+#endif /* MULTINET, BSN */
+              /* Arrrrgh, HTTP 0/1 compatibility problem, maybe. */
               rv = -2;
               goto ready_to_leave;
-            }
+          }
           break;
-	}
-
-#ifndef DISABLE_TRACE
-      if (www2Trace)
-	  fprintf (stderr, "HTCopy: put_block on input_buffer '%s'\n", input_buffer);
-#endif
+      }
 
       (*targetClass.put_block)(sink, input_buffer, status);
 
       if (ftpKludge) {
-	hdr_len=0;
+	  hdr_len = 0;
+      } else {
+	  hdr_len = HTMIME_get_header_length(sink);
       }
-      else {
-	hdr_len = HTMIME_get_header_length(sink);
-      }
-
-/*	  left = loading_length - total_read;*/
 
       bytes += status;
 
-      /* moved msg stuff here as loading_length may change midstream -bjs*/
-      if (loading_length == -1){
+      /* Moved msg stuff here as loading_length may change midstream */
+      if (loading_length == -1) {
 	  msg = (loading_inlined_images ? 
 		 "Read %d bytes of inlined image data." : 
 		 "Read %d bytes of data.");
-        sprintf (line, msg, bytes);
-/*	HTMeter(0,NULL);*/
-      }else{
+          sprintf(line, msg, bytes);
+      } else {
 	  msg = (loading_inlined_images ? 
 		 "Read %d of %d bytes of inlined image data." : 
 		 "Read %d of %d bytes of data.");
-        sprintf (line, msg, bytes, loading_length+hdr_len);
-	HTMeter((bytes*100)/(loading_length+hdr_len),NULL);
+          sprintf(line, msg, bytes, loading_length + hdr_len);
+	  HTMeter((bytes * 100) / (loading_length + hdr_len), NULL);
       }
-      HTProgress (line);
-      if((loading_length != -1) && (total_read>=(loading_length+hdr_len))) {
-/*	  fprintf(stderr,"done\n");*/
+      HTProgress(line);
+      if ((loading_length != -1) &&
+	  (total_read >= (loading_length + hdr_len)))
 	  break;
-      }
-    } /* next bufferload */
-  
-/*
-  HTProgress (loading_inlined_images ?
-              "Data transfer complete." : "Data transfer complete.");    
-*/
-  HTProgress("Data transfer complete.");
-  noLength=0;
-  HTMeter(100,NULL);
-  noLength=1;
 
-/*  fprintf(stderr,"HTFormat: KeepAlive Exit\n");*/
-/*
-  NETCLOSE (file_number);
-*/
+  } /* Next bufferload */
+  
+  HTProgress("Data transfer complete.");
+  HTMeter(100, NULL);
 
   /* Success. */
   rv = 0;
@@ -666,7 +656,6 @@ PUBLIC int HTCopy ARGS3(int,			file_number,
 }
 
 
-
 /*	Push data from a file pointer down a stream
 **	-------------------------------------
 **
@@ -676,27 +665,30 @@ PUBLIC int HTCopy ARGS3(int,			file_number,
 **
 */
 PUBLIC void HTFileCopy ARGS2(
-	FILE *,			fp,
-	HTStream*,		sink)
+	FILE *,		fp,
+	HTStream *,	sink)
 {
     HTStreamClass targetClass;    
+    int status;
     
     targetClass = *(sink->isa);	/* Copy pointers to procedures */
     
-    for(;;) {
-	int status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
+    for (;;) {
+	status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
 	if (status == 0) { /* EOF or error */
-	    if (ferror(fp) == 0) break;
+	    if (ferror(fp) == 0)
+		break;
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr,
-		"HTFormat: Read error, read returns %d\n", ferror(fp));
+	    if (www2Trace)
+		fprintf(stderr,
+		        "HTFormat: Read error, read returns %d\n", ferror(fp));
 #endif
 	    break;
 	}
 	(*targetClass.put_block)(sink, input_buffer, status);
-    } /* next bufferload */
+    } /* Next bufferload */
 
-    fclose (fp);
+    fclose(fp);
     return;
 }
 
@@ -705,22 +697,24 @@ PUBLIC void HTFileCopyToText ARGS2(
 	FILE *,			fp,
 	HText *,		text)
 {
-  for(;;) 
-    {
-      int status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
-      if (status == 0) 
-        { /* EOF or error */
-          if (ferror(fp) == 0) break;
+  int status;
+
+  for (;;) {
+      status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
+      if (status == 0) { /* EOF or error */
+          if (ferror(fp) == 0)
+	      break;
 #ifndef DISABLE_TRACE
-          if (www2Trace) fprintf(stderr,
-                             "HTFormat: Read error, read returns %d\n", ferror(fp));
+          if (www2Trace)
+	      fprintf(stderr,
+		      "HTFormat: Read error, read returns %d\n", ferror(fp));
 #endif
           break;
-        }
-      HText_appendBlock (text, input_buffer, status);
-  } /* next bufferload */
+      }
+      HText_appendBlock(text, input_buffer, status);
+  } /* Next bufferload */
   
-  fclose (fp);
+  fclose(fp);
   return;
 }
 
@@ -740,37 +734,34 @@ PUBLIC int HTParseSocket ARGS6(
 	HTFormat,		format_out,
 	HTParentAnchor *,	anchor,
 	int,			file_number,
-	HTStream*,		sink,
+	HTStream *,		sink,
         int,                    compressed)
 {
-  HTStream * stream;
+  HTStream *stream;
   HTStreamClass targetClass;    
   int rv;
   
-  stream = HTStreamStack(format_in,
-                         format_out,
-                         compressed,
-                         sink, anchor);
-  
-  if (!stream) 
-    {
+  stream = HTStreamStack(format_in, format_out, compressed, sink, anchor);
+
+  if (!stream) {
       char buffer[1024];	/* @@@@@@@@ */
+
       sprintf(buffer, "Sorry, can't convert from %s to %s.",
               HTAtom_name(format_in), HTAtom_name(format_out));
 #ifndef DISABLE_TRACE
-      if (www2Trace) fprintf(stderr, "HTFormat: %s\n", buffer);
+      if (www2Trace)
+	  fprintf(stderr, "HTFormat: %s\n", buffer);
 #endif
       return HTLoadError(sink, 501, buffer);
-    }
+  }
     
   targetClass = *(stream->isa);	/* Copy pointers to procedures */
-  rv = HTCopy(file_number, stream, 0);
-  if (rv == -1)
-    {
-      /* handle_interrupt should have been done in HTCopy */
+  rv = HTCopy(file_number, stream, 0, NULL);
+  if (rv == -1) {
+      /* Handle_interrupt should have been done in HTCopy */
       /* (*targetClass.handle_interrupt)(stream); */
       return HT_INTERRUPTED;
-    }
+  }
 
   (*targetClass.end_document)(stream);
 
@@ -778,13 +769,12 @@ PUBLIC int HTParseSocket ARGS6(
      an external viewer gets forked off in the free method below,
      the connection doesn't remain upon until the child exits --
      which it does if we don't do this. */
-  NETCLOSE (file_number);
+  NETCLOSE(file_number);
 
   (*targetClass.free)(stream);
     
   return HT_LOADED;
 }
-
 
 
 /*	Parse a file given format and file pointer
@@ -802,23 +792,22 @@ PUBLIC int HTParseFile ARGS6(
 	HTFormat,		format_out,
 	HTParentAnchor *,	anchor,
 	FILE *,			fp,
-	HTStream*,		sink,
+	HTStream *,		sink,
         int,                    compressed)
 {
-    HTStream * stream;
+    HTStream *stream;
     HTStreamClass targetClass;    
     
-    stream = HTStreamStack(format_in,
-                           format_out,
-                           compressed,
-                           sink , anchor);
+    stream = HTStreamStack(format_in, format_out, compressed, sink, anchor);
     
     if (!stream) {
         char buffer[1024];	/* @@@@@@@@ */
+
 	sprintf(buffer, "Sorry, can't convert from %s to %s.",
 		HTAtom_name(format_in), HTAtom_name(format_out));
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "HTFormat(in HTParseFile): %s\n", buffer);
+	if (www2Trace)
+	    fprintf(stderr, "HTFormat(in HTParseFile): %s\n", buffer);
 #endif
         return HTLoadError(sink, 501, buffer);
     }

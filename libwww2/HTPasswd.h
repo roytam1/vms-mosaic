@@ -13,18 +13,19 @@
 #define HTAApwMa        HTAA_passwdMatch
 #define HTAAFrPR        HTAAFile_readPasswdRec
 #define HTAAchPw        HTAA_checkPasswd
-#endif /* SHORT_NAMES */
+#endif
 
 /*
 
 User Authentication
 
-   HTAA_checkPassword(username,password,passwdfile)opens the password file, and checks if
-   the username-password pair is correct. Return value is YES, if and only if they are
-   correct. Otherwise, and also if the open fails, returns NO.
+   HTAA_checkPassword(username, password, passwdfile) opens the password file,
+   and checks if the username-password pair is correct.  Return value is YES,
+   if and only if they are correct.  Otherwise, and also if the open fails,
+   returns NO.
    
-   If the given password file name is NULL or an empty string, the default password file
-   name is used (macro PASSWD_FILE).
+   If the given password file name is NULL or an empty string, the default
+   password file name is used (macro PASSWD_FILE).
    
  */
 
@@ -43,13 +44,12 @@ User Authentication
 **      returns         YES, if the username-password pair was correct.
 **                      NO, otherwise; also, if open fails.
 */
-PUBLIC BOOL HTAA_checkPassword PARAMS((WWW_CONST char * username,
-                                       WWW_CONST char * password,
-                                       WWW_CONST char * filename));
+PUBLIC BOOL HTAA_checkPassword PARAMS((WWW_CONST char *username,
+                                       WWW_CONST char *password,
+                                       WWW_CONST char *filename));
+
 /*
-
-Password File Maintenance Routines
-
+ * Password File Maintenance Routines
  */
 
 /* PUBLIC                                               HTAA_encryptPasswd()
@@ -71,7 +71,7 @@ Password File Maintenance Routines
 **      about the security inside the machine.
 **
 */
-PUBLIC char *HTAA_encryptPasswd PARAMS((WWW_CONST char * password));
+PUBLIC char *HTAA_encryptPasswd PARAMS((WWW_CONST char *password));
 
 
 /* PUBLIC                                               HTAA_passwdMatch()
@@ -88,8 +88,8 @@ PUBLIC char *HTAA_encryptPasswd PARAMS((WWW_CONST char * password));
 **      returns         YES, if password matches the encrypted one.
 **                      NO, if not, or if either parameter is NULL.
 */
-PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char * password,
-                                     WWW_CONST char * encrypted));
+PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char *password,
+                                     WWW_CONST char *encrypted));
 
 
 /* PUBLIC                                               HTAAFile_readPasswdRec()
@@ -114,14 +114,8 @@ PUBLIC BOOL HTAA_passwdMatch PARAMS((WWW_CONST char * password,
 **      There may be whitespace (blanks or tabs) in the beginning and
 **      the end of each field. They are ignored.
 */
-PUBLIC int HTAAFile_readPasswdRec PARAMS((FILE * fp,
-                                          char * out_username,
-                                          char * out_password));
-/*
-
- */
+PUBLIC int HTAAFile_readPasswdRec PARAMS((FILE *fp,
+                                          char *out_username,
+                                          char *out_password));
 
 #endif /* not HTPASSWD_H */
-/*
-
-   End of file HTPasswd.h.  */

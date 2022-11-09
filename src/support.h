@@ -62,5 +62,5 @@
    that file up because it was too big, and required a re-compile of all
    the source whenever something changed. */
 
-
-
+void GetWordFromString(char *, char **, char **);
+int ReadBuffer(MCCIPort, char *, int);

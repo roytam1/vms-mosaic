@@ -1,12 +1,11 @@
 /* XPM */
 static char * toolbar_back_1_xpm[] = {
-"24 24 6 1",
+"24 24 5 1",
 " 	c None",
-".	c #2A2A21218B8B",
 "X	c #000000000000",
 "o	c #404040404040",
-"O	c #7F7F7F7F7F7F",
-"+	c #C0C0C0C0C0C0",
+"O	c #808080808080",
+"+	c #BFBFBFBFBFBF",
 "                        ",
 "                        ",
 "                   XXX  ",

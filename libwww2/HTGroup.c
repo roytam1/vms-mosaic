@@ -81,8 +81,10 @@ PRIVATE void syntax_error ARGS3(FILE *,	 fp,
     int cnt = 0;
     char ch;
 
-    while ((ch = getc(fp)) != EOF  &&  ch != '\n')
-	if (cnt < 40) buffer[cnt++] = ch;
+    while ((ch = getc(fp)) != EOF  &&  ch != '\n') {
+	if (cnt < 40)
+	    buffer[cnt++] = ch;
+    }
     buffer[cnt] = (char)0;
 
 #ifndef DISABLE_TRACE
@@ -102,9 +104,9 @@ PRIVATE AddressDefList *parse_address_part ARGS1(FILE *, fp)
     BOOL only_one = NO;
 
     lex_item = lex(fp);
-    if (lex_item == LEX_ALPH_STR || lex_item == LEX_TMPL_STR)
+    if (lex_item == LEX_ALPH_STR || lex_item == LEX_TMPL_STR) {
 	only_one = YES;
-    else if (lex_item != LEX_OPEN_PAREN  ||
+    } else if (lex_item != LEX_OPEN_PAREN  ||
 	     ((lex_item = lex(fp)) != LEX_ALPH_STR &&
 	      lex_item != LEX_TMPL_STR)) {
 	syntax_error(fp, "Expecting a single address or '(' beginning list",
@@ -155,9 +157,9 @@ PRIVATE UserDefList *parse_user_part ARGS1(FILE *, fp)
     BOOL only_one = NO;
 
     lex_item = lex(fp);
-    if (lex_item == LEX_ALPH_STR)
+    if (lex_item == LEX_ALPH_STR) {
 	only_one = YES;
-    else if (lex_item != LEX_OPEN_PAREN  ||
+    } else if (lex_item != LEX_OPEN_PAREN  ||
 	     (lex_item = lex(fp)) != LEX_ALPH_STR) {
 	syntax_error(fp, "Expecting a single name or '(' beginning list",
 		     lex_item);
@@ -167,6 +169,7 @@ PRIVATE UserDefList *parse_user_part ARGS1(FILE *, fp)
 
     for (;;) {
 	Ref *ref = (Ref*)malloc(sizeof(Ref));
+
 	ref->name = NULL;
 	ref->translation = NULL;
 	StrAllocCopy(ref->name, lex_buffer);
@@ -220,9 +223,9 @@ PRIVATE Item *parse_item ARGS1(FILE *, fp)
 	    lex_item == LEX_OPEN_PAREN) {
 	    unlex(lex_item);
 	    address_def_list = parse_address_part(fp);
-	}
-	else {
-	    if (user_def_list) HTList_delete(user_def_list);	/* @@@@ */
+	} else {
+	    if (user_def_list)
+		HTList_delete(user_def_list);	/* @@@@ */
 	    syntax_error(fp, "Expected address part (single address or list)",
 			 lex_item);
 	    return NULL;
@@ -393,9 +396,9 @@ PRIVATE GroupDefList *parse_group_file ARGS1(FILE *, fp)
 
 PRIVATE void print_item ARGS1(Item *, item)
 {
-    if (!item)
+    if (!item) {
 	fprintf(stderr, "\tNULL-ITEM\n");
-    else {
+    } else {
 	UserDefList *cur1 = item->user_def_list;
 	AddressDefList *cur2 = item->address_def_list;
 	Ref *user_ref = (Ref*)HTList_nextObject(cur1);
@@ -408,14 +411,18 @@ PRIVATE void print_item ARGS1(Item *, item)
 		fprintf(stderr, "; %s%s", user_ref->name,
 			(user_ref->translation ? "*REF*" : ""));
 	    fprintf(stderr, "] ");
-	} else fprintf(stderr, "\tANYBODY ");
+	} else {
+	    fprintf(stderr, "\tANYBODY ");
+        }
 
 	if (addr_ref) {
 	    fprintf(stderr, "@ [%s", addr_ref->name);
 	    while (NULL != (addr_ref = (Ref*)HTList_nextObject(cur2)))
 		fprintf(stderr, "; %s", addr_ref->name);
 	    fprintf(stderr, "]\n");
-	} else fprintf(stderr, "@ ANYADDRESS\n");
+	} else {
+	     fprintf(stderr, "@ ANYADDRESS\n");
+        }
     }
 }
 
@@ -425,10 +432,11 @@ PRIVATE void print_item_list ARGS1(ItemList *, item_list)
     ItemList *cur = item_list;
     Item *item;
 
-    if (!item_list)
+    if (!item_list) {
 	fprintf(stderr, "EMPTY");
-    else while (NULL != (item = (Item*)HTList_nextObject(cur)))
+    } else while (NULL != (item = (Item*)HTList_nextObject(cur))) {
 	print_item(item);
+    }
 }
 
 
@@ -483,14 +491,14 @@ PRIVATE BOOL part_match ARGS2(WWW_CONST char *, tcur,
 
     if (!tcur || !icur) return NO;
 
-    cur=tcur;
-    cnt=0;
+    cur = tcur;
+    cnt = 0;
     while (cnt < 3  &&  *cur && *cur != '.')
 	required[cnt++] = *(cur++);
     required[cnt] = (char)0;
 
-    cur=icur;
-    cnt=0;
+    cur = icur;
+    cnt = 0;
     while (cnt < 3  &&  *cur && *cur != '.')
 	actual[cnt++] = *(cur++);
     actual[cnt] = (char)0;
@@ -498,6 +506,7 @@ PRIVATE BOOL part_match ARGS2(WWW_CONST char *, tcur,
 #ifndef DISABLE_TRACE
     if (www2Trace) {
 	BOOL status = HTAA_templateMatch(required, actual);
+
 	fprintf(stderr, "part_match: req: '%s' act: '%s' match: %s\n",
 		required, actual, (status ? "yes" : "no"));
 	return status;
@@ -525,11 +534,13 @@ PRIVATE BOOL ip_number_match ARGS2(WWW_CONST char *,	template,
     WWW_CONST char *icur = inet_addr;
     int cnt;
     
-    for (cnt=0; cnt<4; cnt++) {
+    for (cnt=0; cnt < 4; cnt++) {
 	if (!tcur || !icur || !part_match(tcur, icur))
 	    return NO;
-	if (NULL != (tcur = strchr(tcur, '.'))) tcur++;
-	if (NULL != (icur = strchr(icur, '.'))) icur++;
+	if (NULL != (tcur = strchr(tcur, '.')))
+	    tcur++;
+	if (NULL != (icur = strchr(icur, '.')))
+	    icur++;
     }
     return YES;
 }
@@ -556,7 +567,8 @@ PRIVATE BOOL is_domain_mask ARGS1(WWW_CONST char *,	mask)
 {
     WWW_CONST char *cur = mask;
 
-    if (!mask) return NO;
+    if (!mask)
+	return NO;
 
     while (*cur) {
 	if (*cur != '.'  &&  *cur != '*'  &&  (*cur < '0' || *cur > '9'))
@@ -596,8 +608,7 @@ PRIVATE BOOL ip_mask_match ARGS3(WWW_CONST char *,	mask,
 	if (is_domain_mask(mask)) {
 	    if (HTAA_templateMatch(mask, ip_name))
 		return YES;
-	}
-	else {
+	} else {
 	    if (ip_number_match(mask, ip_number))
 		return YES;
 	}
@@ -646,17 +657,18 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
     FILE *fp;
     GroupCache *group_cache;
 
-    if (!group_cache_list)
+    if (!group_cache_list) {
 	group_cache_list = HTList_new();
-    else {
+    } else {
 	GroupCacheList *cur = group_cache_list;
 
 	while (NULL != (group_cache = (GroupCache*)HTList_nextObject(cur))) {
 	    if (!strcmp(filename, group_cache->group_filename)) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s '%s' %s\n",
-				   "HTAA_readGroupFile: group file",
-				   filename, "already found in cache");
+		if (www2Trace)
+		    fprintf(stderr, "%s '%s' %s\n",
+			    "HTAA_readGroupFile: group file",
+			    filename, "already found in cache");
 #endif
 		return group_cache->group_list;
 	    } /* if cache match */
@@ -664,15 +676,16 @@ PUBLIC GroupDefList *HTAA_readGroupFile ARGS1(WWW_CONST char *, filename)
     } /* cache exists */
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr, "HTAA_readGroupFile: reading group file `%s'\n",
-		       filename);
+    if (www2Trace)
+	fprintf(stderr, "HTAA_readGroupFile: reading group file `%s'\n",
+		filename);
 #endif
 
     if (!(fp = fopen(filename, "r"))) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s '%s'\n",
-			   "HTAA_readGroupFile: unable to open group file",
-			   filename);
+	if (www2Trace)
+	    fprintf(stderr, "%s '%s'\n",
+		    "HTAA_readGroupFile: unable to open group file", filename);
 #endif
 	return NULL;
     }
@@ -730,9 +743,9 @@ PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
 	    if (!item->address_def_list ||	/* Any address allowed */
 		ip_in_def_list(item->address_def_list, ip_number, ip_name)) {
 		    
-		if (!item->user_def_list)	/* Any user allowed */
+		if (!item->user_def_list) {	/* Any user allowed */
 		    return HTAA_OK;
-		else {
+		} else {
 		    UserDefList *cur2 = item->user_def_list;
 		    Ref *ref;
 
@@ -744,10 +757,9 @@ PUBLIC HTAAFailReasonType HTAA_userAndInetInGroup ARGS4(GroupDef *, group,
 							     ip_number,ip_name);
 			    if (reason == HTAA_OK)
 				return HTAA_OK;
-			}
-			else {	/* Username, check directly */
+			} else {	/* Username, check directly */
 			    if (username && *username &&
-				0==strcmp(ref->name, username))
+				0 == strcmp(ref->name, username))
 				return HTAA_OK;
 			}
 		    } /* Every user/group name in this group */

@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+ * The VMS Mosaic Project
+ */
 
 #ifndef __MOSAIC_H__
 #define __MOSAIC_H__
@@ -147,7 +149,7 @@
 
 #if defined(VMS) && !defined(__DECC)  /* VAXC only */
 #if !defined(__CADDR_T) && !defined(CADDR_T) && !defined(__SOCKET_TYPEDEFS)
-typedef char * caddr_t;
+typedef char *caddr_t;
 #endif /* Do if tcp.h not included previously, GEC */
 #ifndef __CADDR_T
 #define __CADDR_T 1   /* DECwindows xresource.h wants __CADDR_T, PGE */
@@ -181,14 +183,14 @@ typedef enum
 /* -------------------------------- MACROS -------------------------------- */
 /* ------------------------------------------------------------------------ */
 
-#define MO_VERSION_STRING "3.6-1"
-#define MO_VERSION_STRING2 "3_6"  /* For file names */
+#define MO_VERSION_STRING "4.0"
+#define MO_VERSION_STRING2 "4_0"  /* For file names */
 #define MO_GO_NCSA_COUNT 0  /* Not the VMS style, AV */
 
 #define MO_HELP_ON_VERSION_DOCUMENT \
   mo_assemble_help_url("help-on-version-2.7b5.html")
 
-/* No one left at NCSA, GEC */
+/* No one left at NCSA */
 #define MO_DEVELOPER_ADDRESS "mosaic@wvnvms.wvnet.edu"
 
 #ifndef DOCS_DIRECTORY_DEFAULT
@@ -200,14 +202,13 @@ typedef enum
 #endif
 
 #ifndef HOME_PAGE_DEFAULT
-/* This must be a straight string as it is included into a struct; 
-   no tricks. */
+/* This must be a straight string as it is included into a struct; no tricks. */
 #define HOME_PAGE_DEFAULT "http://wvnvms.wvnet.edu/vmswww/vms_mosaic.html"
 #endif
 
 #ifndef HTMLPRIMER_PAGE_DEFAULT
 #define HTMLPRIMER_PAGE_DEFAULT \
-  "http://www.ncsa.uiuc.edu/General/Internet/WWW/HTMLPrimerAll.html"
+  "http://wvnvms.wvnet.edu/vmswww/mosaic/htmlprimerall.html"
 #endif
 
 #ifndef URLPRIMER_PAGE_DEFAULT
@@ -216,19 +217,59 @@ typedef enum
 #endif
 
 #ifndef NETWORK_SEARCH_DEFAULT
-#define NETWORK_SEARCH_DEFAULT "http://altavista.digital.com/"
+#define NETWORK_SEARCH_DEFAULT "http://www.google.com/"
+#endif
+#ifndef NETWORK_SEARCH_NAME
+#define NETWORK_SEARCH_NAME "Web - Google"
 #endif
 
 #ifndef USENET_SEARCH_DEFAULT
-#define USENET_SEARCH_DEFAULT "http://www.deja.com/"
+#define USENET_SEARCH_DEFAULT "http://groups.google.com/"
+#endif
+#ifndef USENET_SEARCH_NAME
+#define USENET_SEARCH_NAME "Usenet -  Google Groups"
 #endif
 
 #ifndef META_SEARCH_DEFAULT
 #define META_SEARCH_DEFAULT "http://www.dogpile.com/"
 #endif
+#ifndef META_SEARCH_NAME
+#define META_SEARCH_NAME "Meta-Search - Dogpile"
+#endif
 
 #ifndef INTERNET_METAINDEX_DEFAULT
 #define INTERNET_METAINDEX_DEFAULT "http://www.yahoo.com"
+#endif
+#ifndef INTERNET_METAINDEX_NAME
+#define INTERNET_METAINDEX_NAME "Web Directory - Yahoo"
+#endif
+
+#ifndef AUCTION_SEARCH_DEFAULT
+#define AUCTION_SEARCH_DEFAULT "http://www.ebay.com"
+#endif
+#ifndef AUCTION_SEARCH_NAME
+#define AUCTION_SEARCH_NAME "Auctions - eBay"
+#endif
+
+#ifndef LIST_SEARCH_DEFAULT
+#define LIST_SEARCH_DEFAULT "http://groups.yahoo.com"
+#endif
+#ifndef LIST_SEARCH_NAME
+#define LIST_SEARCH_NAME "Lists - Yahoo Groups"
+#endif
+
+#ifndef MAP_SEARCH_DEFAULT
+#define MAP_SEARCH_DEFAULT "http://www.mapquest.com"
+#endif
+#ifndef MAP_SEARCH_NAME
+#define MAP_SEARCH_NAME "Maps - MapQuest"
+#endif
+
+#ifndef PEOPLE_SEARCH_DEFAULT
+#define PEOPLE_SEARCH_DEFAULT "http://www.whowhere.com"
+#endif
+#ifndef PEOPLE_SEARCH_NAME
+#define PEOPLE_SEARCH_NAME "People - WhoWhere"
 #endif
 
 #ifndef DOCUMENTS_MENU_SPECFILE
@@ -261,8 +302,7 @@ typedef enum
 #endif /* Mail prefix for VMS MAIL */
 
 #ifndef PRINT_DEFAULT
-#define PRINT_DEFAULT \
-  "Print/Name=\"Mosaic print\"/Notify/Identify/Delete"
+#define PRINT_DEFAULT "Print/Name=\"Mosaic print\"/Notify/Identify/Delete"
 #endif /* Default print command for VMS */
 
 #ifndef EDITOR_DEFAULT
@@ -299,6 +339,9 @@ typedef enum
 #if defined(__alpha)
 #define MO_MACHINE_TYPE "DEC Alpha"
 #endif
+#if defined(__ia64)
+#define MO_MACHINE_TYPE "IA64"
+#endif
 #if defined(NEXT)
 #define MO_MACHINE_TYPE "NeXT BSD"
 #endif
@@ -322,7 +365,10 @@ typedef enum
 #if defined(__alpha)
 #define MO_MACHINE_TYPE "OpenVMS Alpha"
 #endif
-#if !defined(vax) && !defined(__alpha)
+#if defined(__ia64)
+#define MO_MACHINE_TYPE "OpenVMS IA64"
+#endif
+#if !defined(vax) && !defined(__alpha) && !defined(__ia64)
 #define MO_MACHINE_TYPE "OpenVMS"
 #endif
 #endif /* VMS, BSN, GEC */
@@ -336,15 +382,15 @@ typedef enum
 #else
 #if defined(__sgi) || defined(sun)
 #define HAVE_AUDIO_ANNOTATIONS
-#endif /* if */
-#endif /* ifdef */
+#endif
+#endif
 
 /* Be safe... some URL's get very long. */
 #define MO_LINE_LENGTH 2048
 
 /* Use builtin strdup when appropriate -- code duplicated in tcp.h. */
 #if defined(ultrix) || (defined(VMS) && (!defined(__GNUC__) || defined(vax))) || defined(NeXT)
-extern char *strdup ();
+extern char *strdup();
 #endif
 
 #define public
@@ -381,7 +427,8 @@ extern char *strdup ();
 
 
 /* mo_window contains everything related to a single Document View
-   window, including subwindow details. */
+ * window, including subwindow details.
+ */
 typedef struct mo_window
 {
   int id;
@@ -444,8 +491,9 @@ typedef struct mo_window
     Widget title_text;
     Widget scrolled_win, view;
     Widget rightform;
-    Widget tracker_label, logo, security;
-    Widget button_rc, button2_rc, encrypt;
+    Widget tracker_label, logo, security, encrypt;
+    Widget tearbutton;
+    Widget button_rc, button2_rc;
     Widget toolbarwin, topform;
     int toolset;
     int toolbardetached;
@@ -453,11 +501,8 @@ typedef struct mo_window
     
     Widget meter, meter_frame;
     int meter_level, meter_width, meter_height;
-    int meter_notext;
     Pixel meter_fg, meter_bg, meter_font_fg, meter_font_bg;
-    int meter_fontW, meter_fontH;
     char *meter_text;
-    XFontStruct *meter_font;
 
   Widget searchindex_button;   /* Pushbutton, says "Search Index" */
   Widget searchindex_win_label, searchindex_win_text;
@@ -508,6 +553,9 @@ typedef struct mo_window
   Widget print_us_toggle_save;
   Widget print_us_toggle_print;
   Widget print_us_toggle_mail;
+  Widget print_duplex_toggle_save;
+  Widget print_duplex_toggle_print;
+  Widget print_duplex_toggle_mail;
   Widget print_url_only;
   Widget print_doc_only;
     
@@ -602,6 +650,7 @@ typedef struct mo_window
   Boolean safe_colors;
   Boolean blink_text;
   Boolean frame_support;
+  Boolean hotkeys;
 
   Widget subgroup;
   Widget unsubgroup;
@@ -625,7 +674,7 @@ typedef struct mo_window
 
   struct mo_window *frames;
   struct mo_window *next_frame;
-  Boolean is_frame;
+  int is_frame;
   Boolean new_node;
   struct mo_window *frame;
   struct mo_window *parent;
@@ -634,6 +683,11 @@ typedef struct mo_window
   char *frametexthead;
   char *frameurl;
   char *framename;
+  char *framelast_modified;
+  char *frameexpires;
+  char *framecharset;
+
+  Pixel form_button_bg;
 
 } mo_window;
 
@@ -679,6 +733,9 @@ typedef struct mo_node
   /* Encryption cipher (if any) */
   char *cipher;
   int cipher_bits;
+
+  /* Character set (if any) */
+  char *charset;
 
   /* Frame info */
   struct mo_frame *frames;
@@ -728,22 +785,24 @@ typedef enum
   mo_kerberosv5_login,
 #endif
   mo_proxy, mo_no_proxy,
-  mo_reload_document, mo_reload_document_and_images, 
+  mo_reload_document, mo_reload_document_and_images,
   mo_refresh_document, mo_clear_image_cache,
+#ifdef CCI
   mo_cci,
+#endif
   mo_document_source, mo_document_edit, mo_document_date, mo_search,
   mo_open_document, mo_open_local_document, mo_save_document,
   mo_mail_document, mo_print_document,
   mo_new_window, mo_clone_window,
-  mo_close_window, mo_exit_program,
+  mo_close_window, mo_exit_program, mo_stop,
   mo_home_document, mo_ncsa_document,
   mo_mosaic_manual, mo_cookie_manager,
-  mo_back, mo_forward, mo_history_list, 
+  mo_back, mo_forward, mo_history_list,
   mo_clear_global_history,
   mo_hotlist_postit, mo_register_node_in_default_hotlist,
   mo_all_hotlist_to_rbm, mo_all_hotlist_from_rbm,
   mo_network_search, mo_usenet_search, mo_people_search, mo_meta_search,
-  mo_internet_metaindex, mo_list_search,
+  mo_internet_metaindex, mo_list_search, mo_map_search, mo_auction_search,
   mo_large_fonts, mo_regular_fonts, mo_small_fonts,
   mo_large_helvetica, mo_regular_helvetica, mo_small_helvetica,
   mo_large_newcentury, mo_regular_newcentury, mo_small_newcentury,
@@ -761,40 +820,44 @@ typedef enum
   mo_default_underlines, mo_l1_underlines, mo_l2_underlines, mo_l3_underlines,
   mo_no_underlines, mo_binary_transfer,
   mo_binary_ftp_mode,
-/* Links window */
-  mo_links_window, 
-/* News Menu & Stuff */
+
+  /* Links window */
+  mo_links_window,
+
+  /* News Menu & Stuff */
   mo_news_prev, mo_news_next, mo_news_prevt, mo_news_nextt,
   mo_news_post, mo_news_cancel, mo_news_reply, mo_news_follow,
   mo_news_fmt0, mo_news_fmt1, mo_news_index, mo_news_list,
   mo_news_groups, mo_news_flush, mo_news_flushgroup,
   mo_news_grp0, mo_news_grp1, mo_news_grp2,
   mo_news_art0, mo_news_art1, mo_use_flush,
-  mo_news_sub, mo_news_unsub, mo_news_sub_anchor, mo_news_unsub_anchor, 
+  mo_news_sub, mo_news_unsub, mo_news_sub_anchor, mo_news_unsub_anchor,
   mo_news_mread, mo_news_mread_anchor, mo_news_munread, mo_news_maunread,
-  
-/* Other stuff */
+
+  /* Other stuff */
   mo_re_init, mo_delay_image_loads, mo_table_support, mo_expand_images_current,
   mo_image_view_internal, mo_progressive_loads, mo_animate_images,
   mo_preferences, mo_save_preferences, mo_refresh_url, mo_blink_text,
-  mo_frame_support,
-/* FTP */
+  mo_frame_support, mo_hotkeys, mo_tooltips, mo_verify_certs,
+
+  /* FTP */
   mo_ftp_put, mo_ftp_remove, mo_ftp_mkdir,
 
   mo_body_color, mo_body_images, mo_font_color, mo_font_sizes, mo_safe_colors,
 
-/* Debug stuff */
+  /* Debug stuff */
   mo_trace_cache, mo_trace_cci, mo_trace_html, mo_trace_http, mo_trace_nut,
   mo_trace_src, mo_trace_table, mo_trace_www2, mo_trace_refresh, mo_report_bugs,
+  mo_trace_cookie,
 
-/* Password cash stuff */
+  /* Password cash stuff */
   mo_clear_passwd_cache,
 
-/* NOTE!!!!!! THIS MUST ALWAYS BE LAST!!!!!! */
+  /* NOTE!!!!!! THIS MUST ALWAYS BE LAST!!!!!! */
   mo_last_entry
 } mo_token;
 
 
 #include "prefs.h"
 
-#endif /* not __MOSAIC_H__ */
+#endif

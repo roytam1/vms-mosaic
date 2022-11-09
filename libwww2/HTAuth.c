@@ -27,7 +27,7 @@ extern int www2Trace;
 
 /* PRIVATE					    decompose_auth_string()
 **		DECOMPOSE AUTHENTICATION STRING
-**		FOR BASIC OR PUBKEY SCHEME
+**		FOR BASIC SCHEME (Perhaps add Digest scheme support?)
 ** ON ENTRY:
 **	authstring	is the authorization string received
 **			from browser.
@@ -42,15 +42,15 @@ PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
 {
     static HTAAUser *user = NULL;
     static char *cleartext = NULL;
-    char *username = NULL;
-    char *password = NULL;
+    char *username;
+    char *password;
     char *inet_addr = NULL;
     char *timestamp = NULL;
     char *browsers_key = NULL;
     char *extras = NULL;
 
-    if (!user && !(user = (HTAAUser*)malloc(sizeof(HTAAUser))))	/* Allocated */
-	outofmem(__FILE__, "decompose_auth_string");		/* only once */
+    if (!user && !(user = (HTAAUser *)malloc(sizeof(HTAAUser)))) /* Allocated */
+	outofmem(__FILE__, "decompose_auth_string");		 /* only once */
 
     user->scheme = scheme;
     user->username = NULL;	/* Not freed, because freeing */
@@ -65,40 +65,22 @@ PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
                         /* this also frees all the strings pointed to	*/
 			/* by the static 'user'.			*/
 
-    if (!authstring || !*authstring || 
-	scheme != HTAA_BASIC || scheme == HTAA_PUBKEY)
+    if (!authstring || !*authstring || scheme != HTAA_BASIC)
 	return NULL;
 
-    if (scheme == HTAA_PUBKEY) {    /* Decrypt authentication string */
-	int bytes_decoded;
-	char *ciphertext;
-	int len = strlen(authstring) + 1;
-
-	if (!(ciphertext = (char*)malloc(len)) ||
-	    !(cleartext  = (char*)malloc(len)))
-	    outofmem(__FILE__, "decompose_auth_string");
-
-	bytes_decoded = HTUU_decode(authstring, ciphertext, len);
-	ciphertext[bytes_decoded] = (char)0;
-#ifdef PUBKEY
-	HTPK_decrypt(ciphertext, cleartext, private_key);
-#endif
-	free(ciphertext);
-    }
-    else {   /* Just uudecode */
+    if (scheme == HTAA_BASIC) {  	/* Just uudecode */
 	int bytes_decoded;
 	int len = strlen(authstring) + 1;
 	
-	if (!(cleartext = (char*)malloc(len)))
+	if (!(cleartext = (char *)malloc(len)))
 	    outofmem(__FILE__, "decompose_auth_string");
 	bytes_decoded = HTUU_decode(authstring, cleartext, len);
 	cleartext[bytes_decoded] = (char)0;
     }
 
-
-/*
-** Extract username and password (for both schemes)
-*/
+    /*
+    ** Extract username and password (for both schemes)
+    */
     username = cleartext;
     if (!(password = strchr(cleartext, ':'))) {
 #ifndef DISABLE_TRACE
@@ -111,33 +93,20 @@ PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
     }
     *(password++) = '\0';
 
-/*
-** Extract rest of the fields
-*/
-    if (scheme == HTAA_PUBKEY) {
-	if (                          !(inet_addr   =strchr(password, ':')) || 
-	    (*(inet_addr++)   ='\0'), !(timestamp   =strchr(inet_addr,':')) ||
-	    (*(timestamp++)   ='\0'), !(browsers_key=strchr(timestamp,':')) ||
-	    (*(browsers_key++)='\0')) {
-
-#ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "%s %s\n",
-			       "decompose_auth_string: Pubkey scheme",
-			       "fields missing in authentication string");
-#endif
-	    return NULL;
-	}
-	extras = strchr(browsers_key, ':');
-    }
-    else extras = strchr(password, ':');
+   /*
+   ** Extract rest of the fields
+   */
+    if (scheme == HTAA_BASIC) 
+        extras = strchr(password, ':');
 
     if (extras) {
 	*(extras++) = '\0';
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s `%s' %s `%s'\n",
-			   "decompose_auth_string: extra field(s) in",
-			   (scheme==HTAA_BASIC ? "Basic" : "Pubkey"),
-			   "authorization string ignored:", extras);
+	if (www2Trace)
+	    fprintf(stderr, "%s `%s' %s `%s'\n",
+	            "decompose_auth_string: extra field(s) in",
+		    (scheme == HTAA_BASIC ? "Basic" : "Other"),
+		    "authorization string ignored:", extras);
 #endif
     }
 
@@ -152,14 +121,15 @@ PRIVATE HTAAUser *decompose_auth_string ARGS2(char *,		authstring,
 
 #ifndef DISABLE_TRACE
     if (www2Trace) {
-	if (scheme==HTAA_BASIC)
+	if (scheme == HTAA_BASIC) {
 	    fprintf(stderr, "decompose_auth_string: %s (%s,%s)\n",
 		    "Basic scheme authentication string:",
 		    username, password);
-	else
+	} else {
 	    fprintf(stderr, "decompose_auth_string: %s (%s,%s,%s,%s,%s)\n",
-		    "Pubkey scheme authentication string:",
+		    "Other scheme authentication string:",
 		    username, password, inet_addr, timestamp, browsers_key);
+	}
     }
 #endif
     
@@ -185,8 +155,7 @@ PRIVATE BOOL HTAA_checkInetAddress ARGS1(WWW_CONST char *, inet_addr)
 ** ON ENTRY:
 **	scheme		used authentication scheme.
 **	scheme_specifics the scheme specific parameters
-**			(authentication string for Basic and
-**			Pubkey schemes).
+**			(authentication string for Basic scheme)
 **	prot		is the protection information structure
 **			for the file.
 **
@@ -206,22 +175,22 @@ PUBLIC HTAAUser *HTAA_authenticate ARGS3(HTAAScheme,	scheme,
 
     switch (scheme) {
       case HTAA_BASIC:
-      case HTAA_PUBKEY:
 	{
 	    HTAAUser *user = decompose_auth_string(scheme_specifics, scheme);
-	                                   /* Remember, user is auto-freed */
+            /* Remember, user is auto-freed */
+
 	    if (user &&
 		HTAA_checkPassword(user->username,
 				   user->password,
 				   HTAssocList_lookup(prot->values, "passw")) &&
 		(HTAA_BASIC == scheme ||
 		 (HTAA_checkTimeStamp(user->timestamp) &&
-		  HTAA_checkInetAddress(user->inet_addr))))
+		  HTAA_checkInetAddress(user->inet_addr)))) {
 		return user;
-	    else
+	    } else {
 		return NULL;
+	    }
 	}
-	break;
       default:
 	/* Other authentication routines go here */
 	return NULL;

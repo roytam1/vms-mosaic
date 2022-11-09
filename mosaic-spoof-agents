@@ -17,8 +17,8 @@
 -  This is a seperator...as long as the first thing is a dash
 #  This is a comment line
 #
-# This is the "example" agent. If you don't like it...comment it out.
-#   if you want it to be your default, put a + infront of it.
+#  This one is now hardcoded in Mosaic
+# Mozilla/4.0 (VMS_Mosaic)
 #
 Bond_James_Bond/007 (BMW; Z3 Roadster)  DOHC_inline_16-valve_4-cylinder
 Gandalf/White (Shadowfax; Wind)  White_Staff

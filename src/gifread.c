@@ -60,21 +60,16 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <X11/Intrinsic.h>
 #include "gifread.h"
 
-/*
-#define TIMING 1
-*/
-
-#include <sys/time.h>
-static struct timeval Tv;
-static struct timezone Tz;
-
-
-#define	MAXCOLORMAPSIZE		256
+#define	MAXCOLORMAPSIZE	256
 
 #define	TRUE	1
 #define	FALSE	0
@@ -83,15 +78,16 @@ static struct timezone Tz;
 #define CM_GREEN	1
 #define CM_BLUE		2
 
-#define	MAX_LWZ_BITS		12
+#define	MAX_LWZ_BITS	12
 
-#define INTERLACE		0x40
+#define INTERLACE	0x40
 #define LOCALCOLORMAP	0x80
-#define BitSet(byte, bit)	(((byte) & (bit)) == (bit))
 
-#define	ReadOK(file,buffer,len)	(fread(buffer, len, 1, file) != 0)
+#define BitSet(byte, bit)	    (((byte) & (bit)) == (bit))
 
-#define LM_to_uint(a,b)			(((b)<<8)|(a))
+#define	ReadOK(file, buffer, len)   (fread(buffer, len, 1, file) != 0)
+
+#define LM_to_uint(a, b)	    (((b) << 8) | (a))
 
 static struct {
 	unsigned int	Width;
@@ -108,69 +104,38 @@ static struct {
 } GifScreen;
 
 static struct {
-	int	transparent;
-	int	delayTime;
-	int	inputFlag;
-	int	disposal;
-} Gif89 = { -1, -1, -1, 0 };
+	int transparent;
+	int delayTime;
+	int inputFlag;
+	int disposal;
+	int animated;
+} Gif89 = { -1, -1, -1, 0, -1 };
 
-static int	verbose = FALSE;
-static int	showComment = FALSE;
-
-
-static int ReadColorMap(FILE *, int, unsigned char [3][MAXCOLORMAPSIZE], int *);
-static int DoExtension(FILE *, int);
+static int ReadColorMap(FILE *, int, unsigned char [3][MAXCOLORMAPSIZE]);
+static void DoExtension(FILE *, int);
 static int GetDataBlock(FILE *, unsigned char *);
 static unsigned char *ReadImage(FILE *, int, int, XColor *, int,
-                unsigned char[3][MAXCOLORMAPSIZE], int, int, int);
-/*
-unsigned char *ReadGIF ARGS(( FILE	*fd, int imageNumber, int *bg ));
-static int ReadColorMap ARGS(( FILE *fd, int number, unsigned char buffer[3][MAXCOLORMAPSIZE] ));
-static int DoExtension ARGS(( FILE *fd, int label ));
-static int GetDataBlock ARGS(( FILE *fd, unsigned char  *buf ));
-static int GetCode ARGS(( FILE *fd, int code_size, int flag ));
-static int LWZReadByte ARGS(( FILE *fd, int flag, int input_code_size ));
-static unsigned char *ReadImage ARGS(( FILE *fd, int len, int height, unsigned char cmap[3][MAXCOLORMAPSIZE], int interlace, int ignore ));
-*/
-
-/*
-static int ReadColorMap();
-static int DoExtension();
-static int GetDataBlock();
-static int GetCode();
-static int LWZReadByte();
-static unsigned char *ReadImage();
-*/
+                unsigned char[3][MAXCOLORMAPSIZE], int, int);
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
+extern int reportBugs;
 #endif
 
-unsigned char *
-ReadGIF(FILE *fd, int *w, int *h, XColor *colrs, int *bg)
+unsigned char *ReadGIF(FILE *fd, int *w, int *h, XColor *colrs, int *bg,
+		       int imageNumber,	int *animated, int *delay,
+		       int *x, int *y, int *disposal, char *rbuf) 
 {
-	unsigned char	buf[16];
-	unsigned char	c;
-	unsigned char	localColorMap[3][MAXCOLORMAPSIZE];
-	int		grayScale;
-	int		useGlobalColormap;
-	int		bitPixel;
-	int		imageCount = 0;
-	char		version[4];
-	int		imageNumber = 1;
-	unsigned char	*image = NULL;
-	int i;
+    unsigned char buf[16];
+    unsigned char c;
+    unsigned char localColorMap[3][MAXCOLORMAPSIZE];
+    int	useGlobalColormap;
+    int	bitPixel;
+    int	i;
+    char version[4];
+    unsigned char *image = NULL;
 
-#ifndef DISABLE_TRACE
-	if (srcTrace) {
-		gettimeofday(&Tv, &Tz);
-		fprintf(stderr, "ReadGIF_DK enter (%d.%d)\n", Tv.tv_sec, Tv.tv_usec);
-	}
-#endif
-
-	verbose = FALSE;
-	showComment = FALSE;
-
+    if (imageNumber == 1) {
 	/*
 	 * Initialize GIF89 extensions
 	 */
@@ -178,86 +143,69 @@ ReadGIF(FILE *fd, int *w, int *h, XColor *colrs, int *bg)
 	Gif89.delayTime = -1;
 	Gif89.inputFlag = -1;
 	Gif89.disposal = 0;
+	Gif89.animated = -1;
 
-	if (! ReadOK(fd,buf,6))
-	{
-#ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "error reading magic number\n");
-		}
-#endif
+	/* Indicate bad file or bad GIF image if return NULL */
+	strncpy(rbuf, "ERROR", 5);
 
-		return(NULL);
-	}
-
-	if (strncmp((char *)buf,"GIF",3) != 0)
-	{
+	if (!ReadOK(fd, buf, 6)) {
 #ifndef DISABLE_TRACE
 		if (srcTrace)
-			fprintf(stderr, "not a GIF file\n");
+			fprintf(stderr, "Bogus image file\n");
 #endif
-
+		return(NULL);
+	}
+	if (strncmp((char *)buf, "GIF", 3)) {
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+			fprintf(stderr, "Not a GIF file\n");
+#endif
+		/* Good file, but not a GIF, so pass back first six bytes */
+		strncpy(rbuf, (char *)buf, 6);
 		return(NULL);
 	}
 
 	strncpy(version, (char *)buf + 3, 3);
 	version[3] = '\0';
 
-	if ((strcmp(version, "87a") != 0) && (strcmp(version, "89a") != 0))
-	{
+	if (strcmp(version, "87a") && strcmp(version, "89a")) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "bad version number, not '87a' or '89a'\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Version not '87a' or '89a'\n");
 #endif
-
 		return(NULL);
 	}
 
-	if (! ReadOK(fd,buf,7))
-	{
-#ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "failed to read screen descriptor\n");
-		}
-#endif
-
+	/* Get screen descriptor */
+	if (!ReadOK(fd, buf, 7))
 		return(NULL);
-	}
 
-	GifScreen.Width           = LM_to_uint(buf[0],buf[1]);
-	GifScreen.Height          = LM_to_uint(buf[2],buf[3]);
-	GifScreen.BitPixel        = 2<<(buf[4]&0x07);
-	GifScreen.ColorResolution = (((buf[4]&0x70)>>3)+1);
+	GifScreen.Width           = LM_to_uint(buf[0], buf[1]);
+	GifScreen.Height          = LM_to_uint(buf[2], buf[3]);
+	GifScreen.BitPixel        = 2 << (buf[4] & 0x07);
+	GifScreen.ColorResolution = (((buf[4] & 0x70) >> 3) + 1);
 	GifScreen.Background      = buf[5];
 	GifScreen.AspectRatio     = buf[6];
 
 	if (BitSet(buf[4], LOCALCOLORMAP)) {	/* Global Colormap */
-		int scale = 65536/MAXCOLORMAPSIZE;
+		int scale = 65536 / MAXCOLORMAPSIZE;
 
-		if (ReadColorMap(fd,GifScreen.BitPixel,GifScreen.ColorMap,
-				&GifScreen.xGrayScale))
-		{
-
+		if (ReadColorMap(fd, GifScreen.BitPixel, GifScreen.ColorMap)) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr, "error reading global colormap\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"Error reading global colormap\n");
 #endif
-
 			return(NULL);
 		}
-		for (i=0; i < GifScreen.BitPixel; i++)
-		{
-
+		for (i = 0; i < GifScreen.BitPixel; i++) {
 			colrs[i].red = GifScreen.ColorMap[0][i] * scale;
 			colrs[i].green = GifScreen.ColorMap[1][i] * scale;
 			colrs[i].blue = GifScreen.ColorMap[2][i] * scale;
 			colrs[i].pixel = i;
 			colrs[i].flags = DoRed|DoGreen|DoBlue;
 		}
-		for (i = GifScreen.BitPixel; i<MAXCOLORMAPSIZE; i++)
-		{
+		for (i = GifScreen.BitPixel; i < MAXCOLORMAPSIZE; i++) {
 			colrs[i].red = 0;
 			colrs[i].green = 0;
 			colrs[i].blue = 0;
@@ -266,213 +214,132 @@ ReadGIF(FILE *fd, int *w, int *h, XColor *colrs, int *bg)
 		}
 	}
 
-	if (GifScreen.AspectRatio != 0 && GifScreen.AspectRatio != 49) {
-/*		float	r;
-		r = ( (float) GifScreen.AspectRatio + 15.0 ) / 64.0;*/
+	if (GifScreen.AspectRatio && GifScreen.AspectRatio != 49) {
+		/* float r = ((float) GifScreen.AspectRatio + 15.0) / 64.0; */
+
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
+		if (srcTrace)
 			fprintf(stderr, "Warning:  non-square pixels!\n");
-		}
 #endif
 	}
+    } /* End of first image only stuff */
 
-	while (image == NULL) {
-		if (! ReadOK(fd,&c,1))
-		{
+	while (!image) {
+		if (!ReadOK(fd, &c, 1))	{
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr, "EOF / read error on image data\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"EOF / read error on image data\n");
 #endif
-
 			return(NULL);
 		}
 
 		if (c == ';') {		/* GIF terminator */
-			if (imageCount < imageNumber)
-			{
+			if (!image) {
 #ifndef DISABLE_TRACE
-				if (srcTrace) {
-					fprintf(stderr, "No images found in file\n");
-				}
+				if (srcTrace && (imageNumber == 1))
+					fprintf(stderr,
+						"No GIF image in file\n");
 #endif
-
 				return(NULL);
 			}
 			break;
 		}
 
 		if (c == '!') { 	/* Extension */
-			if (! ReadOK(fd,&c,1))
-			{
-#ifndef DISABLE_TRACE
-				if (srcTrace) {
-					fprintf(stderr, "EOF / read error on extention function code\n");
-				}
-#endif
-
+			if (!ReadOK(fd, &c, 1))
 				return(NULL);
-			}
 			DoExtension(fd, c);
 			continue;
 		}
 
 		if (c != ',') {		/* Not a valid start character */
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr, "bogus character 0x%02x, ignoring\n",
+			if (srcTrace)
+				fprintf(stderr,
+					"Bogus character 0x%02x, ignoring\n",
 					(int)c);
-			}
 #endif
-
 			continue;
 		}
 
-		++imageCount;
-
-		if (! ReadOK(fd,buf,9))
-		{
-#ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"couldn't read left/top/width/height\n");
-			}
-#endif
-
+		if (!ReadOK(fd, buf, 9))
 			return(NULL);
-		}
 
-		useGlobalColormap = ! BitSet(buf[8], LOCALCOLORMAP);
+		useGlobalColormap = !BitSet(buf[8], LOCALCOLORMAP);
 
-		bitPixel = 1<<((buf[8]&0x07)+1);
+		bitPixel = 1 << ((buf[8] & 0x07) + 1);
 
-		/*
-		 * We only want to set width and height for the imageNumber
-		 * we are requesting.
-		 */
-		if (imageCount == imageNumber)
-		{
-			*w = LM_to_uint(buf[4],buf[5]);
-			*h = LM_to_uint(buf[6],buf[7]);
-		}
-		if (! useGlobalColormap) {
-			if (ReadColorMap(fd,bitPixel,localColorMap,&grayScale))
-			{
+		*x = LM_to_uint(buf[0], buf[1]);
+		*y = LM_to_uint(buf[2], buf[3]);
+		*w = LM_to_uint(buf[4], buf[5]);
+		*h = LM_to_uint(buf[6], buf[7]);
+
+		if (!useGlobalColormap) {
+			if (ReadColorMap(fd, bitPixel, localColorMap)) {
 #ifndef DISABLE_TRACE
-				if (srcTrace) {
-					fprintf(stderr, "error reading local colormap\n");
-				}
+				if (srcTrace)
+				    fprintf(stderr,
+					    "Error reading local colormap\n");
 #endif
-
 				return(NULL);
 			}
-
-			/*
-			 * We only want to set the data for the
-			 * imageNumber we are requesting.
-			 */
-			if (imageCount == imageNumber)
-			{
-			    image = ReadImage(fd, LM_to_uint(buf[4],buf[5]),
-				  LM_to_uint(buf[6],buf[7]), colrs,
-				  bitPixel, localColorMap, grayScale,
-				  BitSet(buf[8], INTERLACE),
-				  imageCount != imageNumber);
-			}
-			else
-			{
-/*			    unsigned char *tdata;
-
-			    tdata =*/ ReadImage(fd, LM_to_uint(buf[4],buf[5]),
-				  LM_to_uint(buf[6],buf[7]), colrs,
-				  bitPixel, localColorMap, grayScale,
-				  BitSet(buf[8], INTERLACE),
-				  imageCount != imageNumber);
-			}
+		        image = ReadImage(fd, LM_to_uint(buf[4], buf[5]),
+					  LM_to_uint(buf[6], buf[7]), colrs,
+					  bitPixel, localColorMap,
+					  BitSet(buf[8], INTERLACE), 0);
 		} else {
-			/*
-			 * We only want to set the data for the
-			 * imageNumber we are requesting.
-			 */
-			if (imageCount == imageNumber)
-			{
-			    image = ReadImage(fd, LM_to_uint(buf[4],buf[5]),
-				  LM_to_uint(buf[6],buf[7]), colrs,
-				  GifScreen.BitPixel, GifScreen.ColorMap,
-				  GifScreen.xGrayScale,
-				  BitSet(buf[8], INTERLACE),
-				  imageCount != imageNumber);
-			}
-			else
-			{
-/*			    unsigned char *tdata;
-
-			    tdata =*/ ReadImage(fd, LM_to_uint(buf[4],buf[5]),
-				  LM_to_uint(buf[6],buf[7]), colrs,
-				  GifScreen.BitPixel, GifScreen.ColorMap,
-				  GifScreen.xGrayScale,
-				  BitSet(buf[8], INTERLACE),
-				  imageCount != imageNumber);
-			}
+			image = ReadImage(fd, LM_to_uint(buf[4],buf[5]),
+					 LM_to_uint(buf[6], buf[7]), colrs,
+					 GifScreen.BitPixel, GifScreen.ColorMap,
+					 BitSet(buf[8], INTERLACE), 0);
 		}
 
 	}
-	*bg = Gif89.transparent;
-
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
-		gettimeofday(&Tv, &Tz);
-		fprintf(stderr, "ReadGIF_DK exit (%d.%d)\n", Tv.tv_sec, Tv.tv_usec);
-	}
+	if (srcTrace)
+		fprintf(stderr, "with x = %d, y = %d\n", *x, *y);
 #endif
+	*bg = Gif89.transparent;
+	*animated = Gif89.animated;
+	*delay = Gif89.delayTime;
+	*disposal = Gif89.disposal;
 
 	return(image);
 }
 
-static int
-ReadColorMap(FILE *fd, int number, unsigned char buffer[3][MAXCOLORMAPSIZE],
-		int *gray)
+static int ReadColorMap(FILE *fd, int number,
+			unsigned char buffer[3][MAXCOLORMAPSIZE])
 {
-	int		i;
-	unsigned char	rgb[3];
-	int		flag;
-
-	flag = TRUE;
+	int i;
+	unsigned char rgb[3];
 
 	for (i = 0; i < number; ++i) {
-		if (! ReadOK(fd, rgb, sizeof(rgb)))
-		{
+		if (!ReadOK(fd, rgb, sizeof(rgb))) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr, "bad colormap\n");
-			}
+			if (srcTrace)
+				fprintf(stderr, "Bad colormap\n");
 #endif
-
 			return(TRUE);
 		}
-
-		buffer[CM_RED][i] = rgb[0] ;
-		buffer[CM_GREEN][i] = rgb[1] ;
-		buffer[CM_BLUE][i] = rgb[2] ;
-
-		flag &= (rgb[0] == rgb[1] && rgb[1] == rgb[2]);
+		buffer[CM_RED][i] = rgb[0];
+		buffer[CM_GREEN][i] = rgb[1];
+		buffer[CM_BLUE][i] = rgb[2];
 	}
-
-	*gray = flag;
-
 	return FALSE;
 }
 
-static int
-DoExtension(FILE *fd, int label)
+static void DoExtension(FILE *fd, int label)
 {
-	static char	buf[256];
-	char		str[256];
+	static unsigned char buf[256];
+	char str[256];
+	int count;
 
 	switch (label) {
 	case 0x01:		/* Plain Text Extension */
-		strcpy(str,"Plain Text Extension");
+		strcpy(str, "Plain Text");
 #ifdef notdef
-		if (GetDataBlock(fd, (unsigned char*) buf) <= 0)
+		if (GetDataBlock(fd, buf) <= 0)
 			;
 
 		lpos   = LM_to_uint(buf[0], buf[1]);
@@ -484,92 +351,94 @@ DoExtension(FILE *fd, int label)
 		foreground = buf[10];
 		background = buf[11];
 
-		while (GetDataBlock(fd, (unsigned char*) buf) > 0) {
+		while (GetDataBlock(fd, buf) > 0) {
 			PPM_ASSIGN(image[ypos][xpos],
-					cmap[CM_RED][v],
-					cmap[CM_GREEN][v],
-					cmap[CM_BLUE][v]);
+				   cmap[CM_RED][v],
+				   cmap[CM_GREEN][v],
+				   cmap[CM_BLUE][v]);
 			++index;
 		}
-
 		return FALSE;
 #else
 		break;
 #endif
 	case 0xff:		/* Application Extension */
-		strcpy(str,"Application Extension");
+		strcpy(str, "Application");
+		if ((count = GetDataBlock(fd, buf)) && (count == 11) &&
+		    !strncmp((char *)buf, "NETSCAPE2.0", 11) &&
+		    (count = GetDataBlock(fd, buf)) && (count == 3) &&
+		    (buf[0] == 1)) {
+			Gif89.animated = LM_to_uint(buf[1], buf[2]);
+		}
+				
 		break;
 	case 0xfe:		/* Comment Extension */
-		strcpy(str,"Comment Extension");
-		while (GetDataBlock(fd, (unsigned char*) buf) > 0) {
-			if (showComment)
-			{
+		strcpy(str, "Comment");
+		while ((count = GetDataBlock(fd, buf)) && (count > 0)) {
 #ifndef DISABLE_TRACE
-				if (srcTrace) {
-					fprintf(stderr, "gif comment: %s\n", buf);
-				}
-#endif
+			if (srcTrace) {
+				buf[count] = '\0';
+				fprintf(stderr, "GIF comment: %s\n", buf);
 			}
+#endif
 		}
-		return FALSE;
+		return;
 	case 0xf9:		/* Graphic Control Extension */
-		strcpy(str,"Graphic Control Extension");
-		(void) GetDataBlock(fd, (unsigned char*) buf);
+		strcpy(str, "Graphic Control");
+		(void) GetDataBlock(fd, buf);
 		Gif89.disposal    = (buf[0] >> 2) & 0x7;
 		Gif89.inputFlag   = (buf[0] >> 1) & 0x1;
-		Gif89.delayTime   = LM_to_uint(buf[1],buf[2]);
-		if ((buf[0] & 0x1) != 0)
-			Gif89.transparent = (int)((unsigned char)buf[3]);
-
-		while (GetDataBlock(fd, (unsigned char*) buf) > 0)
-			;
-		return FALSE;
+		Gif89.delayTime   = LM_to_uint(buf[1], buf[2]);
+		if ((buf[0] & 0x1) != 0) {
+			Gif89.transparent = (int)(buf[3]);
+		} else {
+			Gif89.transparent = -1;
+		}
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+			fprintf(stderr, "GIF bg: %d disposal: %d delay: %d\n",
+				Gif89.transparent, Gif89.disposal,
+				Gif89.delayTime);
+#endif
+		break;
 	default:
 		sprintf(str, "UNKNOWN (0x%02x)", label);
 		break;
 	}
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
-		fprintf(stderr, "got a '%s' extension\n", str);
-	}
+	if (srcTrace)
+		fprintf(stderr, "Got a '%s' extension\n", str);
 #endif
 
-	while (GetDataBlock(fd, (unsigned char*) buf) > 0)
+	while (GetDataBlock(fd, buf) > 0)
 		;
 
-	return FALSE;
+	return;
 }
 
-static int	ZeroDataBlock = FALSE;
+static int ZeroDataBlock = FALSE;
 
-static int
-GetDataBlock(FILE *fd, unsigned char *buf)
+static int GetDataBlock(FILE *fd, unsigned char *buf)
 {
-	unsigned char	count;
+	unsigned char count;
 
 	count = 0;
-	if (! ReadOK(fd, &count, 1)) {
+	if (!ReadOK(fd, &count, 1)) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "error in getting DataBlock size\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Error in getting DataBlock size\n");
 #endif
-
 		return -1;
 	}
-
 	ZeroDataBlock = count == 0;
 
-	if ((count != 0) && (! ReadOK(fd, buf, count))) {
+	if (count && (!ReadOK(fd, buf, count))) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "error in reading DataBlock\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Error in reading DataBlock\n");
 #endif
-
 		return -1;
 	}
-
 	return((int)count);
 }
 
@@ -577,26 +446,25 @@ GetDataBlock(FILE *fd, unsigned char *buf)
 /*
 **  Pulled out of nextCode
 */
-static  int             curbit, lastbit, get_done, last_byte;
-static  int             return_clear;
+static int curbit, lastbit, get_done, last_byte;
+static int return_clear;
 /*
 **  Out of nextLWZ
 */
-static int      stack[(1<<(MAX_LWZ_BITS))*2], *sp;
-static int      code_size, set_code_size;
-static int      max_code, max_code_size;
-static int      clear_code, end_code;
+static int stack[(1 << (MAX_LWZ_BITS)) * 2];
+static int *sp;
+static int code_size, set_code_size;
+static int max_code, max_code_size;
+static int clear_code, end_code;
 
 static void initLWZ(int input_code_size)
 {
-/*	static int      inited = FALSE;*/
-
 	set_code_size = input_code_size;
-	code_size     = set_code_size + 1;
-	clear_code    = 1 << set_code_size ;
-	end_code      = clear_code + 1;
+	code_size = set_code_size + 1;
+	clear_code = 1 << set_code_size;
+	end_code = clear_code + 1;
 	max_code_size = 2 * clear_code;
-	max_code      = clear_code + 2;
+	max_code = clear_code + 2;
 
 	curbit = lastbit = 0;
 	last_byte = 2;
@@ -609,14 +477,14 @@ static void initLWZ(int input_code_size)
 
 static int nextCode(FILE *fd, int code_size)
 {
-	static unsigned char    buf[280];
+	static unsigned char buf[280];
 	static int maskTbl[16] = {
 		0x0000, 0x0001, 0x0003, 0x0007,
 		0x000f, 0x001f, 0x003f, 0x007f,
 		0x00ff, 0x01ff, 0x03ff, 0x07ff,
 		0x0fff, 0x1fff, 0x3fff, 0x7fff,
 	};
-	int                     i, j, ret, end;
+	int i, j, ret, end;
 
 	if (return_clear) {
 		return_clear = FALSE;
@@ -626,17 +494,10 @@ static int nextCode(FILE *fd, int code_size)
 	end = curbit + code_size;
 
 	if (end >= lastbit) {
-		int     count;
+		int count;
 
-		if (get_done) {
-			if (curbit >= lastbit)
-			{
-#if 0
-				ERROR("ran off the end of my bits" );
-#endif
-			}
+		if (get_done)
 			return -1;
-		}
 		buf[0] = buf[last_byte-2];
 		buf[1] = buf[last_byte-1];
 
@@ -645,7 +506,7 @@ static int nextCode(FILE *fd, int code_size)
 
 		last_byte = 2 + count;
 		curbit = (curbit - lastbit) + 16;
-		lastbit = (2+count)*8 ;
+		lastbit = (2 + count) * 8;
 
 		end = curbit + code_size;
 	}
@@ -653,13 +514,14 @@ static int nextCode(FILE *fd, int code_size)
 	j = end / 8;
 	i = curbit / 8;
 
-	if (i == j)
+	if (i == j) {
 		ret = (int)buf[i];
-	else if (i + 1 == j)
-		ret = (int)buf[i] | ((int)buf[i+1] << 8);
-	else
-		ret = (int)buf[i] | ((int)buf[i+1] << 8) | ((int)buf[i+2] << 16);
-
+	} else if (i + 1 == j) {
+		ret = (int)buf[i] | ((int)buf[i + 1] << 8);
+	} else {
+		ret = (int)buf[i] | ((int)buf[i + 1] << 8) |
+		      ((int)buf[i + 2] << 16);
+	}
 	ret = (ret >> (curbit % 8)) & maskTbl[code_size];
 
 	curbit += code_size;
@@ -671,30 +533,27 @@ static int nextCode(FILE *fd, int code_size)
 
 static int nextLWZ(FILE *fd)
 {
-	static int       table[2][(1<< MAX_LWZ_BITS)];
-	static int       firstcode, oldcode;
-	int              code, incode;
-	register int     i;
+	static int table[2][(1 << MAX_LWZ_BITS)];
+	static int firstcode, oldcode;
+	int code, incode;
+	register int i;
 
 	while ((code = nextCode(fd, code_size)) >= 0) {
 	       if (code == clear_code) {
-
-			/* corrupt GIFs can make this happen */
-			if (clear_code >= (1<<MAX_LWZ_BITS))
-			{
+			/* Corrupt GIFs can make this happen */
+			if (clear_code >= (1 << MAX_LWZ_BITS))
 				return -2;
-			}
 
-		       for (i = 0; i < clear_code; ++i) {
+		        for (i = 0; i < clear_code; ++i) {
 			       table[0][i] = 0;
 			       table[1][i] = i;
-		       }
-		       for (; i < (1<<MAX_LWZ_BITS); ++i)
+		        }
+		        for (; i < (1 << MAX_LWZ_BITS); ++i)
 			       table[0][i] = table[1][i] = 0;
-		       code_size = set_code_size+1;
-		       max_code_size = 2*clear_code;
-		       max_code = clear_code+2;
-		       sp = stack;
+		        code_size = set_code_size + 1;
+		        max_code_size = 2 * clear_code;
+		        max_code = clear_code + 2;
+		        sp = stack;
 			do {
 			       firstcode = oldcode = nextCode(fd, code_size);
 			} while (firstcode == clear_code);
@@ -702,8 +561,8 @@ static int nextLWZ(FILE *fd)
 			return firstcode;
 	       }
 	       if (code == end_code) {
-		       int             count;
-		       unsigned char   buf[260];
+		       int count;
+		       unsigned char buf[260];
 
 		       if (ZeroDataBlock)
 			       return -2;
@@ -711,14 +570,13 @@ static int nextLWZ(FILE *fd)
 		       while ((count = GetDataBlock(fd, buf)) > 0)
 			       ;
 
-		       if (count != 0)
-			{
+		       if (count) {
 #ifndef DISABLE_TRACE
-				if (srcTrace) {
-					fprintf(stderr,"missing EOD in data stream (common occurence)");
-				}
+				if (srcTrace)
+				    fprintf(stderr,
+				      "Missing EOD in data (common occurence)");
 #endif
-			}
+		       }
 		       return -2;
 	       }
 
@@ -732,35 +590,24 @@ static int nextLWZ(FILE *fd)
 	       while (code >= clear_code) {
 		       *sp++ = table[1][code];
 		       if (code == table[0][code])
-			{
-#if 0
-			       ERROR("circular table entry BIG ERROR");
-#endif
 			       return(code);
-			}
-			if ((int)sp >= ((int)stack + sizeof(stack)))
-			{
-#if 0
-			       ERROR("circular table STACK OVERFLOW!");
-#endif
+		       if ((int)sp >= ((int)stack + sizeof(stack)))
 			       return(code);
-			}
 		       code = table[0][code];
 	       }
 
 	       *sp++ = firstcode = table[1][code];
 
-	       if ((code = max_code) <(1<<MAX_LWZ_BITS)) {
+	       if ((code = max_code) < (1 << MAX_LWZ_BITS)) {
 		       table[0][code] = oldcode;
 		       table[1][code] = firstcode;
 		       ++max_code;
 		       if ((max_code >= max_code_size) &&
-			       (max_code_size < (1<<MAX_LWZ_BITS))) {
+			   (max_code_size < (1 << MAX_LWZ_BITS))) {
 			       max_code_size *= 2;
 			       ++code_size;
 		       }
 	       }
-
 	       oldcode = incode;
 
 	       if (sp > stack)
@@ -770,27 +617,25 @@ static int nextLWZ(FILE *fd)
 }
 
 
-static unsigned char *
-ReadImage(FILE *fd, int len, int height, XColor *colrs, int cmapSize,
-		unsigned char cmap[3][MAXCOLORMAPSIZE], int gray,
-		int interlace, int ignore)
+static unsigned char *ReadImage(FILE *fd, int len, int height, XColor *colrs,
+				int cmapSize,
+				unsigned char cmap[3][MAXCOLORMAPSIZE],
+				int interlace, int ignore)
 {
 	unsigned char	*dp, c;	
 	int		v;
-	int		xpos = 0, ypos = 0/*, pass = 0*/;
+	int		xpos = 0, ypos = 0;
 	unsigned char 	*image;
 
 	/*
 	**  Initialize the Compression routines
 	*/
-	if (! ReadOK(fd,&c,1))
-	{
+	if (!ReadOK(fd, &c, 1)) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "EOF / read error on image data\n");
-		}
+		if (srcTrace)
+			fprintf(stderr,
+			       "EOF / read error on image data in ReadImage\n");
 #endif
-
 		return(NULL);
 	}
 
@@ -802,7 +647,7 @@ ReadImage(FILE *fd, int len, int height, XColor *colrs, int cmapSize,
 	if (ignore) {
 #ifndef DISABLE_TRACE
 		if (srcTrace)
-			fprintf(stderr, "skipping image...\n" );
+			fprintf(stderr, "Skipping image...\n");
 #endif
 		while (readLWZ(fd) >= 0)
 			;
@@ -810,14 +655,12 @@ ReadImage(FILE *fd, int len, int height, XColor *colrs, int cmapSize,
 	}
 
 	image = (unsigned char *)calloc(len * height, sizeof(char));
-	if (image == NULL)
-	{
+	if (!image) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr, "Cannot allocate space for image data\n");
-		}
+		if (srcTrace || reportBugs)
+			fprintf(stderr,
+				"Cannot allocate space for image data\n");
 #endif
-
 		return(NULL);
 	}
 
@@ -834,22 +677,19 @@ ReadImage(FILE *fd, int len, int height, XColor *colrs, int cmapSize,
 
 #ifndef DISABLE_TRACE
 	if (srcTrace)
-		fprintf(stderr, "reading %d by %d%s GIF image\n",
+		fprintf(stderr, "Reading %d by %d%s GIF image\n",
 			len, height, interlace ? " interlaced" : "" );
 #endif
-
 	if (interlace) {
-		int     i;
-		int     pass = 0, step = 8;
+		int i;
+		int pass = 0, step = 8;
 
 		for (i = 0; i < height; i++) {
-			if (ypos < height)
-			{
+			if (ypos < height) {
 				dp = &image[len * ypos];
 				for (xpos = 0; xpos < len; xpos++) {
 					if ((v = readLWZ(fd)) < 0)
 						goto fini;
-
 					*dp++ = v;
 				}
 			}
@@ -865,22 +705,28 @@ ReadImage(FILE *fd, int len, int height, XColor *colrs, int cmapSize,
 			for (xpos = 0; xpos < len; xpos++) {
 				if ((v = readLWZ(fd)) < 0)
 					goto fini;
-
 				*dp++ = v;
 			}
 		}
 	}
 
-fini:
-	if (readLWZ(fd)>=0)
-	{
+ fini:
+	if (readLWZ(fd) >= 0) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"too much input data, ignoring extra...");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Too much GIF data, ignoring extra\n");
 #endif
 	}
-
 	return(image);
 }
 
+void Get_GIF_ScreenSize(int *w, int *h)
+{
+	*w = GifScreen.Width;
+	*h = GifScreen.Height;
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "GIF Screen width = %d, height = %d\n",
+			GifScreen.Width, GifScreen.Height);
+#endif
+}

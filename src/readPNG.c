@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
 
 /* Author: DXP 
 
@@ -71,52 +71,65 @@
 #include "../config.h"
 #ifdef HAVE_PNG
 
-#include "../libhtmlw/HTMLp.h"
 #include <stdio.h>
 
 #include "png.h"
 #include "mosaic.h"
 #include "readPNG.h"
+#include "quantize.h"
 
 #include <setjmp.h>
 
 extern int browserSafeColors;
-extern XColor BSColors[256];
 extern int BSCnum;
+extern int Vclass;
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 extern int reportBugs;
 #endif
 
-unsigned char *
-ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
-	int *bg)
+
+unsigned char *ReadPNG(Widget hw, FILE *infile, int *width, int *height,
+		       XColor *colrs, int *bg, unsigned char **alpha)
 {
     png_struct *png_ptr;
     png_info *info_ptr;
     png_color_16 my_background;
-    unsigned long bg_pixel = hw->core.background_pixel;
-    XColor tmpcolr;
-    double screen_gamma;
-    png_byte * volatile png_pixels = NULL, ** volatile row_pointers = NULL;
+    png_byte buf[8];
+    png_byte *volatile pixels = NULL;
+    png_byte **volatile row_pointers = NULL;
     int intent;
-    int i;
+    int i, j, h, w;
     int num;
-    static png_color std_color_cube[256];
-    static int initialized = 0;
-    static int num_colors;
+    int has_alpha = 0;
+    int has_background = 0;
+    int is_RGB = 0;
+    static int init = 0;		/* Preferences */
+    static int use_screen_gamma;
+    static double screen_gamma;
+    static int colors_per_image;
+
+    /* Get preference stuff initialized */
+    if (!init) {
+	use_screen_gamma = get_pref_boolean(eUSE_SCREEN_GAMMA);
+	if (use_screen_gamma)
+	    screen_gamma = (double)(get_pref_float(eSCREEN_GAMMA));
+
+	if ((Vclass == TrueColor) || (Vclass == DirectColor)) {
+	    colors_per_image = 256;
+	} else {
+	    colors_per_image = get_pref_int(eCOLORS_PER_INLINED_IMAGE);
+	}
+	init = 1;
+    }
 
     /* First check to see if it's a valid PNG file.  If not, return.
      * We assume that infile is a valid filepointer */
-    {
-        png_byte buf[8];
+    if ((fread(buf, 1, 8, infile) != 8) || png_sig_cmp(buf, 0, 8))
+        return 0;
 
-        if ((fread(buf, 1, 8, infile) != 8) || png_sig_cmp(buf, 0, 8))
-            return(0);
-    }
-
-    /* OK, it is a valid PNG file, so let's rewind it, and start decoding it */
+    /* Rewind it and start decoding */
     rewind(infile);
 
     /* Allocate the structures */
@@ -134,14 +147,13 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     if (setjmp(png_ptr->jmpbuf)) {
         
 #ifndef DISABLE_TRACE
-        if (srcTrace || reportBugs) {
-            fprintf(stderr, "\nlibpng read error!!!\n");
-        }
+        if (srcTrace || reportBugs)
+            fprintf(stderr, "\nlibpng read error!\n");
 #endif
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
-        if (png_pixels)
-            free((char *)png_pixels);
+        if (pixels)
+            free((char *)pixels);
         if (row_pointers)
 	    free((char *)row_pointers);
 
@@ -155,17 +167,17 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     png_read_info(png_ptr, info_ptr);
     
     /* Setup other stuff using the fields of png_info. */
-    *width = (int)png_ptr->width;
-    *height = (int)png_ptr->height;
+    *width = w = (int)png_ptr->width;
+    *height = h = (int)png_ptr->height;
 
 #ifndef DISABLE_TRACE
     if (srcTrace) {
-        fprintf(stderr, "\nBEFORE\nheight = %d\n", (int)png_ptr->width);
-        fprintf(stderr, "width = %d\n", (int)png_ptr->height);
+        fprintf(stderr, "\nBEFORE\nheight = %d\n", h);
+        fprintf(stderr, "width = %d\n", w);
         fprintf(stderr, "bit depth = %d\n", info_ptr->bit_depth);
         fprintf(stderr, "color type = %d\n", info_ptr->color_type);
 	if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
-            fprintf(stderr,"num colors = %d\n", info_ptr->num_palette);
+            fprintf(stderr, "num colors = %d\n", info_ptr->num_palette);
         fprintf(stderr, "rowbytes = %d\n", (int)info_ptr->rowbytes);
     }
 #endif
@@ -174,120 +186,101 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     if (info_ptr->bit_depth == 16)
         png_set_strip_16(png_ptr);
 
-    /* Expand grayscale images to the full 8 bits and */
-    if (((info_ptr->color_type == PNG_COLOR_TYPE_GRAY) ||
-	(info_ptr->color_type == PNG_COLOR_TYPE_GRAY_ALPHA)) &&
-	(info_ptr->bit_depth < 8))
-	    png_set_expand(png_ptr);
+    /* Expand grayscale images to the full 8 bits */
+    if ((info_ptr->color_type == PNG_COLOR_TYPE_GRAY) ||
+	(info_ptr->color_type == PNG_COLOR_TYPE_GRAY_ALPHA)) {
+	if (info_ptr->bit_depth < 8)
+	    png_set_gray_1_2_4_to_8(png_ptr);
+	/* Deal with pnglib insanity */
+	png_set_strip_alpha(png_ptr);
+    }
+    /* Handle alpha channel later */
+    if ((info_ptr->color_type & PNG_COLOR_MASK_ALPHA) ||
+	(info_ptr->valid & PNG_INFO_tRNS)) {
+	has_alpha = 1;
 
-    /* This handles alpha and transparency by replacing it with 
-     * a background value. */
-    if ((info_ptr->valid & PNG_INFO_bKGD) ||
-	(info_ptr->valid & PNG_INFO_tRNS) ||
-	(info_ptr->color_type & PNG_COLOR_MASK_ALPHA)) {
-	    /* This should be the current background color */
-	    tmpcolr.pixel = bg_pixel;
-	    XQueryColor(XtDisplay(hw), hw->core.colormap, &tmpcolr);
-	    my_background.index = 0;
-	    if (info_ptr->valid & PNG_INFO_bKGD) {
-		my_background.gray = info_ptr->background.gray;
-	    } else {
-		my_background.gray = 127;
-	    }
-	    if (info_ptr->bit_depth < 16) {
-		my_background.red = tmpcolr.red / 256;
-		my_background.green = tmpcolr.green / 256;
-		my_background.blue = tmpcolr.blue / 256;
-	    } else {
-		my_background.red = tmpcolr.red;
-		my_background.green = tmpcolr.green;
-		my_background.blue = tmpcolr.blue;
-		if (!(info_ptr->valid & PNG_INFO_bKGD))
-		    my_background.gray *= 256;
-	    }
-	    if (!(info_ptr->color_type & PNG_COLOR_MASK_COLOR))
-		my_background.red = my_background.green = my_background.blue =
-		    my_background.index = my_background.gray;
-	    png_set_background(png_ptr, &my_background,
-			       PNG_BACKGROUND_GAMMA_SCREEN, 0, 1.0);
+    /* Handle non-alpha transparency by setting a background value */
+    } else if (info_ptr->valid & PNG_INFO_bKGD) {
+	XColor tmpcolr;
+	Colormap colmap;
+
+	/* This should be the current background color */
+	XtVaGetValues(hw,
+		      XtNbackground, &(tmpcolr.pixel),
+		      XtNcolormap, &colmap,
+		      NULL);
+	XQueryColor(XtDisplay(hw), colmap, &tmpcolr);
+	my_background.index = 0;
+	if (info_ptr->valid & PNG_INFO_bKGD) {
+	    my_background.gray = info_ptr->background.gray;
+	} else {
+	    my_background.gray = 127;
+	}
+	if (info_ptr->bit_depth < 16) {
+	    my_background.red = tmpcolr.red / 256;
+	    my_background.green = tmpcolr.green / 256;
+	    my_background.blue = tmpcolr.blue / 256;
+	} else {
+	    my_background.red = tmpcolr.red;
+	    my_background.green = tmpcolr.green;
+	    my_background.blue = tmpcolr.blue;
+	    if (!(info_ptr->valid & PNG_INFO_bKGD))
+		my_background.gray *= 256;
+	}
+	if (!(info_ptr->color_type & PNG_COLOR_MASK_COLOR))
+	    my_background.red = my_background.green = my_background.blue =
+				my_background.index = my_background.gray;
+
+	png_set_background(png_ptr, &my_background,
+			   PNG_BACKGROUND_GAMMA_SCREEN, 0, 1.0);
+	has_background = 1;
 #ifndef DISABLE_TRACE
-	    if (srcTrace) {
-	        fprintf(stderr, "bg_index = %d\n",
-		    (int)png_ptr->background.index);
-	        if (!(info_ptr->color_type == PNG_COLOR_MASK_COLOR))
-		    fprintf(stderr, "gray_bg = %d\n",
+	if (srcTrace) {
+	    fprintf(stderr, "bg_index = %d\n", (int)png_ptr->background.index);
+	    if (!(info_ptr->color_type == PNG_COLOR_MASK_COLOR))
+		fprintf(stderr, "gray_bg = %d\n",
 			(int)info_ptr->background.gray);
-	    }
+	}
 #endif
-	    *bg = -2;
+	*bg = -2;
     }
 
-    /* If it is an RGB image, then dither to browser safe colors
-     * or its own palette. */
     if (info_ptr->color_type == PNG_COLOR_TYPE_RGB ||
         info_ptr->color_type == PNG_COLOR_TYPE_RGB_ALPHA) {
-
-        if (!(info_ptr->valid & PNG_INFO_PLTE)) {
-		/* Has no palette */
-#ifndef DISABLE_TRACE
-        	if (srcTrace) {
-        		fprintf(stderr, "dithering (RGB->our colors)...\n");
-        	}
-#endif
-		if (!initialized) {
-		    initialized = 1;
-		    if (browserSafeColors) {
-			num_colors = BSCnum;
-	                for (i=0; i < BSCnum; i++) {
-               		    std_color_cube[i].red = BSColors[i].red >> 8;
-                    	    std_color_cube[i].green = BSColors[i].green >> 8;
-                	    std_color_cube[i].blue = BSColors[i].blue >> 8;
-		        }
-		    } else {
-                	/* If there is is no valid palette, then we need
-			 * to make one up */
-			num_colors = 216;
-                	for (i=0; i < 216; i++) {
-                            /* 255.0/5 = 51 */
-                    	    std_color_cube[i].red = (i%6) * 51;
-                    	    std_color_cube[i].green = ((i/6)%6) * 51;
-                    	    std_color_cube[i].blue = (i/36) * 51;
-                	}
-		    }
-                }
-		num = num_colors;
-		/* If needed, put background color in cube */
-		if (*bg == -2) {
-		    std_color_cube[num].red = my_background.red;
-		    std_color_cube[num].green = my_background.green;
-		    std_color_cube[num].blue = my_background.blue;
-		    my_background.index = num++;
-#ifndef DISABLE_TRACE
-		    if (srcTrace) {
-		        fprintf(stderr, "RGB bg_index = %d\n",
-			    (int)png_ptr->background.index);
-
-		    }
-#endif
-		}
-                png_set_dither(png_ptr, std_color_cube, num, num, NULL, 1);
+	if (!(info_ptr->valid & PNG_INFO_PLTE)) {
+	    /* Go handle RGB or RGBA without a palette */
+	    is_RGB = 1;
+	    goto do_RGB;
         } else {
+	    /* RGB image with a palette */
+	    png_uint_16p histogram = NULL;
+
+	    png_get_hIST(png_ptr, info_ptr, &histogram);
+
+	    if (!histogram) {
+		/* If no histogram, our dither will be better */
 #ifndef DISABLE_TRACE
-            if (srcTrace) {
-                fprintf(stderr, "dithering (RGB->file supplied palette)...\n");
-            }
+		if (srcTrace)
+		    fprintf(stderr, "PNG: RGB palette with no histogram\n");
 #endif
-            png_set_dither(png_ptr, info_ptr->palette, 
-                           info_ptr->num_palette,
-                           (browserSafeColors ? BSCnum :
-			    get_pref_int(eCOLORS_PER_INLINED_IMAGE)), 
-                           info_ptr->hist, 1);
+		is_RGB = 1;
+		goto do_RGB;
+	    } else {
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+		    fprintf(stderr, "PNG: RGB palette with %d colors\n",
+			    info_ptr->num_palette);
+#endif
+		png_set_dither(png_ptr, info_ptr->palette, 
+                               info_ptr->num_palette,
+                               (browserSafeColors ? BSCnum : colors_per_image),
+                               histogram, 1);
+	    }
         }
     }
 
     /* PNG files pack pixels of bit depths 1, 2, and 4 into bytes as
-     * small as they can. This expands pixels to 1 pixel per byte, and
-     * if a transparency value is supplied, an alpha channel is built. */
+     * small as they can. This expands pixels to 1 pixel per byte. */
     if (info_ptr->bit_depth < 8)
         png_set_packing(png_ptr);
 
@@ -295,26 +288,21 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     if (png_get_sRGB(png_ptr, info_ptr, &intent)) {
 	png_set_sRGB(png_ptr, info_ptr, intent);
     } else {
-	if (get_pref_boolean(eUSE_SCREEN_GAMMA)) {
-            screen_gamma = (double)(get_pref_float(eSCREEN_GAMMA));
-            
+	if (use_screen_gamma) {
 #ifndef DISABLE_TRACE
-            if (srcTrace) {
+            if (srcTrace)
                 fprintf(stderr, "screen gamma = %f\n", screen_gamma);
-            }
 #endif
             if (info_ptr->valid & PNG_INFO_gAMA) {
 #ifndef DISABLE_TRACE
-                if (srcTrace) {
+                if (srcTrace)
                     fprintf(stderr, "setting gamma = %f\n", info_ptr->gamma);
-                }
 #endif
                 png_set_gamma(png_ptr, screen_gamma, (double)info_ptr->gamma);
             } else {
 #ifndef DISABLE_TRACE
-                if (srcTrace) {
+                if (srcTrace)
                     fprintf(stderr, "setting gamma = %f\n", 0.45455);
-                }
 #endif
                 png_set_gamma(png_ptr, screen_gamma, (double)0.45455);
             }
@@ -323,99 +311,61 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     
     png_read_update_info(png_ptr, info_ptr);
     
-#ifndef DISABLE_TRACE
-    if (srcTrace) {
-        fprintf(stderr, "\nAFTER\nheight = %d\n", (int)png_ptr->width);
-        fprintf(stderr, "width = %d\n", (int)png_ptr->height);
-        fprintf(stderr, "bit depth = %d\n", info_ptr->bit_depth);
-        fprintf(stderr, "color type = %d\n", info_ptr->color_type);
-	if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
-            fprintf(stderr, "num colors = %d\n", info_ptr->num_palette);
-        fprintf(stderr, "rowbytes = %d\n", (int)info_ptr->rowbytes);
-	if (*bg == -2) {
-            fprintf(stderr, "bg_index = %d\n", (int)info_ptr->background.index);
-	    if (info_ptr->color_type == PNG_COLOR_TYPE_GRAY)
-		fprintf(stderr,"gray_bg = %d\n",(int)info_ptr->background.gray);
-	}
-    }
-#endif
-
     /* Allocate the pixel grid which we will need to send to 
      * png_read_image(). */
-    png_pixels = (png_byte *)malloc(info_ptr->rowbytes * 
-                                    (*height) * sizeof(png_byte));
+    pixels = (png_byte *)malloc(info_ptr->rowbytes * h * sizeof(png_byte));
     
-    row_pointers = (png_byte **) malloc((*height) * sizeof(png_byte *));
-    for (i=0; i < *height; i++)
-        row_pointers[i] = png_pixels + (info_ptr->rowbytes * i);
+    row_pointers = (png_byte **) malloc(h * sizeof(png_byte *));
+    for (i = 0; i < *height; i++)
+        row_pointers[i] = pixels + (info_ptr->rowbytes * i);
 
     /* FINALLY - read the darn thing. */
     png_read_image(png_ptr, row_pointers);
     
     png_read_end(png_ptr, info_ptr);
     
-    /* Now that we have the (transformed to 8-bit RGB) image, we have
+#ifndef DISABLE_TRACE
+    if (srcTrace) {
+        fprintf(stderr, "\nAFTER\nheight = %d\n", (int)png_ptr->height);
+        fprintf(stderr, "width = %d\n", (int)png_ptr->width);
+        fprintf(stderr, "bit depth = %d\n", info_ptr->bit_depth);
+        fprintf(stderr, "color type = %d\n", info_ptr->color_type);
+	if (info_ptr->color_type & PNG_COLOR_MASK_COLOR)
+            fprintf(stderr, "num colors = %d\n", info_ptr->num_palette);
+        fprintf(stderr, "rowbytes = %d\n", (int)info_ptr->rowbytes);
+	if (*bg == -2) {
+            fprintf(stderr, "bg_index = %d\n", (int)info_ptr->background.index);
+	    if (info_ptr->color_type == PNG_COLOR_TYPE_GRAY)
+		fprintf(stderr, "gray_bg = %d\n",
+			(int)info_ptr->background.gray);
+	}
+    }
+#endif
+
+    /* Now that we have the (8-bit indexed) image, we have
      * to copy the resulting palette to our colormap. */
     if (info_ptr->color_type & PNG_COLOR_MASK_COLOR) {
-	if (info_ptr->valid & PNG_INFO_PLTE) {
-            
-            for (i=0; i < info_ptr->num_palette; i++) {
-                colrs[i].red = info_ptr->palette[i].red << 8;
-                colrs[i].green = info_ptr->palette[i].green << 8;
-                colrs[i].blue = info_ptr->palette[i].blue << 8;
-                colrs[i].pixel = i;
-                colrs[i].flags = DoRed|DoGreen|DoBlue;
-            }
+        for (i = 0; i < info_ptr->num_palette; i++) {
+            colrs[i].red = info_ptr->palette[i].red << 8;
+            colrs[i].green = info_ptr->palette[i].green << 8;
+            colrs[i].blue = info_ptr->palette[i].blue << 8;
+            colrs[i].pixel = i;
+            colrs[i].flags = DoRed|DoGreen|DoBlue;
+        }
 #ifndef DISABLE_TRACE
-	    if (srcTrace) {
-		fprintf(stderr,"using palette map\n");
-	    }
+	if (srcTrace)
+	    fprintf(stderr, "using palette map\n");
 #endif
-	    if (*bg == -2) {
-		if (info_ptr->num_trans) {
-		    *bg = 0;
-		} else {
-		    *bg = info_ptr->background.index;
-		}
-	    }
-            
-	} else {
-#ifndef DISABLE_TRACE
-	    if (srcTrace) {
-		fprintf(stderr, "using std_color_cube map of %d colors\n", num);
-	    }
-#endif
-            for (i=0; i < num; i++) {
-                colrs[i].red = std_color_cube[i].red << 8;
-                colrs[i].green = std_color_cube[i].green << 8;
-                colrs[i].blue = std_color_cube[i].blue << 8;
-                colrs[i].pixel = i;
-                colrs[i].flags = DoRed|DoGreen|DoBlue;
-/*
-    fprintf(stderr, "%d %d %d %d\n", i, std_color_cube[i].red,
-		std_color_cube[i].green, std_color_cube[i].blue);
-*/
-            }	    
-/*
-    fprintf(stderr, "Start of pixels = %X\n", *png_pixels);
-*/
-	    if (*bg == -2) {
-		if (info_ptr->num_trans) {
-		    *bg = 0;
-		} else {
-		    *bg = info_ptr->background.index;
-/*
-    fprintf(stderr, "BG = %d %d %d %d\n", *bg, png_ptr->background.red,
-		png_ptr->background.green, png_ptr->background.blue);
-    fprintf(stderr, "BG_1 = %d %d %d\n", png_ptr->background_1.red,
-		png_ptr->background_1.green, png_ptr->background_1.blue);
-*/
-		}
+	if (*bg == -2) {
+	    if (info_ptr->num_trans) {
+		*bg = 0;
+	    } else {
+		*bg = info_ptr->background.index;
 	    }
 	}
     } else {
         /* Grayscale image */
-        for (i=0; i < 256; i++ ) {
+        for (i = 0; i < 256; i++ ) {
             colrs[i].red = i << 8;
             colrs[i].green = i << 8; 	    
             colrs[i].blue = i << 8;
@@ -425,10 +375,145 @@ ReadPNG(HTMLWidget hw, FILE *infile, int *width, int *height, XColor *colrs,
     }
     
     free((char *)row_pointers);
-    
-    /* Clean up after the read, and free any memory allocated */
+
+ do_RGB:
+
+    /* Clean up after the read (or get info only) and free memory allocated */
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+    /* Now handle RGB images and get the alpha channel if needed */
+    if (has_alpha || is_RGB) {
+	unsigned char *a;
+	png_byte *volatile RGBA_pixels = NULL;
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+	    fprintf(stderr, "\nPNG: Get RGB or RGBA image\n");
+#endif
+	/* Null it in case setjmp activated */
+	row_pointers = NULL;
+
+	rewind(infile);
+
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
+					 NULL, NULL, NULL);
+	if (!png_ptr)
+	    return 0;
+
+	info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr) {
+	    png_destroy_read_struct(&png_ptr, NULL, NULL);
+	    return 0;
+	}
+
+	if (setjmp(png_ptr->jmpbuf)) {
+#ifndef DISABLE_TRACE
+	    if (srcTrace || reportBugs)
+		fprintf(stderr, "\nlibpng RGBA read error!\n");
+#endif
+	    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+	    if (pixels)
+		free((char *)pixels);
+	    if (RGBA_pixels)
+		free((char *)RGBA_pixels);
+	    if (row_pointers)
+		free((char *)row_pointers);
+
+	    return 0;
+	}
+
+	png_init_io(png_ptr, infile);
+	png_read_info(png_ptr, info_ptr);
+
+	/* Force to RGB with Alpha */
+	png_set_expand(png_ptr);
+
+	/* Force RGBA even if no Alpha */
+        if (!(info_ptr->color_type & PNG_COLOR_MASK_ALPHA))
+	    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
+
+	if (info_ptr->bit_depth == 16)
+	    png_set_strip_16(png_ptr);
+
+	if (has_background)
+	    png_set_background(png_ptr, &my_background,
+			       PNG_BACKGROUND_GAMMA_SCREEN, 0, 1.0);
+	if (info_ptr->bit_depth < 8)
+	    png_set_packing(png_ptr);
+
+	/* Make it all RGB */
+	if ((info_ptr->color_type == PNG_COLOR_TYPE_GRAY_ALPHA) ||
+	    (info_ptr->color_type == PNG_COLOR_TYPE_GRAY))
+	    png_set_gray_to_rgb(png_ptr);
+
+	if (png_get_sRGB(png_ptr, info_ptr, &intent)) {
+	    png_set_sRGB(png_ptr, info_ptr, intent);
+	} else {
+	    if (use_screen_gamma) {
+		if (info_ptr->valid & PNG_INFO_gAMA) {
+		    png_set_gamma(png_ptr, screen_gamma,
+				  (double)info_ptr->gamma);
+		} else {
+		    png_set_gamma(png_ptr, screen_gamma, (double)0.45455);
+		}
+	    }
+	}
     
-    return png_pixels;
+	png_read_update_info(png_ptr, info_ptr);
+
+	RGBA_pixels = (png_byte *)malloc(info_ptr->rowbytes * h *
+					 sizeof(png_byte));
+	row_pointers = (png_byte **)malloc(h * sizeof(png_byte *));
+	for (i = 0; i < h; i++)
+	    row_pointers[i] = RGBA_pixels + (info_ptr->rowbytes * i);
+
+	png_read_image(png_ptr, row_pointers);
+
+#ifndef DISABLE_TRACE
+	if (srcTrace) {
+	    fprintf(stderr, "\nAFTER RGBA \n");
+	    fprintf(stderr, "bit depth = %d\n", info_ptr->bit_depth);
+	    fprintf(stderr, "color type = %d\n", info_ptr->color_type);
+	    if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
+		fprintf(stderr, "num colors = %d\n", info_ptr->num_palette);
+	    fprintf(stderr, "rowbytes = %d\n", (int)info_ptr->rowbytes);
+	    if (*bg == -2) {
+		fprintf(stderr, "bg_index = %d\n",
+			(int)info_ptr->background.index);
+		if (info_ptr->color_type == PNG_COLOR_TYPE_GRAY)
+		    fprintf(stderr, "gray_bg = %d\n",
+			    (int)info_ptr->background.gray);
+	    }
+	}
+#endif
+    
+	png_read_end(png_ptr, info_ptr);
+	free((char *)row_pointers);
+
+	num = h * w;
+
+	if (is_RGB) {
+	    pixels = QuantizeImage(RGBA_pixels, w, h, 256, 1, colrs, 1);
+#ifndef DISABLE_TRACE
+	    if (srcTrace)
+	        fprintf(stderr, "Quantized 24 bit PNG\n");
+#endif
+	}
+	if (has_alpha) {
+	    *alpha = a = malloc(num);
+	    for (i = 0, j = 3; i < num; i++, j += 4)
+	        *a++ = RGBA_pixels[j];
+#ifndef DISABLE_TRACE
+	    if (srcTrace)
+	        fprintf(stderr, "Got PNG alpha channel\n");
+#endif
+	}
+	free((char *)RGBA_pixels);
+
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    }
+    
+    return pixels;
 }
 #endif

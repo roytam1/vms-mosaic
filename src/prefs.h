@@ -52,6 +52,10 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+ * The VMS Mosaic Project
+ */
+
 /* 
  * Created: Wed Dec 20 11:08:12 CDT 1995
  * Author: Dan Pape
@@ -62,64 +66,67 @@
 #define PREFS 1
 
 /* This include file contains enums for the variables in the following
-   structures. This is so get_pref() knows what to return */
+   structures.  This is so get_pref() knows what to return */
 
 #include <X11/Intrinsic.h>
 #include "prefs_defs.h"
 
 typedef struct
 {
+    int app_defaults_version;
 
-/* anchors */
+    Boolean use_preferences;
+
+/* Anchors */
 
     Boolean track_visited_anchors;
     Boolean display_urls_not_titles;      
     Boolean track_pointer_motion;
     Boolean track_full_url_names;
 
-/* annotations */
+/* Annotations */
     
     Boolean annotations_on_top;
     Boolean confirm_delete_annotation;
     char *annotation_server;
     
-/* audio */
+/* Audio */
 
     char *record_command_location;
     char *record_command;
     
-/* cache */
+/* Cache */
 
     Boolean reload_pragma_no_cache;
 
-/* strings (command names, file names) */
+/* Strings (command names, file names) */
     
     char *sendmail_command;
     char *edit_command;
     char *xterm_command;
     char *mail_filter_command;
        
-/* directories */
+/* Directories */
 
     char *private_annotation_directory;
 
-/* document */
+/* Document */
     
     char *home_document;                  
     char *tmp_directory;
     char *docs_directory;
     
-/* fonts */
+/* Fonts */
     
     char *default_font_choice;
     
-/* history */
+/* History */
     
     char *global_history_file;
     char *history_file;
     Boolean use_global_history;           
   
-/* hotlist */
+/* Hotlist */
     
     char *default_hotlist_file;
     char *default_hot_file;
@@ -127,7 +134,7 @@ typedef struct
     Boolean addHotlistAddsRBM;
     Boolean addRBMAddsRBM;
     
-/* images */
+/* Images */
     
     int colors_per_inlined_image;
     int image_cache_size;
@@ -135,7 +142,7 @@ typedef struct
     Boolean reverse_inlined_bitmap_colors;
     Boolean delay_image_loads;
     
-/* mail */
+/* Mail */
     
     char *default_author_name;
     char *default_author_email;
@@ -155,24 +162,22 @@ typedef struct
     char *personal_type_map;
     Boolean tweak_gopher_types;
 
-/* layout info form main gui */
+/* Layout info form main gui */
     char *gui_layout;
     
-/* news */
-    
-/* printing */
+/* Printing */
     
     char *print_mode;
     Boolean print_banners;
     Boolean print_footnotes;
     Boolean print_us;
     
-/* proxy */
+/* Proxy */
     
     char *proxy_specfile;
     char *noproxy_specfile;
     
-/* services */
+/* Services */
     
     int cciPort;
     int max_num_of_cci_connections;
@@ -183,11 +188,11 @@ typedef struct
     Boolean keepAlive;
     int ftp_timeout_val;
     
-/* tables */
+/* Tables */
     
     Boolean enable_tables;
     
-/* window */
+/* Window */
     
     int default_width;                    
     int default_height;                   
@@ -204,18 +209,10 @@ typedef struct
 
     char *save_mode;
     
-/* HDF stuff */
-    
-    int hdf_max_image_dimension;
-    int hdf_max_displayed_datasets;
-    int hdf_max_displayed_attributes;
-    Boolean hdf_power_user;
-    Boolean hdflongname;
-    
-/* miscellaneous */
+/* Miscellaneous */
 
     char *full_hostname;
-    int  load_local_file;
+    int load_local_file;
     Boolean edit_command_use_xterm;
     Boolean confirm_exit;
     Boolean default_fancy_selections;
@@ -229,38 +226,35 @@ typedef struct
     Boolean debugging_malloc;
 #endif
 
-    /* new in 2.7 */
-
-	Boolean clipping;
-	int max_clip_x;
-	int max_clip_y;
-	Boolean long_text_names;
-	char *toolbar_layout;
-	Boolean sendReferer;
-	Boolean sendAgent;
-	Boolean expandUrls;
-	Boolean expandUrlsWithName;
-	char * defaultProtocol;
-	char * meterForeground;
-	char * meterBackground;
-	char * meterFontForeground;
-	char * meterFontBackground;
-	Boolean use_meter;
-	Boolean backup_files;
-    char * pix_basename;
-	int pix_count;
-	char * acceptlanguage_str;
-	int ftpRedial;
-	int ftpRedialSleep;
-	int ftpFilenameLength;
-	int ftpEllipsisLength;
-	int ftpEllipsisMode;
-	Boolean useScreenGamma;
-	float screen_gamma;
+/* New in 2.7 */
+    Boolean clipping;
+    int max_clip_transitions;
+    Boolean long_text_names;
+    char *toolbar_layout;
+    Boolean sendReferer;
+    Boolean sendAgent;
+    Boolean expandUrls;
+    Boolean expandUrlsWithName;
+    char *defaultProtocol;
+    char *meterForeground;
+    char *meterBackground;
+    char *meterFontForeground;
+    char *meterFontBackground;
+    Boolean use_meter;
+    Boolean backup_files;
+    char *pix_basename;
+    int pix_count;
+    char *acceptlanguage_str;
+    int ftpRedial;
+    int ftpRedialSleep;
+    int ftpFilenameLength;
+    int ftpEllipsisLength;
+    int ftpEllipsisMode;
+    Boolean useScreenGamma;
+    float screen_gamma;
     Boolean disableMiddleButton;
 
-        /* newer in 2.7 */
-
+/* Newer in 2.7 */
     Boolean httpTrace;
     Boolean www2Trace;
     Boolean htmlwTrace;
@@ -268,6 +262,7 @@ typedef struct
     Boolean srcTrace;
     Boolean cacheTrace;
     Boolean nutTrace;
+    Boolean tableTrace;
     Boolean animateBusyIcon;
 
     Boolean splashScreen;
@@ -275,9 +270,9 @@ typedef struct
     Boolean imageViewInternal;
     int urlExpired;
     int popupCascadeMappingDelay;
-    Boolean frame_hack;  
+    Boolean frame_support;  
     
-  /* newest in 2.7 (ha top that) */
+/* Newest in 2.7 (ha top that) */
     Boolean newsNoThreadJumping;
     Boolean newsShowAllArticles;
     Boolean newsShowAllGroups;
@@ -286,7 +281,7 @@ typedef struct
     Boolean newsUseBackgroundFlush;
     int newsBackgroundFlushTime;
 
-  /* newest in 2.7b5 double haha; */
+/* Newest in 2.7b5 double haha */
     Boolean newsPrevIsUnread;
     Boolean newsNextIsUnread;
     char *newsNewsrcPrefix;
@@ -301,22 +296,95 @@ typedef struct
 
     Boolean newsUseShortNewsrc;
 
+/* 2.7b6 */
+    char *kioskProtocols;
+
+    Boolean bodyColors;
+    Boolean bodyImages;
+    char *defaultUnderlines;
+    Boolean ftp_binary_mode;
+    char *vms_mail_prefix;
+    int backupFileVersions;
+
+/* 3.0 */
+    Boolean fontColors;
+    Boolean progressive_display;
+    Boolean fontSizes;
+    int fontBaseSize;
+    Boolean track_target_anchors;
+    Boolean debug_menu;
+    Boolean reportBugs;
+    Boolean image_animation;
+    int min_animation_delay;
+    Boolean refreshTrace;
+
+/* 3.1 */
+    Boolean refresh_URL;
+
+/* 3.2 */
+    Boolean browser_safe_colors;
+
+/* 3.4 */
+    Boolean blinking_text;
+    int blink_time;
+    Boolean cookies;
+    Boolean accept_all_cookies;
+
+/* 3.5-1 */
+    int maxPixmapHeight;
+    int maxPixmapWidth;
+
+/* 3.6 */
+    Boolean use_cookie_file;
+    char *cookie_file;
+
+/* 3.6-2 */
+    char *imagedelay_file;
+
+/* 3.7 */
+    Boolean BSColors_if_Truecolor;
+    Boolean hotkeys;
+    Boolean invalid_cookie_prompt;
+    int max_cookies;
+    int cookie_domain_limit;
+
+/* 3.8 */
+    char *perm_file;
+    char *form_button_background;
+
+/* 3.9 */
+    Boolean verify_ssl_certificates;
+    int hotlist_menu_height;
+    int hotlist_menu_width;
+    int markup_memory_preallocation;
+    int element_memory_preallocation;
+    Boolean cookieTrace;
+
+/* 4.0 */
+    Boolean clue_help;
+    char *clueForeground;
+    char *clueBackground;
+    int clueDelay;
+    int clueDownDelay;
+    char *clueFont;
+    Boolean clue_oval;
+    Boolean clue_rounded;
+    Boolean print_duplex;
+    Boolean menubar_tearoff;
+
 } AppData, *AppDataPtr;
 
 
-
 typedef struct prefs {
-
     int version;
     AppDataPtr RdataP;
-
 } prefsStruct, *prefsStructP;
 
 
 Boolean preferences_genesis(void);
-Boolean preferences_armegeddon(void);
 
 Boolean read_preferences_file(prefsStructP inPrefsStruct);
+Boolean write_preferences_file(prefsStructP inPrefsStruct);
 
 prefsStructP get_ptr_to_preferences(void);
 
@@ -328,20 +396,22 @@ float get_pref_float(long pref_id);
 
 void set_pref_boolean(long pref_id, int value);
 void set_pref(long pref_id, void *incoming);
+void set_pref_int(long pref_id, int value);
+void set_pref_float(long pref_id, float value);
 
+#ifndef VMS
 void mo_preferences_dialog(mo_window *win);
-
+#endif /* VMS, Useless, at least for now, GEC */
 
 #endif
 
 /*
   To add a new preference:
-
+            
   1) Figure out what you want to call it. (duh)
 
-  2) Add it to the structure in xresources.h. (This will eventually go
-     away, but do it for now.
-
+  2) Add it to the structure in xresources.h.
+                       
   2) Figure out where you want it to go in the above structures. For
      example, any preference which would normally be added as an xresource
      would go in the Appdata structure. If you are adding a whole bunch of
@@ -350,7 +420,7 @@ void mo_preferences_dialog(mo_window *win);
 
   3) Add the variable to the structure (preferably at the end).
 
-  4) Add an enumeration for the varuable in the prefs_defs.h file.
+  4) Add an enumeration for the variable in the prefs_defs.h file.
 
   (the rest of the changes are in prefs.c)
   
@@ -358,7 +428,7 @@ void mo_preferences_dialog(mo_window *win);
      write_preferences_file() so that your preference will be added to the
      new prefs file.
 
-  6) Add a news case to get_pref().
+  6) Add a new case to get_pref().
 
   7) Add a new case to set_pref().
 
@@ -367,8 +437,6 @@ void mo_preferences_dialog(mo_window *win);
 
   9) IMPORTANT!!! : Before a new public release - either the
      PREFERENCES_MAJOR_VERSION or the PREFERENCES_MINOR_VERSION defines
-     must be changed, or we risk mangleing our users prefs files!
-
-  Last Change: Mar 21, 1996 - Dan X. Pape
+     must be changed, or we risk mangleing our user's prefs files!
 
 */

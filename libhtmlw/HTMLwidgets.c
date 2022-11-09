@@ -51,11 +51,17 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
+
+#include "../libnut/str-tools.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#ifdef MOTIF
+
 #include <Xm/Xm.h>
 #include <Xm/Frame.h>
 #include <Xm/DrawingA.h>
@@ -65,503 +71,270 @@
 #include <Xm/ToggleB.h>
 #include <Xm/PushB.h>
 #include <Xm/RowColumn.h>
+#include <Xm/Label.h>
 #include <Xm/List.h>
-#else
-#include <X11/Intrinsic.h>
-#include <X11/StringDefs.h>
-#include <X11/Xaw/Toggle.h>
-#include <X11/Xaw/AsciiText.h>
-#include <X11/Xaw/List.h>
-#include <X11/Xaw/Viewport.h>
-#include <X11/Xaw/MenuButton.h>
-#include <X11/Xaw/SimpleMenu.h>
-#include <X11/Xaw/SmeBSB.h>
-#endif /* MOTIF */
+#include <Xm/Scrollbar.h>
+
+#include "HTMLmiscdefs.h"
+#include "HTMLparse.h"
 #include "HTMLP.h"
+#include "HTMLPutil.h"
+#include "HTMLwidgets.h"
 
-
-#ifdef MOTIF
 #define STRING XmString
-#else
-#define STRING String
-#endif /* MOTIF */
 
-#define X_NAME		"x"
-#define Y_NAME		"y"
-
-#define	W_TEXTFIELD	0
-#define	W_CHECKBOX	1
-#define	W_RADIOBOX	2
-#define	W_PUSHBUTTON	3
-#define	W_PASSWORD	4
-#define	W_OPTIONMENU	5
-#define	W_TEXTAREA	6
-#define	W_LIST		7
-#define	W_JOT		8
-#define	W_HIDDEN	9
-
-
-extern void NewJot();
-extern void ClearJot();
-extern void EVJotExpose();
-extern void EVJotPress();
-extern void EVJotMove();
-extern void EVJotRelease();
-extern char *EJB_JOTfromJot();
-extern char *ParseMarkTag();
-
-#ifdef MOTIF
-static Boolean ModifyIgnore = False;
-#endif /* MOTIF */
-
-char **ParseCommaList();
-void FreeCommaList();
-char *MapOptionReturn();
-
-static char traversal_table[] = 
-"\
-~Shift ~Meta ~Ctrl <Key> Tab:  traversal_forward()\n\
-Shift ~Meta ~Ctrl <Key> Tab:   traversal_back()\n\
-Ctrl <Key> Tab:    traversal_end()\
-";
-
-static char text_translations[] = "\
-           ~Meta ~Alt Ctrl<Key>u:	beginning-of-line()		\
-					delete-to-end-of-line()		\n\
-           ~Meta ~Alt Ctrl<Key>k:	delete-to-end-of-line()		\n\
-           ~Meta ~Alt Ctrl<Key>a:	beginning-of-line()		\n\
-           ~Meta ~Alt Ctrl<Key>e:	end-of-line()   		\n\
-           ~Meta ~Alt Ctrl<Key>w:	key-select()			\
-					delete-selection()		\n\
-           ~Meta ~Alt Ctrl<Key>y:	paste-clipboard()		\n\
-	 Meta ~Ctrl       <Key>d:	delete-next-word()		\n\
-	  Alt ~Ctrl       <Key>d:	delete-next-word()		\n\
-           ~Meta ~Alt Ctrl<Key>d:       delete-next-character()         \n\
-     Meta ~Ctrl<Key>osfBackSpace:	delete-previous-word()		\n\
-      Alt ~Ctrl<Key>osfBackSpace:	delete-previous-word()		\n\
-	Meta ~Ctrl<Key>osfDelete:	delete-next-word()		\n\
-	 Alt ~Ctrl<Key>osfDelete:	delete-next-word()              \n\
-                      <Btn1Down>:       take_focus() grab-focus() traversal_current()";
-
-
-#ifndef MOTIF
-#define FONTHEIGHT(font) (font->max_bounds.ascent + font->max_bounds.descent)
+#define X_NAME	"x"
+#define Y_NAME	"y"
 
 #ifndef DISABLE_TRACE
+extern int reportBugs;
 extern int htmlwTrace;
 #endif
 
-void
-setTextSize(w, columns, lines)
-	Widget w;
-	int columns;
-	int lines;
-{
-	XFontStruct *font;
-	Position lm, rm, tm, bm;
-	int width, height;
+extern int LimDimY;
 
-	XtVaGetValues(w, XtNfont, &font,
-		XtNleftMargin, &lm,
-		XtNrightMargin, &rm,
-		XtNtopMargin, &tm,
-		XtNbottomMargin, &bm,
-		NULL);
-	width  = rm + lm + columns * XTextWidth(font, "0", 1);
-	height = tm + bm + lines * FONTHEIGHT(font);
-	XtVaSetValues(w,
-		XtNwidth, width,
-		XtNheight, height,
-		NULL);
-}
+int skip_traversal_current = 0;
 
-void
-CBListDestroy(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
-{
-	char **string_list=NULL, **p;
-	int item_count;
+static char **ParseCommaList(char *str, int *count);
+static char *MapOptionReturn(char *val, char **mapping);
 
-	XtVaGetValues(w,
-		XtNlist, string_list,
-		XtNnumberStrings, &item_count, /*ddt4/3/95*/
-		NULL);
+static char traversal_table[] = "\
+    ~Shift ~Meta ~Ctrl <Key> Tab:  traversal_forward()\n\
+    Shift ~Meta ~Ctrl <Key> Tab:   traversal_back()\n\
+    Ctrl <Key> Tab:    		   traversal_end()";
 
-	p = string_list;
-	while(item_count > 0)
-	{
-		free(*p++);
-		item_count--;
-	}
-	free(string_list);
-}
+/* Disable dran and drop */
+static char button_translations[] = "\
+    <Btn2Down>:       take_focus()";
 
+static char text_translations[] = "\
+   ~Meta ~Alt Ctrl<Key>u:	beginning-of-line()		\
+				delete-to-end-of-line()		\n\
+   ~Meta ~Alt Ctrl<Key>x:	beginning-of-line()		\
+				delete-to-end-of-line()		\n\
+   ~Meta ~Alt Ctrl<Key>k:	delete-to-end-of-line()		\n\
+   ~Meta ~Alt Ctrl<Key>a:	beginning-of-line()		\n\
+   ~Meta ~Alt Ctrl<Key>e:	end-of-line()   		\n\
+   ~Meta ~Alt Ctrl<Key>w:	key-select()			\
+				delete-selection()		\n\
+   ~Meta ~Alt Ctrl<Key>y:	paste-clipboard()		\n\
+   Meta ~Ctrl     <Key>d:	delete-next-word()		\n\
+   Alt ~Ctrl      <Key>d:	delete-next-word()		\n\
+   ~Meta ~Alt Ctrl<Key>d:       delete-next-character()         \n\
+   Meta ~Ctrl<Key>osfBackSpace:	delete-previous-word()		\n\
+   Alt ~Ctrl<Key>osfBackSpace:  delete-previous-word()		\n\
+   Meta ~Ctrl<Key>osfDelete:	delete-next-word()		\n\
+   Alt ~Ctrl<Key>osfDelete:	delete-next-word()		\n\
+              <Btn1Down>:       take_focus() grab-focus() traversal_current()";
 
-void
-CBTextDestroy(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
-{
-	char *txt = (char *)client_data;
-	free(txt);
-}
-
-
-void
-CBoption(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
-{
-	Widget menuButton = (Widget)client_data;
-	char *label;
-
-	XtVaGetValues(menuButton, XtNlabel, &label, NULL);
-	XtVaGetValues(w, XtNlabel, &label, NULL);
-	XtVaSetValues(menuButton, XtNlabel, label, NULL);
-}
-#endif /* not MOTIF */
-
-
-void
-AddNewForm(hw, fptr)
-	HTMLWidget hw;
-	FormInfo *fptr;
+void AddNewForm(HTMLWidget hw, FormInfo *fptr)
 {
 	FormInfo *ptr;
 
 	ptr = hw->html.form_list;
-	if (ptr == NULL)
-	{
+	if (!ptr) {
 		hw->html.form_list = fptr;
+		fptr->cached = 0;
 		fptr->next = NULL;
-	}
-	else
-	{
-		while (ptr->next != NULL)
-		{
+	} else {
+		while (ptr->next)
 			ptr = ptr->next;
-		}
 		ptr->next = fptr;
 		fptr->next = NULL;
 	}
 }
 
-
-int
-CollectSubmitInfo(fptr, name_list, value_list)
-	FormInfo *fptr;
-	char ***name_list;
-	char ***value_list;
+static int CollectSubmitInfo(FormInfo *fptr, char ***name_list,
+			     char ***value_list)
 {
 	HTMLWidget hw = (HTMLWidget)(fptr->hw);
 	WbFormCallbackData cbdata;
 	WidgetInfo *wptr;
 	int cnt;
-#ifndef MOTIF
-	Boolean state;
-#endif
 
-	if (fptr->end == -1)  /* unterminated FORM tag */
-	{
+	if (fptr->end == -1) {  /* Unterminated FORM tag */
 		wptr = hw->html.widget_list;
 		cnt = 0;
-		while (wptr != NULL)
-		{
+		while (wptr) {
 			cnt++;
 			wptr = wptr->next;
 		}
 		cbdata.attribute_count = cnt;
-	}
-	else
-	{
+	} else {
 		cbdata.attribute_count = fptr->end - fptr->start;
 	}
 	cbdata.attribute_names = (char **)malloc(cbdata.attribute_count *
-		sizeof(char *));
+						 sizeof(char *));
 	cbdata.attribute_values = (char **)malloc(cbdata.attribute_count *
-		sizeof(char *));
-
-	if (fptr->start == 0)
-	{
+						  sizeof(char *));
+	if (fptr->start == 0) {
 		wptr = hw->html.widget_list;
-	}
-	else
-	{
+	} else {
 		wptr = hw->html.widget_list;
-		while (wptr != NULL)
-		{
-			if (wptr->id == fptr->start)
-			{
+		while (wptr) {
+			if (wptr->id == fptr->start) {
 				wptr = wptr->next;
 				break;
 			}
 			wptr = wptr->next;
 		}
 	}
-
 	cnt = 0;
-
-	while ((wptr != NULL)&&(cnt < cbdata.attribute_count))
-	{
-	/***   cvarela@ncsa.uiuc.edu:  August 17, 1994
-               Adding multiple submit buttons support
-         ***   changed to match widgets -- amb ***/
-           if (wptr->name)
-
-	    {
+	while (wptr && (cnt < cbdata.attribute_count)) {
+	    /***   cvarela@ncsa.uiuc.edu:  August 17, 1994
+                   Adding multiple submit buttons support
+             ***   changed to match widgets -- amb ***/
+           if (wptr->name) {
 		Widget child;
 		STRING *str_list;
 		int list_cnt;
 		char *val;
-#ifdef MOTIF
 		STRING label;
 		Cardinal argcnt;
 		Arg arg[5];
-#else
-		XawListReturnStruct *currentSelection;
-#endif /* MOTIF */
 
 		cbdata.attribute_names[cnt] = wptr->name;
-		switch(wptr->type)
-		{
-			case W_TEXTFIELD:
-#ifdef MOTIF
-				cbdata.attribute_values[cnt] =
-					XmTextFieldGetString(wptr->w);
-#else
-				XtVaGetValues(wptr->w, XtNstring,
-					&(cbdata.attribute_values[cnt]),
-					NULL);
-#endif /* MOTIF */
-				if ((cbdata.attribute_values[cnt] != NULL)&&
-				    (cbdata.attribute_values[cnt][0] == '\0'))
-				{
-					cbdata.attribute_values[cnt] = NULL;
-				}
-				break;
-			case W_TEXTAREA:
-#ifdef MOTIF
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNworkWindow, &child);
-				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-				cbdata.attribute_values[cnt] =
-					XmTextGetString(child);
-#else
-				XtVaGetValues(wptr->w, XtNstring,
-					&(cbdata.attribute_values[cnt]),
-					NULL);
-#endif /* MOTIF */
-				if ((cbdata.attribute_values[cnt] != NULL)&&
-				    (cbdata.attribute_values[cnt][0] == '\0'))
-				{
-					cbdata.attribute_values[cnt] = NULL;
-				}
-				break;
-			case W_PASSWORD:
-				cbdata.attribute_values[cnt] = wptr->password;
-				if ((cbdata.attribute_values[cnt] != NULL)&&
-				    (cbdata.attribute_values[cnt][0] == '\0'))
-				{
-					cbdata.attribute_values[cnt] = NULL;
-				}
-				break;
-			case W_LIST:
-				/*
-				 * First get the Widget ID of the proper
-				 * list element
-				 */
-#ifdef MOTIF
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNworkWindow, &child);
-				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-#else
-				{
-					WidgetList wl;
-					XtVaGetValues(wptr->w, XtNchildren,
-						&wl, NULL);
-					child = *++wl;
-				}
-#endif /* MOTIF */
-
-				/*
-				 * Now get the list of selected items.
-				 */
-#ifdef MOTIF
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNselectedItemCount,
-					&list_cnt);
-				argcnt++;
-				XtSetArg(arg[argcnt], XmNselectedItems,
-					&str_list);
-				argcnt++;
-				XtGetValues(child, arg, argcnt);
-#else
-				currentSelection = XawListShowCurrent(child);
-				list_cnt =
-				  currentSelection->list_index == XAW_LIST_NONE?
-					0 : 1;
-				str_list = &(currentSelection->string);
-#endif /* MOTIF */
-
-				if (list_cnt == 0)
-				{
-					cnt--;
-					cbdata.attribute_count--;
-				}
-				else /* list_cnt >= 1 */
-				{
-					int j, new_cnt;
-					char **names;
-					char **values;
-
-					if (list_cnt > 1)
-					{
-					    new_cnt = cbdata.attribute_count +
-						list_cnt - 1;
-					    names = (char **)malloc(new_cnt *
-						sizeof(char *));
-					    values = (char **)malloc(new_cnt *
-						sizeof(char *));
-					    for (j=0; j<cnt; j++)
-					    {
-						names[j] =
-						    cbdata.attribute_names[j];
-						values[j] =
-						    cbdata.attribute_values[j];
-					    }
-					    free((char *)
-						cbdata.attribute_names);
-					    free((char *)
-						cbdata.attribute_values);
-					    cbdata.attribute_names = names;
-					    cbdata.attribute_values = values;
-					    cbdata.attribute_count = new_cnt;
-					}
-
-					for (j=0; j<list_cnt; j++)
-					{
-						cbdata.attribute_names[cnt + j]
-							= wptr->name;
-#ifdef MOTIF
-						XmStringGetLtoR(str_list[j],
-						    XmSTRING_DEFAULT_CHARSET,
-						    &val);
-#else
-						val = str_list[j];
-#endif /* MOTIF */
-						if ((val != NULL)&&
-							(val[0] == '\0'))
-						{
-							val = NULL;
-						}
-						else if (val != NULL)
-						{
-							val = MapOptionReturn(
-								val,
-								wptr->mapping);
-						}
-						cbdata.attribute_values[cnt + j]
-							= val;
-					}
-					cnt = cnt + list_cnt - 1;
-				}
-				break;
-			/*
-			 * For an option menu, first get the label gadget
-			 * which holds the current value.
-			 * Now get the text from that label as a character
-			 * string.
-			 */
-			case W_OPTIONMENU:
-#ifdef MOTIF
-				child = XmOptionButtonGadget(wptr->w);
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNlabelString, &label);
-				argcnt++;
-				XtGetValues(child, arg, argcnt);
-				val = NULL;
-				XmStringGetLtoR(label, XmSTRING_DEFAULT_CHARSET,
-					&val);
-#else
-				XtVaGetValues(wptr->w, XtNlabel, &val, NULL);
-#endif /* MOTIF */
-				if ((val != NULL)&&(val[0] == '\0'))
-				{
-					val = NULL;
-				}
-				else if (val != NULL)
-				{
-					val = MapOptionReturn(val,
-						wptr->mapping);
-				}
-				cbdata.attribute_values[cnt] = val;
-				if ((cbdata.attribute_values[cnt] != NULL)&&
-				    (cbdata.attribute_values[cnt][0] == '\0'))
-				{
-					cbdata.attribute_values[cnt] = NULL;
-				}
-				break;
-			case W_CHECKBOX:
-			case W_RADIOBOX:
-#ifdef MOTIF
-				if (XmToggleButtonGetState(wptr->w) == True)
-#else
-				XtVaGetValues(wptr->w, XtNstate, &state, NULL);
-				if (state)
-#endif /* MOTIF */
-				{
-				    cbdata.attribute_values[cnt] = wptr->value;
-				}
-				else
-				{
-				    cnt--;
-				    cbdata.attribute_count--;
-				}
-				break;
- 
-		       /*** cvarela@ncsa.uiuc.edu:  August 17, 1994
-		            Adding multiple submit buttons support ***/
-				/* mods 3/11/95  -- amb */
-                       case W_PUSHBUTTON:
-                               if (fptr->button_pressed == wptr->w){
-                                   cbdata.attribute_values[cnt] = wptr->value;
-                               }
-                               else
-                               {
-                                   cnt--;
-                                   cbdata.attribute_count--;
-                               }
-                               break;
-			/**/
-
-			case W_HIDDEN:
-				cbdata.attribute_values[cnt] = wptr->value;
-				break;
-#ifdef MOTIF
-			case W_JOT:
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNuserData,
-					(XtPointer *)&child);
-				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-				cbdata.attribute_values[cnt] =
-					EJB_JOTfromJot(child);
-				break;
-#endif /* MOTIF */
-			default:
+		switch (wptr->type) {
+		case W_TEXTFIELD:
+			cbdata.attribute_values[cnt] =
+						  XmTextFieldGetString(wptr->w);
+			if ((cbdata.attribute_values[cnt] != NULL) &&
+			    (cbdata.attribute_values[cnt][0] == '\0'))
 				cbdata.attribute_values[cnt] = NULL;
-				break;
+			break;
+		case W_TEXTAREA:
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNworkWindow, &child);
+			argcnt++;
+			XtGetValues(wptr->w, arg, argcnt);
+			cbdata.attribute_values[cnt] = XmTextGetString(child);
+			if ((cbdata.attribute_values[cnt] != NULL) &&
+			    (cbdata.attribute_values[cnt][0] == '\0'))
+				cbdata.attribute_values[cnt] = NULL;
+			break;
+		case W_PASSWORD:
+			cbdata.attribute_values[cnt] = wptr->password;
+			if ((cbdata.attribute_values[cnt] != NULL) &&
+			    (cbdata.attribute_values[cnt][0] == '\0'))
+				cbdata.attribute_values[cnt] = NULL;
+			break;
+		case W_LIST:
+			/*
+			 * First get the Widget ID of the proper
+			 * list element
+			 */
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNworkWindow, &child);
+			argcnt++;
+			XtGetValues(wptr->w, arg, argcnt);
+
+			/*
+			 * Now get the list of selected items.
+			 */
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNselectedItemCount, &list_cnt);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNselectedItems, &str_list);
+			argcnt++;
+			XtGetValues(child, arg, argcnt);
+
+			if (list_cnt == 0) {
+				cnt--;
+				cbdata.attribute_count--;
+			} else { /* list_cnt >= 1 */
+				int j, new_cnt;
+				char **names;
+				char **values;
+
+				if (list_cnt > 1) {
+				    new_cnt = cbdata.attribute_count +
+					      list_cnt - 1;
+				    names = (char **)malloc(new_cnt *
+							    sizeof(char *));
+				    values = (char **)malloc(new_cnt *
+							     sizeof(char *));
+				    for (j = 0; j < cnt; j++) {
+					names[j] = cbdata.attribute_names[j];
+					values[j] = cbdata.attribute_values[j];
+				    }
+				    free((char *) cbdata.attribute_names);
+				    free((char *) cbdata.attribute_values);
+				    cbdata.attribute_names = names;
+				    cbdata.attribute_values = values;
+				    cbdata.attribute_count = new_cnt;
+				}
+
+				for (j = 0; j < list_cnt; j++) {
+				    cbdata.attribute_names[cnt + j] =wptr->name;
+				    XmStringGetLtoR(str_list[j],
+					        XmSTRING_DEFAULT_CHARSET, &val);
+				    if (val && (val[0] == '\0')) {
+					val = NULL;
+				    } else if (val) {
+					val = MapOptionReturn(val,
+							      wptr->mapping);
+				    }
+				    cbdata.attribute_values[cnt + j] = val;
+				}
+				cnt = cnt + list_cnt - 1;
+			}
+			break;
+		/*
+		 * For an option menu, first get the label gadget
+		 * which holds the current value.
+		 * Now get the text from that label as a character
+		 * string.
+		 */
+		case W_OPTIONMENU:
+			child = XmOptionButtonGadget(wptr->w);
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNlabelString, &label);
+			argcnt++;
+			XtGetValues(child, arg, argcnt);
+			val = NULL;
+			XmStringGetLtoR(label, XmSTRING_DEFAULT_CHARSET, &val);
+			if (val && (val[0] == '\0')) {
+				val = NULL;
+			} else if (val) {
+				val = MapOptionReturn(val, wptr->mapping);
+			}
+			cbdata.attribute_values[cnt] = val;
+			if ((cbdata.attribute_values[cnt] != NULL) &&
+			    (cbdata.attribute_values[cnt][0] == '\0'))
+				cbdata.attribute_values[cnt] = NULL;
+			break;
+		case W_CHECKBOX:
+		case W_RADIOBOX:
+			if (XmToggleButtonGetState(wptr->w) == True) {
+			        cbdata.attribute_values[cnt] = wptr->value;
+			} else {
+			        cnt--;
+			        cbdata.attribute_count--;
+			}
+			break;
+
+	        /*** cvarela@ncsa.uiuc.edu:  August 17, 1994
+	            Adding multiple submit buttons support ***/
+			/* mods 3/11/95  -- amb */
+		case W_PUSHBUTTON:
+                	if (fptr->button_pressed == wptr->w) {
+                		cbdata.attribute_values[cnt] = wptr->value;
+                        } else {
+                                cnt--;
+                                cbdata.attribute_count--;
+                        }
+                        break;
+		/**/
+
+		case W_HIDDEN:
+			cbdata.attribute_values[cnt] = wptr->value;
+			break;
+		default:
+			cbdata.attribute_values[cnt] = NULL;
+			break;
 		}
 		cnt++;
-	    }
-	    else
-	    {
+	    } else {
 		cbdata.attribute_count--;
 	    }
 	    wptr = wptr->next;
@@ -573,13 +346,7 @@ CollectSubmitInfo(fptr, name_list, value_list)
 	return(cbdata.attribute_count);
 }
 
-
-void
-ImageSubmitForm(fptr, event, name, x, y)
-	FormInfo *fptr;
-	XEvent *event;
-	char *name;
-	int x, y;
+void ImageSubmitForm(FormInfo *fptr, XEvent *event, char *name, int x, int y)
 {
 	HTMLWidget hw = (HTMLWidget)(fptr->hw);
 	WbFormCallbackData cbdata;
@@ -590,10 +357,9 @@ ImageSubmitForm(fptr, event, name, x, y)
 
 	cbdata.event = event;
 	cbdata.href = fptr->action;
-	cbdata.format = fptr->format;
+	cbdata.target = fptr->target;
         cbdata.method = fptr->method;
         cbdata.enctype = fptr->enctype;
-        cbdata.enc_entity = fptr->enc_entity;
 
 	name_list = NULL;
 	value_list = NULL;
@@ -601,33 +367,25 @@ ImageSubmitForm(fptr, event, name, x, y)
 
 	cbdata.attribute_count = cnt + 2;
 	cbdata.attribute_names = (char **)malloc(cbdata.attribute_count *
-		sizeof(char *));
+						 sizeof(char *));
 	cbdata.attribute_values = (char **)malloc(cbdata.attribute_count *
-		sizeof(char *));
-	for (i=0; i<cnt; i++)
-	{
+						  sizeof(char *));
+	for (i = 0; i < cnt; i++) {
 		cbdata.attribute_names[i] = name_list[i];
 		cbdata.attribute_values[i] = value_list[i];
 	}
-	if (name_list != NULL)
-	{
+	if (name_list)
 		free((char *)name_list);
-	}
-	if (value_list != NULL)
-	{
+	if (value_list)
 		free((char *)value_list);
-	}
 
-	if ((name != NULL)&&(name[0] != '\0'))
-	{
+	if (name && (name[0] != '\0')) {
 		cbdata.attribute_names[cnt] = (char *)malloc(strlen(name) +
-			strlen(X_NAME) + 2);
+							    strlen(X_NAME) + 2);
 		strcpy(cbdata.attribute_names[cnt], name);
 		strcat(cbdata.attribute_names[cnt], ".");
 		strcat(cbdata.attribute_names[cnt], X_NAME);
-	}
-	else
-	{
+	} else {
 		cbdata.attribute_names[cnt] = (char *)malloc(strlen(X_NAME) +1);
 		strcpy(cbdata.attribute_names[cnt], X_NAME);
 	}
@@ -636,16 +394,13 @@ ImageSubmitForm(fptr, event, name, x, y)
 	strcpy(cbdata.attribute_values[cnt], valstr);
 
 	cnt++;
-	if ((name != NULL)&&(name[0] != '\0'))
-	{
+	if (name && (name[0] != '\0')) {
 		cbdata.attribute_names[cnt] = (char *)malloc(strlen(name) +
-			strlen(Y_NAME) + 2);
+							    strlen(Y_NAME) + 2);
 		strcpy(cbdata.attribute_names[cnt], name);
 		strcat(cbdata.attribute_names[cnt], ".");
 		strcat(cbdata.attribute_names[cnt], Y_NAME);
-	}
-	else
-	{
+	} else {
 		cbdata.attribute_names[cnt] = (char *)malloc(strlen(Y_NAME) +1);
 		strcpy(cbdata.attribute_names[cnt], Y_NAME);
 	}
@@ -653,132 +408,92 @@ ImageSubmitForm(fptr, event, name, x, y)
 	cbdata.attribute_values[cnt] = (char *)malloc(strlen(valstr) + 1);
 	strcpy(cbdata.attribute_values[cnt], valstr);
 
-	XtCallCallbackList ((Widget)hw, hw->html.form_callback,
-		(XtPointer)&cbdata);
+	XtCallCallbackList((Widget)hw, hw->html.form_callback,
+			   (XtPointer)&cbdata);
 }
 
-
-void
-CBSubmitForm(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
+void CBSubmitForm(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	FormInfo *fptr = (FormInfo *)client_data;
-	HTMLWidget hw = (HTMLWidget)(fptr->hw);
+	HTMLWidget hw;
 	WbFormCallbackData cbdata;
-#ifdef MOTIF
-	XmPushButtonCallbackStruct *pb =
-		(XmPushButtonCallbackStruct *)call_data;
-#endif /* MOTIF */
 
-#ifdef MOTIF
-	cbdata.event = pb->event;
-#else
-	/******* WE HAVE NO EVENT in ATHENA *******/
-	cbdata.event = NULL;
-#endif /* MOTIF */
+	if (!fptr)
+		return;
+
+	hw = (HTMLWidget)(fptr->hw);
+
 	cbdata.href = fptr->action;
+	cbdata.target = fptr->target;
         cbdata.method = fptr->method;
-	cbdata.format = fptr->format;
         cbdata.enctype = fptr->enctype;
-        cbdata.enc_entity = fptr->enc_entity;
 	fptr->button_pressed = w;
 
 	cbdata.attribute_count = CollectSubmitInfo(fptr,
-		&cbdata.attribute_names, &cbdata.attribute_values);
-
-	XtCallCallbackList ((Widget)hw, hw->html.form_callback,
-		(XtPointer)&cbdata);
+						   &cbdata.attribute_names,
+						   &cbdata.attribute_values);
+	XtCallCallbackList((Widget)hw, hw->html.form_callback,
+			   (XtPointer)&cbdata);
 }
-
 
 /*
  * A radio buttom was toggled on in a form.
  * If there are other radios of the same name, turn them off.
  */
-void
-CBChangeRadio(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
+void CBChangeRadio(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	FormInfo *fptr = (FormInfo *)client_data;
-	HTMLWidget hw = (HTMLWidget)(fptr->hw);
+	HTMLWidget hw;
 	WidgetInfo *wptr;
 	WidgetInfo *wtmp;
 	char *name;
 	int cnt, count;
-#ifdef MOTIF
 	XmToggleButtonCallbackStruct *tb =
-		(XmToggleButtonCallbackStruct *)call_data;
-#else
-	Boolean state;
-#endif /* MOTIF */
+				(XmToggleButtonCallbackStruct *)call_data;
 
-#ifdef MOTIF
 	/*
 	 * Bad button
 	 */
-	if (tb == NULL)
-	{
+	if (!tb)
 		return;
-	}
-#endif /* MOTIF */
-
 	/*
 	 * Only do stuff when the button is turned on.
 	 * Don't let the button be turned off, by clicking on
 	 * it, as that would leave all buttons off.
 	 */
-#ifdef MOTIF
-	if ((tb == NULL)||(tb->set == False))
-	{
+	if (!tb || (tb->set == False)) {
 		XmToggleButtonSetState(w, True, False);
 		return;
 	}
-#else
-	XtVaGetValues(w, XtNstate, &state, NULL);
-	if (!state)
-	{
-		XtVaSetValues(w, XtNstate, 1, NULL);
-		return;
-	}
-#endif /* MOTIF */
 
+	if (!fptr)
+		return;
+
+	hw = (HTMLWidget)(fptr->hw);
 	/*
 	 * Terminate the form if it was never properly terminated.
 	 */
-	if (fptr->end == -1)  /* unterminated FORM tag */
-	{
+	if (fptr->end == -1) {  /* Unterminated FORM tag */
 		wptr = hw->html.widget_list;
 		cnt = 0;
-		while (wptr != NULL)
-		{
+		while (wptr) {
 			cnt++;
 			wptr = wptr->next;
 		}
 		count = cnt;
-	}
-	else
-	{
+	} else {
 		count = fptr->end - fptr->start;
 	}
 
 	/*
 	 * Locate the start of the form.
 	 */
-	if (fptr->start == 0)
-	{
+	if (fptr->start == 0) {
 		wptr = hw->html.widget_list;
-	}
-	else
-	{
+	} else {
 		wptr = hw->html.widget_list;
-		while (wptr != NULL)
-		{
-			if (wptr->id == fptr->start)
-			{
+		while (wptr) {
+			if (wptr->id == fptr->start) {
 				wptr = wptr->next;
 				break;
 			}
@@ -791,10 +506,8 @@ CBChangeRadio(w, client_data, call_data)
 	 */
 	name = NULL;
 	wtmp = wptr;
-	while (wtmp != NULL)
-	{
-		if (wtmp->w == w)
-		{
+	while (wtmp) {
+		if (wtmp->w == w) {
 			name = wtmp->name;
 			break;
 		}
@@ -805,109 +518,55 @@ CBChangeRadio(w, client_data, call_data)
 	 * Check for other checked radioboxes of the same name.
 	 */
 	cnt = 0;
-	while ((wptr != NULL)&&(cnt < count))
-	{
-#ifdef MOTIF
-		if ((wptr->type == W_RADIOBOX)&&
-			(wptr->w != w)&&
-			(XmToggleButtonGetState(wptr->w) == True)&&
-			(wptr->name != NULL)&&
-			(name != NULL)&&
-			(strcmp(wptr->name, name) == 0))
-		{
+	while (wptr && (cnt < count)) {
+		if ((wptr->type == W_RADIOBOX) && (wptr->w != w) &&
+		    (XmToggleButtonGetState(wptr->w) == True) &&
+		    wptr->name && name && !strcmp(wptr->name, name))
 			XmToggleButtonSetState(wptr->w, False, False);
-		}
-#else
-		if ((wptr->type == W_RADIOBOX)&&
-			(wptr->w != w)&&
-			(wptr->name != NULL)&&
-			(name != NULL)&&
-			(strcmp(wptr->name, name) == 0))
-		{
-			XtVaGetValues(wptr->w, XtNstate, &state, NULL);
-			if (state)
-			{
-				XtVaSetValues(wptr->w, XtNstate, 0, NULL);
-			}
-		}
-#endif /* MOTIF */
 		cnt++;
 		wptr = wptr->next;
 	}
 }
 
-
-#ifdef MOTIF
 /*
  * Catch all attempted modifications to the textfield for password
  * entry.  This is so we can prevent the password from showing
- * uponm the screen.
- * I would prefer that for all insereted characters a random 1-3 '*'s
+ * up on the screen.
+ * I would prefer that for all inserted characters a random 1-3 '*'s
  * were added, and any delete deleted the whole string, but due to
- * bugs in somve version of Motif 1.1 this won't work.
+ * bugs in some versions of Motif 1.1 this won't work.
  */
-void
-CBPasswordModify(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
+void CBPasswordModify(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	FormInfo *fptr = (FormInfo *)client_data;
 	XmTextVerifyCallbackStruct *tv =(XmTextVerifyCallbackStruct *)call_data;
-	HTMLWidget hw = (HTMLWidget)(fptr->hw);
+	HTMLWidget hw;
 	WidgetInfo *wptr;
 	int i, len;
 
-	/*
-	 * by default accept nothing
-	tv->doit = False;
-	 */
-
-	/*
-	 * Ignore when ModifyIgnore is true
-	 */
-	if (ModifyIgnore == True)
-	{
+	/* Only accept text modification of password fields */
+	if (!fptr || (tv->reason != XmCR_MODIFYING_TEXT_VALUE))
 		return;
-	}
 
-	/*
-	 * only accept text modification of password fields
-	 */
-	if (tv->reason != XmCR_MODIFYING_TEXT_VALUE)
-	{
-		return;
-	}
+	hw = (HTMLWidget)(fptr->hw);
 
-	/*
-	 * find the structure for this widget
-	 */
+	/* Find the structure for this widget */
 	wptr = hw->html.widget_list;
-	while (wptr != NULL)
-	{
+	while (wptr) {
 		if (wptr->w == w)
-		{
 			break;
-		}
 		wptr = wptr->next;
 	}
-	if (wptr == NULL)
-	{
+	if (!wptr)
 		return;
-	}
 
-	/*
-	 * Deletion.
-	 */
-	if (tv->text->ptr == NULL)
-	{
+	/*  Deletion.  */
+	if (tv->text->ptr == NULL) {
 		tv->doit = True;
-
 		/*
 		 * Only can delete if we have stuff to delete.
 		 */
-		if ((wptr->password != NULL)&&(wptr->password[0] != '\0'))
-		{
+		if (wptr->password && (wptr->password[0] != '\0')) {
 			int start;
 			char *tptr;
 
@@ -916,25 +575,18 @@ CBPasswordModify(w, client_data, call_data)
 			 * Find the start of the chunk of text to
 			 * delete.
 			 */
-			if (tv->startPos < len)
-			{
+			if (tv->startPos < len) {
 				start = tv->startPos;
-			}
-			else
-			{
+			} else {
 				start = len - 1;
 			}
-
 			/*
-			 * might be more stuff after the end that we
+			 * Might be more stuff after the end that we
 			 * want to move up
 			 */
-			if (tv->endPos > len)
-			{
+			if (tv->endPos > len) {
 				tptr = &(wptr->password[len]);
-			}
-			else
-			{
+			} else {
 				tptr = &(wptr->password[tv->endPos]);
 			}
 			wptr->password[start] = '\0';
@@ -944,8 +596,7 @@ CBPasswordModify(w, client_data, call_data)
 	/*
 	 * Else insert character.
 	 */
-	else if (tv->text->length >= 1)
-	{
+	else if (tv->text->length >= 1) {
 		int maxlength, plen;
 		Cardinal argcnt;
 		Arg arg[5];
@@ -953,52 +604,41 @@ CBPasswordModify(w, client_data, call_data)
 		/*
 		 * No insertion if it makes you exceed maxLength
 		 */
-		if (wptr->password == NULL)
-		{
+		if (wptr->password == NULL) {
 			plen = 0;
-		}
-		else
-		{
+		} else {
 			plen = strlen(wptr->password);
 		}
 		maxlength = 1000000;
 		argcnt = 0;
-		XtSetArg(arg[argcnt], XmNmaxLength, &maxlength); argcnt++;
+		XtSetArg(arg[argcnt], XmNmaxLength, &maxlength);
+		argcnt++;
 		XtGetValues(w, arg, argcnt);
 		if ((plen + tv->text->length) > maxlength)
-		{
 			return;
-		}
 
-		if (wptr->password == NULL)
-		{
+		if (wptr->password == NULL) {
 			wptr->password = (char *)malloc(tv->text->length + 1);
-			for (i=0; i < tv->text->length; i++)
-			{
+			for (i = 0; i < tv->text->length; i++)
 				wptr->password[i] = tv->text->ptr[i];
-			}
 			wptr->password[tv->text->length] = '\0';
 		}
 		/*
-		 * else insert a char somewhere.
+		 * Else insert a char somewhere.
 		 * Make a new buffer.  Put everything from before the insert
 		 * postion into it.  Now insert the character.
 		 * Finally append any remaining text.
 		 */
-		else
-		{
+		else {
 			char *buf;
 			char *tptr;
 			char tchar;
 			int start;
 
 			len = strlen(wptr->password);
-			if (tv->startPos < len)
-			{
+			if (tv->startPos < len) {
 				start = tv->startPos;
-			}
-			else
-			{
+			} else {
 				start = len;
 			}
 			tptr = &(wptr->password[start]);
@@ -1006,154 +646,113 @@ CBPasswordModify(w, client_data, call_data)
 			*tptr = '\0';
 			buf = (char *)malloc(len + tv->text->length + 1);
 			strcpy(buf, wptr->password);
-			for (i=0; i < tv->text->length; i++)
-			{
+			for (i = 0; i < tv->text->length; i++)
 				buf[start + i] = tv->text->ptr[i];
-			}
 			buf[start + tv->text->length] = '\0';
 			*tptr = tchar;
 			strcat(buf, tptr);
 			free(wptr->password);
 			wptr->password = buf;
 		}
-
 		tv->doit = True;
 		/*
-		 * make a '*' show up instead of what they typed
+		 * Make a '*' show up instead of what they typed
 		 */
-		for (i=0; i < tv->text->length; i++)
-		{
+		for (i = 0; i < tv->text->length; i++)
 			tv->text->ptr[i] = '*';
-		}
 	}
 }
-#endif /* MOTIF */
-
-
 
 /*
  * RETURN was hit in a textfield in a form.
  * If this is the only textfield in this form, submit the form.
  */
-void
-CBActivateField(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
+void CBActivateField(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	FormInfo *fptr = (FormInfo *)client_data;
-	HTMLWidget hw = (HTMLWidget)(fptr->hw);
+	HTMLWidget hw;
 	WidgetInfo *wptr;
 	int cnt, count;
-#ifdef MOTIF
-	XmAnyCallbackStruct *cb = (XmAnyCallbackStruct *)call_data;
-#endif /* MOTIF */
 
+	if (!fptr)
+		return;
+
+	hw = (HTMLWidget)(fptr->hw);
 	/*
 	 * Terminate the form if it was never properly terminated.
 	 */
-	if (fptr->end == -1)  /* unterminated FORM tag */
-	{
+	if (fptr->end == -1) {    /* Unterminated FORM tag */
 		wptr = hw->html.widget_list;
 		cnt = 0;
-		while (wptr != NULL)
-		{
+		while (wptr) {
 			cnt++;
 			wptr = wptr->next;
 		}
 		count = cnt;
-	}
-	else
-	{
+	} else {
 		count = fptr->end - fptr->start;
 	}
-
 	/*
 	 * Locate the start of the form.
 	 */
-	if (fptr->start == 0)
-	{
+	if (fptr->start == 0) {
 		wptr = hw->html.widget_list;
-	}
-	else
-	{
+	} else {
 		wptr = hw->html.widget_list;
-		while (wptr != NULL)
-		{
-			if (wptr->id == fptr->start)
-			{
+		while (wptr) {
+			if (wptr->id == fptr->start) {
 				wptr = wptr->next;
 				break;
 			}
 			wptr = wptr->next;
 		}
 	}
-
 	/*
 	 * Count the textfields in this form.
 	 */
 	cnt = 0;
-	while ((wptr != NULL)&&(cnt < count))
-	{
-		if ((wptr->type == W_TEXTFIELD)||(wptr->type == W_PASSWORD))
-		{
+	while (wptr && (cnt < count)) {
+		if ((wptr->type == W_TEXTFIELD) || (wptr->type == W_PASSWORD))
 			cnt++;
-		}
 		wptr = wptr->next;
 	}
-
 	/*
 	 * If this is the only textfield in this form, submit the form.
 	 */
 	if (cnt == 1)
-	{
 		CBSubmitForm(w, client_data, call_data);
-	}
 }
 
-
-void
-CBResetForm(w, client_data, call_data)
-	Widget w;
-	caddr_t client_data;
-	caddr_t call_data;
+void CBResetForm(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	FormInfo *fptr = (FormInfo *)client_data;
-	HTMLWidget hw = (HTMLWidget)(fptr->hw);
+	HTMLWidget hw;
 	WidgetInfo *wptr;
 	int widget_count, cnt;
-#ifdef MOTIF
-	XmPushButtonCallbackStruct *pb =
-		(XmPushButtonCallbackStruct *)call_data;
-#endif /* MOTIF */
 
-	if (fptr->end == -1)  /* unterminated FORM tag */
-	{
+	if (!fptr)
+		return;
+
+	hw = (HTMLWidget)(fptr->hw);
+
+	if (fptr->end == -1) {  /* Unterminated FORM tag */
 		wptr = hw->html.widget_list;
 		cnt = 0;
-		while (wptr != NULL)
-		{
+		while (wptr) {
 			cnt++;
 			wptr = wptr->next;
 		}
 		widget_count = cnt;
-	}
-	else
-	{
+	} else {
 		widget_count = fptr->end - fptr->start;
 	}
 
-	if (fptr->start == 0)
-	{
+	if (fptr->start == 0) {
 		wptr = hw->html.widget_list;
-	}
-	else
-	{
+	} else {
 		wptr = hw->html.widget_list;
-		while (wptr != NULL)
-		{
-			if (wptr->id == fptr->start)
-			{
+		while (wptr) {
+			if (wptr->id == fptr->start) {
 				wptr = wptr->next;
 				break;
 			}
@@ -1162,398 +761,181 @@ CBResetForm(w, client_data, call_data)
 	}
 
 	cnt = 0;
-	while ((wptr != NULL)&&(cnt < widget_count))
-	{
+	while (wptr && (cnt < widget_count)) {
 		Widget child;
-		STRING label;
-#ifdef MOTIF
 		Cardinal argcnt;
 		Arg arg[5];
-#else
-		char *txt = NULL;
-		int length = 0;
-		Boolean stringInPlace;
-#endif /* MOTIF */
 
-		switch(wptr->type)
-		{
-			case W_TEXTFIELD:
-#ifdef MOTIF
-				if (wptr->value == NULL)
-				{
-				    XmTextFieldSetString(wptr->w, "");
-				}
-				else
-				{
-				    XmTextFieldSetString(wptr->w, wptr->value);
-				}
-#else
-				XtVaGetValues(wptr->w,
-					XtNuseStringInPlace, &stringInPlace,
-					XtNlength, &length,
-					NULL);
-				if (stringInPlace)
-				{
-					XtVaGetValues(wptr->w,
-						XtNstring, &txt,
-						NULL);
-				}
-				if (wptr->value == NULL)
-				{
-					if (stringInPlace)
-					{
-						if (txt) *txt = '\0';
-						XtVaSetValues(wptr->w,
-							XtNstring, txt, NULL);
-					}
-					else
-					{
-						XtVaSetValues(wptr->w,
-							XtNstring, "", NULL);
-					}
-				}
-				else
-				{
-					if (stringInPlace)
-					{
-						strncpy(txt,wptr->value,length);
-						XtVaSetValues(wptr->w,
-							XtNstring, txt, NULL);
-					}
-					else
-					{
-						XtVaSetValues(wptr->w,
-							XtNstring, wptr->value,
-							NULL);
-					}
-				}
-#endif /* MOTIF */
-				break;
-			case W_TEXTAREA:
-#ifdef MOTIF
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNworkWindow, &child);
-				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-				if (wptr->value == NULL)
-				{
-				    XmTextSetString(child, "");
-				}
-				else
-				{
-				    XmTextSetString(child, wptr->value);
-				}
-#else
-				XtVaSetValues(wptr->w, XtNstring,
-					wptr->value ? wptr->value : "",
-					NULL);
-#endif /* MOTIF */
-				break;
-			case W_PASSWORD:
-				if (wptr->value == NULL)
-				{
-#ifdef MOTIF
-				    /*
-				     * Due to errors in Motif1.1, I can't
-				     * call XmTextFieldSetString() here.
-				     * Because I have a modifyVerify callback
-				     * registered for this widget.
-				     * I don't know if this error exists
-				     * in Motif1.2 or not.
-				     */
-				    argcnt = 0;
-				    XtSetArg(arg[argcnt], XmNvalue, "");
-				    argcnt++;
-				    XtSetValues(wptr->w, arg, argcnt);
-#else
-				    XtVaSetValues(wptr->w,
-					XtNstring, "",  NULL);
-#endif /* MOTIF */
-				    if (wptr->password != NULL)
-				    {
-					free(wptr->password);
-					wptr->password = NULL;
-				    }
-				}
-				else
-				{
-				    int i, len;
-
-				    if (wptr->password != NULL)
-				    {
-					free(wptr->password);
-					wptr->password = NULL;
-				    }
-				    len = strlen(wptr->value);
-				    wptr->password = (char *)malloc(len + 1);
-				    for (i=0; i<len; i++)
-				    {
-					wptr->password[i] = '*';
-				    }
-				    wptr->password[len] = '\0';
-#ifdef MOTIF
-				    XmTextFieldSetString(wptr->w,
-					wptr->password);
-#else
-				    XtVaSetValues(wptr->w,
-					XtNstring, wptr->password,
-					NULL);
-#endif /* MOTIF */
-				    strcpy(wptr->password, wptr->value);
-				}
-				break;
-			case W_LIST:
-			    {
-				char **vlist;
-				int vlist_cnt;
-				STRING *val_list;
-				int i;
-
-#ifdef MOTIF
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNworkWindow, &child);
-				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-#else
-				WidgetList wl;
-				char **string_list;
-				int list_cnt;
-
-				XtVaGetValues(wptr->w, XtNchildren, &wl, NULL);
-				child = *++wl;
-				XtVaGetValues(child,
-					XtNlist, &string_list,
-					XtNnumberStrings, &list_cnt, NULL);
-#endif /* MOTIF */
-
-				if (wptr->value != NULL)
-				{
-				    vlist = ParseCommaList(wptr->value,
-					&vlist_cnt);
-				    val_list = (STRING *)malloc(vlist_cnt *
-					sizeof(STRING));
-#ifdef MOTIF
-				    XmListDeselectAllItems(child);
-				    for (i=0; i<vlist_cnt; i++)
-				    {
-					val_list[i] =
-						XmStringCreateSimple(vlist[i]);
-				    }
-#else
-				    XawListUnhighlight(child);
-				    for (i=0; i<vlist_cnt; i++)
-				    {
-					val_list[i] =
-						XtNewString(vlist[i]);
-				    }
-#endif /* MOTIF */
-				    FreeCommaList(vlist, vlist_cnt);
-#ifdef MOTIF
-				    if (vlist_cnt > 0)
-				    {
-					argcnt = 0;
-					XtSetArg(arg[argcnt], XmNselectedItems,
-						val_list);
-					argcnt++;
-					XtSetArg(arg[argcnt],
-						XmNselectedItemCount,
-						vlist_cnt);
-					argcnt++;
-					XtSetValues(child, arg, argcnt);
-				    }
-				    for (i=0; i<vlist_cnt; i++)
-				    {
-					XmStringFree(val_list[i]);
-				    }
-#else
-				    if (vlist_cnt > 0)
-				    {
-					if (vlist_cnt > 1)
-					{
-#ifndef DISABLE_TRACE
-						if (htmlwTrace) {
-							fprintf(stderr,
-								"HTML: only a single selection allowed!\n");
-						}
-#endif
-					}
-
-					for (i=0; i<list_cnt; i++)
-					{
-					    if (!strcmp(string_list[i],
-						val_list[0]))
-					    {
-						XawListHighlight(child, i);
-						break;
-					    }
-					}
-				    }
-				    for (i=0; i<vlist_cnt; i++)
-				    {
-					free(val_list[i]);
-				    }
-#endif /* MOTIF */
-				    if (val_list != NULL)
-				    {
-					free((char *)val_list);
-				    }
-				}
-				else
-				{
-#ifdef MOTIF
-					XmListDeselectAllItems(child);
-#else
-					XawListUnhighlight(child);
-#endif /* MOTIF */
-				}
+		switch (wptr->type) {
+		    case W_TEXTFIELD:
+			if (wptr->value == NULL) {
+			    XmTextFieldSetString(wptr->w, "");
+			} else {
+			    XmTextFieldSetString(wptr->w, wptr->value);
+			}
+			break;
+		    case W_TEXTAREA:
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNworkWindow, &child);
+			argcnt++;
+			XtGetValues(wptr->w, arg, argcnt);
+			if (wptr->value == NULL) {
+			    XmTextSetString(child, "");
+			} else {
+			    XmTextSetString(child, wptr->value);
+			}
+			break;
+		    case W_PASSWORD:
+			if (wptr->value == NULL) {
+			    /*
+			     * Due to errors in Motif 1.1, I can't
+			     * call XmTextFieldSetString() here.
+			     * Because I have a modifyVerify callback
+			     * registered for this widget.
+			     * I don't know if this error exists
+			     * in Motif 1.2 or not.
+			     */
+			    argcnt = 0;
+			    XtSetArg(arg[argcnt], XmNvalue, "");
+			    argcnt++;
+			    XtSetValues(wptr->w, arg, argcnt);
+			    if (wptr->password) {
+				free(wptr->password);
+				wptr->password = NULL;
 			    }
-				break;
-			/*
-			 * gack, we saved the widget id of the starting default
-			 * into the value character pointer, just so we could
-			 * yank it out here, and restore the default.
-			 */
-			case W_OPTIONMENU:
-				if (wptr->value != NULL)
-				{
-					Widget hist = (Widget)wptr->value;
-#ifdef MOTIF
-					Cardinal argcnt;
-					Arg arg[5];
+			} else {
+			    int i, len;
 
-					argcnt = 0;
-					XtSetArg(arg[argcnt], XmNmenuHistory,
-						hist);
-					argcnt++;
-					XtSetValues(wptr->w, arg, argcnt);
-#else
-					char *txt;
+			    if (wptr->password) {
+				free(wptr->password);
+				wptr->password = NULL;
+			    }
+			    len = strlen(wptr->value);
+			    wptr->password = (char *)malloc(len + 1);
+			    for (i = 0; i < len; i++)
+				wptr->password[i] = '*';
+			    wptr->password[len] = '\0';
+			    XmTextFieldSetString(wptr->w, wptr->password);
+			    strcpy(wptr->password, wptr->value);
+			}
+			break;
+		    case W_LIST:
+			{
+			  char **vlist;
+			  int vlist_cnt;
+			  STRING *val_list;
+			  int i;
 
-					XtVaGetValues(hist, XtNlabel,&txt,NULL);
-					XtVaSetValues(wptr->w,XtNlabel,txt,NULL);
-#endif /* MOTIF */
-				}
-				break;
-			case W_CHECKBOX:
-			case W_RADIOBOX:
-#ifdef MOTIF
-				if (wptr->checked == True)
-				{
-				  XmToggleButtonSetState(wptr->w, True, False);
-				}
-				else
-				{
-				  XmToggleButtonSetState(wptr->w, False, False);
-				}
-#else
-				XtVaSetValues(wptr->w,
-					XtNstate, wptr->checked, NULL);
-#endif /* MOTIF */
-				break;
-			case W_HIDDEN:
-				break;
-#ifdef MOTIF
-			case W_JOT:
+			  argcnt = 0;
+			  XtSetArg(arg[argcnt], XmNworkWindow, &child);
+			  argcnt++;
+			  XtGetValues(wptr->w, arg, argcnt);
+
+			  if (wptr->value) {
+			      vlist = ParseCommaList(wptr->value, &vlist_cnt);
+			      val_list = (STRING *)malloc(vlist_cnt *
+						          sizeof(STRING));
+			      XmListDeselectAllItems(child);
+			      for (i = 0; i < vlist_cnt; i++)
+				  val_list[i] = XmStringCreateSimple(vlist[i]);
+			      FreeCommaList(vlist, vlist_cnt);
+			      if (vlist_cnt > 0) {
+				  argcnt = 0;
+				  XtSetArg(arg[argcnt], XmNselectedItems,
+					   val_list);
+				  argcnt++;
+				  XtSetArg(arg[argcnt],
+					   XmNselectedItemCount, vlist_cnt);
+				  argcnt++;
+				  XtSetValues(child, arg, argcnt);
+			      }
+			      for (i = 0; i < vlist_cnt; i++)
+				  XmStringFree(val_list[i]);
+			      if (val_list)
+				  free((char *)val_list);
+			  } else {
+			      XmListDeselectAllItems(child);
+			  }
+		        }
+		        break;
+		    /*
+		     * Gack, we saved the widget id of the starting default
+		     * into the value character pointer, just so we could
+		     * yank it out here, and restore the default.
+		     */
+		    case W_OPTIONMENU:
+			if (wptr->value) {
+				Widget hist = (Widget)wptr->value;
+
 				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNuserData,
-					(XtPointer *)&child);
+				XtSetArg(arg[argcnt], XmNmenuHistory, hist);
 				argcnt++;
-				XtGetValues(wptr->w, arg, argcnt);
-				ClearJot(hw, child, wptr->width, wptr->height);
-				break;
-#endif /* MOTIF */
-			default:
-				break;
+				XtSetValues(wptr->w, arg, argcnt);
+			}
+			break;
+		    case W_CHECKBOX:
+		    case W_RADIOBOX:
+			if (wptr->checked == True) {
+				XmToggleButtonSetState(wptr->w, True, False);
+			} else {
+				XmToggleButtonSetState(wptr->w, False, False);
+			}
+			break;
+		    case W_HIDDEN:
+		    default:
+			break;
 		}
 		cnt++;
 		wptr = wptr->next;
 	}
 }
 
-
-void
-PrepareFormEnd(hw, w, fptr)
-	HTMLWidget hw;
-	Widget w;
-	FormInfo *fptr;
+static void PrepareFormEnd(HTMLWidget hw, Widget w, FormInfo *fptr)
 {
-#ifdef MOTIF
 	XtAddCallback(w, XmNactivateCallback, 
-                      (XtCallbackProc)CBSubmitForm, (caddr_t)fptr);
-#else
-	XtAddCallback(w, XtNcallback,
-		      (XtCallbackProc)CBSubmitForm, (caddr_t)fptr);
-#endif /* MOTIF */
+                      (XtCallbackProc)CBSubmitForm, (XtPointer)fptr);
 }
 
-
-void
-PrepareFormReset(hw, w, fptr)
-	HTMLWidget hw;
-	Widget w;
-	FormInfo *fptr;
+static void PrepareFormReset(HTMLWidget hw, Widget w, FormInfo *fptr)
 {
-#ifdef MOTIF
 	XtAddCallback(w, XmNactivateCallback, 
-                      (XtCallbackProc)CBResetForm, (caddr_t)fptr);
-#else
-	XtAddCallback(w, XtNcallback,
-		     (XtCallbackProc)CBResetForm, (caddr_t)fptr);
-#endif /* MOTIF */
+                      (XtCallbackProc)CBResetForm, (XtPointer)fptr);
 }
 
-
-void
-HideWidgets(hw)
-	HTMLWidget hw;
+void HideWidgets(HTMLWidget hw)
 {
 	WidgetInfo *wptr;
 	XEvent event;
 
-#ifdef MOTIF
 	/*
 	 * Make sure all expose events have been dealt with first.
 	 */
 	XmUpdateDisplay((Widget)hw);
-#endif /* MOTIF */
-
 	wptr = hw->html.widget_list;
-	while (wptr != NULL)
-	{
-		if ((wptr->w != NULL)&&(wptr->mapped == True))
-		{
+	while (wptr) {
+		if (wptr->w && wptr->mapped) {
 			XtSetMappedWhenManaged(wptr->w, False);
 			wptr->mapped = False;
 		}
 		wptr = wptr->next;
 	}
 
-	/*
-	 * Force the exposure events into the queue
-	 */
+	/* Force the exposure events into the queue */
 	XSync(XtDisplay(hw), False);
 
-	/*
-	 * Remove all Expose events for the view window
-	 */
+	/* Remove all Expose events for the view window */
 	while (XCheckWindowEvent(XtDisplay(hw->html.view),
-		XtWindow(hw->html.view), ExposureMask, &event) == True)
-	{
-	}
+				 XtWindow(hw->html.view), ExposureMask, &event))
+		;
 }
 
-
-void
-MapWidgets(hw)
-	HTMLWidget hw;
+static void MapWidgets(HTMLWidget hw)
 {
 	WidgetInfo *wptr;
 
 	wptr = hw->html.widget_list;
-	while (wptr != NULL)
-	{
-		if ((wptr->w != NULL)&&(wptr->mapped == False))
-		{
+	while (wptr) {
+		if (wptr->w && !wptr->mapped && wptr->seeable) {
 			wptr->mapped = True;
 			XtSetMappedWhenManaged(wptr->w, True);
 		}
@@ -1561,27 +943,17 @@ MapWidgets(hw)
 	}
 }
 
-
-Boolean
-AlreadyChecked(hw, fptr, name)
-	HTMLWidget hw;
-	FormInfo *fptr;
-	char *name;
+static Boolean AlreadyChecked(HTMLWidget hw, FormInfo *fptr, char *name)
 {
 	WidgetInfo *wptr;
 	Boolean radio_checked;
 
 	radio_checked = False;
 	wptr = hw->html.widget_list;
-	while (wptr != NULL)
-	{
-		if ((wptr->id >= fptr->start)&&
-			(wptr->type == W_RADIOBOX)&&
-			(wptr->checked == True)&&
-			(wptr->name != NULL)&&
-			(name != NULL)&&
-			(strcmp(wptr->name, name) == 0))
-		{
+	while (wptr) {
+		if ((wptr->id >= fptr->start) && (wptr->type == W_RADIOBOX) &&
+		    (wptr->checked == True) && wptr->name && name &&
+		    !strcmp(wptr->name, name)) {
 			radio_checked = True;
 			break;
 		}
@@ -1590,184 +962,56 @@ AlreadyChecked(hw, fptr, name)
 	return(radio_checked);
 }
 
-
-WidgetInfo *
-AddNewWidget(hw, fptr, w, type, id, x, y, width, height, name, value, mapping, checked)
-	HTMLWidget hw;
-	FormInfo *fptr;
-	Widget w;
-	int type;
-	int id;
-	int x, y;
-	int width, height;
-	char *name;
-	char *value;
-	char **mapping;
-	Boolean checked;
+static WidgetInfo *AddNewWidget(HTMLWidget hw, Widget w,
+				int type, int id, int x, int y,
+				int width, int height,
+				char *name, char *value, char **mapping,
+				Boolean checked, PhotoComposeContext *pcc)
 {
 	WidgetInfo *wptr, *lptr;
 
-	wptr = hw->html.widget_list;
-	if (wptr == NULL)
-	{
-		wptr = (WidgetInfo *)malloc(sizeof(WidgetInfo));
-		wptr->w = w;
-		wptr->type = type;
-		wptr->id = id;
-		wptr->x = x;
-		wptr->y = y;
-		wptr->width = width;
-		wptr->height = height;
-		wptr->seeable=0;
-		wptr->name = name;
-		wptr->value = value;
-		wptr->password = NULL;
-		wptr->mapping = mapping;
-		wptr->checked = checked;
-		wptr->mapped = False;
-		wptr->next = NULL;
-		wptr->prev = NULL;
-		hw->html.widget_list = wptr;
+	if (!pcc->cw_only) {
+		wptr = hw->html.widget_list;
+	} else {
+		wptr = NULL;
 	}
-	else
-	{
-		while (wptr->next != NULL)
-		{
+	if (!wptr) {
+		wptr = (WidgetInfo *)malloc(sizeof(WidgetInfo));
+		wptr->prev = NULL;
+		wptr->cache_invalid = 0;
+		wptr->cached_forms = NULL;
+		if (!pcc->cw_only)
+			hw->html.widget_list = wptr;
+	} else {
+		while (wptr->next)
 			wptr = wptr->next;
-		}
 		wptr->next = (WidgetInfo *)malloc(sizeof(WidgetInfo));
-		lptr = wptr; /* save this to fill in prev field */
+		lptr = wptr;  /* Save this to fill in prev field */
 		wptr = wptr->next;
 		wptr->prev = lptr;
-		wptr->w = w;
-		wptr->type = type;
-		wptr->id = id;
-		wptr->x = x;
-		wptr->y = y;
-		wptr->width = width;
-		wptr->height = height;
-		wptr->seeable=0;
-		wptr->name = name;
-		wptr->value = value;
-		wptr->password = NULL;
-		wptr->mapping = mapping;
-		wptr->checked = checked;
-		wptr->mapped = False;
-		wptr->next = NULL;
 	}
+	wptr->w = w;
+	wptr->type = type;
+	wptr->id = id;
+	wptr->x = x;
+	wptr->y = y;
+	wptr->width = width;
+	wptr->height = height;
+        wptr->seeable = 0;
+	wptr->name = name;
+	wptr->value = value;
+	wptr->password = NULL;
+	wptr->mapping = mapping;
+	wptr->checked = checked;
+	wptr->mapped = False;
+	wptr->next = NULL;
+	wptr->cache_count = 0;
 
-	if ((wptr->type == W_PASSWORD)&&(wptr->value != NULL))
-	{
-		wptr->password = (char *)malloc(strlen(wptr->value) + 1);
-		strcpy(wptr->password, wptr->value);
-	}
+	if ((wptr->type == W_PASSWORD) && wptr->value)
+		wptr->password = strdup(wptr->value);
 
 	return(wptr);
 }
-
-
-/*
- * For the various widgets, return their fon structures so
- * we can use the font's baseline to place them.
- */
-XFontStruct *
-GetWidgetFont(hw, wptr)
-	HTMLWidget hw;
-	WidgetInfo *wptr;
-{
-	Widget child;
-	XFontStruct *font;
-#ifdef MOTIF
-	Boolean ret;
-	Cardinal argcnt;
-	Arg arg[5];
-	XmFontList font_list = (XmFontList)NULL;
-	XmFontContext font_context;
-	XmStringCharSet charset;
-#endif /* MOTIF */
-
-	/*
-	 * For option menus we have to first get the child that has the
-	 * font info.
-	 */
-	if (wptr->type == W_OPTIONMENU)
-	{
-#ifdef MOTIF
-		child = XmOptionButtonGadget(wptr->w);
-
-		argcnt = 0;
-		XtSetArg(arg[argcnt], XmNfontList, &font_list); argcnt++;
-		XtGetValues(child, arg, argcnt);
-#else
-		XtVaGetValues(wptr->w, XtNfont, &font, NULL);
-#endif /* MOTIF */
-	}
-	else
-	{
-#ifdef MOTIF
-		if ((wptr->type == W_TEXTAREA)||(wptr->type == W_LIST))
-		{
-			child = NULL;
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNworkWindow, &child); argcnt++;
-			XtGetValues(wptr->w, arg, argcnt);
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNfontList,&font_list); argcnt++;
-			XtGetValues(child, arg, argcnt);
-		}
-#else
-		if (wptr->type == W_LIST)
-		{
-			WidgetList wl;
-			int nc;
-			XtVaGetValues(wptr->w,
-				XtNchildren, &wl, XtNnumChildren, &nc, NULL);
-			child = *++wl;
-			XtVaGetValues(child, XtNfont, &font, NULL);
-                }
-#endif /* MOTIF */
-		else
-		{
-#ifdef MOTIF
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNfontList,&font_list); argcnt++;
-			if (wptr->w == NULL)
-			  return((XFontStruct *)NULL);
-			XtGetValues(wptr->w, arg, argcnt);
-#else
-			XtVaGetValues(wptr->w, XtNfont, &font, NULL);
-#endif /* MOTIF */
-		}
-	}
-
-#ifdef MOTIF
-	if (font_list == (XmFontList)NULL)
-	{
-		return((XFontStruct *)NULL);
-	}
-
-	ret = XmFontListInitFontContext(&font_context, font_list);
-	if (ret == False)
-	{
-		return((XFontStruct *)NULL);
-	}
-
-	ret = XmFontListGetNextFont(font_context, &charset, &font);
-	if (ret == False)
-	{
-		return((XFontStruct *)NULL);
-	}
-	else
-	{
-		XmFontListFreeFontContext(font_context);
-		free((char *)charset);
-		return(font);
-	}
-#else
-	return(font);
-#endif /* MOTIF */
-}
-
 
 /*
  * Get the next value in a comma separated list.
@@ -1775,43 +1019,27 @@ GetWidgetFont(hw, wptr)
  * and convert the single ''' characters back to '"'
  * characters
  */
-char *
-NextComma(string)
-        char *string;
+static char *NextComma(char *string)
 {
         char *tptr;
 
         tptr = string;
-        while (*tptr != '\0')
-        {
-                if (*tptr == '\\')
-                {
+        while (*tptr) {
+                if (*tptr == '\\') {
                         *tptr = '\0';
-                        strcat(string, (char *)(tptr + 1));
-                        tptr++;
-                }
-                else if (*tptr == '\'')
-                {
-                        *tptr = '\"';
-                        tptr++;
-                }
-                else if (*tptr == ',')
-                {
+                        strcat(string, (char *)(++tptr));
+                } else if (*tptr == '\'') {
+                        *tptr++ = '\"';
+                } else if (*tptr == ',') {
                         return(tptr);
-                }
-                else
-                {
+                } else {
                         tptr++;
                 }
         }
         return(tptr);
 }
 
-
-char **
-ParseCommaList(str, count)
-	char *str;
-	int *count;
+static char **ParseCommaList(char *str, int *count)
 {
 	char *str_copy;
 	char **list;
@@ -1819,26 +1047,16 @@ ParseCommaList(str, count)
 	char *tptr;
 	char *val;
 	int i, cnt;
-	int max_cnt;
+	int max_cnt = 50;
 
 	*count = 0;
-	if ((str == NULL)||(*str == '\0'))
-	{
+	if (!str || !*str)
 		return((char **)NULL);
-	}
-	str_copy = (char *)malloc(strlen(str) + 1);
-	if (str_copy == NULL)
-	{
-		return((char **)NULL);
-	}
-	strcpy(str_copy, str);
+	str_copy = strdup(str);
+	CHECK_OUT_OF_MEM(str_copy);
 
-	list = (char **)malloc(50 * sizeof(char *));
-	if (list == NULL)
-	{
-		return((char **)NULL);
-	}
-	max_cnt = 50;
+	list = (char **)malloc(max_cnt * sizeof(char *));
+	CHECK_OUT_OF_MEM(list);
 
 	/*
 	 * This loop counts the number of objects
@@ -1849,60 +1067,39 @@ ParseCommaList(str, count)
 	cnt = 0;
 	val = str_copy;
 	tptr = NextComma(val);
-	while (*tptr != '\0')
-	{
-		if ((cnt + 1) == max_cnt)
-		{
-			tlist = (char **)malloc((max_cnt +50) * sizeof(char *));
-			if (tlist == NULL)
-			{
-				return((char **)NULL);
-			}
-			for (i=0; i<cnt; i++)
-			{
+	while (*tptr) {
+		if ((cnt + 1) == max_cnt) {
+			max_cnt += 50;
+			tlist = (char **)malloc(max_cnt * sizeof(char *));
+			CHECK_OUT_OF_MEM(tlist);
+			for (i = 0; i < cnt; i++)
 				tlist[i] = list[i];
-			}
 			free((char *)list);
 			list = tlist;
-			max_cnt += 50;
 		}
 		*tptr = '\0';
-		list[cnt] = (char *)malloc(strlen(val) + 1);
-		if (list[cnt] == NULL)
-		{
-			return((char **)NULL);
-		}
-		strcpy(list[cnt], val);
+		list[cnt] = strdup(val);
+		CHECK_OUT_OF_MEM(list[cnt]);
 		cnt++;
 
 		val = (char *)(tptr + 1);
 		tptr = NextComma(val);
 	}
-	list[cnt] = (char *)malloc(strlen(val) + 1);
-	if (list[cnt] == NULL)
-	{
-		return((char **)NULL);
-	}
-	strcpy(list[cnt], val);
+	list[cnt] = strdup(val);
+	CHECK_OUT_OF_MEM(list[cnt]);
 	cnt++;
 
 	free(str_copy);
 	tlist = (char **)malloc(cnt * sizeof(char *));
-	if (tlist == NULL)
-	{
-		return((char **)NULL);
-	}
-	for (i=0; i<cnt; i++)
-	{
+	CHECK_OUT_OF_MEM(tlist);
+	for (i = 0; i < cnt; i++)
 		tlist[i] = list[i];
-	}
 	free((char *)list);
 	list = tlist;
 
 	*count = cnt;
 	return(list);
 }
-
 
 /*
  * Compose a single string comma separated list from
@@ -1913,85 +1110,64 @@ ParseCommaList(str, count)
  * they would get eaten by the later parsing code, so we will
  * turn '"' into ''', and turn ''' into '\''
  */
-char *
-ComposeCommaList(list, cnt)
-	char **list;
-	int cnt;
+char *ComposeCommaList(char **list, int cnt)
 {
 	int i;
 	char *fail;
 	char *buf;
 	char *tbuf;
-	int len, max_len;
+	int len;
+	int max_len = 1024;
 
 	fail = (char *)malloc(1);
 	*fail = '\0';
 
 	if (cnt == 0)
-	{
 		return(fail);
-	}
 
-	buf = (char *)malloc(1024);
-	if (buf == NULL)
-	{
+	buf = (char *)malloc(max_len);
+	if (!buf)
 		return(fail);
-	}
-	max_len = 1024;
 	len = 0;
 	buf[0] = '\0';
 
-	for (i=0; i<cnt; i++)
-	{
+	for (i = 0; i < cnt; i++) {
 		char *option;
 		char *tptr;
 		int olen;
 
 		option = list[i];
-		if (option == NULL)
-		{
+		if (option == NULL) {
 			olen = 0;
-		}
-		else
-		{
+		} else {
 			olen = strlen(option);
 		}
-		if ((len + (olen * 2)) >= (max_len-2)) /* amb 12/24/94 */
-		{
-			tbuf = (char *)malloc(max_len + olen + 1024);
-			if (tbuf == NULL)
-			{
+		if ((len + (olen * 2)) >= (max_len - 2)) {
+			max_len += olen + 1024;
+			tbuf = (char *)malloc(max_len);
+			if (!tbuf)
 				return(fail);
-			}
 			strcpy(tbuf, buf);
 			free(buf);
 			buf = tbuf;
-			max_len = max_len + olen + 1024;
 		}
 		tptr = (char *)(buf + len);
-		while ((option != NULL)&&(*option != '\0'))
-		{
-			if ((*option == '\\')||(*option == ',')||
-				(*option == '\''))
-			{
+		while (option && *option) {
+			if ((*option == '\\') || (*option == ',') ||
+				(*option == '\'')) {
 				*tptr++ = '\\';
 				*tptr++ = *option++;
 				len += 2;
-			}
-			else if (*option == '\"')
-			{
+			} else if (*option == '\"') {
 				*tptr++ = '\'';
 				option++;
 				len++;
-			}
-			else
-			{
+			} else {
 				*tptr++ = *option++;
 				len++;
 			}
 		}
-		if (i != (cnt - 1))
-		{
+		if (i != (cnt - 1)) {
 			*tptr++ = ',';
 			len++;
 		}
@@ -1999,10 +1175,8 @@ ComposeCommaList(list, cnt)
 	}
 
 	tbuf = (char *)malloc(len + 1);
-	if (tbuf == NULL)
-	{
+	if (!tbuf)
 		return(fail);
-	}
 	strcpy(tbuf, buf);
 	free(buf);
 	buf = tbuf;
@@ -2010,183 +1184,121 @@ ComposeCommaList(list, cnt)
 	return(buf);
 }
 
-
-void
-FreeCommaList(list, cnt)
-	char **list;
-	int cnt;
+void FreeCommaList(char **list, int cnt)
 {
 	int i;
 
-	for (i=0; i<cnt; i++)
-	{
+	for (i = 0; i < cnt; i++) {
 		if (list[i] != NULL)
-		{
 			free(list[i]);
-		}
 	}
-	if (list != NULL)
-	{
+	if (list)
 		free((char *)list);
-	}
 }
-
 
 /*
  * Clean up the mucked value field for a TEXTAREA.
  * Unescape the things with '\' in front of them, and transform
  * lone ' back to "
  */
-void
-UnMuckTextAreaValue(value)
-	char *value;
+static void UnMuckTextAreaValue(char *value)
 {
 	char *tptr;
 
-	if ((value == NULL)||(value[0] == '\0'))
-	{
+	if (!value || (value[0] == '\0'))
 		return;
-	}
-
 	tptr = value;
-        while (*tptr != '\0')
-        {
-                if (*tptr == '\\')
-                {
+        while (*tptr) {
+                if (*tptr == '\\') {
                         *tptr = '\0';
-                        strcat(value, (char *)(tptr + 1));
-                        tptr++;
-                }
-                else if (*tptr == '\'')
-                {
-                        *tptr = '\"';
-                        tptr++;
-                }
-                else
-                {
+                        strcat(value, (char *)(++tptr));
+                } else if (*tptr == '\'') {
+                        *tptr++ = '\"';
+                } else {
                         tptr++;
                 }
         }
 }
 
-
-char *
-MapOptionReturn(val, mapping)
-	char *val;
-	char **mapping;
+static char *MapOptionReturn(char *val, char **mapping)
 {
 	int cnt;
 
-	if (mapping == NULL)
-	{
+	if (mapping == NULL) 
 		return(val);
-	}
-
 	cnt = 0;
-	while (mapping[cnt] != NULL)
-	{
-		if (strcmp(mapping[cnt], val) == 0)
-		{
+	while (mapping[cnt] != NULL) {
+		if (!strcmp(mapping[cnt], val))
 			return(mapping[cnt + 1]);
-		}
 		cnt += 2;
 	}
 	return(val);
 }
 
-
-char **
-MakeOptionMappings(list1, list2, list_cnt)
-	char **list1;
-	char **list2;
-	int list_cnt;
+static char **MakeOptionMappings(char **list1, char **list2, int list_cnt)
 {
 	int i, cnt;
 	char **list;
 
 	/*
-	 * pass through to see how many mappings we have.
+	 * Pass through to see how many mappings we have.
 	 */
 	cnt = 0;
-	for (i=0; i<list_cnt; i++)
-	{
-		if ((list2[i] != NULL)&&(*list2[i] != '\0'))
-		{
+	for (i = 0; i < list_cnt; i++) {
+		/* Can be empty string */
+		if (list2[i] != NULL)
 			cnt++;
-		}
 	}
-
 	if (cnt == 0)
-	{
 		return(NULL);
-	}
-
 	list = (char **)malloc(((2 * cnt) + 1) * sizeof(char *));
-	if (list == NULL)
-	{
+	if (!list)
 		return(NULL);
-	}
-
 	cnt = 0;
-	for (i=0; i<list_cnt; i++)
-	{
-		if ((list2[i] != NULL)&&(*list2[i] != '\0'))
-		{
+	for (i = 0; i < list_cnt; i++) {
+		if (list2[i] != NULL) {
 			list[cnt] = (char *)malloc(strlen(list1[i]) + 1);
 			list[cnt + 1] = (char *)malloc(strlen(list2[i]) + 1);
-			if ((list[cnt] == NULL)||(list[cnt + 1] == NULL))
-			{
+			if ((list[cnt] == NULL) || (list[cnt + 1] == NULL))
 				return(NULL);
-			}
 			strcpy(list[cnt], list1[i]);
 			strcpy(list[cnt + 1], list2[i]);
 			cnt += 2;
 		}
 	}
 	list[cnt] = NULL;
-
 	return(list);
 }
 
-
-#ifdef MOTIF
-/********** MOTIF VERSION *************/
-/*
- * Make the appropriate widget for this tag, and fill in an
+/* Make the appropriate widget for this tag, and fill in a
  * WidgetInfo structure and return it.
  */
-WidgetInfo *
-MakeWidget(hw, text, x, y, id, fptr)
-	HTMLWidget hw;
-	char *text;
-	int x, y;
-	int id;
-	FormInfo *fptr;
+WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
+		       PhotoComposeContext *pcc, int id)
 {
 	Arg arg[30];
 	Cardinal argcnt;
 	Widget w;
+	Widget ChildWidget = NULL;
 	WidgetInfo *wlist;
 	WidgetInfo *wptr;
 	Dimension width, height;
-
+	int x = pcc->x;
+	int y = pcc->y;
+	unsigned long bgcolor = hw->html.background_SAVE;
+	FormInfo *fptr = pcc->cur_form;
 
 	wlist = hw->html.widget_list;
-	while (wlist != NULL)
-	{
+	while (wlist) {
 		if (wlist->id == id)
-		{
 			break;
-		}
 		wlist = wlist->next;
 	}
 
-	/*
-	 * If this widget is not on the list, we have never
+	/* If this widget is not on the list, we have never
 	 * used it before.  Create it now.
 	 */
-	if (wlist == NULL)
-	{
+	if (!wlist) {
 		char widget_name[100];
 		char **mapping;
 		char *tptr;
@@ -2199,7 +1311,6 @@ MakeWidget(hw, text, x, y, id, fptr)
 		Boolean checked;
 
 		mapping = NULL;
-
 		checked = False;
 		name = ParseMarkTag(text, MT_INPUT, "NAME");
 
@@ -2207,32 +1318,23 @@ MakeWidget(hw, text, x, y, id, fptr)
 		 * We may need to shorten the name for the widgets,
 		 * which can't handle long names.
 		 */
-		if (name == NULL)
-		{
+		if (!name) {
 			widget_name[0] = '\0';
-		}
-		else if (strlen(name) > 99)
-		{
+		} else if (strlen(name) > 99) {
 			strncpy(widget_name, name, 99);
 			widget_name[99] = '\0';
-		}
-		else
-		{
+		} else {
 			strcpy(widget_name, name);
 		}
-
 		type_str = ParseMarkTag(text, MT_INPUT, "TYPE");
-		if ((type_str != NULL)&&(my_strcasecmp(type_str, "checkbox") == 0))
-		{
+
+		if (type_str && !my_strcasecmp(type_str, "checkbox")) {
 			XmString label;
 
 			type = W_CHECKBOX;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
-				value = (char *)malloc(strlen("on") + 1);
-				strcpy(value, "on");
-			}
+			if (!value)
+				value = strdup("on");
 
 			tptr = ParseMarkTag(text, MT_INPUT, "CHECKED");
 
@@ -2240,65 +1342,58 @@ MakeWidget(hw, text, x, y, id, fptr)
 			label = XmStringCreateSimple("");
 
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNlabelString, label); argcnt++;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
-			if (tptr != NULL)
-			{
-				XtSetArg(arg[argcnt], XmNset, True); argcnt++;
+			XtSetArg(arg[argcnt], XmNlabelString, label);
+			argcnt++;
+			/* No spacing before blank label */
+			XtSetArg(arg[argcnt], XmNspacing, 0);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
+			if (tptr) {
+				XtSetArg(arg[argcnt], XmNset, True);
+				argcnt++;
 				checked = True;
 				free(tptr);
 			}
 			w = XmCreateToggleButton(hw->html.view, widget_name,
-				arg, argcnt);
-
-			if(!hw->html.focus_follows_mouse)
-			  {
-			    XtOverrideTranslations(w, 
-				    XtParseTranslationTable(traversal_table));
-			    XtOverrideTranslations(w, 
-				    XtParseTranslationTable("<Btn1Down>: Arm() traversal_current()"));
-			  }
-
+						 arg, argcnt);
+			XtOverrideTranslations(w,
+				  XtParseTranslationTable(button_translations));
+			if (!hw->html.focus_follows_mouse) {
+			      XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+			      XtOverrideTranslations(w, XtParseTranslationTable(
+				      "<Btn1Down>: Arm() traversal_current()"));
+			}
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
-
 			XmStringFree(label);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "hidden") == 0))
-		{
+			bgcolor = pcc->bg;
+
+		} else if (type_str && !my_strcasecmp(type_str, "hidden")) {
 			type = W_HIDDEN;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
+			if (!value) {
 				value = (char *)malloc(1);
 				value[0] = '\0';
 			}
-
 			w = NULL;
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "radio") == 0))
-		{
+
+		} else if (type_str && !my_strcasecmp(type_str, "radio")) {
 			XmString label;
 
 			type = W_RADIOBOX;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
-				value = (char *)malloc(strlen("on") + 1);
-				strcpy(value, "on");
-			}
-
+			if (!value)
+				value = strdup("on");
 			/*
 			 * Only one checked radio button with the
 			 * same name per form
 			 */
 			tptr = ParseMarkTag(text, MT_INPUT, "CHECKED");
-			if ((tptr != NULL)&&
-				(AlreadyChecked(hw, fptr, name) == True))
-			{
+			if (tptr && fptr && AlreadyChecked(hw, fptr, name)) {
 				free(tptr);
 				tptr = NULL;
 			}
@@ -2307,362 +1402,303 @@ MakeWidget(hw, text, x, y, id, fptr)
 			label = XmStringCreateSimple("");
 
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNlabelString, label); argcnt++;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
+			XtSetArg(arg[argcnt], XmNlabelString, label);
+			argcnt++;
+			/* No spacing before blank label */
+			XtSetArg(arg[argcnt], XmNspacing, 0);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
 			XtSetArg(arg[argcnt], XmNindicatorType, XmONE_OF_MANY);
 			argcnt++;
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
-
-			if (tptr != NULL)
-			{
-				XtSetArg(arg[argcnt], XmNset, True); argcnt++;
+			if (tptr) {
+				XtSetArg(arg[argcnt], XmNset, True);
+				argcnt++;
 				checked = True;
 				free(tptr);
 			}
 			w = XmCreateToggleButton(hw->html.view, widget_name,
-				arg, argcnt);
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-				  XtParseTranslationTable(traversal_table));
-
+						 arg, argcnt);
+			XtOverrideTranslations(w,
+				  XtParseTranslationTable(button_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+  
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
 			XtAddCallback(w, XmNvalueChangedCallback,
-				(XtCallbackProc)CBChangeRadio, (caddr_t)fptr);
-
+				      (XtCallbackProc)CBChangeRadio,
+				      (XtPointer)fptr);
 			XmStringFree(label);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "submit") == 0))
-		{
+			bgcolor = pcc->bg;
+
+		} else if (type_str && !my_strcasecmp(type_str, "submit")) {
 			XmString label;
+			char *btext = ParseMarkTag(text, MT_INPUT, "TEXT");
 
 			type = W_PUSHBUTTON;
-			label = NULL;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if ((value == NULL)||(*value == '\0'))
-			{
-				value = (char *)malloc(strlen("Submit Query") +
-					1);
-				strcpy(value, "Submit Query");
-			}
-
+			if (!value || !*value)
+				value = strdup("Submit");
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
-			if (value != NULL)
-			{
-				label = XmStringCreateSimple(value);
-				XtSetArg(arg[argcnt], XmNlabelString, label);
-				argcnt++;
-			}
-			w = XmCreatePushButton(hw->html.view, widget_name,
-				arg, argcnt);
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-				  XtParseTranslationTable(traversal_table));
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			if (label != NULL)
-			{
-				XmStringFree(label);
-			}
-                        PrepareFormEnd(hw, w, fptr);
-
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "reset") == 0))
-		{
-			XmString label;
-
-			type = W_PUSHBUTTON;
-			label = NULL;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if ((value == NULL)||(*value == '\0'))
-			{
-				value = (char *)malloc(strlen("Reset") + 1);
-				strcpy(value, "Reset");
-			}
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
-			if (value != NULL)
-			{
-				label = XmStringCreateSimple(value);
-				XtSetArg(arg[argcnt], XmNlabelString, label);
-				argcnt++;
-			}
-			w = XmCreatePushButton(hw->html.view, widget_name,
-				arg, argcnt);
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-				  XtParseTranslationTable(traversal_table));
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			if (label != NULL)
-			{
-				XmStringFree(label);
-			}
-			PrepareFormReset(hw, w, fptr);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "button") == 0))
-		{
-			XmString label;
-
-			type = W_PUSHBUTTON;
-			label = NULL;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++; */
-			if (value != NULL)
-			{
-				label = XmStringCreateSimple(value);
-				XtSetArg(arg[argcnt], XmNlabelString, label);
-				argcnt++;
-			}
-			w = XmCreatePushButton(hw->html.view, widget_name,
-				arg, argcnt);
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-				  XtParseTranslationTable(traversal_table));
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			if (label != NULL)
-			{
-				XmStringFree(label);
-			}
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "jot") == 0))
-		{
-			XmString label;
-			Dimension width, height;
-			Widget frame;
-			char **list;
-			int list_cnt;
-
-			type = W_JOT;
-			label = NULL;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-
-			/*
-			 * SIZE is WIDTH,HEIGHT
-			 */
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			list = ParseCommaList(tptr, &list_cnt);
-			if (tptr != NULL)
-			{
-				free(tptr);
-			}
-
-			width = 200;
-			height = 50;
-			if (list_cnt == 1)
-			{
-				width = atoi(list[0]);
-			}
-			else if (list_cnt > 1)
-			{
-				width = atoi(list[0]);
-				height = atoi(list[1]);
-			}
-			FreeCommaList(list, list_cnt);
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			XtSetArg(arg[argcnt], XmNshadowType, XmSHADOW_IN);
+			XtSetArg(arg[argcnt], XmNx, x);
 			argcnt++;
-			frame = XmCreateFrame(hw->html.view, "Frame",
-				arg, argcnt);
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNwidth, width); argcnt++;
-			XtSetArg(arg[argcnt], XmNheight, height); argcnt++;
-			w = XmCreateDrawingArea(frame, widget_name,
-				arg, argcnt);
-			XtManageChild(w);
-
-			NewJot(w, width, height);
-			XtAddEventHandler(w, ExposureMask, 0,
-				EVJotExpose, (XtPointer)hw);
-			XtAddEventHandler(w, ButtonPressMask, 0,
-				EVJotPress, (XtPointer)hw);
-			XtAddEventHandler(w, ButtonMotionMask, 0,
-				EVJotMove, (XtPointer)hw);
-			XtAddEventHandler(w, ButtonReleaseMask, 0,
-				EVJotRelease, (XtPointer)hw);
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNuserData, (XtPointer)w);
+			XtSetArg(arg[argcnt], XmNy, y);
 			argcnt++;
-			XtSetValues(frame, arg, argcnt);
-
-			w = frame;
-
+			if (btext) {
+				label = XmStringCreateSimple(btext);
+				free(btext);
+			} else {
+				label = XmStringCreateSimple(value);
+			}
+			XtSetArg(arg[argcnt], XmNlabelString, label);
+			argcnt++;
+			w = XmCreatePushButton(hw->html.view, widget_name,
+					       arg, argcnt);
+			XtOverrideTranslations(w,
+				  XtParseTranslationTable(button_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
-			if (label != NULL)
-			{
+			if (label)
 				XmStringFree(label);
+			if (fptr)
+            	                PrepareFormEnd(hw, w, fptr);
+			bgcolor = hw->html.formbuttonbackground;
+
+		} else if (type_str && !my_strcasecmp(type_str, "reset")) {
+			XmString label;
+			char *btext = ParseMarkTag(text, MT_INPUT, "TEXT");
+
+			type = W_PUSHBUTTON;
+			value = ParseMarkTag(text, MT_INPUT, "VALUE");
+			if (!value || !*value)
+				value = strdup("Reset");
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
+			if (btext) {
+				label = XmStringCreateSimple(btext);
+				free(btext);
+			} else {
+				label = XmStringCreateSimple(value);
 			}
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "select") == 0))
-		{
+			XtSetArg(arg[argcnt], XmNlabelString, label);
+			argcnt++;
+			w = XmCreatePushButton(hw->html.view, widget_name,
+					       arg, argcnt);
+			XtOverrideTranslations(w,
+				  XtParseTranslationTable(button_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+			XtSetMappedWhenManaged(w, False);
+			XtManageChild(w);
+			if (label)
+				XmStringFree(label);
+			if (fptr)
+				PrepareFormReset(hw, w, fptr);
+			bgcolor = hw->html.formbuttonbackground;
+
+		} else if (type_str && !my_strcasecmp(type_str, "button")) {
+			XmString label = NULL;
+			char *btext = ParseMarkTag(text, MT_INPUT, "TEXT");
+
+			type = W_PUSHBUTTON;
+			value = ParseMarkTag(text, MT_INPUT, "VALUE");
+			argcnt = 0;
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
+			if (btext) {
+				label = XmStringCreateSimple(btext);
+				free(btext);
+			} else if (value) {
+				label = XmStringCreateSimple(value);
+			}
+			XtSetArg(arg[argcnt], XmNlabelString, label);
+			argcnt++;
+			w = XmCreatePushButton(hw->html.view, widget_name,
+					       arg, argcnt);
+			XtOverrideTranslations(w,
+				  XtParseTranslationTable(button_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+			XtSetMappedWhenManaged(w, False);
+			XtManageChild(w);
+			if (label)
+				XmStringFree(label);
+			bgcolor = hw->html.formbuttonbackground;
+
+		} else if (type_str && !my_strcasecmp(type_str, "select")) {
 			XmString label;
 			Widget scroll;
 			Widget pulldown, button, hist;
-			char *options;
-			char *returns;
+			char *options, *returns, *labels;
 			char **list;
 			int list_cnt;
 			char **ret_list;
 			int return_cnt;
+			char **label_list;
+			int label_cnt;
 			char **vlist;
 			int vlist_cnt;
 			int i, mult, size;
+			int scol_max = 38;
+			int mcol_max = 51;
 
+			/* Compute column max based on screen height */
+			if (LimDimY < 1024) {
+				scol_max = 36;
+				mcol_max = 38;
+			}
 			type = -1;
 			tptr = ParseMarkTag(text, MT_INPUT, "HINT");
-			if ((tptr != NULL)&&(my_strcasecmp(tptr, "list") == 0))
-			{
-				type = W_LIST;
-			}
-			else if ((tptr != NULL)&&(my_strcasecmp(tptr, "menu") == 0))
-			{
-				type = W_OPTIONMENU;
-			}
-			if (tptr != NULL)
-			{
+			if (tptr) {
+				if (!my_strcasecmp(tptr, "list")) {
+					type = W_LIST;
+				} else if (!my_strcasecmp(tptr, "menu")) {
+					type = W_OPTIONMENU;
+				}
 				free(tptr);
 			}
-
 			size = 5;
 			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr != NULL)
-			{
+			if (tptr) {
 				size = atoi(tptr);
-				if ((size > 1)&&(type == -1))
-				{
+				if ((size > 1) && (type == -1))
 					type = W_LIST;
-				}
 				free(tptr);
 			}
-
 			mult = 0;
 			tptr = ParseMarkTag(text, MT_INPUT, "MULTIPLE");
-			if (tptr != NULL)
-			{
+			if (tptr) {
 				if (type == -1)
-				{
 					type = W_LIST;
-				}
 				mult = 1;
 				free(tptr);
 			}
-
 			if (type == -1)
-			{
 				type = W_OPTIONMENU;
-			}
-
 			label = NULL;
 			hist = NULL;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
 			options = ParseMarkTag(text, MT_INPUT, "OPTIONS");
 			returns = ParseMarkTag(text, MT_INPUT, "RETURNS");
+			labels = ParseMarkTag(text, MT_INPUT, "LABELS");
 			list = ParseCommaList(options, &list_cnt);
-			if (options != NULL)
-			{
+			if (options) 
 				free(options);
-			}
 
 			ret_list = ParseCommaList(returns, &return_cnt);
-			if (returns != NULL)
-			{
+			if (returns)
 				free(returns);
-			}
-
 			/*
 			 * If return_cnt is less than list_cnt, the user made
 			 * a serious error.  Try to recover by padding out
 			 * ret_list with NULLs
 			 */
-			if (list_cnt > return_cnt)
-			{
+			if (list_cnt > return_cnt) {
 				int rcnt;
 				char **rlist;
 
 				rlist = (char **)malloc(list_cnt *
-					sizeof(char *));
+							sizeof(char *));
 				for (rcnt = 0; rcnt < return_cnt; rcnt++)
-				{
 					rlist[rcnt] = ret_list[rcnt];
-				}
 				for (rcnt = return_cnt; rcnt < list_cnt; rcnt++)
-				{
 					rlist[rcnt] = NULL;
-				}
-				if (ret_list != NULL)
-				{
+				if (ret_list)
 					free((char *)ret_list);
-				}
 				ret_list = rlist;
 			}
+			label_list = ParseCommaList(labels, &label_cnt);
+			if (labels)
+				free(labels);
 
 			vlist = ParseCommaList(value, &vlist_cnt);
-
 			if (size > list_cnt)
-			{
 				size = list_cnt;
-			}
 			if (size < 1)
-			{
 				size = 1;
-			}
-
 			mapping = MakeOptionMappings(list, ret_list, list_cnt);
-
-			if (type == W_OPTIONMENU)
-			{
-                                Widget child;
+#ifndef DISABLE_TRACE
+			if (htmlwTrace)
+				fprintf(stderr,
+					"Menu items = %d, scolmax = %d\n",
+					list_cnt, scol_max);
+#endif
+			/* Force scrolled window if won't fit in two columns */
+			if ((type == W_OPTIONMENU) &&
+			    (list_cnt > (2 * mcol_max))) {
+				type = W_LIST;
+				if (size < 3)
+					size = 3;
+			}
+			if (type == W_OPTIONMENU) {
                                 XmString xmstr;
+
 				argcnt = 0;
-				pulldown = XmCreatePulldownMenu(
-					(Widget) hw->html.view,
-					widget_name, arg, argcnt);
-
-				for (i=0; i<list_cnt; i++)
-				{
+				if (list_cnt > scol_max) {
+					XtSetArg(arg[argcnt], XmNpacking,
+						 XmPACK_COLUMN);
+					argcnt++;
+					XtSetArg(arg[argcnt], XmNnumColumns, 2);
+					argcnt++;
+				}
+				pulldown = XmCreatePulldownMenu(hw->html.view,
+						      widget_name, arg, argcnt);
+				for (i = 0; i < list_cnt; i++) {
 					char bname[30];
+					int is_title = 0;
+					char *item;
 
-					sprintf(bname, "Button%d", (i + 1));
-					label = XmStringCreateSimple(list[i]);
+					if ((label_cnt > i) && *label_list[i]) {
+						item = label_list[i];
+						if (!strcmp(list[i],
+							    "MOSAIC_OPTGROUP"))
+							/* OPTGROUP label */
+							is_title = 1;
+					} else {
+						item = list[i];
+					}
+					sprintf(bname, "Button%d", i + 1);
+					label = XmStringCreateSimple(item);
 					argcnt = 0;
 					XtSetArg(arg[argcnt], XmNlabelString,
-						label);
+						 label);
 					argcnt++;
-					button = XmCreatePushButton(pulldown,
-						bname, arg, argcnt);
+					if (is_title) {
+	 	                      		/* Kill margin */
+ 	 	                     		XtSetArg(arg[argcnt],
+							 XmNmarginWidth, 0);
+						argcnt++;
+						button = XmCreateLabel(pulldown,
+							    bname, arg, argcnt);
+					} else {
+						button = XmCreatePushButton(
+							        pulldown, bname,
+							        arg, argcnt);
+					}
 					XtManageChild(button);
 					XmStringFree(label);
-					if(!hw->html.focus_follows_mouse)
-					  XtOverrideTranslations(button, 
-				            XtParseTranslationTable(traversal_table));
-					if ((vlist_cnt > 0)&&
-						(vlist[0] != NULL)&&
-						(strcmp(vlist[0], list[i]) ==0))
-					{
+					if (!hw->html.focus_follows_mouse)
+						XtOverrideTranslations(button, 
+				                        XtParseTranslationTable(
+					                      traversal_table));
+					if ((vlist_cnt > 0) &&
+					    (vlist[0] != NULL) &&
+					    !strcmp(vlist[0], list[i]))
 						hist = button;
-					}
 
 					/*
 					 * Start hist out as the first button
@@ -2670,36 +1706,32 @@ MakeWidget(hw, text, x, y, id, fptr)
 					 * default we always default to the
 					 * first element.
 					 */
-					if ((i == 0)&&(hist == NULL))
-					{
-      						hist = button;
-					}
+					if (!hist && !is_title)
+						hist = button;
 				}
-
 				FreeCommaList(list, list_cnt);
 				FreeCommaList(ret_list, list_cnt);
+				FreeCommaList(label_list, label_cnt);
 				FreeCommaList(vlist, vlist_cnt);
-				if (value != NULL)
-				{
+				if (value)
 					free(value);
-				}
-
 				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-				/* kill margins */
-				XtSetArg(arg[argcnt], XmNmarginWidth, 0); 
+				XtSetArg(arg[argcnt], XmNx, x);
 				argcnt++;
-				XtSetArg(arg[argcnt], XmNmarginHeight, 0); 
+				XtSetArg(arg[argcnt], XmNy, y);
 				argcnt++;
+                                /* Kill margins */
+                                XtSetArg(arg[argcnt], XmNspacing, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNmarginWidth, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNmarginHeight, 0);
+                                argcnt++;
 				XtSetArg(arg[argcnt], XmNsubMenuId, pulldown);
-					argcnt++;
-					/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-				argcnt++;*/
-				if (hist != NULL)
-				{
+				argcnt++;
+				if (hist) {
 					XtSetArg(arg[argcnt], XmNmenuHistory,
-						hist);
+						 hist);
 					argcnt++;
 					/*
 					 * A gaggage.  Value is used to later
@@ -2710,77 +1742,62 @@ MakeWidget(hw, text, x, y, id, fptr)
 					 */
 					value = (char *)hist;
 				}
-				w = XmCreateOptionMenu((Widget) hw->html.view,
-					widget_name, arg, argcnt);
-				if(!hw->html.focus_follows_mouse)
-				  {
+				w = XmCreateOptionMenu(hw->html.view,
+						      widget_name, arg, argcnt);
+				if (!hw->html.focus_follows_mouse) {
 				    XtOverrideTranslations(w, 
-				     XtParseTranslationTable(traversal_table));
+				      XtParseTranslationTable(traversal_table));
 				    XtOverrideTranslations(pulldown, 
-				     XtParseTranslationTable(traversal_table));
-				  }
-				
+				      XtParseTranslationTable(traversal_table));
+				}
                                 argcnt = 0;
-
-				xmstr = XmStringCreateSimple ("");
+                                xmstr = XmStringCreateSimple("");
                                 XtSetArg(arg[argcnt], XmNlabelString,
                                          (XtArgVal)xmstr);
                                 argcnt++;
-				XtSetArg(arg[argcnt], XmNwidth, 0);
+                                XtSetArg(arg[argcnt], XmNhighlightThickness, 0);
                                 argcnt++;
-
-                                child = XmOptionLabelGadget (w);
-
-                                XtSetValues (child, arg, argcnt);
-                                XmStringFree (xmstr);
-
-/* back to original because of coredump on initial load of forms page SWP*/
-				/* we unmange first to avoid a flicker
-				   caused by Destroy taking so long */
-/*
-				XtUnmanageChild(child);
-				XtDestroyWidget(child);
-*/
-                        }
-			else /* type == W_LIST */
-			{
+                                XtSetArg(arg[argcnt], XmNshadowThickness, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNborderWidth, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNwidth, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNmarginWidth, 0);
+                                argcnt++;
+                                XtSetArg(arg[argcnt], XmNmarginLeft, 0);
+                                argcnt++;
+                                XtSetValues(XmOptionLabelGadget(w),
+					    arg, argcnt);
+                        } else /* type == W_LIST */ {
 				XmString *string_list;
 				XmString *val_list;
 
-				if ((!mult)&&(vlist_cnt > 1))
-				{
+				if (!mult && (vlist_cnt > 1)) {
 					free(value);
-					value = (char *)malloc(
-						strlen(vlist[0]) + 1);
-					strcpy(value, vlist[0]);
+					value = strdup(vlist[0]);
 				}
-
 				string_list = (XmString *)malloc(list_cnt *
-					sizeof(XmString));
+							      sizeof(XmString));
 				val_list = (XmString *)malloc(vlist_cnt *
-					sizeof(XmString));
-
-				for (i=0; i<list_cnt; i++)
-				{
+							      sizeof(XmString));
+				for (i = 0; i < list_cnt; i++)
 					string_list[i] =
-						XmStringCreateSimple(list[i]);
-				}
-				for (i=0; i<vlist_cnt; i++)
-				{
+						  XmStringCreateSimple(list[i]);
+				for (i = 0; i < vlist_cnt; i++)
 					val_list[i] =
-						XmStringCreateSimple(vlist[i]);
-				}
-
+						 XmStringCreateSimple(vlist[i]);
 				FreeCommaList(list, list_cnt);
 				FreeCommaList(ret_list, list_cnt);
 				FreeCommaList(vlist, vlist_cnt);
 
 				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-				scroll = XmCreateScrolledWindow((Widget) hw->html.view,
-					"Scroll", arg, argcnt);
-
+				XtSetArg(arg[argcnt], XmNx, x);
+				argcnt++;
+				XtSetArg(arg[argcnt], XmNy, y);
+				argcnt++;
+				scroll = XmCreateScrolledWindow(hw->html.view,
+							 "Scroll", arg, argcnt);
 				argcnt = 0;
 				XtSetArg(arg[argcnt], XmNitems, string_list);
 				argcnt++;
@@ -2788,131 +1805,105 @@ MakeWidget(hw, text, x, y, id, fptr)
 				argcnt++;
 				XtSetArg(arg[argcnt], XmNvisibleItemCount,size);
 				argcnt++;
-				if (mult)
-				{
+				if (mult) {
 					XtSetArg(arg[argcnt],XmNselectionPolicy,
-						XmEXTENDED_SELECT);
+						 XmEXTENDED_SELECT);
+					argcnt++;
+				} else {
+					XtSetArg(arg[argcnt],XmNselectionPolicy,
+						 XmBROWSE_SELECT);
 					argcnt++;
 				}
-				else
-				{
-					XtSetArg(arg[argcnt],XmNselectionPolicy,
-						XmBROWSE_SELECT);
-					argcnt++;
-				}
-				if ((vlist_cnt > 0)&&(mult))
-				{
+				if ((vlist_cnt > 0) && mult) {
 					XtSetArg(arg[argcnt], XmNselectedItems,
-						val_list);
+						 val_list);
 					argcnt++;
 					XtSetArg(arg[argcnt],
-						XmNselectedItemCount,
-						vlist_cnt);
+						 XmNselectedItemCount,
+						 vlist_cnt);
 					argcnt++;
-				}
-				else if ((vlist_cnt > 0)&&(!mult))
-				{
+				} else if ((vlist_cnt > 0) && !mult) {
 					XtSetArg(arg[argcnt], XmNselectedItems,
-						&val_list[0]);
+						 &val_list[0]);
 					argcnt++;
 					XtSetArg(arg[argcnt],
-						XmNselectedItemCount, 1);
+						 XmNselectedItemCount, 1);
 					argcnt++;
 				}
-				w = XmCreateList(scroll, widget_name,
-					arg, argcnt);
-				if(!hw->html.focus_follows_mouse)
-				  XtOverrideTranslations(w, 
-				     XtParseTranslationTable(traversal_table));
-				XtManageChild(w);
-				
+				w = XmCreateList(scroll, widget_name, arg,
+						 argcnt);
+				ChildWidget = w;
+				if (!hw->html.focus_follows_mouse)
+				    XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+                                XtManageChild(w);
 				w = scroll;
-
-				for (i=0; i<list_cnt; i++)
-				{
+				for (i = 0; i < list_cnt; i++)
 					XmStringFree(string_list[i]);
-				}
-				if (string_list != NULL)
-				{
+				if (string_list)
 					free((char *)string_list);
-				}
-				for (i=0; i<vlist_cnt; i++)
-				{
+				for (i = 0; i < vlist_cnt; i++)
 					XmStringFree(val_list[i]);
-				}
-				if (val_list != NULL)
-				{
+				if (val_list)
 					free((char *)val_list);
-				}
 			}
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "password") ==0))
-		{
+
+		} else if (type_str && !my_strcasecmp(type_str, "password")) {
 			type = W_PASSWORD;
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
 
 			size = -1;
 			maxlength = -1;
-
 			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr != NULL)
-			{
+			if (tptr) {
 				size = atoi(tptr);
 				free(tptr);
 			}
-
 			tptr = ParseMarkTag(text, MT_INPUT, "MAXLENGTH");
-			if (tptr != NULL)
-			{
+			if (tptr) {
 				maxlength = atoi(tptr);
 				free(tptr);
 			}
 
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			if (size > 0)
-			{
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
+			if (size > 0) {
 				XtSetArg(arg[argcnt], XmNcolumns, size);
 				argcnt++;
 			}
-			if (maxlength > 0)
-			{
+			if (maxlength > 0) {
 				XtSetArg(arg[argcnt], XmNmaxLength, maxlength);
 				argcnt++;
 			}
-			if (value != NULL)
-			{
+			if (value) {
 				int i, len;
 				char *bval;
 
 				len = strlen(value);
 				bval = (char *)malloc(len + 1);
-				for (i=0; i<len; i++)
-				{
+				for (i = 0; i < len; i++)
 					bval[i] = '*';
-				}
 				bval[len] = '\0';
 				XtSetArg(arg[argcnt], XmNvalue, bval);
 				argcnt++;
 			}
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
 			w = XmCreateTextField(hw->html.view, widget_name,
-				arg, argcnt);
-			XtOverrideTranslations(w, XtParseTranslationTable(text_translations));
-									 
-
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-				  XtParseTranslationTable(traversal_table));
-/*
- * The proper order here is XtSetMappedWhenManaged, XtManageChild.  But a bug
- * in some versions of Motif1.1 makes us do it the other way.  All versions
- * of 1.2 should have this fixed
- */
+					      arg, argcnt);
+			XtOverrideTranslations(w,
+				XtParseTranslationTable(text_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
+  /*
+   * The proper order here is XtSetMappedWhenManaged, XtManageChild.  But a bug
+   * in some versions of Motif 1.1 makes us do it the other way.  All versions
+   * of 1.2 should have this fixed.
+   */
 #ifdef MOTIF1_2
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -2920,1185 +1911,158 @@ MakeWidget(hw, text, x, y, id, fptr)
 			XtManageChild(w);
 			XtSetMappedWhenManaged(w, False);
 #endif /* MOTIF1_2 */
-			XtAddCallback(w, XmNactivateCallback,
-				(XtCallbackProc)CBActivateField, (caddr_t)fptr);
-			XtAddCallback(w, XmNmodifyVerifyCallback,
-				(XtCallbackProc)CBPasswordModify, (caddr_t)fptr);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "textarea") ==0))
-		{
-			char **list;
-			int list_cnt;
+			if (fptr) {
+				XtAddCallback(w, XmNactivateCallback,
+					      (XtCallbackProc)CBActivateField,
+					      (XtPointer)fptr);
+				XtAddCallback(w, XmNmodifyVerifyCallback,
+					      (XtCallbackProc)CBPasswordModify,
+					      (XtPointer)fptr);
+			}
+
+		} else if (type_str && !my_strcasecmp(type_str, "textarea")) {
 			int rows, cols;
 			Widget scroll;
 
 			type = W_TEXTAREA;
 
-			/*
-			 * If there is no SIZE, look for ROWS and COLS
-			 * directly.
-			 * SIZE is COLUMNS,ROWS parse the list
-			 */
-			rows = -1;
-			cols = -1;
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr == NULL)
-			{
-				tptr = ParseMarkTag(text, MT_INPUT, "ROWS");
-				if (tptr != NULL)
-				{
-					rows = atoi(tptr);
-					free(tptr);
-				}
-				tptr = ParseMarkTag(text, MT_INPUT, "COLS");
-				if (tptr != NULL)
-				{
-					cols = atoi(tptr);
-					free(tptr);
-				}
-			}
-			else
-			{
-				list = ParseCommaList(tptr, &list_cnt);
+			/* Look for ROWS and COLS */
+			rows = 4;
+			cols = 40;
+			tptr = ParseMarkTag(text, MT_INPUT, "ROWS");
+			if (tptr) {
+				rows = atoi(tptr);
 				free(tptr);
-
-				if (list_cnt == 1)
-				{
-					cols = atoi(list[0]);
-				}
-				else if (list_cnt > 1)
-				{
-					cols = atoi(list[0]);
-					rows = atoi(list[1]);
-				}
-				FreeCommaList(list, list_cnt);
 			}
+			if (rows <= 0)
+				rows = 4;
+			tptr = ParseMarkTag(text, MT_INPUT, "COLS");
+			if (tptr) {
+				cols = atoi(tptr);
+				free(tptr);
+			}
+			if (cols <= 0)
+				cols = 40;
 
-			/*
-			 * Grab the starting value of the text here.
+			/* Grab the starting value of the text here.
 			 * NULL if none.
 			 */
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
 			UnMuckTextAreaValue(value);
 
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			scroll = XmCreateScrolledWindow((Widget) hw->html.view,
-				"Scroll", arg, argcnt);
-
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
+			scroll = XmCreateScrolledWindow(hw->html.view, "Scroll",
+							arg, argcnt);
 			argcnt = 0;
 			XtSetArg(arg[argcnt], XmNeditMode, XmMULTI_LINE_EDIT);
 			argcnt++;
-			if (cols > 0)
-			{
-				XtSetArg(arg[argcnt], XmNcolumns, cols);
-				argcnt++;
-			}
-			if (rows > 0)
-			{
-				XtSetArg(arg[argcnt], XmNrows, rows);
-				argcnt++;
-			}
-			if (value != NULL)
-			{
+			XtSetArg(arg[argcnt], XmNcolumns, cols);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNrows, rows);
+			argcnt++;
+			if (value) {
 				XtSetArg(arg[argcnt], XmNvalue, value);
 				argcnt++;
 			}
-			/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-			argcnt++;*/
 			w = XmCreateText(scroll, widget_name, arg, argcnt);
+			ChildWidget = w;
 			XtManageChild(w);
-			XtOverrideTranslations(w, XtParseTranslationTable(text_translations));
-
-			if(!hw->html.focus_follows_mouse)
-			  XtOverrideTranslations(w, 
-		       	     XtParseTranslationTable(traversal_table));
-			
-
+			XtOverrideTranslations(w,
+				XtParseTranslationTable(text_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w,
+				      XtParseTranslationTable(traversal_table));
 			w = scroll;
-
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
-		}
-		else /* if no type, assume type=text */
-		{
-			char **list;
-			int list_cnt;
-			int rows, cols;
-			Widget scroll;
+		} else {
+			/* If no type, assume type=text.  Single line field */
+			int cols = 40;
 
-			/*
-			 * SIZE can be either COLUMNS or COLUMNS,ROWS
-			 * we assume COLUMNS,ROWS and parse the list
-			 */
+			/* SIZE can be COLUMNS, assume a TEXTFIELD */
+			type = W_TEXTFIELD;
 			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			list = ParseCommaList(tptr, &list_cnt);
-			if (tptr != NULL)
-			{
+			if (tptr) {
+				cols = atoi(tptr);
 				free(tptr);
 			}
-
-			/*
-			 * If only COLUMNS specified, or SIZE not specified
-			 * assume a TEXTFIELD
-			 * Otherwise a TEXTAREA.
-			 */
-			if (list_cnt <= 1)
-			{
-				type = W_TEXTFIELD;
-				if (list_cnt == 1)
-				{
-					cols = atoi(list[0]);
-				}
-				else
-				{
-					cols = -1;
-				}
-			}
-			else
-			{
-				type = W_TEXTAREA;
-				cols = atoi(list[0]);
-				rows = atoi(list[1]);
-				
-				/* be a textfield if only one row */
-				if(rows==1)
-				  type=W_TEXTFIELD;
-			}
-			/*
-			 * Now that we have cols, and maybe rows, free the list
-			 */
-			FreeCommaList(list, list_cnt);
-
-			/*
-			 * Grab the starting value of the text here.
-			 * NULL if none.
-			 */
+			/* Grab the starting value of text.  NULL if none. */
 			value = ParseMarkTag(text, MT_INPUT, "VALUE");
 
-			/*
-			 * For textfileds parse maxlength and
-			 * set up the widget.
-			 */
-			if (type == W_TEXTFIELD)
-			{
-				maxlength = -1;
-				tptr = ParseMarkTag(text, MT_INPUT,"MAXLENGTH");
-				if (tptr != NULL)
-				{
-					maxlength = atoi(tptr);
-					free(tptr);
-				}
-
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-				if (cols > 0)
-				{
-					XtSetArg(arg[argcnt], XmNcolumns, cols);
-					argcnt++;
-				}
-				if (maxlength > 0)
-				{
-					XtSetArg(arg[argcnt], XmNmaxLength,
-						maxlength);
-					argcnt++;
-				}
-				if (value != NULL)
-				{
-					XtSetArg(arg[argcnt], XmNvalue, value);
-					argcnt++;
-				}
-				/*XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-				argcnt++;*/
-
-				w = XmCreateTextField((Widget) hw->html.view,
-					widget_name, arg, argcnt);
-				XtOverrideTranslations(w, XtParseTranslationTable(text_translations));
-				if(!hw->html.focus_follows_mouse)
-				  XtOverrideTranslations(w, 
-				     XtParseTranslationTable(traversal_table));
-			}
-			/*
-			 * Else this is a TEXTAREA.  Maxlength is ignored,
-			 * and we set up the scrolled window
-			 */
-			else
-			{
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-				scroll = XmCreateScrolledWindow(hw->html.view,
-					"Scroll", arg, argcnt);
-
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XmNeditMode,
-					XmMULTI_LINE_EDIT);
-				argcnt++;
-				if (cols > 0)
-				{
-					XtSetArg(arg[argcnt], XmNcolumns, cols);
-					argcnt++;
-				}
-				if (rows > 0)
-				{
-					XtSetArg(arg[argcnt], XmNrows, rows);
-					argcnt++;
-				}
-				if (value != NULL)
-				{
-					XtSetArg(arg[argcnt], XmNvalue, value);
-					argcnt++;
-				}
-				XtSetArg(arg[argcnt], XmNnavigationType, XmNONE);
-				argcnt++;
-				w = XmCreateText(scroll, widget_name,
-					arg, argcnt);
-				XtManageChild(w);
-				XtOverrideTranslations(w, XtParseTranslationTable(text_translations));
-				if(!hw->html.focus_follows_mouse)
-				  XtOverrideTranslations(w, 
-				     XtParseTranslationTable(traversal_table));
-
-
-				w = scroll;
-			}
-
-/*
- * The proper order here is XtSetMappedWhenManaged, XtManageChild.  But a bug
- * in some versions of Motif1.1 makes us do it the other way.  All versions
- * of 1.2 should have this fixed
- */
-#ifdef MOTIF1_2
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-#else
-			XtManageChild(w);
-			XtSetMappedWhenManaged(w, False);
-#endif /* MOTIF1_2 */
-
-			/*
-			 * For textfields, a CR might be an activate
-			 */
-			if (type == W_TEXTFIELD)
-			{
-				XtAddCallback(w, XmNactivateCallback,
-					(XtCallbackProc)CBActivateField, (caddr_t)fptr);
-			}
-		}
-
-		if (type_str != NULL)
-		{
-			free(type_str);
-		}
-
-		/*
-		 * Don't want to do GetValues if this is HIDDEN input
-		 * tag with no widget.
-		 */
-		if (w != NULL)
-		{
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNwidth, &width); argcnt++;
-			XtSetArg(arg[argcnt], XmNheight, &height); argcnt++;
-			XtGetValues(w, arg, argcnt);
-			/* Set it to default so we don't lose it on "back"*/
-                        XtVaSetValues(w,
-                          XmNbackground, hw->html.background_SAVE,
-                          XmNtopShadowColor, hw->html.top_color_SAVE,
-                          XmNbottomShadowColor, hw->html.bottom_color_SAVE,
-                          NULL);
-		}
-		else
-		{
-			width = 0;
-			height = 0;
-		}
-
-		wptr = AddNewWidget(hw, fptr, w, type, id, x, y, width, 
-			height, name, value, mapping, checked);
-	}
-	else
-	/*
-	 * We found this widget on the list of already created widgets.
-	 * Put it in place for reuse.
-	 */
-	{
-		wlist->x = x;
-		wlist->y = y;
-
-		/*
-		 * Don't want to SetValues if type HIDDEN which
-		 * has no widget.
-		 */
-		if (wlist->w != NULL)
-		{
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XmNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XmNy, y); argcnt++;
-			XtSetValues(wlist->w, arg, argcnt);
-
-			/* Set it to default so we don't lose it on "back"*/
-                        XtVaSetValues(wlist->w,
-                          XmNbackground, hw->html.background_SAVE,
-                          XmNtopShadowColor, hw->html.top_color_SAVE,
-                          XmNbottomShadowColor, hw->html.bottom_color_SAVE,
-                          NULL);
-/*
-                        XtVaSetValues(wlist->w,
-                          XmNbackground, hw->core.background_pixel,
-                          XmNtopShadowColor, hw->manager.top_shadow_color,
-                          XmNbottomShadowColor, hw->manager.bottom_shadow_color,
-                          NULL);
-*/
-		}
-
-		wptr = wlist;
-	}
-
-	return(wptr);
-}
-#else
-/********** ATHENA VERSION *************/
-/*
- * Make the appropriate widget for this tag, and fill in an
- * WidgetInfo structure and return it.
- */
-WidgetInfo *
-MakeWidget(hw, text, x, y, id, fptr)
-	HTMLWidget hw;
-	char *text;
-	int x, y;
-	int id;
-	FormInfo *fptr;
-{
-	Arg arg[30];
-	Cardinal argcnt;
-	Widget w;
-	WidgetInfo *wlist;
-	WidgetInfo *wptr;
-	Dimension width, height;
-
-        
-	wlist = hw->html.widget_list;
-	while (wlist != NULL)
-	{
-		if (wlist->id == id)
-		{
-			break;
-		}
-		wlist = wlist->next;
-	}
-
-	/*
-	 * If this widget is not on the list, we have never
-	 * used it before.  Create it now.
-	 */
-	if (wlist == NULL)
-	{
-		char *tptr;
-		char *value;
-		char *name;
-		char *type_str;
-		int type;
-		short size;
-		int maxlength;
-		Boolean checked;
-
-		checked = False;
-		name = ParseMarkTag(text, MT_INPUT, "NAME");
-
-		type_str = ParseMarkTag(text, MT_INPUT, "TYPE");
-		if ((type_str != NULL)&&(my_strcasecmp(type_str, "checkbox") == 0))
-		{
-			type = W_CHECKBOX;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
-				value = (char *)malloc(strlen("on") + 1);
-				strcpy(value, "on");
-			}
-
-			tptr = ParseMarkTag(text, MT_INPUT, "CHECKED");
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			if (tptr != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNstate, True); argcnt++;
-				checked = True;
-				free(tptr);
-			}
-			XtSetArg(arg[argcnt], XtNlabel, ""); argcnt++;
-			w = XtCreateWidget(name, toggleWidgetClass,
-				hw->html.view, arg, argcnt);
-
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "hidden") == 0))
-		{
-			type = W_HIDDEN;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
-				value = (char *)malloc(1);
-				value[0] = '\0';
-			}
-
-			w = NULL;
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "radio") == 0))
-		{
-			type = W_RADIOBOX;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if (value == NULL)
-			{
-				value = (char *)malloc(strlen("on") + 1);
-				strcpy(value, "on");
-			}
-
-			/*
-			 * Only one checked radio button with the
-			 * same name per form
-			 */
-			tptr = ParseMarkTag(text, MT_INPUT, "CHECKED");
-			if ((tptr != NULL)&&
-				(AlreadyChecked(hw, fptr, name) == True))
-			{
-				free(tptr);
-				tptr = NULL;
-			}
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			if (tptr != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNstate, True); argcnt++;
-				checked = True;
-				free(tptr);
-			}
-			XtSetArg(arg[argcnt], XtNlabel, ""); argcnt++;
-			w = XtCreateWidget(name, toggleWidgetClass,
-				hw->html.view, arg, argcnt);
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			XtAddCallback(w, XtNcallback,
-				(XtCallbackProc)CBChangeRadio, (caddr_t)fptr);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "submit") == 0))
-		{
-			type = W_PUSHBUTTON;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if ((value == NULL)||(*value == '\0'))
-			{
-				value = (char *)malloc(strlen("Submit Query") +
-					1);
-				strcpy(value, "Submit Query");
-			}
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			if (value != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNlabel, value);
-				argcnt++;
-			}
-			w = XtCreateWidget(name, commandWidgetClass,
-				hw->html.view, arg, argcnt);
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			PrepareFormEnd(hw, w, fptr);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "reset") == 0))
-		{
-			type = W_PUSHBUTTON;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			if ((value == NULL)||(*value == '\0'))
-			{
-				value = (char *)malloc(strlen("Reset") + 1);
-				strcpy(value, "Reset");
-			}
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			if (value != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNlabel, value);
-				argcnt++;
-			}
-			w = XtCreateWidget(name, commandWidgetClass,
-				hw->html.view, arg, argcnt);
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-			PrepareFormReset(hw, w, fptr);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "button") == 0))
-		{
-			type = W_PUSHBUTTON;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			if (value != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNlabel, value);
-				argcnt++;
-			}
-			w = XtCreateWidget(name, commandWidgetClass,
-				hw->html.view, arg, argcnt);
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "select") == 0))
-		{
-			STRING label;
-			Widget scroll;
-			Widget pulldown, button, hist;
-			char *options;
-			char **list;
-			int list_cnt;
-			char **vlist;
-			int vlist_cnt;
-			int i, mult, size;
-
-			type = -1;
-			tptr = ParseMarkTag(text, MT_INPUT, "HINT");
-			if ((tptr != NULL)&&(my_strcasecmp(tptr, "list") == 0))
-			{
-				type = W_LIST;
-			}
-			else if ((tptr != NULL)&&(my_strcasecmp(tptr, "menu") == 0))
-			{
-				type = W_OPTIONMENU;
-			}
-			if (tptr != NULL)
-			{
-				free(tptr);
-			}
-
-			size = 5;
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr != NULL)
-			{
-				size = atoi(tptr);
-				if ((size > 1)&&(type == -1))
-				{
-					type = W_LIST;
-				}
-				free(tptr);
-			}
-
-			mult = 0;
-			tptr = ParseMarkTag(text, MT_INPUT, "MULTIPLE");
-			if (tptr != NULL)
-			{
-				if (type == -1)
-				{
-					type = W_LIST;
-				}
-				mult = 1;
-				free(tptr);
-			}
-
-			if (type == -1)
-			{
-				type = W_OPTIONMENU;
-			}
-
-			label = NULL;
-			hist = NULL;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			options = ParseMarkTag(text, MT_INPUT, "OPTIONS");
-			list = ParseCommaList(options, &list_cnt);
-			if (options != NULL)
-			{
-				free(options);
-			}
-
-			vlist = ParseCommaList(value, &vlist_cnt);
-
-			if (size > list_cnt)
-			{
-				size = list_cnt;
-			}
-			if (size < 1)
-			{
-				size = 1;
-			}
-
-			if (type == W_OPTIONMENU)
-			{
-				XFontStruct *font;
-				Dimension maxWidth = 0, width, iW;
-
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-				w = XtCreateWidget(name,
-					menuButtonWidgetClass,
-					hw->html.view, arg, argcnt);
-				argcnt = 0;
-				pulldown = XtCreatePopupShell("menu",
-					simpleMenuWidgetClass, w,
-					arg, argcnt);
-				for (i=0; i<list_cnt; i++)
-				{
-					char bname[30];
-
-					sprintf(bname, "Button%d", (i + 1));
-					argcnt = 0;
-					XtSetArg(arg[argcnt], XtNlabel,
-						list[i]);
-					argcnt++;
-					button = XtCreateWidget(bname,
-						smeBSBObjectClass,
-						pulldown, arg, argcnt);
-					XtManageChild(button);
-					XtAddCallback(button, XtNcallback,
-						CBoption, (XtPointer)w);
-
-					if (i==0)
-					{
-						XtVaGetValues(w,
-							XtNfont, &font,
-							XtNinternalWidth, &iW,
-							NULL);
-					}
-
-					width = XTextWidth(font, list[i],
-						strlen(list[i]));
-
-					if (width > maxWidth) maxWidth = width;
-
-					if ((vlist_cnt > 0)&&
-						(vlist[0] != NULL)&&
-						(strcmp(vlist[0], list[i]) ==0))
-					{
-						hist = button;
-						XtVaSetValues(w,
-							XtNlabel,
-							XtNewString(list[i]),
-							NULL);
-					}
-
-					/*
-					 * Start hist out as the first button
-					 * so that if the user didn't set a
-					 * default we always default to the
-					 * first element.
-					 */
-					if ((i == 0)&&(hist == NULL))
-					{
-						hist = button;
-					}
-				}
-
-				XtVaSetValues(w, XtNwidth, maxWidth + (4 * iW),
-					NULL);
-
-				FreeCommaList(vlist, vlist_cnt);
-				if (value != NULL)
-				{
-					free(value);
-				}
-
-				if (hist != NULL)
-				{
-					/*
-					 * A gaggage.  Value is used to later
-					 * restore defaults.  For option menu
-					 * this means we need to save a child
-					 * widget id as opposed to the
-					 * character string everyone else uses.
-					 */
-					value = (char *)hist;
-				}
-                        }
-			else /* type == W_LIST */
-			{
-				STRING *string_list;
-				STRING *val_list;
-
-				if ((!mult)&&(vlist_cnt > 1))
-				{
-					free(value);
-					value = (char *)malloc(
-						strlen(vlist[0]) + 1);
-					strcpy(value, vlist[0]);
-				}
-
-				string_list = (STRING *)malloc(list_cnt *
-					sizeof(STRING));
-				val_list = (STRING *)malloc(vlist_cnt *
-					sizeof(STRING));
-
-				for (i=0; i<list_cnt; i++)
-				{
-					string_list[i] =
-						XtNewString(list[i]);
-				}
-				for (i=0; i<vlist_cnt; i++)
-				{
-					val_list[i] =
-						XtNewString(vlist[i]);
-				}
-
-				FreeCommaList(list, list_cnt);
-				FreeCommaList(vlist, vlist_cnt);
-
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-				XtSetArg(arg[argcnt], XtNallowVert, True);
-				argcnt++;
-				scroll = XtCreateWidget("Scroll",
-					viewportWidgetClass,
-					hw->html.view, arg, argcnt);
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XtNdefaultColumns, 1);
-				argcnt++;
-				w = XtCreateWidget(name,
-					listWidgetClass,
-					scroll, arg, argcnt);
-				XtManageChild(w);
-				XtAddCallback(w, XtNdestroyCallback,
-					CBListDestroy, NULL);
-
-				XawListChange(w, string_list, list_cnt,
-					0, True);
-
-				if (vlist_cnt > 0)
-				{
-				    if (vlist_cnt > 1)
-				    {
-#ifndef DISABLE_TRACE
-					if (htmlwTrace) {
-						fprintf(stderr,
-							"HTML: only a single selection allowed!\n");
-					}
-#endif
-				    }
-
-				    for (i=0; i<list_cnt; i++)
-				    {
-					if (!strcmp(string_list[i],val_list[0]))
-					{
-					    XawListHighlight(w, i);
-					    break;
-					}
-				    }
-				}
-
-				if (size>list_cnt) size=list_cnt;
-				if (size>1)
-				{
-					XFontStruct *font;
-					Dimension h,width, s;
-
-					XtVaGetValues(w, XtNfont, &font,
-						XtNinternalHeight, &h,
-						XtNwidth, &width,
-						XtNrowSpacing, &s,
-						NULL);
-					XtVaSetValues(scroll,
-						XtNheight,
-						h + size*(s+FONTHEIGHT(font)),
-						XtNwidth, width + 20,
-						NULL);
-				}
-
-				w = scroll;
-
-				for (i=0; i<vlist_cnt; i++)
-				{
-					free(val_list[i]);
-				}
-				if (val_list != NULL)
-				{
-					free((char *)val_list);
-				}
-			}
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "password") ==0))
-		{
-			char *txt;
-
-			type = W_PASSWORD;
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-
-			size = -1;
+			/* Parse maxlength and set up the widget. */
 			maxlength = -1;
-
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr != NULL)
-			{
-				size = atoi(tptr);
-				free(tptr);
-			}
-
 			tptr = ParseMarkTag(text, MT_INPUT, "MAXLENGTH");
-			if (tptr != NULL)
-			{
+			if (tptr) {
 				maxlength = atoi(tptr);
 				free(tptr);
 			}
-
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			XtSetArg(arg[argcnt], XtNeditType, XawtextEdit);
+			XtSetArg(arg[argcnt], XmNx, x);
 			argcnt++;
-
-			if (maxlength > 0)
-			{
-				if (value)
-				{
-					txt = XtNewString(value);
-					txt = (char*)realloc(txt,
-						sizeof(char)*(maxlength+1));
-				}
-				else
-				{
-					txt = (char *)malloc(sizeof(char)*
-						(maxlength+1));
-					*txt = '\0';
-				}
-				XtSetArg(arg[argcnt], XtNuseStringInPlace, 1);
-				argcnt++;
-				XtSetArg(arg[argcnt], XtNlength, maxlength);
-				argcnt++;
-			}
-			else
-			{
-				XtSetArg(arg[argcnt], XtNuseStringInPlace, 0);
-				argcnt++;
-			}
-
-
-			if (value != NULL)
-			{
-				int i, len;
-				char *bval;
-
-				len = strlen(value);
-				if (maxlength > 0)
-				{
-					bval = txt;
-					if (maxlength<len) len = maxlength+1;
-				}
-				else
-				{
-					bval = (char *)malloc(len + 1);
-				}
-				for (i=0; i<len; i++)
-				{
-					bval[i] = '*';
-				}
-				bval[len] = '\0';
-				XtSetArg(arg[argcnt], XtNstring, bval);
-				argcnt++;
-			}
-			else  /* value == NULL */
-			{
-				if (maxlength>0)  /* stringInPlace */
-				{
-					XtSetArg(arg[argcnt], XtNstring, txt);
-					argcnt++;
-				}
-			}
-
-			w = XtCreateWidget(name, asciiTextWidgetClass,
-				hw->html.view, arg, argcnt);
-                        if (maxlength > 0)
-			{
-				XtAddCallback(w, XtNdestroyCallback,
-					(XtCallbackProc)CBTextDestroy,
-					(caddr_t)txt);
-			}
-
-			XtOverrideTranslations(w,
-			  XtParseTranslationTable("<Key>: HTMLpwdInput()"));
-			XtOverrideTranslations(w,
-			  XtParseTranslationTable("<Key>Return: no-op(RingBell)"));
-
-			setTextSize(w,size<1?20:size,1);
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-		}
-		else if ((type_str != NULL)&&(my_strcasecmp(type_str, "textarea") ==0))
-		{
-			char **list;
-			int list_cnt;
-			int rows, cols;
-
-			type = W_TEXTAREA;
-
-			/*
-			 * If there is no SIZE, look for ROWS and COLS
-			 * directly.
-			 * SIZE is COLUMNS,ROWS parse the list
-			 */
-			rows = -1;
-			cols = -1;
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			if (tptr == NULL)
-			{
-				tptr = ParseMarkTag(text, MT_INPUT, "ROWS");
-				if (tptr != NULL)
-				{
-					rows = atoi(tptr);
-					free(tptr);
-				}
-				tptr = ParseMarkTag(text, MT_INPUT, "COLS");
-				if (tptr != NULL)
-				{
-					cols = atoi(tptr);
-					free(tptr);
-				}
-			}
-			else
-			{
-				list = ParseCommaList(tptr, &list_cnt);
-				free(tptr);
-
-				if (list_cnt == 1)
-				{
-					cols = atoi(list[0]);
-				}
-				else if (list_cnt > 1)
-				{
-					cols = atoi(list[0]);
-					rows = atoi(list[1]);
-				}
-				FreeCommaList(list, list_cnt);
-			}
-
-			/*
-			 * Grab the starting value of the text here.
-			 * NULL if none.
-			 */
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-			UnMuckTextAreaValue(value);
-
-			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-			XtSetArg(arg[argcnt], XtNeditType, XawtextEdit);
+			XtSetArg(arg[argcnt], XmNy, y);
 			argcnt++;
-
-			if (value != NULL)
-			{
-				XtSetArg(arg[argcnt], XtNstring, value);
+			XtSetArg(arg[argcnt], XmNcolumns, cols);
+			argcnt++;
+			if (maxlength > 0) {
+				XtSetArg(arg[argcnt], XmNmaxLength, maxlength);
 				argcnt++;
 			}
-			w = XtCreateWidget(name, asciiTextWidgetClass,
-				hw->html.view, arg, argcnt);
-			setTextSize(w,cols>0?cols:20,rows>0?rows:1);
-
+			if (value) {
+				XtSetArg(arg[argcnt], XmNvalue, value);
+				argcnt++;
+			}
+			w = XmCreateTextField(hw->html.view, widget_name,
+					      arg, argcnt);
+			XtOverrideTranslations(w,
+				XtParseTranslationTable(text_translations));
+			if (!hw->html.focus_follows_mouse)
+				XtOverrideTranslations(w, 
+				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
+
+			/* For textfields, a CR might be an activate */
+			if (fptr)
+				XtAddCallback(w, XmNactivateCallback,
+					      (XtCallbackProc)CBActivateField,
+					      (XtPointer)fptr);
 		}
-		else /* if no type, assume type=text */
-		{
-			char **list;
-			int list_cnt;
-			int rows, cols;
-
-			/*
-			 * SIZE can be either COLUMNS or COLUMNS,ROWS
-			 * we assume COLUMNS,ROWS and parse the list
-			 */
-			tptr = ParseMarkTag(text, MT_INPUT, "SIZE");
-			list = ParseCommaList(tptr, &list_cnt);
-			if (tptr != NULL)
-			{
-				free(tptr);
-			}
-
-			/*
-			 * If only COLUMNS specified, or SIZE not specified
-			 * assume a TEXTFIELD
-			 * Otherwise a TEXTAREA.
-			 */
-			if (list_cnt <= 1)
-			{
-				type = W_TEXTFIELD;
-				if (list_cnt == 1)
-				{
-					cols = atoi(list[0]);
-				}
-				else
-				{
-					cols = -1;
-				}
-			}
-			else
-			{
-				type = W_TEXTAREA;
-				cols = atoi(list[0]);
-				rows = atoi(list[1]);
-			}
-			/*
-			 * Now that we have cols, and maybe rows, free the list
-			 */
-			FreeCommaList(list, list_cnt);
-
-			/*
-			 * Grab the starting value of the text here.
-			 * NULL if none.
-			 */
-			value = ParseMarkTag(text, MT_INPUT, "VALUE");
-
-			/*
-			 * For textfileds parse maxlength and
-			 * set up the widget.
-			 */
-			if (type == W_TEXTFIELD)
-			{
-				char *txt;
-
-				maxlength = -1;
-				tptr = ParseMarkTag(text, MT_INPUT,"MAXLENGTH");
-				if (tptr != NULL)
-				{
-					maxlength = atoi(tptr);
-					free(tptr);
-				}
-
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-
-				if (maxlength > 0)
-				{
-					if (value)
-					{
-						txt = XtNewString(value);
-						txt = (char *)realloc(txt,
-							maxlength);
-					}
-					else
-					{
-						txt = (char *)malloc(maxlength);
-						*txt = '\0';
-					}
-					XtSetArg(arg[argcnt],
-						XtNuseStringInPlace,1);
-					argcnt++;
-					XtSetArg(arg[argcnt],
-						XtNlength, maxlength);
-					argcnt++;
-					XtSetArg(arg[argcnt], XtNstring, txt);
-					argcnt++;
-				}
-				else
-				{
-					if (value != NULL)
-					{
-						XtSetArg(arg[argcnt],
-							XtNuseStringInPlace,0);
-						argcnt++;
-						txt = value;
-						XtSetArg(arg[argcnt],
-							XtNstring, txt);
-						argcnt++;
-					}
-				}
-
-				XtSetArg(arg[argcnt], XtNeditType, XawtextEdit);
-				argcnt++;
-				w = XtCreateWidget(name,
-					asciiTextWidgetClass,
-					hw->html.view, arg, argcnt);
-				if (maxlength > 0)
-				{
-					XtAddCallback(w, XtNdestroyCallback,
-						CBTextDestroy, (caddr_t)txt);
-				}
-
-				XtOverrideTranslations(w,
-					XtParseTranslationTable(
-					 "<Key>Return: no-op(RingBell)"));
-				setTextSize(w,cols>0?cols:20,1);
-/* Twice??? -- SWP */
-/*
-				XtSetMappedWhenManaged(w, False);
-				XtManageChild(w);
-*/
-			}
-			/*
-			 * Else this is a TEXTAREA.  Maxlength is ignored,
-			 * and we set up the scrolled window
-			 */
-			else
-			{
-				argcnt = 0;
-				XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-				XtSetArg(arg[argcnt], XtNy, y); argcnt++;
-				XtSetArg(arg[argcnt], XtNeditType, XawtextEdit);
-				argcnt++;
-
-				if (value != NULL)
-				{
-					XtSetArg(arg[argcnt], XtNstring, value);
-					argcnt++;
-				}
-				w = XtCreateWidget(name,
-					asciiTextWidgetClass,
-					hw->html.view, arg, argcnt);
-				setTextSize(w,cols>0?cols:20,rows>0?rows:1);
-/* Twice??? -- SWP */
-/*
-				XtSetMappedWhenManaged(w, False);
-				XtManageChild(w);
-*/
-			}
-
-/* Do it only here instead of both places above and here... -- SWP */
-			XtSetMappedWhenManaged(w, False);
-			XtManageChild(w);
-		}
-		if (type_str != NULL)
-		{
+		if (type_str)
 			free(type_str);
-		}
-
 		/*
-		 * Don't want to do GetValues if this is HIDDEN input
+		 * Don't want to do SetValues if this is HIDDEN input
 		 * tag with no widget.
 		 */
-		if (w != NULL)
-		{
+		if (w) {
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNwidth, &width); argcnt++;
-			XtSetArg(arg[argcnt], XtNheight, &height); argcnt++;
+			XtSetArg(arg[argcnt], XmNwidth, &width);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNheight, &height);
+			argcnt++;
 			XtGetValues(w, arg, argcnt);
-		}
-		else
-		{
+			/* Set it to default so we don't lose it on "back" */
+                        XtVaSetValues(w,
+                               XmNbackground, bgcolor,
+                               XmNtopShadowColor, hw->html.top_color_SAVE,
+                               XmNbottomShadowColor, hw->html.bottom_color_SAVE,
+                               NULL);
+		} else {
 			width = 0;
 			height = 0;
 		}
 
-		wptr = AddNewWidget(hw, fptr, w, type, id, x, y, width, height,
-			name, value, (char **) 0,checked);
-					/* ^^^ ddt 4/3/95 */
-	}
-	else
-	/*
-	 * We found this widget on the list of already created widgets.
-	 * Put it in place for reuse.
-	 */
-	{
+		wptr = AddNewWidget(hw, w, type, id, x, y, width, height,
+				    name, value, mapping, checked, pcc);
+		wptr->child = ChildWidget;
+	} else {
+		/*
+		 * We found this widget on the list of already created widgets.
+		 * Put it in place for reuse.
+		 */
 		wlist->x = x;
 		wlist->y = y;
 
@@ -4106,237 +2070,401 @@ MakeWidget(hw, text, x, y, id, fptr)
 		 * Don't want to SetValues if type HIDDEN which
 		 * has no widget.
 		 */
-		if (wlist->w != NULL)
-		{
-			XtUnmanageChild(wlist->w);
+		if (wlist->w) {
+			if ((wlist->type == W_CHECKBOX) ||
+			    (wlist->type == W_RADIOBOX)) {
+				/* Make them match current background */
+				bgcolor = pcc->bg;
+			} else if (wlist->type == W_PUSHBUTTON) {
+				bgcolor = hw->html.formbuttonbackground;
+			}
 			argcnt = 0;
-			XtSetArg(arg[argcnt], XtNx, x); argcnt++;
-			XtSetArg(arg[argcnt], XtNy, y); argcnt++;
+			XtSetArg(arg[argcnt], XmNx, x);
+			argcnt++;
+			XtSetArg(arg[argcnt], XmNy, y);
+			argcnt++;
 			XtSetValues(wlist->w, arg, argcnt);
-			XtManageChild(wlist->w);
+			/* Set it to default so we don't lose it on "back" */
+                        XtVaSetValues(wlist->w,
+                               XmNbackground, bgcolor,
+                               XmNtopShadowColor, hw->html.top_color_SAVE,
+                               XmNbottomShadowColor, hw->html.bottom_color_SAVE,
+                               NULL);
 		}
-
 		wptr = wlist;
 	}
-
 	return(wptr);
 }
-#endif /* MOTIF */
 
-
-void
-WidgetRefresh(hw, eptr)
-        HTMLWidget hw;
-        struct ele_rec *eptr;
+void WidgetRefresh(HTMLWidget hw, ElemInfo *eptr)
 {
-
-/*
-unsigned long wp=WhitePixel(XtDisplay(hw),DefaultScreen(XtDisplay(hw)));
-unsigned long bp=BlackPixel(XtDisplay(hw),DefaultScreen(XtDisplay(hw)));
-*/
-
-	if ((eptr->widget_data != NULL)&&(eptr->widget_data->mapped == False)&&
-		(eptr->widget_data->w != NULL))
-	{
+	if (eptr->widget_data && !eptr->widget_data->mapped &&
+	    eptr->widget_data->w) {
 		XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->fg);
 		XSetBackground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
-
 		eptr->widget_data->mapped = True;
+		eptr->widget_data->seeable = 1;
 		XtSetMappedWhenManaged(eptr->widget_data->w, True);
 	}
 }
 
+/* Place a Widget and add an element record for it. */
+void WidgetPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
+{
+        ElemInfo *eptr;
+	WidgetInfo *widget_data;
+	int width, height, baseline, extra, extra_after;
+        int dir, ascent, descent;
+        XCharStruct all;
+
+        pcc->widget_id++;      /* Get a unique element id */
+
+	/* Force space in front of it if preceeded by text or not in table */
+	if ((pcc->have_space_after || !pcc->in_table) && !pcc->is_bol) {
+		XTextExtents(pcc->cur_font, " ", 1, &dir, &ascent,
+                	     &descent, &all);
+        	extra = all.width;
+	} else {
+		extra = 0;
+        }
+	pcc->x += extra;
+
+	widget_data = MakeWidget(hw, mptr->start, pcc, pcc->widget_id);
+	if (!widget_data) {
+#ifndef DISABLE_TRACE
+		if (reportBugs || htmlwTrace)
+			fprintf(stderr,
+				"[WidgetPlace] Failure in MakeWidget\n");
+#endif
+		return;
+	}
+	width = widget_data->width;
+	widget_data->extra_before = extra;
+        /*
+         * Only after we have placed the widget do we know its dimensions.
+         * So now look and see if the widget is too wide, and if so go
+         * back and insert a linebreak.
+         */
+	/* Don't miss with if preformatted or in table size calculation */
+        if (!pcc->preformat && !pcc->cw_only) {
+                if ((pcc->x + width) >
+		    (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width)) {
+			ConditionalLineFeed(hw, 1, pcc);
+			widget_data = MakeWidget(hw, mptr->start, pcc,
+						 pcc->widget_id);
+			widget_data->extra_before = 0;
+		}
+        }
+
+     	/* Add a little space after in most cases */
+	if ((widget_data->type != W_CHECKBOX) &&
+	    (widget_data->type != W_RADIOBOX)) {
+		extra_after = IMAGE_DEFAULT_BORDER;
+	} else {
+		extra_after = 0;
+	}
+	height = widget_data->height + pcc->cur_font->descent;
+	baseline = widget_data->height / 2 + pcc->cur_font->ascent / 2;
+
+	if (!pcc->cw_only) { 
+		/* Implicit label */
+		if (pcc->in_label && pcc->label_id) {
+			/* Attached to only one form element */
+			mptr->anc_name = pcc->label_id;
+			pcc->label_id = NULL;
+			CreateAnchorElement(hw, mptr, pcc);
+			pcc->in_label = 0;
+		}
+		eptr = CreateElement(hw, E_WIDGET, pcc->cur_font, pcc->x,
+			             pcc->y, width, height, baseline, pcc);
+                eptr->underline_number = 0;  /* Widgets can't be underlined */
+		AdjustBaseLine(eptr, pcc);
+		eptr->widget_data = widget_data;
+		widget_data->eptr = eptr;
+	} else {                   
+		if (pcc->computed_min_x < (width + pcc->eoffsetx +
+					   pcc->left_margin + extra)) {
+                	pcc->computed_min_x = width + pcc->eoffsetx +
+					      pcc->left_margin + extra;
+		}                              
+		if (pcc->nobr && (pcc->computed_min_x <
+		     (pcc->nobr_x + width + extra + extra_after))) {
+			pcc->computed_min_x = pcc->nobr_x + width + extra +
+					      extra_after;
+		}
+		if ((pcc->x + width + extra_after) > pcc->computed_max_x)
+                	pcc->computed_max_x = pcc->x + width + extra_after;
+                if (pcc->cur_line_height < height)           
+			pcc->cur_line_height = height;        
+		HTMLFreeWidgetInfo(widget_data);
+        }
+
+	pcc->x += width + extra_after;
+	pcc->have_space_after = 0;
+        pcc->is_bol = False;
+	pcc->pf_lf_state = 0;
+	if (pcc->cw_only && pcc->nobr)
+		pcc->nobr_x += width + extra_after;
+}
+
+void *HTMLGetWidgetInfo(Widget w)
+{
+	HTMLWidget hw = (HTMLWidget)w;
+
+	return((void *)hw->html.widget_list);
+}
+
+void *HTMLGetFormInfo(Widget w)
+{
+	HTMLWidget hw = (HTMLWidget)w;
+
+	return((void *)hw->html.form_list);
+}
+
+void HTMLFreeWidgetInfo(void *ptr)
+{
+	WidgetInfo *wptr = (WidgetInfo *)ptr;
+	WidgetInfo *tptr;
+
+#ifndef DISABLE_TRACE
+	if (htmlwTrace)
+		fprintf(stderr,	"HTML: Entering HTMLFreeWidgetInfo!\n");
+#endif
+	while (wptr) {
+		tptr = wptr;
+		wptr = wptr->next;
+		if (tptr->w) {
+			/* This is REALLY DUMB, but X generates an expose event
+			 * for the destruction of the Widget, even if it isn't
+			 * mapped at the time it is destroyed.
+			 * So I move the invisible widget to -1000,-1000
+			 * before destroying it, to avoid a visible flash.
+			 */     
+			if (tptr->mapped)
+				XtMoveWidget(tptr->w, -1000, -1000);
+			XtDestroyWidget(tptr->w);
+		}
+		if (tptr->name)
+			free(tptr->name);
+		if ((tptr->value) && (tptr->type != W_OPTIONMENU))
+			free(tptr->value);
+		free((char *)tptr);
+	}
+}
+
+/* Free up the passed linked list of parsed HTML forms, freeing
+ * all memory associated with each form.
+ */
+void HTMLFreeFormInfo(void *ptr)
+{
+	FormInfo *fptr = (FormInfo *)ptr;
+	FormInfo *tptr;
+
+	while (fptr) {
+		tptr = fptr->next;
+		if (fptr->action)
+			free(fptr->action);
+		if (fptr->target)
+			free(fptr->target);
+		if (fptr->method)
+			free(fptr->method);
+		if (fptr->enctype)
+			free(fptr->enctype);
+		free(fptr);
+		fptr = tptr;
+	}
+}
+
+
 void traversal_forward(Widget w, XEvent *event,
-	       String *params, Cardinal *num_params)
+	               String *params, Cardinal *num_params)
 { 
   HTMLTraverseTabGroups(w, XmTRAVERSE_NEXT_TAB_GROUP);
 }
 
+
 void traversal_back(Widget w, XEvent *event,
-	       String *params, Cardinal *num_params)
+	            String *params, Cardinal *num_params)
 { 
   HTMLTraverseTabGroups(w, XmTRAVERSE_PREV_TAB_GROUP);
 }
 
+
 void traversal_current(Widget w, XEvent *event,
-	       String *params, Cardinal *num_params)
+		       String *params, Cardinal *num_params)
 {
-  HTMLTraverseTabGroups(w, XmTRAVERSE_CURRENT);
+  if (!skip_traversal_current) {
+      HTMLTraverseTabGroups(w, XmTRAVERSE_CURRENT);
+  } else {
+      skip_traversal_current = 0;
+  }
 }
 
+
 void traversal_end(Widget w, XEvent *event,
-	       String *params, Cardinal *num_params)
+	           String *params, Cardinal *num_params)
 {
   Widget top;
   HTMLWidget hw = (HTMLWidget) w;
-  int i=0;
+  int i = 0;
 
-  while(i < 5)
-    {
-      if(XtClass((Widget) hw) != htmlWidgetClass)
-	hw = (HTMLWidget) XtParent((Widget) hw);
-      else
-	break;
-      i++;
-    }
+  while (i++ < 5) {
+      if (XtClass((Widget) hw) != htmlWidgetClass) {
+	  hw = (HTMLWidget) XtParent((Widget) hw);
+      } else {
+	  break;
+      }
+  }
 
   top = (Widget) hw;
-  while(!XtIsTopLevelShell(top))
-    top = XtParent(top);
+  while (!XtIsTopLevelShell(top))
+      top = XtParent(top);
 
-  if(XtClass((Widget) hw) != htmlWidgetClass)
-    {
-      fprintf(stderr, "Error in traversal_end action.");
+  if (XtClass((Widget) hw) != htmlWidgetClass) {
+#ifndef DISABLE_TRACE
+      if (reportBugs || htmlwTrace)
+          fprintf(stderr, "Error in traversal_end action.\n");
+#endif
       return;
-    }
+  }
 
-  if(hw->html.focus_follows_mouse)
-    return;
-  else
-    {
+  if (hw->html.focus_follows_mouse) {
+      return;
+  } else {
       XtSetKeyboardFocus(top, hw->html.view);
       HTMLTraverseTabGroups(w, XmTRAVERSE_HOME);
-    }
+  }
 }
 
-/* this function is intended to imitate XmProcessTraversal */
+/* This function is intended to imitate XmProcessTraversal */
 void HTMLTraverseTabGroups(Widget w, int how)
 {
   static WidgetInfo *lptr;
   Widget top;
-  Boolean ret;
-  int i=0;
+  int i;
   HTMLWidget hw = (HTMLWidget) w;
 
-  /* due to the generality of this function the HTMLwidget could be anywhere */
-  for(i=0;i<4;i++)
-    {
-      if((hw != NULL) && (XtClass((Widget) hw) != htmlWidgetClass))
-	hw = (HTMLWidget) XtParent((Widget) hw);
-      else
-	break;
-    }
+  /* Due to the generality of this function the HTMLwidget could be anywhere */
+  for (i = 0; i < 4; i++) {
+      if (hw && (XtClass((Widget) hw) != htmlWidgetClass)) {
+	  hw = (HTMLWidget) XtParent((Widget) hw);
+      } else {
+	  break;
+      }
+  }
 
-  if(!hw || XtClass((Widget) hw) != htmlWidgetClass)
-    return;
+  if (!hw || (XtClass((Widget) hw) != htmlWidgetClass))
+      return;
 
-  /* make sure we have business to do */
-  if(!hw->html.widget_list || hw->html.focus_follows_mouse)
-    return;
+  /* Make sure we have business to do */
+  if (!hw->html.widget_list || hw->html.focus_follows_mouse)
+      return;
 
   top = (Widget) hw;
-  while(!XtIsTopLevelShell(top))
-    top = XtParent(top);
+  while (!XtIsTopLevelShell(top))
+      top = XtParent(top);
   
-  switch(how)
-    {
+  switch (how) {
     case XmTRAVERSE_NEXT_TAB_GROUP:
-      if(!lptr)
-	lptr=hw->html.widget_list;
-      else if(lptr->next && lptr->next->w && XtIsManaged(lptr->next->w))
-	lptr = lptr->next;
-
-      /* Patch for hidden fields... SWP */
-      while (lptr && !lptr->w) {
-	if (lptr->next) {
-	  lptr=lptr->next;
-	}
-	else {
-	  lptr=NULL;
-	}
-      }
-
       if (!lptr) {
-	break;
+	  lptr = hw->html.widget_list;
+      } else if (lptr->next && lptr->next->w && XtIsManaged(lptr->next->w)) {
+	  lptr = lptr->next;
       }
 
-      /* automagickly scroll */
-      if(XtIsManaged(hw->html.vbar) && 
-	 (lptr->y > (hw->html.view_height+hw->html.scroll_y-10)))
-	{
+      /* Patch for hidden fields... */
+      while (lptr && !lptr->w) {
+	  if (lptr->next) {
+	      lptr = lptr->next;
+	  } else {
+	      lptr = NULL;
+	  }
+      }
+
+      if (!lptr)
+	  break;
+
+      /* Automagickly scroll */
+      if (XtIsManaged(hw->html.vbar) && 
+	  (lptr->y > (hw->html.view_height + hw->html.scroll_y - 10))) {
 	  int val, ss, in, pg_in, amount;
 
-	  amount = lptr->y-hw->html.view_height/2;
-	  if(amount<0)
-	    amount=0;
+	  amount = lptr->y - hw->html.view_height / 2;
+	  if (amount < 0)
+	      amount = 0;
 	  XmScrollBarGetValues(hw->html.vbar, &val, &ss, &in, &pg_in);
 
-	  if(amount > (hw->html.doc_height-ss-5))
-	    amount = hw->html.doc_height-ss-5;
+	  if (amount > (hw->html.doc_height - ss - 5))
+	      amount = hw->html.doc_height - ss - 5;
 
-	  XmScrollBarSetValues(hw->html.vbar, amount,
-			       ss, in, pg_in);
-	}
+	  XmScrollBarSetValues(hw->html.vbar, amount, ss, in, pg_in, (int)NULL);
+      }
 
-      if(XtClass(lptr->w) == xmScrolledWindowWidgetClass)
-	{
+      if (XtClass(lptr->w) == xmScrolledWindowWidgetClass) {
 	  Widget text;
+
 	  XtVaGetValues(lptr->w, XmNworkWindow, &text, NULL);
 	  XtSetKeyboardFocus(top, text);
-	} 
-      else
-	XtSetKeyboardFocus(top, lptr->w);
+      } else {
+	  XtSetKeyboardFocus(top, lptr->w);
+      }
       break;
+
     case XmTRAVERSE_PREV_TAB_GROUP:
-      if(!lptr)
-	lptr=hw->html.widget_list;
-      else if(lptr->prev)
-	lptr = lptr->prev;
-
-      /* Patch for hidden fields... SWP */
-      while (lptr && !lptr->w) {
-	if (lptr->prev) {
-	  lptr=lptr->prev;
-	}
-	else {
-	  lptr=NULL;
-	}
-      }
-
       if (!lptr) {
-	break;
+	  lptr = hw->html.widget_list;
+      } else if (lptr->prev) {
+	  lptr = lptr->prev;
       }
 
-      /* automagickly scroll */
-      if(XtIsManaged(hw->html.vbar) && 
-	 (lptr->y < hw->html.scroll_y+10))
-	{
+      /* Patch for hidden fields... */
+      while (lptr && !lptr->w) {
+	  if (lptr->prev) {
+	      lptr = lptr->prev;
+	  } else {
+	      lptr = NULL;
+	  }
+      }
+
+      if (!lptr)
+	  break;
+
+      /* Automagickly scroll */
+      if (XtIsManaged(hw->html.vbar) && (lptr->y < hw->html.scroll_y + 10)) {
 	  int val, ss, in, pg_in, amount;
 
 	  XmScrollBarGetValues(hw->html.vbar, &val, &ss, &in, &pg_in);
 
-	  amount = lptr->y - hw->html.view_height/2;
+	  amount = lptr->y - hw->html.view_height / 2;
+	  if (amount < 0)
+	      amount = 0;
 
-	  if(amount<0)
-	    amount=0;
+	  XmScrollBarSetValues(hw->html.vbar, amount, ss, in, pg_in, (int)NULL);
+      }
 
-	  XmScrollBarSetValues(hw->html.vbar, amount,
-			       ss, in, pg_in);
-	}
-
-      if(XtClass(lptr->w) == xmScrolledWindowWidgetClass)
-	{
+      if (XtClass(lptr->w) == xmScrolledWindowWidgetClass) {
 	  Widget text;
 
 	  XtVaGetValues(lptr->w, XmNworkWindow, &text, NULL);
 	  XtSetKeyboardFocus(top, text);
-	}
-      else
-	XtSetKeyboardFocus(top, lptr->w);
+      } else {
+	  XtSetKeyboardFocus(top, lptr->w);
+      }
       break;
+
     case XmTRAVERSE_HOME:
-      lptr=NULL;
+      lptr = NULL;
       break;
+
     case XmTRAVERSE_CURRENT:
       lptr = hw->html.widget_list;
       
-      /* check parent to allow for text areas (lptr->w would be scroll) */
-      while(lptr!=NULL) 
-	{
-	  if((lptr->w == w) || (lptr->w == XtParent(w)))
-	    break;
+      /* Check parent to allow for text areas (lptr->w would be scroll) */
+      while (lptr) {
+	  if ((lptr->w == w) || (lptr->w == XtParent(w)))
+	      break;
 	  lptr = lptr->next;
-	}
+      }
 
       XtSetKeyboardFocus(top, w);
 

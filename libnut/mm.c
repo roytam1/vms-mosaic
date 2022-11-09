@@ -51,15 +51,18 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "mm.h"
 
-
-/*#define MM_TEST /**/
-
+/*
+#define MM_TEST
+*/
 
 #ifndef MM_TEST
 #ifndef DISABLE_TRACE
@@ -67,105 +70,93 @@ extern int nutTrace;
 #endif
 #else
 #ifndef DISABLE_TRACE
-int nutTrace=1;
+int nutTrace = 1;
 #endif
 #endif
 
 
-void freeBlock(mem_block *block) {
-
+void freeBlock(mem_block *block)
+{
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"freeBlock: Called\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "freeBlock: Called\n");
 #endif
 
 	if (block) {
 		if (block->memory) {
 #ifndef DISABLE_TRACE
-			if (nutTrace) {
-				fprintf(stderr,"freeBlock: Freeing block->memory\n");
-			}
+			if (nutTrace)
+				fprintf(stderr,
+					"freeBlock: Freeing block->memory\n");
 #endif
 			free(block->memory);
-			block->memory=NULL;
+			block->memory = NULL;
 		}
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
-			fprintf(stderr,"freeBlock: Freeing block\n");
-		}
+		if (nutTrace)
+			fprintf(stderr, "freeBlock: Freeing block\n");
 #endif
 		free(block);
-		block=NULL;
+		block = NULL;
 	}
-
-#ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"freeBlock: Leaving\n");
-	}
-#endif
 
 	return;
 }
 
 
-mem_block *allocateBlock(int type) {
-
-mem_block *block;
+mem_block *allocateBlock(int type)
+{
+	mem_block *block;
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"allocateBlock: Called\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "allocateBlock: Called\n");
 #endif
-
-	block=(mem_block *)calloc(1,sizeof(mem_block));
+	block = (mem_block *)calloc(1, sizeof(mem_block));
 	if (!block) {
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
+		if (nutTrace)
 			perror("allocateBlock_block");
-		}
 #endif
-
 		return(NULL);
 	}
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"allocateBlock: block(%d)\n",sizeof(block));
-	}
+	if (nutTrace)
+		fprintf(stderr, "allocateBlock: block(%d)\n", sizeof(block));
 #endif
 
 	memset(block, 0, sizeof(mem_block));
 
-	if (type>=MEM_MAX_ENTRY) {
+	if (type >= MEM_MAX_ENTRY) {
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
-			fprintf(stderr,"allocateBlock_type: Invalid type\n");
-		}
+		if (nutTrace)
+			fprintf(stderr, "allocateBlock_type: Invalid type\n");
 #endif
-
 		return(NULL);
 	}
 
-	block->memoryType=type;
-	block->sizeCnt=1;
-	block->size=memSize[block->memoryType];
-	block->fullSize=block->size*block->sizeCnt;
+	block->memoryType = type;
+	block->sizeCnt = 1;
+	block->size = memSize[block->memoryType];
+	block->fullSize = block->size * block->sizeCnt;
 
 #ifndef DISABLE_TRACE
 	if (nutTrace) {
-		fprintf(stderr,"allocateBlock: block->memoryType(%d), block->sizeCnt(%d)\n",block->memoryType,block->sizeCnt);
-		fprintf(stderr,"allocateBlock: block->size(%d), block->fullSize(%d)\n",block->size,block->fullSize);
+		fprintf(stderr,
+			"allocateBlock: block->memoryType(%d), block->sizeCnt(%d)\n",
+			block->memoryType, block->sizeCnt);
+		fprintf(stderr,
+			"allocateBlock: block->size(%d), block->fullSize(%d)\n",
+			block->size, block->fullSize);
 	}
 #endif
 
-	block->memory=(char *)calloc((block->fullSize),sizeof(char));
+	block->memory = (char *)calloc((block->fullSize), sizeof(char));
 	if (!block->memory) {
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
+		if (nutTrace)
 			perror("allocateBlock_block->memory");
-		}
 #endif
 		freeBlock(block);
 
@@ -173,190 +164,167 @@ mem_block *block;
 	}
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"allocateBlock: block->memory(%d)\n",sizeof(block->memory));
-	}
+	if (nutTrace)
+		fprintf(stderr, "allocateBlock: block->memory(%d)\n",
+			sizeof(block->memory));
 #endif
-
-	block->nextFree=0;
+	block->nextFree = 0;
 
 #ifndef DISABLE_TRACE
 	if (nutTrace) {
-		fprintf(stderr,"allocateBlock: block->nextFree(%d)\n",block->nextFree);
-		fprintf(stderr,"allocateBlock: Leaving\n");
+		fprintf(stderr, "allocateBlock: block->nextFree(%d)\n",
+			block->nextFree);
+		fprintf(stderr, "allocateBlock: Leaving\n");
 	}
 #endif
-
 	return(block);
 }
 
 
-int reallocateBlock(mem_block *block) {
-
+int reallocateBlock(mem_block *block)
+{
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"reallocateBlock: Called\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "reallocateBlock: Called\n");
 #endif
-
 	block->sizeCnt++;
-	block->fullSize+=block->size;
+	block->fullSize += block->size;
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"reallocateBlock: block->sizeCnt(%d), block->fullSize(%d)\n",block->sizeCnt,block->fullSize);
-	}
+	if (nutTrace)
+		fprintf(stderr,
+			"reallocateBlock: block->sizeCnt(%d), block->fullSize(%d)\n",
+			block->sizeCnt, block->fullSize);
 #endif
-
-	block->memory=realloc(block->memory,(block->fullSize*sizeof(char)));
+	block->memory = realloc(block->memory, block->fullSize * sizeof(char));
 	if (!block->memory) {
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
+		if (nutTrace)
 			perror("reallocateBlock_block->memory");
-		}
 #endif
 		freeBlock(block);
-
 		return(MEM_FAIL);
 	}
 
 #ifndef DISABLE_TRACE
 	if (nutTrace) {
-		fprintf(stderr,"reallocateBlock: block->memory(%d)\n",sizeof(block->memory));
-		fprintf(stderr,"reallocateBlock: Leaving\n");
+		fprintf(stderr, "reallocateBlock: block->memory(%d)\n",
+			sizeof(block->memory));
+		fprintf(stderr, "reallocateBlock: Leaving\n");
 	}
 #endif
-
 	return(MEM_SUCCEED);
 }
 
 
-void clearBlock(mem_block *block) {
+void clearBlock(mem_block *block)
+{
+	block->nextFree = 0;
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"clearBlock: Called\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "clearBlock: block->nextFree(%d)\n",
+			block->nextFree);
 #endif
-
-	block->nextFree=0;
-
-#ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"clearBlock: block->nextFree(%d)\n",block->nextFree);
-		fprintf(stderr,"clearBlock: Leaving\n");
-	}
-#endif
-
 	return;
 }
 
 
-void *balloc(mem_block *block, int size) {
-
-void *ptr=NULL;
+void *balloc(mem_block *block, int size)
+{
+	void *ptr;
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"balloc: Called\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "balloc: Called\n");
 #endif
 
 	if (!block) {
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
-			fprintf(stderr,"balloc_block: Block not allocated\n");
-		}
+		if (nutTrace)
+			fprintf(stderr, "balloc_block: Block not allocated\n");
 #endif
-
 		return(NULL);
 	}
 
-	if (size<=0) {
-		if (size==0) {
+	if (size <= 0) {
+		if (size == 0) {
 #ifndef DISABLE_TRACE
-			if (nutTrace) {
-				fprintf(stderr,"balloc_size: Size is zero\n");
-			}
+			if (nutTrace)
+				fprintf(stderr, "balloc_size: Size is zero\n");
 #endif
-
 			return(NULL);
 		}
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
-			fprintf(stderr,"balloc_size: Size is negative\n");
-		}
+		if (nutTrace)
+			fprintf(stderr, "balloc_size: Size is negative\n");
 #endif
-
 		return(NULL);
 	}
 
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"balloc: size(%d), (block->fullSize{%d}-block->nextFree{%d})(%d)\n",size,block->fullSize,block->nextFree,(block->fullSize-block->nextFree));
-	}
+	if (nutTrace)
+		fprintf(stderr,
+			"balloc: size(%d), (block->fullSize{%d}-block->nextFree{%d})(%d)\n",
+			size, block->fullSize, block->nextFree,
+			block->fullSize - block->nextFree);
 #endif
 
-	if (size>(block->fullSize-block->nextFree)) {
-		/*need to reallocate*/
+	if (size > (block->fullSize - block->nextFree)) {
+		/* need to reallocate */
 #ifndef DISABLE_TRACE
-		if (nutTrace) {
-			fprintf(stderr,"balloc: Need to reallocateBlock\n");
-		}
+		if (nutTrace)
+			fprintf(stderr, "balloc: Need to reallocateBlock\n");
 #endif
-		if (reallocateBlock(block)!=MEM_SUCCEED) {
+		if (reallocateBlock(block) != MEM_SUCCEED)
 			return(NULL);
-		}
 	}
 
 	ptr = &(block->memory[block->nextFree]);
-	block->nextFree+=(size+(MEM_ALIGN-(size%MEM_ALIGN)));
+	block->nextFree += (size + (MEM_ALIGN - (size % MEM_ALIGN)));
 
 #ifndef DISABLE_TRACE
 	if (nutTrace) {
-		fprintf(stderr,"balloc: ptr(%d), block->nextFree(%d)\n",sizeof(ptr),block->nextFree);
-		fprintf(stderr,"balloc: Leaving\n");
+		fprintf(stderr, "balloc: ptr(%d), block->nextFree(%d)\n",
+			sizeof(ptr), block->nextFree);
+		fprintf(stderr, "balloc: Leaving\n");
 	}
 #endif
-
 	return(ptr);
 }
 
 
-int blockSize(mem_block *block) {
-
+int blockSize(mem_block *block)
+{
 #ifndef DISABLE_TRACE
-	if (nutTrace) {
-		fprintf(stderr,"blockSize: Calling\n");
-		fprintf(stderr,"blockSize: block->fullSize(%d)\n",block->fullSize);
-		fprintf(stderr,"blockSize: Leaving\n");
-	}
+	if (nutTrace)
+		fprintf(stderr, "blockSize: block->fullSize(%d)\n",
+			block->fullSize);
 #endif
-
 	return(block->fullSize);
 }
 
 
 #ifdef MM_TEST
 
-int main() {
+int main()
+{
+	mem_block *b;
+	char *ptr1;
+	int *iptr;
 
-mem_block *b;
-char *ptr1;
-int *iptr;
+	b = allocateBlock(MEM_LEX);
 
-	b=allocateBlock(MEM_LEX);
+	ptr1 = balloc(b, 4095);
+	ptr1 = balloc(b, 1);
+	ptr1 = balloc(b, 1);
+	iptr = balloc(b, sizeof(int));
 
-	ptr1=balloc(b,4095);
-	ptr1=balloc(b,1);
-	ptr1=balloc(b,1);
-	iptr=balloc(b,sizeof(int));
+	*iptr = 50;
 
-	*iptr=50;
+	sprintf(ptr1, "1234567890123456789 (%d)", *iptr);
 
-	sprintf(ptr1,"1234567890123456789 (%d)",*iptr);
-
-	printf("[%s]\n",ptr1);
+	printf("[%s]\n", ptr1);
 
 	exit(0);
 }

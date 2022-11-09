@@ -52,13 +52,15 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006
+ * The VMS Mosaic Project
+ */
 
 #ifndef HTMLW_HTML_H
 #define HTMLW_HTML_H
 
 #include <Xm/Xm.h>
-#if (XmVERSION == 1)&&(XmREVISION >= 2)
+#if (XmVERSION == 1) && (XmREVISION >= 2)
 #undef MOTIF1_2
 #define MOTIF1_2
 #endif
@@ -87,31 +89,27 @@ typedef int (*visitTestProc)(Widget, char*);
 typedef void (*pointerTrackProc)();
 
 typedef struct ele_ref_rec {
-	int id, pos;
+	int id;
+	int pos;
 } ElementRef;
 
 typedef struct link_rec {
 	char *href;
 } LinkInfo;
 
-#ifndef DISABLE_TRACE
-extern int htmlwTrace;
-extern int reportBugs;
-#endif
-
 /*
  * Public functions
  */
-extern char *HTMLGetText (Widget w, int pretty, char *url, char *time_str);
-extern char *HTMLGetTextAndSelection (Widget w, char **startp, char **endp,
-				      char **insertp);
-extern char **HTMLGetHRefs (Widget w, int *num_hrefs);
-extern char **HTMLGetImageSrcs (Widget w, int *num_srcs);
-extern void *HTMLGetWidgetInfo (Widget w);
-extern void *HTMLGetFormInfo (Widget w);
-extern void HTMLFreeWidgetInfo (void *ptr);
-extern void HTMLFreeFormInfo (void *ptr);
-extern LinkInfo *HTMLGetLinks (Widget w, int *num_links);
+extern char *HTMLGetText(Widget w, int pretty, char *url, char *time_str);
+extern char *HTMLGetTextAndSelection(Widget w, char **startp, char **endp,
+				     char **insertp);
+extern char **HTMLGetHRefs(Widget w, int *num_hrefs);
+extern char **HTMLGetImageSrcs(Widget w, int *num_srcs);
+extern void *HTMLGetWidgetInfo(Widget w);
+extern void *HTMLGetFormInfo(Widget w);
+extern void HTMLFreeWidgetInfo(void *ptr);
+extern void HTMLFreeFormInfo(void *ptr);
+extern LinkInfo *HTMLGetLinks(Widget w, int *num_links);
 extern int HTMLPositionToId(Widget w, int x, int y);
 extern int HTMLIdToPosition(Widget w, int element_id, int *x, int *y);
 extern int HTMLAnchorToPosition(Widget w, char *name, int *x, int *y);
@@ -122,16 +120,17 @@ extern void HTMLRetestAnchors(Widget w, visitTestProc testFunc);
 extern void HTMLClearSelection(Widget w);
 extern void HTMLSetSelection(Widget w, ElementRef *start, ElementRef *end);
 extern void HTMLSetText(Widget w, char *text, char *header_text,
-			char *footer_text, int element_id,
-			char *target_anchor, void *ptr);
-extern int HTMLSearchText(Widget w, char *pattern,
-	ElementRef *m_start, ElementRef *m_end, int backward, int caseless);
+			char *footer_text, int element_id, char *target_anchor,
+			void *ptr, char *refresh_text, char *charset);
+extern int HTMLSearchText(Widget w, char *pattern, ElementRef *m_start,
+			  ElementRef *m_end, int backward, int caseless);
 extern int HTMLSearchNews(Widget w, ElementRef *m_start, ElementRef *m_end);
 extern void HTMLTraverseTabGroups();
 extern void HTMLSetFocusPolicy(Widget w, int to);
-extern void HTMLDrawBackgroundImage(Widget w, int x, int y, int width,
+extern void HTMLDrawBackgroundImage(Widget wid, int x, int y, int width,
 				    int height);
 extern void HTMLFreeWidget(HTMLWidget hw);
+extern void GetMailtoKludgeInfo(char **url, char **subject);
 
 /*
  * Public Structures
@@ -162,7 +161,8 @@ typedef struct form_rec {
 	char *target;
         char *method;
         char *enctype;
-	int start, end;
+	int start;
+	int end;
         Widget button_pressed; /* Match button pressed to one of submits */
 	int cw_only;	       /* Mark it as belonging to EstimateMinMaxTable */
 	int cached;
@@ -263,6 +263,12 @@ typedef struct image_rec {
 	struct image_rec *next;	/* Linked list of animation images */
 	int aligned;
 	XtIntervalId timer;	/* Animation timer id */
+	unsigned char *alpha;	/* Alpha channel */
+	unsigned char *alpha_image_data; /* Alpha background image data */
+	int saved_x;		/* Current Eleminfo x,y of image with alpha */
+	int saved_y;
+	unsigned char *rgb;	/* Used by ImageQuantize callback */
+	XColor *ori_colrs;	/* Original colors for Alpha channel use */
 } ImageInfo;
 
 typedef struct anim_rec {
@@ -286,8 +292,10 @@ typedef struct wid_rec {
 	Widget w;
 	int type;
 	int id;
-	int x, y;
-	int width, height;
+	int x;
+	int y;
+	int width;
+	int height;
         Boolean seeable;
 	int extra_before;
 	char *name;
@@ -301,6 +309,7 @@ typedef struct wid_rec {
 	int cache_count;
 	int cache_invalid;
 	FormInfo *cached_forms;
+	Widget child;
 	struct ele_rec *eptr;
 	struct wid_rec *next;
 	struct wid_rec *prev;
@@ -312,8 +321,6 @@ typedef struct _CellStruct {
         int tr_count;
         int colspan;
         int rowspan;
-        int is_colspan;
-        int is_rowspan;
 	int back_cs;
 	int back_rs;
         MarkInfo *td_start;
@@ -337,6 +344,7 @@ typedef struct _CellStruct {
 	int nowrap;
 	Boolean has_content;
 	int content_height;
+	int group;
 } CellStruct;
                                 
 typedef struct _ColumnList {
@@ -352,39 +360,70 @@ typedef struct _RowList {
         int low_cur_line_num;
 } RowList;
 
+typedef struct {
+        unsigned int halign;
+        unsigned int valign;
+        int rel_width;
+	int abs_width;
+	int prop_width;
+	int group;
+} ColElemInfo;
+
+typedef enum {
+	VOID,
+	ABOVE,
+	BELOW,
+	HSIDES,
+	VSIDES,
+	LHS,
+	RHS,
+	BOX
+} FrameType;
+
+typedef enum {
+	NONE,
+	GROUPS,
+	ROWS,
+	COLS,
+	ALL
+} RulesType;
+
 typedef struct _TableRec {
-	int	borders;
-	int	outer_border;	     /* Outer border width */
-	unsigned int relative_width; /* For <table width=50%> */
-				     /* it's relative to window width */
-	unsigned int absolute_width; /* Width in pixels */
-	int	num_col;
-	int	num_row;
+	int borders;
+	int outer_border;		/* Outer border width */
+	FrameType frame;		/* Outer border type */
+	RulesType rules;		/* Rules type */
+	unsigned int relative_width;	/* For <table width=50%> */
+					/* it's relative to window width */
+	unsigned int absolute_width;	/* Width in pixels */
+	int num_col;
+	int num_row;
 	MarkInfo *caption_start_mark;
 	MarkInfo *caption_end_mark;
-	int	captionAlignment;
+	int captionAlignment;
+	int captionIsLegend;
 	MarkInfo *tb_start_mark;
 	MarkInfo *tb_end_mark;
 	MarkInfo *start_other_mark;
 	MarkInfo *end_other_mark;
-	int	other_before_caption;
+	int other_before_caption;
 	MarkInfo *first_tr_mark;
 	RowList  *row_list;
-	int	width, height;
-	int	min_width, max_width;
-	int    *col_max_w;	/* Min and max widths of each columns */
-	int    *col_min_w;
-	int    *col_w;		/* Definitive size of columns */
-	int    *col_req_w;	/* Requested width, (0 if none, -1 if */
+	int width, height;
+	int min_width, max_width;
+	int *col_max_w;		/* Min and max widths of each columns */
+	int *col_min_w;
+	int *col_w;		/* Definitive size of columns */
+	int *col_req_w;		/* Requested width, (0 if none, -1 if */
 				/* absolute, percentage if relative) */
-	int    *col_abs_w;	/* Suggested absolute width */
-	int	is_tint;	/* Is table in table? */
-	int 	estimate_height; /* Computed estimated height */
+	int *col_abs_w;		/* Suggested absolute width */
+	int estimate_height;	/* Computed estimated height */
 	DivAlignType align;
-	int	align_adjx;	/* x alignment adjustment */
-	int	valign_adjx;	/* y alignment adjustment */
-	int	cellpadding;
-	int	cellspacing;
+	int align_adjx;		/* x alignment adjustment */
+	int valign_adjx;	/* y alignment adjustment */
+	int cellpadding;
+	int cellspacing;
+	ColElemInfo *col_info;
 } TableInfo;
 
 typedef struct sel_rec {
@@ -393,8 +432,10 @@ typedef struct sel_rec {
 	int is_value;
 	char *retval_buf;
 	char *option_buf;
+	char *label_buf;
 	char **returns;
 	char **options;
+	char **labels;
 	int option_cnt;
 	char **value;
 	int value_cnt;
@@ -568,31 +609,47 @@ typedef struct frame_rec {
 	struct frame_rec *frame_parent_frameset; /* Parent frameset, if any */
         struct frame_rec *frame_next;   /* Next frame child, if any */
         struct frame_rec *frame_children; /* List of frames */
-        FramesetLayout  frame_layout;	/* frameset layout policy */
+        FramesetLayout  frame_layout;	/* Frameset layout policy */
 	/* IFRAME stuff */
 	Widget		iframe;
         Boolean		seeable;
 	Boolean 	mapped;
 	Boolean		aligned;	/* Is it left/right aligned? */
+	Boolean		cw_only;	/* Compute size only? */
 } FrameInfo;
+
+/*****
+* Frame callback request type
+*****/
+typedef enum {
+        FRAME_CREATE = 0,
+        FRAME_DELETE = 1,        
+        IFRAME_CREATE = 2
+} FrameRequest;
+
+typedef struct HTMLFrameCallbackStruct { 
+	FrameRequest reason;
+	int doc_height;
+	int doc_width;
+} FrameCbData;
 
 typedef struct ele_rec {
 	int type;
-	ImageInfo 	*pic_data;
-	WidgetInfo 	*widget_data;
-	TableInfo 	*table_data;
-	CellStruct 	*cell_data;
-	AprogInfo	*aps;
-	AppletInfo 	*ats;
-	XFontStruct 	*font;
-	AlignType 	valignment;
-	AlignType 	halignment;
-	Boolean 	selected;
-	Boolean 	is_in_form; /* Used to indicate special ISMAP in form */
-	int 		indent_level;
+	ImageInfo *pic_data;
+	WidgetInfo *widget_data;
+	TableInfo *table_data;
+	CellStruct *cell_data;
+	AprogInfo *aps;
+	AppletInfo *ats;
+	XFontStruct *font;
+	AlignType valignment;
+	AlignType halignment;
+	Boolean selected;
+	Boolean is_in_form;	    /* Indicate special ISMAP in form */
+	int indent_level;
 	int start_pos, end_pos;
-	int x, y;		/* The upper left corner of Bounding box */
-	int baseline;		/* Baseline for alignment */
+	int x, y;		    /* The upper left corner of Bounding box */
+	int baseline;		    /* Baseline for alignment */
 	int bwidth;
 	int width;
 	int height;
@@ -604,7 +661,7 @@ typedef struct ele_rec {
 	Boolean strikeout;
 	unsigned long fg;
 	unsigned long bg;
-	MarkInfo *anchor_tag_ptr; /* Put it in struct mark_up */
+	MarkInfo *anchor_tag_ptr;   /* Put it in struct mark_up */
 	char *edata;
 	int edata_len;
 	struct ele_rec *next;
@@ -618,6 +675,8 @@ typedef struct ele_rec {
 	struct ele_rec *blink_next;
 	int underline_yoffset;
 	FrameInfo *frame;
+	char *label_id;
+	char *title;
 } ElemInfo;
 
 typedef struct {
@@ -636,10 +695,6 @@ typedef struct {
 #define	AT_HREF		"href"
 #define	AT_TITLE	"title"
 
-typedef struct HTMLFrameCallbackStruct { 
-	int reason;	/* 0 = create, 1 = delete */
-} FrameCbData;
-
 /*
  * New resource names
  */
@@ -649,12 +704,12 @@ typedef struct HTMLFrameCallbackStruct {
 #define	WbNtext			"text"
 #define	WbNheaderText		"headerText"
 #define	WbNfooterText		"footerText"
-#define	WbNfooterAnnoText	"footerAnnoText"
+#define	WbNcharSet		"charSet"
 #define	WbNtitleText		"titleText"
 #define	WbNanchorUnderlines	"anchorUnderlines"
-#define	WbNvisitedAnchorUnderlines	"visitedAnchorUnderlines"
-#define	WbNdashedAnchorUnderlines	"dashedAnchorUnderlines"
-#define	WbNdashedVisitedAnchorUnderlines	"dashedVisitedAnchorUnderlines"
+#define	WbNvisitedAnchorUnderlines	 "visitedAnchorUnderlines"
+#define	WbNdashedAnchorUnderlines	 "dashedAnchorUnderlines"
+#define	WbNdashVisitedAnchorUnderlines   "dashVisitedAnchorUnderlines"
 #define	WbNanchorColor		"anchorColor"
 #define	WbNvisitedAnchorColor	"visitedAnchorColor"
 #define	WbNactiveAnchorFG	"activeAnchorFG"
@@ -684,10 +739,12 @@ typedef struct HTMLFrameCallbackStruct {
 #define	WbNlistingFont		"listingFont"
 #define	WbNanchorCallback	"anchorCallback"
 #define	WbNbaseCallback		"baseCallback"
+#define	WbNtitleCallback	"titleCallback"
 #define	WbNsubmitFormCallback	"submitFormCallback"
-#define	WbNpreviouslyVisitedTestFunction "previouslyVisitedTestFunction"
+#define	WbNpreviousVisitedTestFunction "previousVisitedTestFunction"
 #define WbNmaxColorsInImage	"maxColorsInImage"
 #define WbNimageCallback	"imageCallback"
+#define WbNimageQuantizeCallback "imageQuantizeCallback"
 #define WbNgetUrlDataCB		"getUrlDataCB"
 
 #define	WbNpercentVerticalSpace "percentVerticalSpace"
@@ -698,6 +755,7 @@ typedef struct HTMLFrameCallbackStruct {
 #define WbNbodyColors            "bodyColors"
 #define WbNbodyImages            "bodyImages"
 #define WbNbodyBG                "bodyBG"
+#define WbNformButtonBackground  "formButtonBackground"
 #define WbNfontColors            "fontColors"
 #define WbNfontSizes             "fontSizes"
 #define WbNfontBase              "fontBase"
@@ -716,12 +774,12 @@ typedef struct HTMLFrameCallbackStruct {
 #define	WbCText			"Text"
 #define	WbCHeaderText		"HeaderText"
 #define	WbCFooterText		"FooterText"
-#define	WbCFooterAnnoText	"FooterAnnoText"
+#define	WbCCharSet		"CharSet"
 #define	WbCTitleText		"TitleText"
 #define	WbCAnchorUnderlines	"AnchorUnderlines"
-#define	WbCVisitedAnchorUnderlines	"VisitedAnchorUnderlines"
-#define	WbCDashedAnchorUnderlines	"DashedAnchorUnderlines"
-#define	WbCDashedVisitedAnchorUnderlines	"DashedVisitedAnchorUnderlines"
+#define	WbCVisitedAnchorUnderlines	 "VisitedAnchorUnderlines"
+#define	WbCDashedAnchorUnderlines	 "DashedAnchorUnderlines"
+#define	WbCDashVisitedAnchorUnderlines   "DashVisitedAnchorUnderlines"
 #define	WbCAnchorColor		"AnchorColor"
 #define	WbCVisitedAnchorColor	"VisitedAnchorColor"
 #define	WbCActiveAnchorFG	"ActiveAnchorFG"
@@ -749,9 +807,10 @@ typedef struct HTMLFrameCallbackStruct {
 #define	WbCPlainboldFont	"PlainboldFont"
 #define	WbCPlainitalicFont	"PlainitalicFont"
 #define	WbCListingFont		"ListingFont"
-#define	WbCPreviouslyVisitedTestFunction "PreviouslyVisitedTestFunction"
+#define	WbCPreviousVisitedTestFunction "PreviousVisitedTestFunction"
 #define WbCMaxColorsInImage	"MaxColorsInImage"
 #define WbCImageCallback	"ImageCallback"
+#define WbCImageQuantizeCallback "ImageQuantizeCallback"
 #define WbCGetUrlDataCB		"GetUrlDataCB"
 
 #define	WbCPercentVerticalSpace "PercentVerticalSpace"
@@ -764,6 +823,7 @@ typedef struct HTMLFrameCallbackStruct {
 #define WbCBodyColors            "BodyColors"
 #define WbCBodyImages            "BodyImages"
 #define WbCBodyBG                "BodyBG"
+#define WbCFormButtonBackground  "FormButtonBackground"
 #define WbCFontColors            "FontColors"
 #define WbCFontSizes             "FontSizes"
 #define WbCFontBase              "FontBase"

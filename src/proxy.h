@@ -51,6 +51,9 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 #define FONTNAME "-adobe-courier-medium-r-normal-*-17-*-*-*-*-*-iso8859-1"
 
 #define TRANS_HTTP 0
@@ -65,7 +68,6 @@ struct ProxyDomain {
 	char *domain;
 };
 	
-
 struct Proxy {
 	struct Proxy *next;
 	struct Proxy *prev;
@@ -78,7 +80,7 @@ struct Proxy {
 	struct ProxyDomain *list;
 };
 
-/* added function prototypes - DXP */
+/* Added function prototypes - DXP */
 
 void AddProxyToList(), ShowProxyList(), EditProxyInfo(), CommitProxyInfo(),
         DismissProxy(), ClearProxyText(), FillProxyText(),  WriteProxies(),
@@ -86,7 +88,8 @@ void AddProxyToList(), ShowProxyList(), EditProxyInfo(), CommitProxyInfo(),
         ShowProxyDomainList(), CommitProxyDomainInfo(),
         CallEdit(), CallAdd(), CallEditDomain(), CallAddDomain(), 
         CallRemoveProxy(), DestroyDialog(), PopProxyDialog(), DeleteProxy(),
-        EditNoProxyInfo(), CenterDialog(), ProxyHelpWindow(), HelpWindow();
+        EditNoProxyInfo(), CenterDialog(), ProxyHelpWindow(), 
+        HelpWindow(), ClearTempBongedProxies();
 
 struct Proxy *ReadProxies(char *filename);
 
@@ -95,3 +98,7 @@ struct Proxy *ReadNoProxies(char *filename);
 struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList);
 
 void DeleteProxyDomain(struct ProxyDomain *p);
+
+int has_fallbacks(char *protocol);
+
+struct Proxy *GetProxy(char *proxy, char *access, int fMatchEnd);

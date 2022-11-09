@@ -12,11 +12,11 @@
 #include <stdio.h>
 #include "HTFormat.h"
 
-extern HTStream * HTSaveAndExecute PARAMS((
-        HTPresentation *        pres,
-        HTParentAnchor *        anchor, /* Not used */
-        HTStream *              sink,
-        HTFormat                format_in,
-        int                     compressed));
+extern HTStream *HTSaveAndExecute PARAMS((
+        HTPresentation    *pres,
+        HTParentAnchor    *anchor,  /* Not used */
+        HTStream          *sink,
+        HTFormat           format_in,
+        int                compressed));
 
 #endif

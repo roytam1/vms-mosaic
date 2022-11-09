@@ -51,6 +51,9 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include "mosaic.h"
 #include "grpan.h"
@@ -58,11 +61,9 @@
 #include "pan.h"
 #include "mo-www.h"
 /*#ifdef __hpux || __sgi*/
-#if defined(__hpux) || defined(__sgi) || defined(linux)
+#if defined(__hpux) || defined(__sgi) || defined(linux) || defined(__DECC)
 #include <time.h>
 #endif
-
-static char *EscapeStuff(char *title);
 
 
 /* -------------------------- Group Annotations --------------------------- */
@@ -107,23 +108,17 @@ static char *EscapeStuff(char *title)
 	int ecnt;
 
 	if (title == NULL)
-	{
 		return(title);
-	}
 
 	ecnt = 0;
 	tptr = title;
-	while (*tptr != '\0')
-	{
+	while (*tptr != '\0') {
 		if ((*tptr == '\"')||(*tptr == '\\'))
-		{
 			ecnt++;
-		}
 		tptr++;
 	}
 
-	if (ecnt == 0)
-	{
+	if (ecnt == 0) {
 		ret = strdup(title);
 		return(ret);
 	}
@@ -131,15 +126,11 @@ static char *EscapeStuff(char *title)
 	ret = (char *)malloc(strlen(title) + ecnt + 1);
 	ptr = ret;
 	tptr = title;
-	while (*tptr != '\0')
-	{
-		if ((*tptr == '\"')||(*tptr == '\\'))
-		{
+	while (*tptr != '\0') {
+		if ((*tptr == '\"')||(*tptr == '\\')) {
 			*ptr++ = '\\';
 			*ptr++ = *tptr++;
-		}
-		else
-		{
+		} else {
 			*ptr++ = *tptr++;
 		}
 	}
@@ -163,62 +154,49 @@ static char *EscapeStuff(char *title)
  ****************************************************************************/
 char *mo_fetch_grpan_links (char *url)
 {
-  char *request;
   char *ttxt, *ttxthead;
   char *post_data, *status_ptr;
+  static int init = 0;
+  static char *server;
 
-  if (! get_pref_string(eANNOTATION_SERVER)) /* No annotation server */
-    {
+  if (!init) {
+      server = get_pref_string(eANNOTATION_SERVER);
+      init = 1;
+  }
+  if (!server || !*server) {
       return NULL;
-    }
-  else
-    {
+  } else {
       /* Go get the anchor in the URL, if any. */
-      char *anch = mo_url_extract_anchor (url);
+      char *anch = mo_url_extract_anchor(url);
       
-      /* If there is one and it doesn't start with "hdfref",
-         then clip it off.  WHAT ABOUT PERSONAL ANNOTATIONS??? */
-      if (anch && strncmp (anch, "hdfref", 6))
-        url = mo_url_canonicalize (url, "");
+      /* If there is one then clip it off.
+       * WHAT ABOUT PERSONAL ANNOTATIONS??? */
+      if (anch)
+          url = mo_url_canonicalize(url, "");
       
       /* Sanity check. */
       if (!url)
-        return NULL;
+          return NULL;
 
-      /* the old Bina grpan request */
-/*      
-	request = (char *)malloc(strlen(url) + 256);
-	sprintf
-        (request, "grpan://%s/url=\"%s\";=", Rdata.annotation_server, url);
-	ttxt = grpan_doit("ANN_GET ", request, (char *)NULL, 0, &ttxthead);
-	free(request);
-	*/
-      
-      /* amb */
       post_data = (char *)malloc(strlen(url) + 1024);
       sprintf(post_data, "cmd=an_get&format=html&url=%s", url);
-      ttxt = mo_post_pull_er_over (get_pref_string(eANNOTATION_SERVER),
-				   "application/x-www-form-urlencoded", 
-				   post_data, &ttxthead);
+      ttxt = mo_post_pull_er_over(server, "application/x-www-form-urlencoded", 
+				  post_data, &ttxthead);
       free(post_data);
 
-      /* check if status=200 was returned */
-      status_ptr=strstr(ttxt, "status=");
-      /*check for null... SWP*/
-      if (!status_ptr || (status_ptr && strncmp(status_ptr, "status=200", 10)!=0)) {
-	return(NULL);
+      /* Check if status=200 was returned */
+      status_ptr = strstr(ttxt, "status=");
+      if (!status_ptr ||
+          (status_ptr && strncmp(status_ptr, "status=200", 10) != 0)) {
+	  return(NULL);
       }
-      /* /amb */
 
-      if ((ttxt == NULL)||(*ttxt == '\0')) /* No annotations */
-        {
+      if (!ttxt || !*ttxt) {
           return(NULL);
-        }
-      else
-        {
+      } else {
           return(ttxt);
-        }
-    }
+      }
+  }
 }
 
 
@@ -235,13 +213,14 @@ char *mo_fetch_grpan_links (char *url)
 mo_status mo_is_editable_grpan (char *text)
 {
   if (!text)
-    return mo_fail;
+      return mo_fail;
 
-  if (!strncmp (text, NCSA_GROUP_ANNOTATION_FORMAT_ONE,
-                strlen (NCSA_GROUP_ANNOTATION_FORMAT_ONE)))
-    return mo_succeed;
-  else
-    return mo_fail;
+  if (!strncmp(text, NCSA_GROUP_ANNOTATION_FORMAT_ONE,
+               strlen (NCSA_GROUP_ANNOTATION_FORMAT_ONE))) {
+      return mo_succeed;
+  } else {
+      return mo_fail;
+  }
 }
 
 
@@ -263,17 +242,19 @@ mo_status mo_is_editable_grpan (char *text)
  ****************************************************************************/
 mo_status mo_new_grpan (char *url, char *title, char *author, char *text)
 {
-  if (! get_pref_string(eANNOTATION_SERVER)) /* No annotation server */
-    {
+  char *server = get_pref_string(eANNOTATION_SERVER);
+
+  if (!server) { /* No annotation server */
       return mo_fail;
-    }
-  else
-    {
+  } else {
       char *post_data;
-      char *request;
-      char *ttxt, *ttxthead;
-      time_t foo = time (NULL);
-      char *ts = ctime (&foo);
+      char *ttxthead;
+      time_t foo = time(NULL);
+#ifndef __GNUC__
+      char *ts = ctime(&foo);
+#else
+      char *ts = (char *)ctime(&foo);
+#endif /* GNU C, GEC */
       char *Etitle, *Euser;
       char *esc_text;
       
@@ -282,48 +263,25 @@ mo_status mo_new_grpan (char *url, char *title, char *author, char *text)
       Etitle = EscapeStuff(title);
       Euser = EscapeStuff(author);
 
-/* The old Bina thing */
-/*
-  
-  request = (char *)malloc(strlen(url) + strlen(Etitle) + strlen(Euser) +
-  strlen(ts) + strlen(text) + 256);
-  if (request == NULL)
-  {
-  return mo_fail;
-  }
-  sprintf(request,
-  "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;length=%d;=",
-  Rdata.annotation_server, url, Etitle, Euser, ts, strlen(text));
-  ttxt = grpan_doit
-  ("ANN_SET ", request, text, (strlen(text) + 1), &ttxthead);
-  free(request);
-  */
-
-      /* amb */
-      post_data = (char *)malloc(strlen(url) + strlen(Etitle) + strlen(Euser) 
-				 + strlen(ts) + strlen(text) + 256);
+      post_data = (char *)malloc(strlen(url) + strlen(Etitle) + strlen(Euser) +
+				 strlen(ts) + strlen(text) + 256);
       if (post_data == NULL)
-	return mo_fail;
+	  return mo_fail;
+
       esc_text = mo_escape_part(text);
       sprintf(post_data, "cmd=an_post&url=%s&title=%s&author=%s&text=%s",
 	      url, title, author, esc_text);
-      ttxt = mo_post_pull_er_over (get_pref_string(eANNOTATION_SERVER),
-				   "application/x-www-form-urlencoded", 
-				   post_data, &ttxthead);
+      mo_post_pull_er_over(server, "application/x-www-form-urlencoded", 
+			   post_data, &ttxthead);
       free(post_data);
 
-      /* /amb */
-
-      if (Etitle != NULL)
-        {
+      if (Etitle)
           free(Etitle);
-        }
-      if (Euser != NULL)
-        {
+      if (Euser)
           free(Euser);
-        }
+      free(server);
       return mo_succeed;
-    }
+  }
 }
 
 
@@ -344,16 +302,19 @@ mo_status mo_new_grpan (char *url, char *title, char *author, char *text)
 mo_status mo_audio_grpan (char *url, char *title, char *author, 
                           char *data, int len)
 {
-  if (! get_pref_string(eANNOTATION_SERVER)) /* No annotation server */
-    {
+  char *server = get_pref_string(eANNOTATION_SERVER);
+
+  if (!server) { /* No annotation server */
       return mo_fail;
-    }
-  else
-    {
+  } else {
       char *request;
-      char *ttxt, *ttxthead;
-      time_t foo = time (NULL);
-      char *ts = ctime (&foo);
+      char *ttxthead;
+      time_t foo = time(NULL);
+#ifndef __GNUC__
+      char *ts = ctime(&foo);
+#else
+      char *ts = (char *)ctime(&foo);
+#endif /* GNU C, GEC */
       char *Etitle, *Euser;
 
       ts[strlen(ts)-1] = '\0';
@@ -364,28 +325,24 @@ mo_status mo_audio_grpan (char *url, char *title, char *author,
       request = (char *)malloc(strlen(url) + strlen(Etitle) + strlen(Euser) +
                                strlen(ts) + 256);
       if (request == NULL)
-        {
           return mo_fail;
-        }
+
       sprintf(request,
 #ifdef __sgi
-              "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;audio=aiff;length=%d;=",
+           "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;audio=aiff;length=%d;=",
 #else /* sun or hp */
-              "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;audio=au;length=%d;=",
+           "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;audio=au;length=%d;=",
 #endif
-	      get_pref_string(eANNOTATION_SERVER), url, Etitle, Euser, ts, len);
-      ttxt = grpan_doit("ANN_SET ", request, data, len, &ttxthead);
+	   server, url, Etitle, Euser, ts, len);
+      grpan_doit("ANN_SET ", request, data, len, &ttxthead);
       free(request);
-      if (Etitle != NULL)
-        {
+      if (Etitle)
           free(Etitle);
-        }
-      if (Euser != NULL)
-        {
+      if (Euser)
           free(Euser);
-        }
+      free(server);
       return mo_succeed;
-    }
+  }
 }
 
 
@@ -405,19 +362,22 @@ mo_status mo_audio_grpan (char *url, char *title, char *author,
  ****************************************************************************/
 mo_status mo_modify_grpan (char *url, char *title, char *author, char *text)
 {
-  if (! get_pref_string(eANNOTATION_SERVER)) /* No annotation server */
-    {
+  char *server = get_pref_string(eANNOTATION_SERVER);
+
+  if (!server) { /* No annotation server */
       return mo_fail;
-    }
-  else
-    {
+  } else {
       char *request;
-      char *ttxt, *ttxthead;
-      time_t foo = time (NULL);
-      char *ts = ctime (&foo);
+      char *ttxthead;
+      time_t foo = time(NULL);
+#ifndef __GNUC__
+      char *ts = ctime(&foo);
+#else
+      char *ts = (char *)ctime(&foo);
+#endif /* GNU C, GEC */
       char *Etitle, *Euser;
       
-      ts[strlen(ts)-1] = '\0';
+      ts[strlen(ts) - 1] = '\0';
       
       Etitle = EscapeStuff(title);
       Euser = EscapeStuff(author);
@@ -425,24 +385,20 @@ mo_status mo_modify_grpan (char *url, char *title, char *author, char *text)
       request = (char *)malloc(strlen(url) + strlen(Etitle) + strlen(Euser) +
                                strlen(ts) + strlen(text) + 256);
       if (request == NULL)
-        {
           return mo_fail;
-        }
+
       sprintf(request,
-              "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;length=%d;=",
-	      get_pref_string(eANNOTATION_SERVER), url, Etitle, Euser, ts, strlen(text));
-      ttxt = grpan_doit("ANN_CHANGE ", request, text, (strlen(text) + 1), &ttxthead);
+           "grpan://%s/url=\"%s\";title=\"%s\";user=\"%s\";date=%s;length=%d;=",
+	   server, url, Etitle, Euser, ts, strlen(text));
+      grpan_doit("ANN_CHANGE ", request, text, (strlen(text) + 1), &ttxthead);
       free(request);
-      if (Etitle != NULL)
-        {
+      if (Etitle)
           free(Etitle);
-        }
-      if (Euser != NULL)
-        {
+      if (Euser)
           free(Euser);
-        }
+      free(server);
       return mo_succeed;
-    }
+  }
 }
 
 
@@ -458,23 +414,19 @@ mo_status mo_modify_grpan (char *url, char *title, char *author, char *text)
  ****************************************************************************/
 mo_status mo_delete_grpan (char *url)
 {
-  if (! get_pref_string(eANNOTATION_SERVER)) /* No annotation server */
-    {
+  if (!get_pref_string(eANNOTATION_SERVER)) { /* No annotation server */
       return mo_fail;
-    }
-  else
-    {
+  } else {
       char *request;
-      char *ttxt, *ttxthead;
+      char *ttxthead;
       
       request = (char *)malloc(strlen(url) + 256);
-      sprintf
-        (request, "grpan://%s/url=\"%s\";=", 
-	 get_pref_string(eANNOTATION_SERVER), url);
-      ttxt = grpan_doit("ANN_DELETE ", request, (char *)NULL, 0, &ttxthead);
+      sprintf(request, "grpan://%s/url=\"%s\";=",
+	      get_pref_string(eANNOTATION_SERVER), url);
+      grpan_doit("ANN_DELETE ", request, (char *)NULL, 0, &ttxthead);
       free(request);
       return(mo_succeed);
-    }
+  }
 }
 
 
@@ -505,142 +457,105 @@ mo_status mo_grok_grpan_pieces (char *url, char *t,
 
   /* Fail if there isno annotation text */
   txt = t;
-  if ((txt == NULL)||(*txt == '\0'))
-  {
-    return mo_fail;
-  }
+  if ((txt == NULL) || (*txt == '\0'))
+      return mo_fail;
 
   /* Fail if this is not a group annotation */
-  if (strncmp (txt, NCSA_GROUP_ANNOTATION_FORMAT_ONE,
-               strlen (NCSA_GROUP_ANNOTATION_FORMAT_ONE)) != 0)
-    {
+  if (strncmp(txt, NCSA_GROUP_ANNOTATION_FORMAT_ONE,
+              strlen (NCSA_GROUP_ANNOTATION_FORMAT_ONE)) != 0)
       return mo_fail;
-    }
   
   /* Skip the magic cookie */
   tptr = txt;
-  while (*tptr != '\n')
-    {
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
   /* Skip the title line */
   tptr++;
-  while (*tptr != '\n')
-    {
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
   /* skip to the beginning of the title after the header tag */
-  while (*tptr != '>')
-    {
+  while (*tptr != '>') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   tptr++;
   head = tptr;
   
-  /* skip to the end of the title before the close header tag */
-  while (*tptr != '<')
-    {
+  /* Skip to the end of the title before the close header tag */
+  while (*tptr != '<') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   *tptr = '\0';
   *title = strdup(head); /* snarf out the title */
   *tptr = '<';
   
-  /* skip to the end of the header line. */
-  while (*tptr != '\n')
-    {
+  /* Skip to the end of the header line. */
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
-  /* skip to the beginning of the author after the address tag */
-  while (*tptr != '>')
-    {
+  /* Skip to the beginning of the author after the address tag */
+  while (*tptr != '>') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   tptr++;
   head = tptr;
   
-  /* skip to the end of the author before the close address tag */
-  while (*tptr != '<')
-    {
+  /* Skip to the end of the author before the close address tag */
+  while (*tptr != '<') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   *tptr = '\0';
   *author = strdup(head); /* snarf the author name */
   *tptr = '<';
   
-  /* skip to the end of the author line. */
-  while (*tptr != '\n')
-    {
+  /* Skip to the end of the author line. */
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
-  /* skip to the end of the date line. */
+  /* Skip to the end of the date line. */
   tptr++;
-  while (*tptr != '\n')
-    {
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
-  /* skip to the end of the ___ line. */
+  /* Skip to the end of the ___ line. */
   tptr++;
-  while (*tptr != '\n')
-    {
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   
-  /* skip to the end of the pre line. */
+  /* Skip to the end of the pre line. */
   tptr++;
-  while (*tptr != '\n')
-    {
+  while (*tptr != '\n') {
       if (*tptr == '\0')
-	{
           return mo_fail;
-	}
       tptr++;
-    }
+  }
   tptr++;
   *text = strdup(tptr); /* snarf the remaining text */
   
@@ -649,27 +564,20 @@ mo_status mo_grok_grpan_pieces (char *url, char *t,
    * the id number out of it.
    */
   tptr = strrchr(url, '/');
-  if (tptr == NULL)
-    {
+  if (tptr == NULL) {
       int hash, val;
       
       if (sscanf(url, "%d-%d.html", &hash, &val) != 2)
-	{
           return mo_fail;
-	}
       *id = val;
-    }
-  else
-    {
+  } else {
       int hash, val;
       
       tptr++;
       if (sscanf(tptr, "%d-%d.html", &hash, &val) != 2)
-	{
           return mo_fail;
-	}
       *id = val;
-    }
+  }
   
   return mo_succeed;
 }

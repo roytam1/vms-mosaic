@@ -1,5 +1,29 @@
 /* Copyright G.Dauphin Sep 97 */
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
+/*****
+* XmHTML Widget code:
+* Copyright (C) 1994-1997 by Ripley Software Development
+* All Rights Reserved
+*
+* This file is part of the XmHTML Widget Library.
+*
+* This library is free software; you can redistribute it and/or
+* modify it under the terms of the GNU Library General Public
+* License as published by the Free Software Foundation; either
+* version 2 of the License, or (at your option) any later version.
+*
+* This library is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+* Library General Public License for more details.
+*
+* You should have received a copy of the GNU Library General Public
+* License along with this library; if not, write to the Free
+* Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+*
+*****/
+
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "HTMLP.h"
@@ -7,6 +31,7 @@
 #include "HTMLframe.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 #include "../libnut/str-tools.h"
 
 #ifndef DISABLE_TRACE
@@ -34,39 +59,43 @@ void FramePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	case M_FRAME:
 		pcc->anchor_tag_ptr = mptr;
 		sptr = mptr->anc_href =
-			ParseMarkTag(mptr->start, MT_FRAME, "SRC");
+		    ParseMarkTag(mptr->start, MT_FRAME, "SRC");
 		if (sptr) {
+		    pcc->fg = hw->html.anchor_fg;
+		    pcc->underline_number = hw->html.num_anchor_underlines;
+		    pcc->dashed_underlines = hw->html.dashed_anchor_lines;
+		    if (hw->html.previously_visited_test != NULL) {
+			if ((*(visitTestProc)
+			     (hw->html.previously_visited_test)) 
+			    ((Widget)hw, sptr)) {   
+			    pcc->fg = hw->html.visitedAnchor_fg;
+			    pcc->underline_number =
+					  hw->html.num_visitedAnchor_underlines;
+			    pcc->dashed_underlines =
+					    hw->html.dashed_visitedAnchor_lines;
+			} else {
+			    pcc->fg = hw->html.anchor_fg;
+			    pcc->underline_number =
+						 hw->html.num_anchor_underlines;
+			    pcc->dashed_underlines =
+						   hw->html.dashed_anchor_lines;
+			}
+		    } else {       
 			pcc->fg = hw->html.anchor_fg;
 			pcc->underline_number = hw->html.num_anchor_underlines;
 			pcc->dashed_underlines = hw->html.dashed_anchor_lines;
-			if (hw->html.previously_visited_test != NULL) {
-				if ((*(visitTestProc)
-				   (hw->html.previously_visited_test))
-				   ((Widget)hw, sptr)) {   
-					pcc->fg = hw->html.visitedAnchor_fg;
-					pcc->underline_number = hw->html.num_visitedAnchor_underlines;            
-					pcc->dashed_underlines = hw->html.dashed_visitedAnchor_lines;                             
-				} else {
-					pcc->fg = hw->html.anchor_fg;
-					pcc->underline_number = hw->html.num_anchor_underlines; 
-					pcc->dashed_underlines = hw->html.dashed_anchor_lines;
-				}
-			} else {       
-				pcc->fg = hw->html.anchor_fg;
-				pcc->underline_number = hw->html.num_anchor_underlines;
-				pcc->dashed_underlines = hw->html.dashed_anchor_lines;
-			} 
+		    } 
 		}
 		if (pcc->in_underlined) {
-			pcc->dashed_underlines = False;
-			if (!pcc->underline_number)
-				pcc->underline_number = 1;
+		    pcc->dashed_underlines = False;
+		    if (!pcc->underline_number)
+			pcc->underline_number = 1;
 		}                      
 
 		ConditionalLineFeed(hw, 1, pcc);
 		if (sptr) {
-			mptr->text = sptr;
-			PartOfTextPlace(hw, mptr, pcc);
+		    mptr->text = sptr;
+		    PartOfTextPlace(hw, mptr, pcc);
 		}
 
 		pcc->fg = hw->manager.foreground;
@@ -76,10 +105,10 @@ void FramePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 
 		nptr = ParseMarkTag(mptr->start, MT_FRAME, "NAME");
 		if (nptr && sptr) {
-			pcc->x += 10;
-			mptr->text = nptr;
-			PartOfTextPlace(hw, mptr, pcc);
-			free(nptr);
+		    pcc->x += 10;
+		    mptr->text = nptr;
+		    PartOfTextPlace(hw, mptr, pcc);
+		    free(nptr);
 		}
 		mptr->text = NULL;
 		break;
@@ -125,12 +154,8 @@ void FramePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
     }
 }
 
-#define XmIsHTML(w)	XtIsSubclass(w, htmlWidgetClass)
-
 static void adjustFrame(FrameInfo *parent, int *p_width, int *p_height);
  
-Boolean parser_warnings = True;
-
 /*
  * Original code from XmHTML Widget :
  * Copyright (C) 1994-1997 by Ripley Software Development
@@ -139,11 +164,8 @@ Boolean parser_warnings = True;
 /*** External Function Prototype Declarations ***/
 
 /*** Public Variable Declarations ***/
-/* how many times may we retry frame alignment? */
-#define MAX_FRAME_ITERATIONS    100
 #define ROW     1
 #define COL     2
-#define ROW_COL	4
 
 /* Useful defines */
 #define IS_FRAMESET(F) \
@@ -158,24 +180,21 @@ Boolean parser_warnings = True;
 	(IS_FRAMESET(F) && ((F)->frame_layout == FRAMESET_LAYOUT_ROWS))
 #define IS_FRAMESET_LAYOUT_COLS(F) \
 	(IS_FRAMESET(F) && ((F)->frame_layout == FRAMESET_LAYOUT_COLS))
-#define IS_FRAMESET_LAYOUT_ROW_COLS(F) \
-	(IS_FRAMESET(F) && ((F)->frame_layout == FRAMESET_LAYOUT_ROW_COLS))
-
 
 /* Definition of a HTML frameset */
 
 typedef struct _frameSet {
-        int type;	/* type of this set, either ROW or COL */
-        int border;     /* frame border value */
-        int *sizes;     /* array of child sizes */
-        FrameSize *size_types;	/* array of possible size specifications */
-        int nchilds;    /* max no of childs */
-        int childs_done;/* no of childs processed so far */
-        int insert_pos; /* insertion position of current child */
-        struct _frameSet *parent;       /* parent frameset of this frameset */
-        struct _frameSet *childs;       /* list of childs */
-        struct _frameSet *next;         /* ptr to next frameSet */
-	FrameInfo *actualFrameSet; /* ptr to saved FrameSet */
+        int type;	            /* type of this set, either ROW or COL */
+        int border;                 /* frame border value */
+        int *sizes;                 /* array of child sizes */
+        FrameSize *size_types;      /* array of possible size specifications */
+        int nchilds;                /* max no of childs */
+        int childs_done;            /* no of childs processed so far */
+        int insert_pos;             /* insertion position of current child */
+        struct _frameSet *parent;   /* parent frameset of this frameset */
+        struct _frameSet *childs;   /* list of childs */
+        struct _frameSet *next;     /* ptr to next frameSet */
+	FrameInfo *actualFrameSet;  /* ptr to saved FrameSet */
 } frameSet;
 
 /* Stack of framesets */
@@ -185,8 +204,8 @@ typedef struct _frameStack {
         struct _frameStack *next;
 } frameStack;
 
-static int current_frame;       /* Running frame counter */
-static frameSet *frame_sets;    /* List of all framesets processed */
+static int current_frame;                  /* Running frame counter */
+static frameSet *frame_sets;               /* List of all framesets processed */
 static frameStack frame_base, *frame_stack;
 
 
@@ -203,7 +222,7 @@ static void pushFrameSet(frameSet *frame_set)
 {
         frameStack *tmp;
 
-        tmp = (frameStack*)malloc(sizeof(frameStack));
+        tmp = (frameStack *)malloc(sizeof(frameStack));
         tmp->frame_set = frame_set;
         tmp->next = frame_stack;
         frame_stack = tmp;
@@ -235,7 +254,7 @@ static frameSet *popFrameSet(void)
 
 /*****
 * Name:         doFrameSet
-* Return Type:  frameSet*
+* Return Type:  frameSet *
 * Description:  creates and fills a frameSet structure with the info in it's
 *               attributes
 * In:
@@ -250,7 +269,7 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
 {
         frameSet *list, *tmp;
         String rPtr, cPtr, tmpPtr, ptr;
-        int i;
+        int i, j;
 	int nrow = 0;
 	int ncol = 0;
 
@@ -286,14 +305,19 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
 
 	/* Hack to support frameset grids */
 	if (nrow && ncol) {
-		*is_grid = 1;
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) {
+		if (htmlwTrace || reportBugs)
 			fprintf(stderr,	"Frameset is %d by %d grid\n",
 				nrow, ncol);
-		}
 #endif
-		ncol = 0;
+		if (nrow == 1) {
+			nrow = 0;
+		} else if (ncol == 1) {
+			ncol = 0;
+		} else {
+			*is_grid = 1;
+			ncol = 0;
+		}
 	}
 	if (nrow) {
         	list->nchilds = nrow;
@@ -306,9 +330,9 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
         	list->type = COL;
 	}
 
-        list->sizes = (int*)calloc(list->nchilds, sizeof(int));
-        list->size_types = (FrameSize*)calloc(list->nchilds, sizeof(FrameSize));
-        list->childs = (frameSet*)calloc(list->nchilds, sizeof(frameSet));
+        list->sizes = (int *)calloc(list->nchilds, sizeof(int));
+        list->size_types = (FrameSize *)calloc(list->nchilds,sizeof(FrameSize));
+        list->childs = (frameSet *)calloc(list->nchilds, sizeof(frameSet));
 
         /*
         * Get dimensions: when we encounter a ``*'' in a size definition it
@@ -317,21 +341,30 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
         * width of the render area.  When it's a number not followed by anything
         * we have an absolute size.
         */
-	if (list->type == COL)
+	if (list->type == COL) {
         	tmpPtr = ptr = cPtr;
-	else
+	} else {
         	tmpPtr = ptr = rPtr;
+	}
+        /* Remove blanks */
+	if (ptr) {
+        	for (i = j = 0; ptr[i]; i++) {
+			if (!isspace((unsigned char)(ptr[i])))
+				ptr[j++] = ptr[i];
+		}
+		ptr[j] = 0;
+	}
 
         i = 0;
         while (tmpPtr && (i < list->nchilds)) {
                 if (*tmpPtr == ',' || *tmpPtr == '\0') {
-                        if (*(tmpPtr-1) == '*')
+                        if (*(tmpPtr - 1) == '*') {
                                 list->size_types[i] = FRAME_SIZE_OPTIONAL;
-                        else if (*(tmpPtr-1) == '%')
+                        } else if (*(tmpPtr - 1) == '%') {
                                 list->size_types[i] = FRAME_SIZE_RELATIVE;
-                        else
+                        } else {
                                 list->size_types[i] = FRAME_SIZE_FIXED;
-
+			}
                         list->sizes[i++] = atoi(ptr);
 
                         if (*tmpPtr == '\0')
@@ -348,10 +381,11 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
 	/* Frame borders can be specified by both frameborder or border, they
 	 * are equal.
 	 */
-	if (frame_stack->frame_set)
+	if (frame_stack->frame_set) {
 		list->border = frame_stack->frame_set->border;
-	else
+	} else {
 	        list->border = 2;
+	}
 	/* Sigh, stupid Netscape frameset definition allows a tag to have
 	 * a textvalue or a number.
 	 */
@@ -369,19 +403,20 @@ static frameSet *doFrameSet(String attributes, int *is_grid)
         if (!frame_sets) {
                 frame_sets = list;
         } else {
-                for (tmp = frame_sets; tmp && tmp->next; tmp = tmp->next);
+                for (tmp = frame_sets; tmp && tmp->next; tmp = tmp->next)
+			;
                 tmp->next = list;
         }
 
 	/* Create actual representation of frameset */
         {
-          FrameInfo *actualFrameSet;
+            FrameInfo *actualFrameSet;
 
-          actualFrameSet = (FrameInfo *)calloc(1, sizeof(FrameInfo));
-          actualFrameSet->frame_type |= FRAMESET_TYPE;
-          actualFrameSet->frame_layout =
+            actualFrameSet = (FrameInfo *)calloc(1, sizeof(FrameInfo));
+            actualFrameSet->frame_type |= FRAMESET_TYPE;
+            actualFrameSet->frame_layout =
               (list->type == ROW ? FRAMESET_LAYOUT_ROWS : FRAMESET_LAYOUT_COLS);
-          list->actualFrameSet = actualFrameSet;
+            list->actualFrameSet = actualFrameSet;
         }
         return(list);
 }
@@ -405,68 +440,69 @@ static FrameInfo *doFrame(HTMLWidget html, String attributes)
         FrameInfo *frame;
         String chPtr;
 
+        if (!attributes)
+		return NULL;
+
         frame = html->html.frames[current_frame];
+
+	/* Required to have SRC */
+        frame->frame_src = ParseMarkTag(attributes, MT_FRAME, "src");
+	if (!frame->frame_src)
+		return NULL;
+	if (!*frame->frame_src) {
+		free(frame->frame_src);
+		frame->frame_src = NULL;
+		return NULL;
+	}
+
+	/* Not in a table */
+	frame->cw_only = 0;
 
 	/* Default frame sizing & scrolling */
 	frame->frame_size_type = FRAME_SIZE_FIXED;
         frame->frame_scroll_type = FRAME_SCROLL_AUTO;
 
 	/* Get frame name, default to _frame if not present */
-        if (!attributes || (frame->frame_name =
-	    ParseMarkTag(attributes, MT_FRAME, "name")) == NULL) {
+        if (!(frame->frame_name = ParseMarkTag(attributes, MT_FRAME, "name"))) {
                 char buf[24];
 
                 sprintf(buf, "_frame%i", current_frame);
                 frame->frame_name = strdup(buf);
         }
 
-        /* Pick up all remaining frame attributes */
-        if (attributes) {
-                frame->frame_src = ParseMarkTag(attributes, MT_FRAME, "src");
-		frame->frame_margin_width = 5;
-		if (chPtr = ParseMarkTag(attributes, MT_FRAME, "marginwidth")) {
-			frame->frame_margin_width = atoi(chPtr);
-			free(chPtr);
-		}
-		frame->frame_margin_height = 5;
-		if (chPtr = ParseMarkTag(attributes, MT_FRAME, "marginheight")){
-			frame->frame_margin_height = atoi(chPtr);
-			free(chPtr);
-		}
+	frame->frame_margin_width = 5;
+	if (chPtr = ParseMarkTag(attributes, MT_FRAME, "marginwidth")) {
+		frame->frame_margin_width = atoi(chPtr);
+		free(chPtr);
+	}
 
-	/*
-	 * This is useless as we don't support frame resizing.  I think this is
-	 * a thing the caller must be able to do.  A possible way could be to
-	 * overlay the render area with a PanedWidget and store these HTML
-	 * widgets as childs of this paned widget.
-	 */
-		if (chPtr = ParseMarkTag(attributes, MT_FRAME, "noresize")) {
-			frame->frame_resize = False;
-			free(chPtr);
+	frame->frame_margin_height = 5;
+	if (chPtr = ParseMarkTag(attributes, MT_FRAME, "marginheight")) {
+		frame->frame_margin_height = atoi(chPtr);
+		free(chPtr);
+	}
+
+	if (chPtr = ParseMarkTag(attributes, MT_FRAME, "noresize")) {
+		frame->frame_resize = False;
+		free(chPtr);
+	}
+	frame->frame_border = -1;
+	if (chPtr = ParseMarkTag(attributes, MT_FRAME, "frameborder")) {
+		if (!my_strcasecmp(chPtr, "no") || (*chPtr == '0')) {
+			frame->frame_border = 0;
+		} else {
+			frame->frame_border = 2;
 		}
-		frame->frame_border = -1;
-		if (chPtr = ParseMarkTag(attributes, MT_FRAME, "frameborder")) {
-			if (!my_strcasecmp(chPtr, "no") || (*chPtr == '0')) {
-				frame->frame_border = 0;
-			} else {
-				frame->frame_border = 2;
-			}
-			free(chPtr);
+		free(chPtr);
+	}
+	/* What about scrolling? */
+        if (chPtr = ParseMarkTag(attributes, MT_FRAME, "scrolling")) {
+                if (!my_strcasecmp(chPtr, "yes")) {
+			frame->frame_scroll_type = FRAME_SCROLL_YES;
+                } else if (!my_strcasecmp(chPtr, "no")) {
+                        frame->frame_scroll_type = FRAME_SCROLL_NONE;
 		}
-		/* What about scrolling? */
-                if (chPtr = ParseMarkTag(attributes, MT_FRAME, "scrolling")) {
-                        if (!my_strcasecmp(chPtr, "yes"))
-                              frame->frame_scroll_type = FRAME_SCROLL_YES;
-                        else if (!my_strcasecmp(chPtr, "no"))
-                              frame->frame_scroll_type = FRAME_SCROLL_NONE;
-                        free(chPtr);
-                }
-        } else {
-                frame->frame_src           = NULL;
-                frame->frame_margin_width  = 5;
-                frame->frame_margin_height = 5;
-                frame->frame_resize        = True;
-		frame->frame_border	   = -1;
+                free(chPtr);
         }
 
 #ifndef DISABLE_TRACE
@@ -475,7 +511,7 @@ static FrameInfo *doFrame(HTMLWidget html, String attributes)
 		"doFrame, frame %i name: %s\n\tsrc: %s\n\tmargin width: %i\n\tmargin height: %i\n\tresize: %s\n\tscrolling: %s\n",
 		current_frame,
 		frame->frame_name,
-                frame->frame_src ? frame->frame_src : "<none>",
+                frame->frame_src,
 		frame->frame_margin_width,
                 frame->frame_margin_height,
 		frame->frame_resize ? "yes" : "no",
@@ -484,11 +520,6 @@ static FrameInfo *doFrame(HTMLWidget html, String attributes)
 		 "none"));
 	}
 #endif
-        /*
-        * Actual widget creation is postponed until the very last moment
-        * of HTMLCreateFrames
-        */
-
         /* Increment running frame counter */
         current_frame++;
         return(frame);
@@ -525,13 +556,15 @@ static void insertFrameSetChild(frameSet *parent, frameSet *child)
                 if (!son->frame_border)
                         son->frame_resize = False;
 
-                for (c = dad->frame_children; c; c = c->frame_next)
+                for (c = dad->frame_children; c; c = c->frame_next) {
                         if (!c->frame_next)
                                 break;
-                if (c)
+		}
+                if (c) {
                         c->frame_next = son;
-                else
+                } else {
                         dad->frame_children = son;
+		}
                 son->frame_parent_frameset = dad;
 
                 parent->childs[parent->childs_done] = *child;
@@ -555,6 +588,9 @@ static void insertFrameChild(frameSet *frame_set, FrameInfo *frame)
 	FrameInfo *c, *dad;
         int insert_pos = frame_set->childs_done;
 
+	if (!frame)
+		return;
+
 	frame->frame_size_s = frame_set->sizes[insert_pos];
         frame->frame_size_type = frame_set->size_types[insert_pos];
 
@@ -567,16 +603,18 @@ static void insertFrameChild(frameSet *frame_set, FrameInfo *frame)
 
         /* Disable resizing if we don't have a border */
         if (!frame->frame_border)
-          frame->frame_resize = False;
+        	frame->frame_resize = False;
 
         dad = frame_set->actualFrameSet;
-        for (c = dad->frame_children; c; c = c->frame_next)
+        for (c = dad->frame_children; c; c = c->frame_next) {
                 if (!c->frame_next)
                         break;
-        if (c)
+	}
+        if (c) {
                 c->frame_next = frame;
-        else
+        } else {
                 dad->frame_children = frame;
+	}
         frame->frame_parent_frameset = dad;
 
         frame_set->childs_done++;
@@ -594,13 +632,13 @@ static void makeFrameset(HTMLWidget hw, MarkInfo **mptr)
 	for (tmp = *mptr; tmp; tmp = tmp->next) {
 		switch (tmp->type) {
 		case M_FRAMESET:
-			if (tmp->is_end) { /* End frameset  Pop stack */
+			if (tmp->is_end) {  /* End frameset  Pop stack */
 				current_set = popFrameSet();
 				/* No more sets on the stack: we've reached
 				 * end of outermost frameset tag */
 				if (!current_set)
-					return;
-			} else { /* New one, push current frameset on stack */
+				    return;
+			} else {  /* New one, push current frameset on stack */
 				pushFrameSet(current_set);
 				parent_set = frame_stack->frame_set;
 				/* Check if we still have room for this thing */
@@ -616,14 +654,13 @@ static void makeFrameset(HTMLWidget hw, MarkInfo **mptr)
 				    insertFrameSetChild(parent_set,current_set);
 				    /* Grid hack */
 				    if (grid) for (i = current_set->nchilds,
-					temp = tmp; i; --i) {
-
+						   temp = tmp; i; --i) {
 					pushFrameSet(current_set);
 					parent_set = frame_stack->frame_set;
 					current_set = doFrameSet(temp->start,
-					    &grid);
+					    			 &grid);
 				        insertFrameSetChild(parent_set,
-					    current_set);
+					    		    current_set);
 					childs = current_set->nchilds;
 					mark = tmp->next;
 					while (mark && childs &&
@@ -633,7 +670,7 @@ static void makeFrameset(HTMLWidget hw, MarkInfo **mptr)
 
 						frame = doFrame(hw,mark->start);
 						insertFrameChild(current_set,
-							frame);
+								 frame);
 						tmp = mark;
 						childs--;
 						if (!childs)
@@ -662,10 +699,9 @@ static void makeFrameset(HTMLWidget hw, MarkInfo **mptr)
 					}
 				    }
 #ifndef DISABLE_TRACE
-				    if (htmlwTrace || reportBugs) {
+				    if (htmlwTrace || reportBugs)
 					fprintf(stderr,
-					    "Bad <FRAMESET>: missing COLS or ROWS attribute on parent set\n");
-				    }
+					  "Bad <FRAMESET>: missing COLS or ROWS attribute on parent set\n");
 #endif
 				}
 			}
@@ -715,11 +751,11 @@ static void makeFrameset(HTMLWidget hw, MarkInfo **mptr)
 
 static FrameInfo *getRootFrameset(HTMLWidget hw)
 {
-        FrameInfo *frame;
+	FrameInfo *frame;
 
-        for (frame = hw->html.frames[0];
-	     frame && frame->frame_parent_frameset;
-	     frame = frame->frame_parent_frameset);
+	for (frame = hw->html.frames[0]; frame && frame->frame_parent_frameset;
+	     frame = frame->frame_parent_frameset)
+		;
 
         return(frame);
 }
@@ -734,7 +770,7 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 {
         FrameInfo *child = NULL;
         int width, height;
-        int cum_fixed_size, cum_rel_size, cum_opt_size;
+        int cum_fixed_size, cum_rel_size;
         int nb_opt = 0, nb_rel = 0, nb_fix = 0;
 
 	/* Begin with fixed-sized children */
@@ -742,7 +778,6 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 	/* Finally, end up with optional-sized children */
         cum_fixed_size = 0;	/* pixel */
         cum_rel_size = 0;	/* % */
-        cum_opt_size = 0;	/* * */
 
         for (child = parent->frame_children; child; child = child->frame_next) {
                 if (IS_FRAME_SIZE_FIXED(child)) {
@@ -802,8 +837,7 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 			     child = child->frame_next) {
 				if (IS_FRAME_SIZE_RELATIVE(child)) {
 					width = *p_width;
-					height = child->frame_height +
-						to_add;
+					height = child->frame_height + to_add;
 					adjustFrame(child, &width, &height);
 					child->frame_width = width;
 					child->frame_height = height;
@@ -824,7 +858,7 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 		}
 	} else if (cum_fixed_size + cum_rel_size > *p_height) {
 		/* Too much space is allocated */
-		if (cum_fixed_size <= *p_height) { /* Too much % */
+		if (cum_fixed_size <= *p_height) {  /* Too much % */
 			int to_sub;
 
 			to_sub = (*p_height - cum_fixed_size);
@@ -833,7 +867,7 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 				if (IS_FRAME_SIZE_RELATIVE(child)) {
 					width = *p_width;
 					height = (child->frame_height *
-						to_sub) / cum_rel_size;
+						  to_sub) / cum_rel_size;
 					if (height < 1)
 						height = 1;
 					adjustFrame(child, &width, &height);
@@ -841,12 +875,12 @@ static void adjustFramesetRows(FrameInfo *parent, int *p_width, int *p_height)
 					child->frame_height = height;
 				}
 			}
-		} else { /* Too much pixel */
+		} else {  /* Too much pixel */
 			for (child = parent->frame_children; child;
 			     child = child->frame_next) { 
 				width = *p_width;
-				height = (child->frame_height * *p_height)/
-					(cum_fixed_size + cum_rel_size);
+				height = (child->frame_height * *p_height) /
+					 (cum_fixed_size + cum_rel_size);
 				if (height < 1)
                                 	height = 1;
 				adjustFrame(child, &width, &height);
@@ -862,7 +896,7 @@ static void adjustFramesetColumns(FrameInfo *parent, int *p_width,
 {
         FrameInfo *child = NULL;
         int width, height;
-        int cum_fixed_size, cum_rel_size, cum_opt_size;
+        int cum_fixed_size, cum_rel_size;
         int nb_opt = 0, nb_rel = 0, nb_fix = 0;
 
 	/* Begin with fixed-sized children */
@@ -870,7 +904,6 @@ static void adjustFramesetColumns(FrameInfo *parent, int *p_width,
 	/* Finally, end up with optional-sized children */
         cum_fixed_size = 0;
         cum_rel_size = 0;
-        cum_opt_size = 0;
         for (child = parent->frame_children; child;
 	     child = child->frame_next) {
                 if (IS_FRAME_SIZE_FIXED(child)) {
@@ -920,19 +953,18 @@ static void adjustFramesetColumns(FrameInfo *parent, int *p_width,
                         int to_add;    
                                        
                         to_add = (*p_width - cum_fixed_size - cum_rel_size) /
-				nb_rel;                                   
+				 nb_rel;                                   
                         for (child = parent->frame_children; child;
 			     child = child->frame_next) {      
                                 if (IS_FRAME_SIZE_RELATIVE(child)) {
 					height = *p_height;
-					width = child->frame_width +
-						to_add;
+					width = child->frame_width + to_add;
                                         adjustFrame(child, &width, &height);
                                         child->frame_width = width;
                                         child->frame_height = height;
                                 }      
                         }
-                } else { /* Pixels */
+                } else {  /* Pixels */
                         int to_add;    
                                        
                         to_add = (*p_width - cum_fixed_size) / nb_fix;
@@ -964,7 +996,7 @@ static void adjustFramesetColumns(FrameInfo *parent, int *p_width,
                                         child->frame_height = height;
                                 }
                         }
-                } else { /* Too many pixels */ 
+                } else {  /* Too many pixels */ 
                         for (child = parent->frame_children; child;
 			     child = child->frame_next) {      
                                 height = *p_height;
@@ -980,7 +1012,6 @@ static void adjustFramesetColumns(FrameInfo *parent, int *p_width,
         } 
 }
 
- 
 static void adjustFrame(FrameInfo *parent, int *p_width, int *p_height)
 {
         if (*p_width <= 0)
@@ -990,10 +1021,11 @@ static void adjustFrame(FrameInfo *parent, int *p_width, int *p_height)
 
         if (IS_FRAMESET(parent)) {
 		/* Do recursion only if it is a frameset */
-                if (parent->frame_layout == FRAMESET_LAYOUT_ROWS)
+                if (parent->frame_layout == FRAMESET_LAYOUT_ROWS) {
                         adjustFramesetRows(parent, p_width, p_height);
-                else if (parent->frame_layout == FRAMESET_LAYOUT_COLS)
+                } else if (parent->frame_layout == FRAMESET_LAYOUT_COLS) {
                         adjustFramesetColumns(parent, p_width, p_height);
+		}
         }
 }
 
@@ -1095,10 +1127,10 @@ static int HTMLCheckForFrames(MarkInfo **mptr)
 	 * morons put <BODY> tags inside the frameset tags, so we
 	 * cannot do this.
          */
-        for (tmp = *mptr; tmp; tmp = tmp->next)
+        for (tmp = *mptr; tmp; tmp = tmp->next) {
                 if ((tmp->type == M_FRAME) && !tmp->is_end)
                         nframes++;
-
+	}
         return(nframes);
 }
 
@@ -1120,13 +1152,13 @@ static void recursiveDestroyFrameset(FrameInfo *frame)
         }
         if (frame->frame_src) {
 		free(frame->frame_src);
-		frame->frame_src = NULL; /* Sanity */
+		frame->frame_src = NULL;  /* Sanity */
         }
         if (frame->frame_name) {
                 free(frame->frame_name);
-                frame->frame_name = NULL; /* Sanity */
+                frame->frame_name = NULL;  /* Sanity */
         }
-        frame->frame_parent_frameset = NULL; /* Sanity */
+        frame->frame_parent_frameset = NULL;  /* Sanity */
 
         free(frame);
         frame = NULL;
@@ -1145,13 +1177,13 @@ static void recursiveDestroyFrameset(FrameInfo *frame)
 void HTMLDestroyFrames(HTMLWidget hw)
 {
         FrameCbData cbs;
- 	FrameInfo *root_frame = NULL;
+ 	FrameInfo *root_frame;
 
         /* Free them */
         root_frame = getRootFrameset(hw);
         recursiveDestroyFrameset(root_frame);
 
-	cbs.reason = 1;		/* Delete */
+	cbs.reason = FRAME_DELETE;
 	/* Call the callback list */
 	XtCallCallbackList((Widget)hw, hw->html.frame_callback, &cbs);
 	hw->html.nframe = 0;
@@ -1165,11 +1197,12 @@ void HTMLDestroyFrames(HTMLWidget hw)
 *       True when all frames could be created, False otherwise.
 */
 Boolean HTMLCreateFrameSet(HTMLWidget hw, MarkInfo **mptr,
-	PhotoComposeContext *pcc)
+			   PhotoComposeContext *pcc)
 {
         int i;
         MarkInfo **tmp;
         FrameCbData cbs;
+        FrameInfo *frame_w;
 
         frame_stack = &frame_base;
         frame_stack->next = NULL;
@@ -1195,12 +1228,10 @@ Boolean HTMLCreateFrameSet(HTMLWidget hw, MarkInfo **mptr,
 
         /* Create the list of HTML frame children */
         hw->html.frames = (FrameInfo **)calloc(hw->html.nframe,
-                sizeof(FrameInfo *));
+					       sizeof(FrameInfo *));
 
         /* Create individual HTML frame children ptrs */
         for (i = 0; i < hw->html.nframe; i++) {
-                FrameInfo *frame_w;
-
                 frame_w = (FrameInfo *)calloc(1, sizeof(FrameInfo));
                 hw->html.frames[i] = frame_w;
         }
@@ -1214,6 +1245,15 @@ Boolean HTMLCreateFrameSet(HTMLWidget hw, MarkInfo **mptr,
 			/* No more HTML is done after outermost frameset tag */
 
         /* Adjust framecount, makeFrameSets might have found invalid sets */
+	if (!current_frame) {
+	        for (i = 0; i < hw->html.nframe; i++)
+			free(hw->html.frames[i]);
+		free(hw->html.frames);
+		hw->html.frames = NULL;
+	        hw->html.nframe = 0;
+                return(False);
+	}
+	/* Memory leak.  Unused frame records not freed later. */
         hw->html.nframe = current_frame;
 
         adjustConstraints(hw);
@@ -1221,14 +1261,14 @@ Boolean HTMLCreateFrameSet(HTMLWidget hw, MarkInfo **mptr,
 	/* Clean the window we are building the frames in */
         XClearWindow(XtDisplay(hw), XtWindow(hw->html.view));
 
-	cbs.reason = 0;		/* Create */
+	cbs.reason = FRAME_CREATE;
 	/* Call the callback list */
 	XtCallCallbackList((Widget)hw, hw->html.frame_callback, &cbs);
 
         return(True);
 }
 
-void IframeRefresh(HTMLWidget hw, ElemInfo *eptr)
+void IframeRefresh(ElemInfo *eptr)
 {
 	if (eptr->frame && !eptr->frame->mapped && eptr->frame->iframe) {
 		eptr->frame->mapped = True;

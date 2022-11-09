@@ -1,0 +1,18 @@
+-------------------------------------------------------------------
+3-Oct-1999
+Mosaic may crash with a "Bad Drawable 72" error.  This is usually
+caused by an image which has dimensions larger than those supported
+by your graphics card.  Most VAX cards limit the dimensions to the
+display size.  The preferences MAXPIXMAPWIDTH and MAXPIXMAPHEIGHT
+can be set to prevent Mosaic from attempting to display images
+which are too large.  In some cases Mosaic may crash with an access
+violation instead of the "Bad Drawable 72" error.
+-------------------------------------------------------------------
+15-Nov-2004
+Mosaic MMS and MMK builds will fail if the SET PROCESS/PARSE=EXTEND
+command is in effect.  MAKE_MOSAIC.COM sets the process parse style
+to TRADITIONAL.
+-------------------------------------------------------------------
+28-May-2006
+Shaped tooltips are not supported on servers running Motif 1.1.
+-------------------------------------------------------------------

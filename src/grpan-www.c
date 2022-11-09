@@ -55,20 +55,23 @@
 #include "mosaic.h"
 #include "grpan-www.h"
 
-/*for memcpy*/
+#if 0
+
+/* For memcpy */
+#ifndef VMS
 #include <memory.h>
+#else
+#include <string.h>
+#endif
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 #endif
 
-#if 0
-
 /* libwww includes */
-#include "tcp.h"
-#include "HTAnchor.h"
-#include "HTParse.h"
-
+#include "../libwww2/tcp.h"
+#include "../libwww2/HTAnchor.h"
+#include "../libwww2/HTParse.h"
 
 static int HtLoadHTTPANN(char *arg, char *data, int len, char *com);
 
@@ -112,8 +115,7 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 	tptr = HTParse(arg, "", PARSE_HOST);
 	status = HTParseInet(sin, tptr);
 	free(tptr);
-	if (status)
-	{
+	if (status) {
 		return(status);
 	}
 
@@ -126,9 +128,8 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 #endif
 	status = connect
-          (s, (struct sockaddr*)&soc_address,sizeof(soc_address));
-	if (status < 0)
-	{
+          (s, (struct sockaddr*)&soc_address, sizeof(soc_address));
+	if (status < 0) {
 		return(HTInetStatus("connect"));
 	}
 
@@ -144,25 +145,20 @@ HtLoadHTTPANN(char *arg, char *data, int len, char *com)
 	if (command == NULL) outofmem(__FILE__, "HTLoadHTTP");
 	strcpy(command, com);
 	strcat(command, tptr);
-	if (len != 0)
-	{
+	if (len != 0) {
 		char *bptr;
 
 		bptr = (char *)(command + command_len);
-/*		bcopy(data, bptr, len);*/
 		memcpy(bptr, data, len);
 		command_len += len;
-	}
-	else
-	{
+	} else {
 		command_len++;
 	}
 	free(tptr);
 
 	status = NETWRITE(s, command, command_len);
 	free(command);
-	if (status < 0)
-	{
+	if (status < 0) {
 		return(HTInetStatus("send"));
 	}
 
@@ -190,8 +186,7 @@ grpan_doit(char *com, char *url, char *data, int len, char **texthead)
 #if 0
 	char *txt;
 
-	if (HtLoadHTTPANN(url, data, len, com) == HT_LOADED)
-	{
+	if (HtLoadHTTPANN(url, data, len, com) == HT_LOADED) {
 		txt = mo_get_html_return(texthead);
 		return(txt);
 	}
@@ -199,4 +194,3 @@ grpan_doit(char *com, char *url, char *data, int len, char **texthead)
 #endif /* 0 */
 	return(NULL);
 }
-

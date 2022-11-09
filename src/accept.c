@@ -52,26 +52,112 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 #include "../config.h"
+
+#ifdef CCI
 
 #ifdef linux
 #define SCREWY_BLOCKING
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
+
+#ifndef MULTINET
+
+#ifdef SOCKETSHR
+#include "socketshr_files:types.h"
+#else
 #include <sys/types.h>
+#endif
+
+#if defined(VMS) && defined(CADDR_T)
+#ifdef __CADDR_T
+#undef __CADDR_T
+#endif
+#define __CADDR_T
+#endif /* VMS, include file problem, BSN */
+
+#ifdef VMS
+#if defined(SOCKETSHR) && defined(__DECC)
+#define __FD_SET 1
+#endif /* DEC C V5.2 socket.h conflicts with SOCKETSHR types.h, GEC */
+#include <socket.h>
+#include <in.h>
+#include <time.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
 #include <sys/time.h>
+#endif
+
+#include <netdb.h>
+
+#if defined(VMS) && !defined(WIN_TCP)
+
+#ifndef SOCKETSHR
+int  ioctl (int d, int request, char *argp);
+#ifndef UCX_COMPAT
+#include "sys$library:ucx$inetdef.h"
+#else
+#ifdef TCPWARE
+#include "tcpware_include:ucx$inetdef.h"
+#else
+#define FIONBIO -2147195266
+#endif
+#endif /* ucx$inetdef.h will be missing for UCX compatibility builds, GEC */
+#endif
+#include <tcp.h>
+#ifdef SOCKETSHR
+#include "socketshr_files:socketshr.h"
+#if defined(__DECC) && !defined(__alpha)
+#undef fprintf
+#endif /* Avoid possible problems, GEC */
+#endif
+
+#else
+
 #include <sys/ioctl.h>
+#endif /* VMS, use ioctl stuff in [.libwww2]httcp.c for UCX, GEC */
+
+#else /* MultiNet */
+
+#if defined(__TIME_T) && !defined(__TYPES_LOADED) && !defined(__TYPES)
+#define __TYPES_LOADED
+#endif /* Different defs in OpenVMS and MultiNet include files, BSN */
+#ifdef __DECC
+#define _POSIX_C_SOURCE
+#endif /* DEC C, GEC */
+#include "multinet_root:[multinet.include.sys]types.h"
+#include "multinet_root:[multinet.include.sys]socket.h"
+#include "multinet_root:[multinet.include.netinet]in.h"
+#include "multinet_root:[multinet.include]netdb.h"
+#ifdef __DECC
+#undef _POSIX_C_SOURCE
+#endif /* DEC C, GEC */
+#if defined(__DECC) && !defined(_XOPEN_SOURCE_EXTENDED) && defined(__FD_SET)
+#define _XOPEN_SOURCE_EXTENDED
+#include "multinet_root:[multinet.include.sys]time.h"
+#undef _XOPEN_SOURCE_EXTENDED
+#else
+#include "multinet_root:[multinet.include.sys]time.h"
+#endif /* As if MultiNet V3.5A&B weren't bad enough, then came DECC052H, GEC */
+#include "multinet_root:[multinet.include.sys]ioctl.h"
+#endif /* MULTINET, BSN, GEC */
+
 #ifdef SCREWY_BLOCKING
 #include <sys/fcntl.h>
 #endif
 
-/*For memset*/
+/* For memset */
+#ifndef VMS
 #include <memory.h>
+#else
+#include <string.h>
+#endif /* VMS, GEC */
 
 #ifdef MOTOROLA
 #include <sys/filio.h>
@@ -79,7 +165,7 @@
 
 #ifdef DGUX
 #include <sys/file.h>
-#endif
+#endif  
 
 #ifdef SVR4
 #ifndef SCO
@@ -92,104 +178,101 @@
 #include "port.h"
 #include "accept.h"
 
-#include "memStuffForPipSqueeks.h"
-
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 #endif
 
 ListenAddress NetServerInitSocket(portNumber)
-/* return -1 on error */
+/* Return -1 on error */
 int portNumber;
 {
-ListenAddress socketFD;
-struct sockaddr_in serverAddress;
-struct protoent *protocolEntry;
+	ListenAddress socketFD;
+	struct sockaddr_in serverAddress;
+	struct protoent *protocolEntry;
 
 	protocolEntry = getprotobyname("tcp");
 	if (protocolEntry) {
-		socketFD = socket(AF_INET, SOCK_STREAM,protocolEntry->p_proto);
-		}
-	else {
-		socketFD = socket(AF_INET, SOCK_STREAM,0);
-		}
+		socketFD = socket(AF_INET, SOCK_STREAM, protocolEntry->p_proto);
+	} else {
+		socketFD = socket(AF_INET, SOCK_STREAM, 0);
+	}
 	
 	if (socketFD < 0) {
-
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"Can't create socket.\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Can't create socket.\n");
 #endif
-
 		return(-1);
-		}
+	}
 
-/*        bzero((char *) &serverAddress, sizeof(serverAddress));*/
 	memset((char *) &serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
 	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 	serverAddress.sin_port = htons(portNumber);
 
 	if (bind(socketFD, (struct sockaddr *) &serverAddress, 
-		sizeof(serverAddress))<0){
+		 sizeof(serverAddress)) < 0) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"Can't bind to address.\n");
-			}
+			if (srcTrace)
+				fprintf(stderr, "Can't bind to address.\n");
 #endif
-
 		return(-1);
-		}
+	}
 
 #ifdef SCREWY_BLOCKING
-            /* set socket to non-blocking for linux */
-        fcntl(socketFD,FNDELAY,0);
+        /* Set socket to non-blocking for linux */
+        fcntl(socketFD, FNDELAY, 0);
 #endif
         
-	if (listen(socketFD,5) == -1) {
+	if (listen(socketFD, 5) == -1) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"Can't listen.\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "Can't listen.\n");
+#endif
+		return(-1);
+	}
+
+#ifndef SCREWY_BLOCKING
+	/* Set socket to non-blocking */
+#ifndef MULTINET
+	ioctl(socketFD, FIONBIO, 0);
+#else
+	socket_ioctl(socketFD, FIONBIO, 0);
+#endif
 #endif
 
-		return(-1);
-		}
-#ifndef SCREWY_BLOCKING
-            /* set socket to non-blocking */
-	ioctl(socketFD,FIONBIO,0);
-#endif
-        
 	return(socketFD);
 }
 
 
 PortDescriptor *NetServerAccept(socketFD)
-/* accept a connection off of a base socket */
-/* do not block! */
-/* return NULL if no connection else return PortDescriptor*  */
+/* Accept a connection off of a base socket */
+/* Do not block! */
+/* Return NULL if no connection else return PortDescriptor*  */
 ListenAddress socketFD;
 {
-int newSocketFD;
-struct sockaddr_in clientAddress;
-int clientAddressLength;
-PortDescriptor *c;
+	int newSocketFD;
+	struct sockaddr_in clientAddress;
+#if !defined(VMS) || (__DECC_VER < 50230003)
+	int clientAddressLength = sizeof(clientAddress);
+#else
+	size_t clientAddressLength = sizeof(clientAddress);
+#endif
+	PortDescriptor *c;
 
-
-
-	/* it's assumed that the socketFD has already been set to non block*/
-	clientAddressLength = sizeof(clientAddress);
-	newSocketFD = accept(socketFD,(struct sockaddr *) &clientAddress,
+	/* It's assumed that the socketFD has already been set to non block */
+	newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddress,
+#ifndef __GNUC__
 				&clientAddressLength);
-	if (newSocketFD < 0) {
+#else
+				(int)&clientAddressLength);
+#endif /* GNU C, GEC */
+	if (newSocketFD < 0)
 		return(NULL);
-		}
 
-	/* we have connection */
-	if (!(c =(PortDescriptor *)MALLOC(sizeof(PortDescriptor)))){
+	/* We have connection */
+	if (!(c = (PortDescriptor *)malloc(sizeof(PortDescriptor))))
 		return(0);
-		}
 	c->socketFD = newSocketFD;
 	c->numInBuffer = 0;
 
@@ -197,68 +280,84 @@ PortDescriptor *c;
 }
 
 
-int NetRead(c,buffer,bufferSize)
-/* read input from port, return number of bytes read */
+int NetRead(c, buffer, bufferSize)
+/* Read input from port, return number of bytes read */
 
 PortDescriptor *c;
 char *buffer;
 int bufferSize;
 {
-int length;
+	int length;
 
+#ifndef MULTINET
 	length = read(c->socketFD, buffer, bufferSize);
+#else
+	length = socket_read(c->socketFD, buffer, bufferSize);
+#endif
 	return(length);
-
 }
 
 
-
-int NetServerWrite(c,buffer,bufferSize)
-/* send buffer, return number of bytes sent */
+int NetServerWrite(c, buffer, bufferSize)
+/* Send buffer, return number of bytes sent */
 PortDescriptor *c;
 char *buffer;
 int bufferSize;
 {
-int length;
+	int length;
 
-	length = write(c->socketFD,buffer,bufferSize);
+#ifndef MULTINET
+	length = write(c->socketFD, buffer, bufferSize);
+#else
+	length = socket_write(c->socketFD, buffer, bufferSize);
+#endif
 
 	return(length);
 }
 
 
-int NetCloseConnection(c)
+void NetCloseConnection(c)
 /* close the connection */
 PortDescriptor *c;
 {
+#ifndef MULTINET
 	close(c->socketFD);
+#else
+	socket_close(c->socketFD);
+#endif
+	return;
 }
 
-int NetCloseAcceptPort(s)
+void NetCloseAcceptPort(s)
 int s;
 {
+#ifndef MULTINET
 	close(s);
+#else
+	socket_close(s);
+#endif
+	return;
 }
-
 
 
 int NetIsThereInput(p)
 /* Do a non block check on socket for input and return 1 for yes, 0 for no */
 PortDescriptor *p;
 {
-static struct  timeval timeout = { 0L , 0L };
-/*int val;*/
-fd_set readfds;
-
+	static struct  timeval timeout = { 0L , 0L };
+	fd_set readfds;
 
 	FD_ZERO(&readfds);
-	FD_SET(p->socketFD,&readfds);
-	if (0 < select(32, &readfds, 0, 0, &timeout)){
+	FD_SET(p->socketFD, &readfds);
+#if defined(__hpux) || defined(MULTINET) || defined(_DECC_V4_SOURCE) || (defined(__DECC) && !defined(__DECC_VER)) || __DECC_
+	if (0 < select(32, (int *)&readfds, 0, 0, &timeout)) {
+#else
+	if (0 < select(32, &readfds, 0, 0, &timeout)) {
+#endif		
 		return(1);
-		}
-	else {
+	} else {
 		return(0);
-		}
+	}
 	
 }
 
@@ -266,24 +365,28 @@ int NetIsThereAConnection(socketFD)
 /* Do a non block check on socket for input and return 1 for yes, 0 for no */
 int socketFD;
 {
-static struct  timeval timeout = { 0L , 0L };
-/*int val;*/
-fd_set readfds;
-
+	static struct  timeval timeout = { 0L , 0L };
+	fd_set readfds;
 
 	FD_ZERO(&readfds);
-	FD_SET(socketFD,&readfds);
-	if (0 < select(32, &readfds, 0, 0, &timeout)){
+	FD_SET(socketFD, &readfds);
+#if defined(__hpux) || defined(MULTINET) || defined(_DECC_V4_SOURCE) || (defined(__DECC) && !defined(__DECC_VER)) || __DECC_
+	if (0 < select(32, (int *)&readfds, 0, 0, &timeout)) {
+#else
+	if (0 < select(32, &readfds, 0, 0, &timeout)) {
+#endif		
 		return(1);
-		}
-	else {
+	} else {
 		return(0);
-		}
+	}
 }
 int NetGetSocketDescriptor(s)
-/* extract socket file descriptor from the Port structure */
+/* Extract socket file descriptor from the Port structure */
 PortDescriptor *s;
 {
         return(s->socketFD);
 }
 
+#else
+int acceptdummy; /* Shut the freaking stupid compiler up */
+#endif /* CCI */

@@ -17,21 +17,20 @@
 #define HTAAgCPr        HTAA_getCurrentProtection
 #define HTAAgDPr        HTAA_getDefaultProtection
 #define HTAAclPr        HTAA_clearProtections
-#endif /*SHORT_NAMES*/
+#endif
+
 /*
-
-Server's Representation of Document (Tree) Protections
-
+ * Server's Representation of Document (Tree) Protections
  */
 
 typedef struct {
-    char *        template;     /* Template for this protection         */
-    char *        filename;     /* Current document file                */
-    char *        uid_name;     /* Effective uid (name of it)           */
-    char *        gid_name;     /* Effective gid (name of it)           */
-    GroupDef *    mask_group;   /* Allowed users and IP addresses       */
-    HTList *      valid_schemes;/* Valid authentication schemes         */
-    HTAssocList * values;       /* Association list for scheme specific */
+    char         *template;     /* Template for this protection         */
+    char         *filename;     /* Current document file                */
+    char         *uid_name;     /* Effective uid (name of it)           */
+    char         *gid_name;     /* Effective gid (name of it)           */
+    GroupDef     *mask_group;   /* Allowed users and IP addresses       */
+    HTList       *valid_schemes;/* Valid authentication schemes         */
+    HTAssocList  *values;       /* Association list for scheme specific */
                                 /* parameters.                          */
 } HTAAProt;
 /*
@@ -69,9 +68,9 @@ Callbacks for rule system
 **      returns         nothing.
 **                      Sets the module-wide variable default_prot.
 */
-PUBLIC void HTAA_setDefaultProtection PARAMS((WWW_CONST char *      cur_docname,
-                                              WWW_CONST char *      prot_filename,
-                                              WWW_CONST char *      eff_ids));
+PUBLIC void HTAA_setDefaultProtection PARAMS((WWW_CONST char *cur_docname,
+                                              WWW_CONST char *prot_filename,
+                                              WWW_CONST char *eff_ids));
 
 
 
@@ -94,9 +93,9 @@ PUBLIC void HTAA_setDefaultProtection PARAMS((WWW_CONST char *      cur_docname,
 **      returns         nothing.
 **                      Sets the module-wide variable current_prot.
 */
-PUBLIC void HTAA_setCurrentProtection PARAMS((WWW_CONST char *      cur_docname,
-                                              WWW_CONST char *      prot_filename,
-                                              WWW_CONST char *      eff_ids));
+PUBLIC void HTAA_setCurrentProtection PARAMS((WWW_CONST char *cur_docname,
+                                              WWW_CONST char *prot_filename,
+                                              WWW_CONST char *eff_ids));
 
 
 /* SERVER INTERNAL                                      HTAA_clearProtections()
@@ -189,11 +188,6 @@ PUBLIC int HTAA_getUid NOPARAMS;
 **              Default is 65534 (nogroup).
 */
 PUBLIC int HTAA_getGid NOPARAMS;
-/*
 
- */
 
 #endif /* not HTAAPROT_H */
-/*
-
-   End of file HTAAProt.h.  */

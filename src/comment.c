@@ -52,115 +52,289 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2003, 2004, 2005 - The VMS Mosaic Project */
 
 /*
  * Written By:  Scott Powers
  * Date:        April 26, 1995
- * Purpose:     Creates a comment card for Mosaic. Submittal is via form
+ * Purpose:     Creates a comment card for Mosaic.  Submittal is via form
  *		  and works in conjunction with	a "C" cgi-bin program.
  */
+
 #include "../config.h"
 #include "mosaic.h"
 #include "gui.h"
+#define _COMMENT_H
 #include "comment.h"
+#undef _COMMENT_H
+#include <stdio.h>
 
-
+#ifndef VMS
 #include <pwd.h>
 #include <sys/utsname.h>
-
-
-#ifdef DEBUG_CC
-int do_comment=1;
 #else
-int do_comment=0;
+#include "vms_pwd.h"
+#include <lib$routines.h>
+
+/* This .h file should not be referenced in DESCRIP.MMS for this module */
+/* because the SSL dummy .h file will force a recompile when needed. */
+#ifdef __GNUC__
+#include MOSAIC_BUILT
+#else
+#include "mosaic_built"
+#endif
 #endif
 
+extern char *built_time;
+extern char *ident_ver;
 
-extern mo_window *current_win;
-extern char *machine;
+int do_comment = 0;
+
+#ifndef VMS
 extern struct utsname mo_uname;
+#endif
 
-
-void CommentCard(mo_window *win);
-int DumpHtml(char *htmlname);
-char *MakeFilename();
-void InitCard(char *fname);
-void PutCardCount(long *num, char *fname);
-long GetCardCount(char *fname);
+static int DumpHtml(char *htmlname);
+static void InitCard(char *fname);
+static void PutCardCount(long *num, char *fname);
 
 
 void CommentCard(mo_window *win) {
+	long num[10];
+	char *fname;
+	int n;
+	char *htmlurl;
+	char *htmlname = (char *)malloc(sizeof(char) * L_tmpnam);
 
-FILE *fp;
-long num[10];
-char *fname;
-int n;
-char *htmlname, *htmlurl;
+	if (!win)
+		win = mo_next_window(NULL);
 
-	if (!win) {
-		win=mo_next_window(NULL);
-	}
-	if (!win) {
+	if (!win)
 		return;
-	}
 
-	for (n=0; n<10; n++) {
-		num[n]=0;
-	}
+	for (n = 0; n < 10; n++)
+		num[n] = 0;
 
 	if (!do_comment) {
-		if (!(fname=MakeFilename())) {
+		if (!(fname = MakeFilename()))
 			return;
-		}
-
-		num[0]=GetCardCount(fname);
+ 		num[0] = GetCardCount(fname);
 		num[0]++;
 	}
 
 #ifndef PRERELEASE
-	if (num[0]==COMMENT_TIME || do_comment) {
-		if (!(htmlname=tmpnam(NULL))) {
-			free(fname);
-
+	if ((num[0] == COMMENT_TIME) || do_comment) {
+		if (!tmpnam(htmlname)) {
+			if (!do_comment)
+				free(fname);
 			return;
 		}
+		strcat(htmlname, ".html");
 		if (!DumpHtml(htmlname)) {
-			free(fname);
-
+			if (!do_comment)
+				free(fname);
 			return;
 		}
-		htmlurl=(char *)calloc(strlen(htmlname)+strlen("file://localhost")+10,sizeof(char));
-		sprintf(htmlurl,"file://localhost%s",htmlname);
-		mo_open_another_window(win,htmlurl,NULL,NULL);
+		htmlurl = (char *)calloc(strlen(htmlname) +
+			strlen("file://localhost") + 10, sizeof(char));
+#ifndef VMS
+		sprintf(htmlurl, "file://localhost%s", htmlname);
+#else
+		sprintf(htmlurl, "file://localhost/%s", htmlname);
+#endif
+		mo_open_another_window(win, htmlurl, NULL, NULL);
+#ifdef VMS
+		remove(htmlname);
+#endif
+		free(htmlname);
 		free(htmlurl);
 	}
 #endif
 
 	if (!do_comment) {
-		PutCardCount(num,fname);
+		PutCardCount(num, fname);
+		free(fname);
 	}
-
-	free(fname);
 
 	return;
 }
 
 
-int DumpHtml(char *htmlname) {
+static int DumpHtml(char *htmlname) {
+	FILE *fp;
+#ifdef VMS
+#define SYI$_HW_NAME 4362
+#define SYI$_VERSION 4096
+	int syi_hw_name = SYI$_HW_NAME;
+	int syi_version = SYI$_VERSION;
+	char hardware[32], VMS_version[16], *cp;
+	int status;
+	unsigned short l_hardware, l_version;
 
-FILE *fp;
+	struct  dsc$descriptor_s {
+	  unsigned short  dsc$w_length;
+	  unsigned char   dsc$b_dtype;
+	  unsigned char   dsc$b_class;
+	  char            *dsc$a_pointer;
+	} hardware_desc = {sizeof(hardware), 14, 1, NULL},
+	  VMS_version_desc = {sizeof(VMS_version), 14, 1, NULL};
 
-	if (!(fp=fopen(htmlname,"w"))) {
+	hardware_desc.dsc$a_pointer = hardware;
+	VMS_version_desc.dsc$a_pointer = VMS_version;
+#endif
+
+	if (!(fp = fopen(htmlname, "w")))
 		return(0);
-	}
-	fprintf(fp,"%s\n",comment_card_html_top);
-	fprintf(fp,"					Mosaic Compiled OS: %s<br>\n",MO_COMMENT_OS);
-	fprintf(fp,"					<input type=\"hidden\" name=\"os\" value=\"%s\">\n",MO_COMMENT_OS);
-	fprintf(fp,"					Sysname: %s<br>\n",mo_uname.sysname);
-	fprintf(fp,"					<input type=\"hidden\" name=\"sysname\" value=\"%s\">\n",mo_uname.sysname);
-	fprintf(fp,"					Release: %s<br>\n",mo_uname.release);
-	fprintf(fp,"					<input type=\"hidden\" name=\"release\" value=\"%s\">\n",mo_uname.release);
-	fprintf(fp,"%s\n",comment_card_html_bot);
+
+	fprintf(fp, "%s\n", comment_card_html_top);
+#ifndef VMS
+	fprintf(fp, " Mosaic Compiled OS: %s<br>\n", MO_COMMENT_OS);
+	fprintf(fp, " <input type=\"hidden\" name=\"os\" value=\"%s\">\n",
+		MO_COMMENT_OS);
+	fprintf(fp, " Sysname: %s<br>\n", mo_uname.sysname);
+	fprintf(fp, " <input type=\"hidden\" name=\"sysname\" value=\"%s\">\n",
+		mo_uname.sysname);
+	fprintf(fp, " Release: %s<br>\n", mo_uname.release);
+	fprintf(fp, " <input type=\"hidden\" name=\"release\" value=\"%s\">\n",
+		mo_uname.release);
+#else
+	status = lib$getsyi((void *)&syi_hw_name, 0, &hardware_desc,
+			    &l_hardware, 0, 0);
+        status = lib$getsyi((void *)&syi_version, 0, &VMS_version_desc,
+			    &l_version, 0, 0);
+	hardware[l_hardware] = '\0';
+        VMS_version[l_version] = '\0';
+        for (cp = &VMS_version[l_version-1]; VMS_version; cp--) {
+        	if (*cp != ' ')
+			break;
+        	*cp = '\0';
+        }
+	fprintf(fp, "System version %s running on a %s.<br>\n", VMS_version,
+		hardware);
+	fprintf(fp, 
+		"<input type=\"hidden\" name=\"release\" value=\"%s %s\">\n",
+		MO_MACHINE_TYPE, VMS_version);
+	fprintf(fp, "<input type=\"hidden\" name=\"hardware\" value=\"%s\">\n",
+		hardware);
+#ifdef MULTINET
+	fprintf(fp, "TCP/IP: MultiNet<br>\n");
+	fprintf(fp,
+		"<input type=\"hidden\" name=\"TCP/IP\" value=\"MultiNet\">\n");
+#elif WIN_TCP
+	fprintf(fp, "TCP/IP: Pathway<br>\n");
+	fprintf(fp,
+		"<input type=\"hidden\" name=\"TCP/IP\" value=\"Pathway\">\n");
+#elif SOCKETSHR
+	fprintf(fp, "TCP/IP: SOCKETSHR/NETLIB<br>\n");
+	fprintf(fp,
+	        "<input type=\"hidden\" name=\"TCP/IP\" value=\"SOCKETSHR/NETLIB\">\n");
+#else
+	fprintf(fp, "TCP/IP: TCP/IP Services or UCX compatible<br>\n");
+	fprintf(fp,
+		"<input type=\"hidden\" name=\"TCP/IP\" value=\"UCX (or UCX compatible)\">\n");
+#endif /* TCP/IP flavour */
+
+	fprintf(fp, "Your Mosaic executable was generated using Motif \n");
+#ifdef MOTIF1_5
+	fprintf(fp, "1.5<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.5\">\n");
+#else
+
+#ifdef MOTIF1_4
+#ifdef MOTIF1_41
+	fprintf(fp, "1.4-1<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.4-1\">\n");
+#else
+	fprintf(fp, "1.4<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.4\">\n");
+#endif
+
+#else
+
+#ifdef MOTIF1_3
+#ifdef MOTIF1_30
+	fprintf(fp, "1.3-0<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.3-0\">\n");
+#else
+#ifdef MOTIF1_31
+	fprintf(fp, "1.3-1<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.3-1\">\n");
+#else
+	fprintf(fp, "1.3-x<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.3-x\">\n");
+#endif
+#endif
+
+#else
+
+#ifdef MOTIF1_26
+	fprintf(fp, "1.2-6<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.2-6\">\n");
+#else
+#ifdef MOTIF1_25
+	fprintf(fp, "1.2-5<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.2-5\">\n");
+#else
+#ifdef MOTIF1_24
+	fprintf(fp, "1.2-4<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.2-4\">\n");
+#else
+#ifdef MOTIF1_23
+#if (MOTIF1_23 == 7)
+	fprintf(fp, "1.2-3 ECO 7<br>\n");
+	fprintf(fp,
+	      "<input type=\"hidden\" name=\"motif\" value=\"1.2-3 ECO 7\">\n");
+#else
+	fprintf(fp, "1.2-3<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.2-3\">\n");
+#endif
+#else
+#ifdef MOTIF1_2
+	fprintf(fp, "1.2<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.2\">\n");
+#else
+	fprintf(fp, "1.1<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"motif\" value=\"1.1\">\n");
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+        fprintf(fp, "and was built on %s with image Ident %s<br>\n",
+		built_time, ident_ver);
+	fprintf(fp, "<input type=\"hidden\" name=\"built\" value=\"%s\">\n",
+		built_time);
+	fprintf(fp, "<input type=\"hidden\" name=\"ident\" value=\"%s\">\n",
+		ident_ver);
+#if defined(VAXC) && !defined(__DECC)
+        fprintf(fp, "using VAX C. \n");
+	fprintf(fp, "<input type=\"hidden\" name=\"C\" value=\"VAX C\">\n");
+#else
+#ifdef __GNUC__
+        fprintf(fp, "using GNU C. \n");
+	fprintf(fp, "<input type=\"hidden\" name=\"C\" value=\"GNU C\">\n");
+#else
+        fprintf(fp, "using DEC C. \n");
+	fprintf(fp, "<input type=\"hidden\" name=\"C\" value=\"DEC C\">\n");
+#endif
+#endif
+#ifdef HAVE_SSL
+#ifdef HAVE_HPSSL
+	fprintf(fp, "It was linked with HP SSL.<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"OpenSSL\" value=\"HP\">\n");
+#else
+	fprintf(fp, "It was linked with OpenSSL.<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"OpenSSL\" value=\"Yes\">\n");
+#endif
+#else
+        fprintf(fp, "It was not linked with OpenSSL.<br>\n");
+	fprintf(fp, "<input type=\"hidden\" name=\"OpenSSL\" value=\"No\">\n");
+#endif
+#endif /* VMS, GEC */
+	fprintf(fp, "%s\n", comment_card_html_bot);
 	fclose(fp);
 
 	return(1);
@@ -168,84 +342,92 @@ FILE *fp;
 
 
 char *MakeFilename() {
-
-char *hptr, home[256], *fname;
-struct passwd *pwdent;
+	char *hptr, home[256], *fname;
+#ifndef VMS
+	struct passwd *pwdent;
+#endif
 
 	/*
 	 * Try the HOME environment variable, then the password file, and
 	 *   finally give up.
 	 */
-	if (!(hptr=getenv("HOME"))) {
-		if (!(pwdent=getpwuid(getuid()))) {
+	if (!(hptr = getenv("HOME"))) {
+#ifndef VMS
+		if (!(pwdent = getpwuid(getuid()))) {
 			return(NULL);
+		} else {
+			strcpy(home, pwdent->pw_dir);
 		}
-		else {
-			strcpy(home,pwdent->pw_dir);
-		}
-	}
-	else {
-		strcpy(home,hptr);
+#else
+		return(NULL);
+#endif
+	} else {
+		strcpy(home, hptr);
 	}
 
-	fname=(char *)calloc(strlen(home)+strlen(COMMENT_CARD_FILENAME)+
-			     strlen(MO_VERSION_STRING)+5,sizeof(char));
-	sprintf(fname,"%s/%s%s",home,COMMENT_CARD_FILENAME,MO_VERSION_STRING);
+ 	fname = (char *)calloc(strlen(home) + strlen(COMMENT_CARD_FILENAME) +
+			       strlen(MO_VERSION_STRING) + 5, sizeof(char));
+#ifndef VMS
+	sprintf(fname, "%s/%s%s", home, COMMENT_CARD_FILENAME,
+		MO_VERSION_STRING);
+#else
+	sprintf(fname, "%s%s%s", home, COMMENT_CARD_FILENAME,
+		MO_VERSION_STRING2);
+#endif
 
 	return(fname);
 }
 
 
-void InitCard(char *fname) {
-
-FILE *fp;
-long num[10];
-int n;
-
-	if (!(fp=fopen(fname,"w"))) {
-		return;
-	}
-
-	num[0]=1;
-	n=fwrite(num,sizeof(long),2,fp);
-
-	fclose(fp);
-
-	return;
-}
-
-
-void PutCardCount(long *num, char *fname) {
-
-FILE *fp;
-int n;
-
-	if (!(fp=fopen(fname,"w"))) {
-		return;
-	}
-
-	n=fwrite(num,sizeof(long),2,fp);
-
-	fclose(fp);
-
-	return;
-}
-
-
 long GetCardCount(char *fname) {
+	FILE *fp;
+	long num[10];
 
-FILE *fp;
-long num[10];
-int n;
-
-	if (!(fp=fopen(fname,"r"))) {
+	if (!(fp = fopen(fname, "r"))) {
 		InitCard(fname);
 		return((long)0);
 	}
-	fseek(fp,0L,SEEK_SET);
-	n=fread(num,sizeof(long),2,fp);
+	fseek(fp, 0L, SEEK_SET);
+	fread(num, sizeof(long), 2, fp);
 
 	fclose(fp);
-
 	return(num[0]);
+}
+
+
+static void InitCard(char *fname) {
+	FILE *fp;
+	long num[10];
+
+#ifdef VMS
+	/*
+	 * Make sure we start a new file like UNIX
+	 */
+        remove(fname);
+#endif
+	if (!(fp = fopen(fname, "w")))
+		return;
+
+	num[0] = 1;
+	fwrite(num, sizeof(long), 2, fp);
+                               
+	fclose(fp);
+	return;
+}
+
+
+static void PutCardCount(long *num, char *fname) {
+	FILE *fp;
+
+#ifndef VMS
+	if (!(fp = fopen(fname, "w")))
+#else
+	if (!(fp = fopen(fname, "r+")))
+#endif
+		return;
+
+	fwrite(num, sizeof(long), 2, fp);
+
+	fclose(fp);                          
+	return;
 }

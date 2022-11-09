@@ -3,7 +3,8 @@
  * Version 3.2.1 [May97]
  *
  * Copyright (C) 1997 - G.Dauphin
- * Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006 -
+ * The VMS Mosaic Project
  */
 
 #ifndef HTML_PARSE_H
@@ -23,10 +24,13 @@ typedef enum _MarkType {
 	M_BIG,
 	M_BLINK,
 	M_BOLD,
+	M_BUTTON,
 	M_CAPTION,
 	M_CITATION,
 	M_COMMENT,
 	M_CODE,
+	M_COL,
+	M_COLGROUP,
 	M_DESC_TITLE,
 	M_DESC_TEXT,
 	M_DEFINE,
@@ -40,25 +44,36 @@ typedef enum _MarkType {
 	M_INPUT,
 	M_ITALIC,
 	M_KEYBOARD,
+	M_LABEL,
+	M_LEGEND,
 	M_LINEBREAK,
 	M_LINK,
 	M_LIST_ITEM,
 	M_MAP,
 	M_META,
+	M_MOSAIC,
+	M_NCSA,
 	M_NOBR,
+	M_NOINDEX,		/* Non-standard Atomz tag */
 	M_NOSCRIPT,
+	M_OPTGROUP,
 	M_OPTION,
 	M_PARAM,
 	M_BUGGY_TABLE,
+	M_TBODY,
 	M_TD_CELL_PAD,
 	M_TD_CELL_FREE,
+	M_TD_CELL_PROPAGATE,
 	M_TEXTAREA,
+	M_TFOOT,
+	M_THEAD,
 	M_TITLE,
 	M_SAMPLE,
 	M_SCRIPT,
 	M_SELECT,
 	M_SMALL,
 	M_SPACER,
+	M_SPAN,
 	M_STRIKEOUT,
 	M_STRONG,
 	M_STYLE,
@@ -66,7 +81,7 @@ typedef enum _MarkType {
 	M_SUP,
 	M_UNDERLINED,
 	M_VARIABLE,
-/* block elements below, text elements above */
+/* Block elements below M_ADDRESS, text elements above */
 	M_ADDRESS,
 	M_BLOCKQUOTE,
 	M_CENTER,
@@ -75,6 +90,7 @@ typedef enum _MarkType {
 	M_DIV,
 	M_DOC_BODY,
 	M_DOC_HEAD,
+	M_FIELDSET,
 	M_FORM,
 	M_FRAME,
 	M_FRAMESET,
@@ -117,10 +133,14 @@ typedef enum _MarkType {
 #define MT_BLOCKQUOTE	"blockquote"
 #define MT_DOC_BODY     "body"
 #define MT_LINEBREAK	"br"
+#define MT_BUTTON	"button"
 #define MT_CAPTION	"caption"
 #define MT_CENTER	"center"
 #define MT_CITATION	"cite"
 #define MT_CODE		"code"
+#define MT_COL		"col"
+#define MT_COLGROUP	"colgroup"
+#define	MT_DELETED	"del"
 #define	MT_DESC_TEXT	"dd"
 #define MT_DEFINE	"dfn"
 #define MT_DIRECTORY	"dir"
@@ -129,6 +149,7 @@ typedef enum _MarkType {
 #define	MT_DESC_TITLE	"dt"
 #define MT_DOCTYPE	"!DOCTYPE"
 #define MT_EMPHASIZED	"em"
+#define MT_FIELDSET	"fieldset"
 #define MT_FIGURE	"fig"
 #define MT_FONT		"font"
 #define MT_FORM		"form"
@@ -147,18 +168,25 @@ typedef enum _MarkType {
 #define MT_IFRAME	"iframe"
 #define MT_IMAGE	"img"
 #define MT_INPUT	"input"
+#define MT_INSERTED	"ins"
 #define MT_INDEX	"isindex"
 #define MT_KEYBOARD	"kbd"
+#define	MT_LABEL	"label"
+#define	MT_LEGEND	"legend"
 #define	MT_LIST_ITEM	"li"
 #define MT_LINK		"link"
 #define	MT_LISTING_TEXT	"listing"
 #define MT_MAP		"map"
 #define MT_MENU		"menu"
 #define MT_META		"meta"
+#define MT_MOSAIC	"mosaic"
+#define MT_NCSA		"ncsa-"
 #define MT_NOBR		"nobr"
+#define	MT_NOINDEX	"noindex"	/* Non-standard Atomz tag */
 #define MT_NOFRAMES	"noframes"
 #define MT_NOSCRIPT	"noscript"
 #define	MT_NUM_LIST	"ol"
+#define MT_OPTGROUP	"optgroup"
 #define MT_OPTION	"option"
 #define	MT_PARAGRAPH	"p"
 #define	MT_PARAM	"param"
@@ -169,6 +197,7 @@ typedef enum _MarkType {
 #define MT_SELECT	"select"
 #define MT_SMALL	"small"
 #define MT_SPACER	"spacer"
+#define MT_SPAN		"span"
 #define MT_STRIKEOUT	"strike"
 #define MT_STRIKEOUT2	"s"
 #define MT_STRONG	"strong"
@@ -176,9 +205,12 @@ typedef enum _MarkType {
 #define MT_SUB          "sub"
 #define MT_SUP          "sup"
 #define MT_TABLE	"table"
+#define MT_TBODY	"tbody"
 #define MT_TABLE_DATA	"td"
 #define MT_TEXTAREA	"textarea"
+#define MT_TFOOT	"tfoot"
 #define MT_TABLE_HEADER	"th"
+#define MT_THEAD	"thead"
 #define	MT_TITLE	"title"
 #define MT_TABLE_ROW	"tr"
 #define MT_FIXED	"tt"
@@ -186,7 +218,6 @@ typedef enum _MarkType {
 #define	MT_UNUM_LIST	"ul"
 #define MT_VARIABLE	"var"
 #define	MT_PLAIN_TEXT	"xmp"
-
 
 /* &quot marker character */
 #define QUOT_CONST '\237'
@@ -217,8 +248,8 @@ typedef struct mark_up {
 	int preallo;
 } MarkInfo;
 
-extern int		caseless_equal(char *str1, char *str2);
-extern void 		clean_white_space(char *txt);
-extern char * 		ParseMarkTag(char *text, char *mtext, char *mtag);
+extern int  caseless_equal(char *str1, char *str2);
+extern void clean_white_space(char *txt);
+extern char *ParseMarkTag(char *text, char *mtext, char *mtag);
 
 #endif /* HTML_PARSE_H */

@@ -52,11 +52,16 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/*#include "mosaic.h"*/
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 #ifndef __HOTLIST_H__
 #define __HOTLIST_H__
 
+#ifndef VMS
 #include <pwd.h>
+#else
+#include "vms_pwd.h"
+#endif  /* PGE */
 
 #define NCSA_HOTLIST_FORMAT_COOKIE_ONE \
   "ncsa-xmosaic-hotlist-format-1"
@@ -137,7 +142,7 @@ typedef struct mo_root_hotlist
   union mo_hot_item *previous;
   union mo_hot_item *next;
 
-  /* specific to mo_hotlist */
+  /* Specific to mo_hotlist */
   struct mo_hotlist *parent;
 
   union mo_hot_item *nodelist;
@@ -164,13 +169,19 @@ typedef union mo_hot_item
   mo_root_hotlist root;
 } mo_hot_item;
 
-void mo_append_item_to_hotlist (mo_hotlist *list, mo_hot_item *node);
+extern void mo_append_item_to_hotlist(mo_hotlist *list, mo_hot_item *node);
+extern mo_status mo_add_item_to_hotlist(mo_hotlist *list, mo_item_type type,
+                                        char *title, char *url, int position,
+                                        int rbm);
 #if 0
-mo_status mo_dump_hotlist (mo_hotlist *);
+extern mo_status mo_dump_hotlist(mo_hotlist *);
 #endif /* 0 */
-mo_status mo_setup_default_hotlist (void);
-mo_status mo_write_default_hotlist (void);
-mo_status mo_post_hotlist_win (mo_window *);
-mo_status mo_add_node_to_current_hotlist (mo_window *);
+extern mo_status mo_setup_default_hotlist(void);
+extern mo_status mo_write_default_hotlist(void);
+extern mo_status mo_post_hotlist_win(mo_window *);
+extern mo_status mo_add_node_to_current_hotlist(mo_window *);
+
+extern void mo_init_hotmenu();
+extern void mo_rbm_myself_to_death(mo_window *, int);
 
 #endif

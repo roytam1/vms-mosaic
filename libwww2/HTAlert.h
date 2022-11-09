@@ -1,4 +1,3 @@
-/*  */
 
 /*      Displaying messages and getting input for WWW Library
 **      =====================================================
@@ -18,8 +17,8 @@
 **      On exit,
 **              Return value is malloc'd string which must be freed.
 */
-extern char * HTPrompt PARAMS((WWW_CONST char * Msg, WWW_CONST char * deflt));
-extern char * HTPromptPassword PARAMS((WWW_CONST char * Msg));
+extern char *HTPrompt PARAMS((WWW_CONST char *Msg, WWW_CONST char *deflt));
+extern char *HTPromptPassword PARAMS((WWW_CONST char *Msg));
 
 
 /*      Display a message, don't wait for input
@@ -27,7 +26,7 @@ extern char * HTPromptPassword PARAMS((WWW_CONST char * Msg));
 **      On entry,
 **              The input is a list of parameters for printf.
 */
-extern void HTAlert PARAMS((WWW_CONST char * Msg));
+extern void HTAlert PARAMS((WWW_CONST char *Msg));
 
 
 /*      Display a progress message for information (and diagnostics) only
@@ -35,10 +34,11 @@ extern void HTAlert PARAMS((WWW_CONST char * Msg));
 **      On entry,
 **              The input is a list of parameters for printf.
 */
-extern void HTProgress PARAMS((WWW_CONST char * Msg));
+extern void HTProgress PARAMS((WWW_CONST char *Msg));
 extern int HTCheckActiveIcon PARAMS((int twirl));
 extern void HTClearActiveIcon NOPARAMS;
-
+extern void HTMeter PARAMS((WWW_CONST int level, WWW_CONST char *text));
+extern void HTDoneWithIcon NOPARAMS;
 
 /*      Display a message, then wait for 'yes' or 'no'.
 **
@@ -49,7 +49,5 @@ extern void HTClearActiveIcon NOPARAMS;
 **              If the user enters 'YES', returns TRUE, returns FALSE
 **              otherwise.
 */
-extern BOOL HTConfirm PARAMS ((WWW_CONST char * Msg));
-/*
+extern BOOL HTConfirm PARAMS ((WWW_CONST char *Msg));
 
-    */

@@ -1,0 +1,224 @@
+.!
+.!  File:	MOSAIC.HELP
+.!		(adapted from Hunter Goatley's UNZIP_CLI.HELP)
+.!
+.!	To build:
+.!	    $ EDIT /TPU/NOSECTION/NODISPLAY/COMMAND=CVTHELP.TPU MOSAIC.HELP
+.!	    $ RUNOFF MOSAIC.RNH
+.!	    $ LIBR /HELP/INSERT libr MOSAIC
+.!
+<INIT>
+<MAIN>
+MOSAIC
+
+Mosaic is a World Wide Web browser
+based on X Windows.  An X display device is required.
+
+Format:
+<FORMAT>
+MOSAIC [/qualifiers] [url]
+.!
+<TOPIC>
+Parameter
+
+<PARAMETER>
+url
+<PTEXT>
+The URL (Uniform Resource Locator) which Mosaic should start up with.
+The URL will be changed to all lowercase unless it is enclosed in quotes.
+If specified, it must be at the end of the command line after any qualifiers.
+<TXETP>
+<QUALIFIERS>
+<QUALIFIER>
+/BACKGROUND
+
+/BACKGROUND=color-spec
+
+Specifies the Mosaic window's background color where color-spec
+is an alphabetic color name (e.g. black) or an RGB color specification
+(e.g. #646464646464).
+<QUALIFIER>
+/COLOR
+
+/COLOR
+
+Tells Mosaic to use color for its user interface; this is the default
+behavior.  Use /MONO for monochrome displays.
+<QUALIFIER>
+/DEFAULTS
+
+/DEFAULTS (D)
+<BREAK>
+/NODEFAULTS
+
+Mosaic uses a number of default X resource settings.  Use /NODEFAULTS
+to prevent the defaults (including those set by /MONO and /COLOR) from
+being used.
+<QUALIFIER>
+/DELAY_IMAGE_LOADS
+
+/DELAY_IMAGE_LOADS
+
+Turns on delayed image loading.  This is equivalent to setting the
+delayImageLoads X resource.
+<QUALIFIER>
+/DISPLAY
+
+/DISPLAY=display-device
+
+Specifies the display Mosaic should use.
+<QUALIFIER>
+/FOREGROUND
+
+/FOREGROUND=color-spec
+
+Specifies the Mosaic window's foreground color where color-spec
+is an alphabetic color name (e.g. black) or an RGB color specification
+(e.g. #646464646464).
+<QUALIFIER>
+/IMAGE_CACHE_SIZE
+
+/IMAGE_CACHE_SIZE=integer
+
+Sets the maximum image cache size in kilobytes.  Default is 2048.  Using
+this qualifier is equivalent to setting the imageCacheSize resource. 
+<QUALIFIER>
+/GEOMETRY
+
+/GEOMETRY=window-geometry
+
+Set the geometry of the Mosaic window.  For example, /GEOMETRY="600x800"
+tells Mosaic to use a window size of 600 by 800 pixels.
+<QUALIFIER>
+/GLOBAL_HISTORY
+
+/GLOBAL_HISTORY (D)
+<BREAK>
+/NOGLOBAL_HISTORY
+
+Specifies whether or not to read and write the global history file that keeps
+track of where you've been in previous sessions.
+<QUALIFIER>
+/GROUP
+
+/GROUP
+<BREAK>
+/NOGROUP (D)
+
+Enter the remote control mailbox in the group logical name table.
+Requires the GRPNAM privilege.  See also /REMOTE and /MAILBOX_NAME.
+This qualifier implies /REMOTE.
+<QUALIFIER>
+/HOME
+
+/HOME=home-url
+
+Specifies the Mosaic home url.
+<QUALIFIER>
+/ICONIC
+
+/ICONIC
+
+Start Mosaic iconized.
+<QUALIFIER>
+/INSTALL_COLORMAP
+
+/INSTALL_COLORMAP
+
+Tells Mosaic to use a private color map.
+<QUALIFIER>
+/KIOSK
+
+/KIOSK
+
+Removes the menubar and all but the back, forward, exit, home, stop
+transfer (the globe) and security stat buttons.  Specify /KIOSK=NOEXIT
+to remove the exit button.  Specify /KIOSK=PRINT to provide a print button.
+<QUALIFIER>
+/MAILBOX_NAME
+
+/MAILBOX_NAME=mailbox
+
+Specifies the name of the mailbox to use to for remote control.  See
+/REMOTE and /GROUP.  This qualifier implies /REMOTE.
+<QUALIFIER>
+/MONO
+
+/MONO
+
+Tells Mosaic to use monochrome colors for its user interface.
+Monochrome displays should automatically be detected, and the
+/MONO qualifier should not be necessary.
+<QUALIFIER>
+/NOPREFERENCES
+
+/NOPREFERENCES
+
+Tells Mosaic not to use the preference file (if one exists) at startup.
+<QUALIFIER>
+/REMOTE
+
+/REMOTE
+<BREAK>
+/NOREMOTE (D)
+
+Mosaic can be controlled remotely.  If you start the program with
+the /REMOTE qualifier, it will act on commands sent to a mailbox
+named MOSAIC_username.  See also /MAILBOX_NAME and /GROUP.
+<QUALIFIER>
+/SYNCHRONOUS
+
+/SYNCHRONOUS
+<BREAK>
+/NOSYNCHRONOUS (D)
+
+Tell Mosaic to do X requests in synchronous mode.  This qualifier
+is normally only used for debugging Mosaic.
+<QUALIFIER>
+/TEMP_DIRECTORY
+
+/TEMP_DIRECTORY=directory-spec
+
+Specifies the directory Mosaic should use for temporary files.
+<QUALIFIER>
+/VERSION
+
+/VERSION
+<BREAK>
+/NOVERSION (D)
+
+Display the version of Mosaic and then exit.
+<TOPIC>
+UNIX_Options
+
+The following UNIX style options and modifiers can be used instead of
+the DCL qualifiers:
+
+<LITERAL>
+|  UNIX options   Equivalent DCL qualifiers
+|  ------------   -------------------------
+|
+|   -background    /BACKGROUND
+|   -color         /COLOR
+|   -dil           /DELAY_IMAGE_LOADS
+|   -display       /DISPLAY
+|   -foreground    /FOREGROUND
+|   -geometry      /GEOMETRY
+|   -home          /HOME
+|   -install       /INSTALL_COLORMAP
+|   -iconic        /ICONIC
+|   -ics           /IMAGE_CACHE_SIZE
+|   -kiosk         /KIOSK
+|   -kioskNoExit   /KIOSK=NOEXIT
+|   -kioskPrint    /KIOSK=PRINT
+|   -mbx           /REMOTE
+|   -mbx_grp       /GROUP
+|   -mbx_name      /MAILBOX_NAME
+|   -mono          /MONO
+|   -nd            /NODEFAULTS
+|   -ngh           /NOGLOBAL_HISTORY
+|   -nopref        /NOPREFERENCES
+|   -tmpdir        /TEMP_DIRECTORY
+|   -sync          /SYNCHRONOUS
+|
+<LARETIL>

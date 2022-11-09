@@ -51,72 +51,77 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
+
+#ifdef CCI
+
 #include <stdio.h>
 #include <string.h>
+#if defined(VAXC) || defined(__GNUC__) || defined(__DECC) 
+#include <ctype.h>
+#endif /* Need isspace defined, GEC */
 
-/*for memcpy*/
+/* For memcpy */
+#ifndef VMS
 #include <memory.h>
+#endif
 
 #include "cci.h"
+#include "accept.h"
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 #endif
 
-int ReadBuffer(s,data,numBytesToRead)
-/* this routine reads from the specified port, but also considers contents
-   read and in buffer from the GetLine() routine.
-/* return the number of chars read */
-MCCIPort s;
-char *data;
-int numBytesToRead;
+/* This routine reads from the specified port, but also considers contents
+ * read and in buffer from the GetLine() routine.
+ * Returns the number of chars read */
+int ReadBuffer(MCCIPort s, char *data, int numBytesToRead)
 {
-int numRead = 0;
+	int numRead = 0;
 
 	if (numBytesToRead <= s->numInBuffer) {
-		memcpy(data,s->buffer,numBytesToRead);
+		memcpy(data, s->buffer, numBytesToRead);
 		s->numInBuffer -= numBytesToRead;
 		return(numBytesToRead);
-		}
+	}
 	if (s->numInBuffer > 0) {
-		memcpy(data,s->buffer,s->numInBuffer);
+		memcpy(data, s->buffer, s->numInBuffer);
 		data += s->numInBuffer;
 		numBytesToRead -= s->numInBuffer;
 		numRead = s->numInBuffer;
 		s->numInBuffer = 0;
-		}
+	}
 
 	numRead += NetRead(s, data, numBytesToRead);
 	return(numRead);
 }
 
 
-
-char *GetLine(s) /****** this routine needs an overhaul.... */
-MCCIPort s;
 /* This routine returns a line read in from the socket file descriptor. 
  * The location of the string returned is good until the next call.
  * Limitation of this routine: A line read in must not be bigger than
  * the buffersize.
  * 0 returned on error
  */
-
+char *NNTPGetLine(MCCIPort s) /****** this routine needs an overhaul.... */
 {
-int numBytes;
-char buf2[PORTBUFFERSIZE +1];
-char *endptr;
-static char returnLine[PORTBUFFERSIZE * 2 +2];
-register char *rptr,*ptr;
-register int count;
-
+	int numBytes;
+	char buf2[PORTBUFFERSIZE + 1];
+	char *endptr;
+	static char returnLine[PORTBUFFERSIZE * 2 + 2];
+	register char *rptr, *ptr;
+	register int count;
 
 	if (s->numInBuffer < 1) {
 		/* no character in s->buffer, so fill it up */
 /*
 		if (!connectedToServer) {
 			return(0);
-			}
+		}
 */
 		if (1 > (numBytes = NetRead(s, s->buffer, PORTBUFFERSIZE))) {
 			/*  End Of Connection */
@@ -125,40 +130,39 @@ register int count;
 */
 
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"GetLine: End of Connection\n");
-			}
+			if (srcTrace)
+				fprintf(stderr, "GetLine: End of Connection\n");
 #endif
 
 			return(0);
-			}
-		s->numInBuffer = numBytes;
 		}
+		s->numInBuffer = numBytes;
+	}
 
-	s->buffer[s->numInBuffer]='\0';
+	s->buffer[s->numInBuffer] = '\0';
 	if (!(endptr = strstr(s->buffer, "\r\n"))) {
 		/* There is no <CRLF> in s->buffer */
 /*
 		if (!connectedToServer) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"GetLine: return 0 at point 3\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"GetLine: return 0 at point 3\n");
 #endif
 
 			return(0);
-			}
+		}
 */
 /*
 		if (! NetIsThereInput(s)) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"GetLine: return 0 at point 4\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"GetLine: return 0 at point 4\n");
 #endif
 
 			return(0);
-			}
+		}
 */
 
 		/* read in <CRLF> */
@@ -168,78 +172,76 @@ register int count;
 			NNTPDisconnectFromServer(s);
 */
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"GetLine: return 0 at point 5\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"GetLine: return 0 at point 5\n");
 #endif
 
 			return(0);
-			}
-		memcpy(&(s->buffer[s->numInBuffer]),buf2,numBytes);
+		}
+		memcpy(&(s->buffer[s->numInBuffer]), buf2, numBytes);
 		s->numInBuffer += numBytes;
-		s->buffer[s->numInBuffer]='\0';
+		s->buffer[s->numInBuffer] = '\0';
 		if (!(endptr = strstr(s->buffer, "\r\n"))) {
 			/* protocol error on server end 
 			   Everything sent should be terminated with
 			   a <CRLF>... just return for now */
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
-				fprintf(stderr,"GetLine: return NULL at point 6\n");
-			}
+			if (srcTrace)
+				fprintf(stderr,
+					"GetLine: return NULL at point 6\n");
 #endif
 
 			return(NULL);
-			}
 		}
-	endptr++;endptr++; /* <CRLF> should be included in line*/
+	}
+	endptr++; /* <CRLF> should be included in line */
+	endptr++;
 
-	/* copy the line to the returnLine s->buffer */
+	/* Copy the line to the returnLine s->buffer */
 	count = 0;
 	rptr = returnLine;
 	ptr = s->buffer;
 	while (ptr != endptr) {
-		*rptr++ =  *ptr++;
+		*rptr++ = *ptr++;
 		count++;
-		}
-	*rptr = '\0'; /* null terminate the return line */
+	}
+	*rptr = '\0';	/* Null terminate the return line */
 
-	/* shift the s->buffer contents to the front */
+	/* Shift the s->buffer contents to the front */
 	s->numInBuffer -= count;
-/*	bcopy(ptr,s->buffer,s->numInBuffer);*/
-	memcpy(s->buffer,ptr,s->numInBuffer);
+	memcpy(s->buffer, ptr, s->numInBuffer);
 
 	return(returnLine);
 	
 } /* NNTPGetLine() */
 
 
-/* return a word out of the text */
-void GetWordFromString(text,retStart,retEnd)
-char *text;	 /* text to get a word out of */
-char **retStart; /* RETURNED: start of word in text */
-char **retEnd;	 /* RETURNED: end of word in text */
+/* Return a word out of the text */
+void GetWordFromString(char *text, char **retStart, char **retEnd)
 {
-char *start;
-char *end;
+	char *start;
+	char *end;
 
 	if (!text) {
 		*retStart = *retEnd = text;
 		return;
-		}
+	}
 
 	start = text;
-	while ((*start) && isspace(*start)){ /*skip over leading space*/
+	while ((*start) && isspace(*start)) {     /* Skip over leading space */
 		start++;
-		}
+	}
 
 	end = start;
-	while((*end) && (!isspace(*end))){ /* find next space */
+	while ((*end) && (!isspace(*end))) {      /* Find next space */
 		end++;
-		}
+	}
 
 	*retStart = start;
 	*retEnd = end;
 	return;
 }
-
-
+#else
+int ccidummy5; /* Shut the freaking stupid compiler up */
+#endif /* End ifdef CCI */

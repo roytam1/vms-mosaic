@@ -1,29 +1,32 @@
-/*                                            Utilities for the Authorization parts of libwww
+/*                            Utilities for the Authorization parts of libwww
+
              COMMON PARTS OF AUTHORIZATION MODULE TO BOTH SERVER AND BROWSER
                                              
-   This module is the interface to the common parts of Access Authorization (AA) package
-   for both server and browser. Important to know about memory allocation:
+   This module is the interface to the common parts of Access Authorization
+   (AA) package for both server and browser.  Important to know about memory
+   allocation:
    
-   Routines in this module use dynamic allocation, but free automatically all the memory
-   reserved by them.
+   Routines in this module use dynamic allocation, but free automatically
+   all the memory reserved by them.
    
-   Therefore the caller never has to (and never should) free() any object returned by
-   these functions.
+   Therefore the caller never has to (and never should) free() any object
+   returned by these functions.
    
-   Therefore also all the strings returned by this package are only valid until the next
-   call to the same function is made. This approach is selected, because of the nature of
-   access authorization: no string returned by the package needs to be valid longer than
-   until the next call.
+   Therefore also all the strings returned by this package are only valid
+   until the next call to the same function is made.  This approach is
+   selected, because of the nature of access authorization: no string
+   returned by the package needs to be valid longer than until the next call.
    
-   This also makes it easy to plug the AA package in: you don't have to ponder whether to
-   free() something here or is it done somewhere else (because it is always done somewhere
-   else).
+   This also makes it easy to plug the AA package in: you don't have to
+   ponder whether to free() something here or is it done somewhere else
+   (because it is always done somewhere else).
    
-   The strings that the package needs to store are copied so the original strings given as
-   parameters to AA functions may be freed or modified with no side effects.
+   The strings that the package needs to store are copied so the original
+   strings given as parameters to AA functions may be freed or modified
+   with no side effects.
    
-   Also note: The AA package does not free() anything else than what it has itself
-   allocated.
+   Also note: The AA package does not free() anything else than what it
+   has itself allocated.
    
  */
 
@@ -47,7 +50,7 @@
 #define HTAApALi        HTAA_parseArgList
 #define HTAAsuRe        HTAA_setupReader
 #define HTAAgUfL        HTAA_getUnfoldedLine
-#endif /*SHORT_NAMES*/
+#endif
 
 
 /*
@@ -70,18 +73,18 @@ Default filenames
 ** Numeric constants
 */
 #define MAX_USERNAME_LEN        128      /* @@ Longest allowed username    */
-#define MAX_PASSWORD_LEN        3*13    /* @@ Longest allowed password    */
-                                        /* (encrypted, so really only 3*8)*/
+#define MAX_PASSWORD_LEN        3*13     /* @@ Longest allowed password    */
+                                         /* (encrypted, so really only 3*8)*/
 #define MAX_METHODNAME_LEN      128      /* @@ Longest allowed method name */
 #define MAX_FIELDNAME_LEN       128      /* @@ Longest field name in       */
-                                        /* protection setup file          */
+                                         /* protection setup file          */
 #define MAX_PATHNAME_LEN        128      /* @@ Longest passwd/group file   */
-                                        /* patname to allow               */
+                                         /* patname to allow               */
 
 /*
 ** Helpful macros
 */
-#define FREE(x) if (x) {free(x); x=NULL;}
+#define FREE(x) if (x) {free(x); x = NULL;}
 
 /*
 
@@ -89,8 +92,8 @@ Datatype definitions
 
   HTAASCHEME
   
-   The enumeration HTAAScheme represents the possible authentication schemes used by the
-   WWW Access Authorization.
+   The enumeration HTAAScheme represents the possible authentication
+   schemes used by the WWW Access Authorization.
    
  */
 
@@ -98,13 +101,12 @@ typedef enum {
     HTAA_UNKNOWN,
     HTAA_NONE,
     HTAA_BASIC,
-    HTAA_PUBKEY,
     HTAA_KERBEROS_V4,
     HTAA_KERBEROS_V5,
     HTAA_MD5,
     HTAA_DOMAIN,
     HTAA_MAX_SCHEMES, /* THIS MUST ALWAYS BE LAST! Number of schemes */
-    HTAA_LOGIN /*No...this must always be last because it is a FTP hack*/
+    HTAA_LOGIN        /* No, this must always be last because it is a FTP hack*/
 } HTAAScheme;
 
 /*
@@ -136,20 +138,20 @@ Authentication Schemes
 ** ON EXIT:
 **      returns         the enumerated constant for that scheme.
 */
-PUBLIC HTAAScheme HTAAScheme_enum PARAMS((WWW_CONST char* name));
+extern HTAAScheme HTAAScheme_enum PARAMS((WWW_CONST char *name));
 
 
 /* PUBLIC                                               HTAAScheme_name()
 **                      GET THE NAME OF A GIVEN SCHEME
 ** ON ENTRY:
 **      scheme          is one of the scheme enum values:
-**                      HTAA_NONE, HTAA_BASIC, HTAA_PUBKEY, ...
+**                      HTAA_NONE, HTAA_BASIC, HTAA_MD5, ...
 **
 ** ON EXIT:
 **      returns         the name of the scheme, i.e.
-**                      "none", "basic", "pubkey", ...
+**                      "none", "basic", ...
 */
-PUBLIC char *HTAAScheme_name PARAMS((HTAAScheme scheme));
+extern char *HTAAScheme_name PARAMS((HTAAScheme scheme));
 
 /*
 
@@ -166,7 +168,7 @@ Methods
 **      returns         HTAAMethod enumerated value corresponding
 **                      to the given name.
 */
-PUBLIC HTAAMethod HTAAMethod_enum PARAMS((WWW_CONST char * name));
+extern HTAAMethod HTAAMethod_enum PARAMS((WWW_CONST char *name));
 
 
 /* PUBLIC                                               HTAAMethod_name()
@@ -179,7 +181,7 @@ PUBLIC HTAAMethod HTAAMethod_enum PARAMS((WWW_CONST char * name));
 **      returns         the name of the scheme, i.e.
 **                      "GET", "PUT", ...
 */
-PUBLIC char *HTAAMethod_name PARAMS((HTAAMethod method));
+extern char *HTAAMethod_name PARAMS((HTAAMethod method));
 
 
 /* PUBLIC                                               HTAAMethod_inList()
@@ -192,8 +194,8 @@ PUBLIC char *HTAAMethod_name PARAMS((HTAAMethod method));
 **      returns         YES, if method was found.
 **                      NO, if not found.
 */
-PUBLIC BOOL HTAAMethod_inList PARAMS((HTAAMethod        method,
-                                     HTList *           list));
+extern BOOL HTAAMethod_inList PARAMS((HTAAMethod     method,
+                                     HTList         *list));
 /*
 
 Match Template Against Filename
@@ -222,8 +224,8 @@ Match Template Against Filename
 **      returns         YES, if filename matches the template.
 **                      NO, otherwise.
 */
-PUBLIC BOOL HTAA_templateMatch PARAMS((WWW_CONST char * template,
-                                       WWW_CONST char * filename));
+extern BOOL HTAA_templateMatch PARAMS((WWW_CONST char *template,
+                                       WWW_CONST char *filename));
 
 
 /* PUBLIC                                       HTAA_makeProtectionTemplate()
@@ -245,13 +247,13 @@ PUBLIC BOOL HTAA_templateMatch PARAMS((WWW_CONST char * template,
 **                              being a comment marker here,
 **                              there really isn't any space.
 */
-PUBLIC char *HTAA_makeProtectionTemplate PARAMS((WWW_CONST char * docname));
+extern char *HTAA_makeProtectionTemplate PARAMS((WWW_CONST char *docname));
+
 /*
 
 MIME Argument List Parser
 
  */
-
 
 /* PUBLIC                                               HTAA_parseArgList()
 **              PARSE AN ARGUMENT LIST GIVEN IN A HEADER FIELD
@@ -279,7 +281,7 @@ MIME Argument List Parser
 **              the number of order number of that item. E.g.
 **              "1" for the first, etc.
 */
-PUBLIC HTList *HTAA_parseArgList PARAMS((char * str));
+extern HTList *HTAA_parseArgList PARAMS((char *str));
 
 /*
 
@@ -306,7 +308,7 @@ Header Line Reader
 **                      will use this buffer first and then
 **                      proceed to read from socket.
 */
-PUBLIC void HTAA_setupReader PARAMS((char *     start_of_headers,
+extern void HTAA_setupReader PARAMS((char      *start_of_headers,
                                      int        length,
                                      int        soc));
 
@@ -332,11 +334,8 @@ PUBLIC void HTAA_setupReader PARAMS((char *     start_of_headers,
 **      Field-Name: Blaa-Blaa This-Is-A-Continuation-Line Here-Is_Another
 **
 */
-PUBLIC char *HTAA_getUnfoldedLine NOPARAMS;
+extern char *HTAA_getUnfoldedLine NOPARAMS;
 
 #endif /* Not in SRC tree */
 #endif  /* NOT HTAAUTIL_H */
 
-/*
-
-   End of file HTAAUtil.h. */

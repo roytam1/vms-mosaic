@@ -12,10 +12,10 @@
 
 #include <stdio.h>
 #include "HTML.h"
-
 #include "HTUtils.h"
 #include "tcp.h"
 #include "HTParse.h"
+#include "../libnut/str-tools.h"
 
 #define BIG 10000		/* Arbitrary limit to value length */
 #define PARAM_MAX BIG
@@ -25,19 +25,18 @@ extern int www2Trace;
 #endif
 
 struct _HTStructured {
-	WWW_CONST HTStructuredClass *	isa;
+	WWW_CONST HTStructuredClass *isa;
 	/* ... */
 };
 
-#define PUTC(c) (*me->target->isa->put_character)(me->target, c)
 #define PUTS(s) (*me->target->isa->put_string)(me->target, s)
 #define START(e) (*me->target->isa->start_element)(me->target, e, 0, 0)
 #define END(e) (*me->target->isa->end_element)(me->target, e)
 
 
-/*	Here are the parameters which can be specified in a  source file
+/*	Here are the parameters which can be specified in a source file
 */
-PRIVATE WWW_CONST char* par_name[] = {
+PRIVATE WWW_CONST char *par_name[] = {
 	"version", 
 	"ip-address",
 #define PAR_IP_NAME 2
@@ -79,30 +78,14 @@ enum tokenstate { beginning, before_tag, colon, before_value,
 */
 
 struct _HTStream {
-	WWW_CONST HTStreamClass *	isa;
-	HTStructured *		target;
-	char *			par_value[PAR_COUNT];
+	WWW_CONST HTStreamClass *isa;
+	HTStructured 		*target;
+	char 			*par_value[PAR_COUNT];
 	enum tokenstate 	state;
-	char 			param[BIG+1];
+	char 			param[BIG + 1];
 	int			param_number;
 	int			param_count;
 };
-
-
-
-
-PUBLIC WWW_CONST char * hex = "0123456789ABCDEF";
-
-/*	Decode one hex character
-*/
-
-PUBLIC char from_hex ARGS1(char, c)
-{
-    return 		  (c>='0')&&(c<='9') ? c-'0'
-			: (c>='A')&&(c<='F') ? c-'A'+10
-			: (c>='a')&&(c<='f') ? c-'a'+10
-			:		       0;
-}
 
 
 /*			State machine
@@ -121,18 +104,19 @@ PUBLIC char from_hex ARGS1(char, c)
 /*		Treat One Character
 **		-------------------
 */
-PRIVATE void WSRCParser_put_character ARGS2(HTStream*, me, char, c)
+PRIVATE void WSRCParser_put_character ARGS2(HTStream *, me, char, c)
 {
     switch (me->state) {
     case beginning:
-        if (c=='(') me->state = before_tag;
+        if (c == '(')
+	    me->state = before_tag;
 	break;
 	
     case before_tag:
-        if (c==')') {
+        if (c == ')') {
 	    me->state = done;
 	    return;			/* Done with input file */
-	} else if (c==':') {
+	} else if (c == ':') {
 	    me->param_count = 0;
 	    me->state = colon;
 	}				/* Ignore other text */
@@ -141,16 +125,17 @@ PRIVATE void WSRCParser_put_character ARGS2(HTStream*, me, char, c)
     case colon:
         if (WHITE(c)) {
 	    me->param[me->param_count++] = 0;	/* Terminate */
-	    for(me->param_number = 0; par_name[me->param_number]; me->param_number++) {
-		if (0==strcmp(par_name[me->param_number], me->param)) {
+	    for (me->param_number = 0; par_name[me->param_number];
+		 me->param_number++) {
+		if (0 == strcmp(par_name[me->param_number], me->param))
 		    break;
-		}
 	    }
 	    if (!par_name[me->param_number]) {	/* Unknown field */
 #ifndef DISABLE_TRACE
-	        if (www2Trace) fprintf(stderr,
-		    "HTWSRC: Unknown field `%s' in source file\n",
-		    me->param);
+	        if (www2Trace)
+		    fprintf(stderr,
+			    "HTWSRC: Unknown field `%s' in source file\n",
+		            me->param);
 #endif
 		me->param_number = PAR_UNKNOWN;
 		me->state = before_value;	/* Could be better ignore */
@@ -158,23 +143,25 @@ PRIVATE void WSRCParser_put_character ARGS2(HTStream*, me, char, c)
 	    }
 	    me->state = before_value;
 	} else {
-	    if (me->param_count < PARAM_MAX)  me->param[me->param_count++] = c;
+	    if (me->param_count < PARAM_MAX)
+		me->param[me->param_count++] = c;
 	}
 	break;
 	
     case before_value:
-        if (c==')') {
+        if (c == ')') {
 	    me->state = done;
 	    return;			/* Done with input file */
 	}
-	if (WHITE(c)) return;		/* Skip white space */
+	if (WHITE(c))
+	    return;			/* Skip white space */
 	me->param_count = 0;
-	if (c=='"') {
+	if (c == '"') {
 	    me->state = quoted_value;
 	    break;
 	}
-	me->state = (c=='"') ? quoted_value : 
-		    (c=='(') ? bracketed_value : value;
+	me->state = (c == '"') ? quoted_value : 
+		    (c == '(') ? bracketed_value : value;
 	me->param[me->param_count++] = c;	/* Don't miss first character */
 	break;
 
@@ -184,37 +171,41 @@ PRIVATE void WSRCParser_put_character ARGS2(HTStream*, me, char, c)
 	    StrAllocCopy(me->par_value[me->param_number], me->param);
 	    me->state = before_tag;
 	} else {
-	    if (me->param_count < PARAM_MAX)  me->param[me->param_count++] = c;
+	    if (me->param_count < PARAM_MAX)
+		me->param[me->param_count++] = c;
 	}
 	break;
 
     case bracketed_value:
-        if (c==')') {
+        if (c == ')') {
 	    me->param[me->param_count] = 0;
 	    StrAllocCopy(me->par_value[me->param_number], me->param);
 	    me->state = before_tag;
 	    break;
 	}
-        if (me->param_count < PARAM_MAX)  me->param[me->param_count++] = c;
+        if (me->param_count < PARAM_MAX)
+	    me->param[me->param_count++] = c;
 	break;
 	
     case quoted_value:
-        if (c=='"') {
+        if (c == '"') {
 	    me->param[me->param_count] = 0;
 	    StrAllocCopy(me->par_value[me->param_number], me->param);
 	    me->state = before_tag;
 	    break;
 	}
 	
-	if (c=='\\') {		/* Ignore escape but switch state */
+	if (c == '\\') {		/* Ignore escape but switch state */
 	    me->state = escape_in_quoted;
 	    break;
 	}
-	if (me->param_count < PARAM_MAX)  me->param[me->param_count++] = c;
+	if (me->param_count < PARAM_MAX)
+	    me->param[me->param_count++] = c;
 	break;
 
     case escape_in_quoted:
-        if (me->param_count < PARAM_MAX)  me->param[me->param_count++] = c;
+        if (me->param_count < PARAM_MAX)
+	    me->param[me->param_count++] = c;
 	me->state = quoted_value;
 	break;
 	
@@ -230,7 +221,7 @@ PRIVATE void WSRCParser_put_character ARGS2(HTStream*, me, char, c)
 **
 */
 
-void give_parameter ARGS2(HTStream *, me, int, p)
+PRIVATE void give_parameter ARGS2(HTStream *, me, int, p)
 {
     PUTS(par_name[p]);
     if (me->par_value[p]) {
@@ -252,12 +243,12 @@ PRIVATE void WSRC_gen_html ARGS2(HTStream *, me, BOOL, source_file)
     if (me->par_value[PAR_DATABASE_NAME]) {
 	char * shortname = 0;
 	int l;
+
 	StrAllocCopy(shortname, me->par_value[PAR_DATABASE_NAME]);
 	l = strlen(shortname);
-	if ( l > 4 && !strcasecomp(shortname + l -4, ".src")) {
-	    shortname[l-4] = 0;	/* Chop of .src -- boring! */
-	}
-	
+	if (l > 4 && !my_strcasecmp(shortname + l - 4, ".src"))
+	    shortname[l - 4] = 0;	/* Chop of .src -- boring! */
+
 	START(HTML_TITLE);
 	PUTS(shortname);
 	PUTS(source_file ? " WAIS source file" : " index");
@@ -277,9 +268,9 @@ PRIVATE void WSRC_gen_html ARGS2(HTStream *, me, BOOL, source_file)
 	START(HTML_DD);
 	if (me->par_value[PAR_IP_NAME] &&
 	    me->par_value[PAR_DATABASE_NAME]) {
-    
 	    char WSRC_address[256];
-	    char * www_database;
+	    char *www_database;
+
 	    www_database = HTEscape(me->par_value[PAR_DATABASE_NAME]);
 	    sprintf(WSRC_address, "wais://%s:%s/%s",
 		me->par_value[PAR_IP_NAME],
@@ -287,22 +278,22 @@ PRIVATE void WSRC_gen_html ARGS2(HTStream *, me, BOOL, source_file)
 			: "210",
 		www_database);
 	
-            PUTS ("<A HREF=\"");
-            PUTS (WSRC_address);
-            PUTS ("\">");
+            PUTS("<A HREF=\"");
+            PUTS(WSRC_address);
+            PUTS("\">");
 	    PUTS("Direct access");
             PUTS("</A>");
 	    
 	    PUTS(" or ");
 	    
 	    sprintf(WSRC_address, "http://www.ncsa.uiuc.edu:8001/%s:%s/%s",
-		me->par_value[PAR_IP_NAME],
-		me->par_value[PAR_TCP_PORT] ? me->par_value[PAR_TCP_PORT]
-		: "210",
-		www_database);
-            PUTS ("<A HREF=\"");
-            PUTS (WSRC_address);
-            PUTS ("\">");
+		    me->par_value[PAR_IP_NAME],
+		    me->par_value[PAR_TCP_PORT] ? me->par_value[PAR_TCP_PORT]
+		     : "210",
+		    www_database);
+            PUTS("<A HREF=\"");
+            PUTS(WSRC_address);
+            PUTS("\">");
 	    PUTS("through NCSA gateway");
             PUTS("</A>");
 	    
@@ -341,36 +332,38 @@ PRIVATE void WSRC_gen_html ARGS2(HTStream *, me, BOOL, source_file)
 } /* generate html */
 
 
-PRIVATE void WSRCParser_put_string ARGS2(HTStream *, context, WWW_CONST char*, str)
+PRIVATE void WSRCParser_put_string ARGS2(HTStream *, context,
+					 WWW_CONST char *, str)
 {
     WWW_CONST char *p;
-    for(p=str; *p; p++)
+
+    for (p = str; *p; p++)
         WSRCParser_put_character(context, *p);
 }
 
 
 PRIVATE void WSRCParser_write ARGS3(
-		HTStream *, 	context,
-		WWW_CONST char*, 	str,
-		int, 		l)
+		HTStream *, 	  context,
+		WWW_CONST char *, str,
+		int, 		  l)
 {
     WWW_CONST char *p;
-    WWW_CONST char *e = str+l;
-    for(p=str; p<e; p++)
+    WWW_CONST char *e = str + l;
+
+    for (p = str; p < e; p++)
         WSRCParser_put_character(context, *p);
 }
 
 
 PRIVATE void WSRCParser_free ARGS1(HTStream *, me)
 {
+    int p;
+
     WSRC_gen_html(me, YES);
-    {
-	int p;
-	for(p=0; par_name[p]; p++) {	/* Clear out old values */
-	    if (me->par_value[p]) {
-		free(me->par_value[p]);
-	    }
-	}
+
+    for (p = 0; par_name[p]; p++) {	/* Clear out old values */
+	if (me->par_value[p])
+	    free(me->par_value[p]);
     }
     free(me);
 }
@@ -390,7 +383,7 @@ PRIVATE void WSRCParser_handle_interrupt ARGS1(HTStream *, me)
 **		---------------
 */
 
-HTStreamClass WSRCParserClass = {
+static HTStreamClass WSRCParserClass = {
 	"WSRCParser",
 	WSRCParser_free,
 	WSRCParser_end_document,
@@ -398,31 +391,28 @@ HTStreamClass WSRCParserClass = {
  	WSRCParser_put_string,
 	WSRCParser_write,
         WSRCParser_handle_interrupt
-
 };
 
 
 /*		Converter from WAIS Source to whatever
 **		--------------------------------------
 */
-PUBLIC HTStream* HTWSRCConvert ARGS5(
+PUBLIC HTStream *HTWSRCConvert ARGS5(
 	HTPresentation *,	pres,
 	HTParentAnchor *,	anchor,	
 	HTStream *,		sink,
-        HTFormat,                format_in,
-        int,                     compressed)
+        HTFormat,               format_in,
+        int,                    compressed)
 {
-    HTStream * me = (HTStream*) malloc(sizeof(*me));
+    HTStream *me = (HTStream *) malloc(sizeof(*me));
+    int p;
 
     me->isa = &WSRCParserClass;
     me->target = HTML_new(NULL, pres->rep_out, sink);
 
-    {
-	int p;
-	for(p=0; p < PAR_COUNT; p++) {	/* Clear out parameter values */
-	    me->par_value[p] = 0;
-	}
-    }
+    for (p = 0; p < PAR_COUNT; p++)	/* Clear out parameter values */
+	me->par_value[p] = 0;
+
     me->state = beginning;
 
     return me;

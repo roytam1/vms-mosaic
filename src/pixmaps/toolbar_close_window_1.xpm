@@ -2,10 +2,10 @@
 static char * toolbar_close_window_1_xpm[] = {
 "24 24 5 1",
 " 	c None",
-".	c #FAFA13134040",
+".	c #FFFF00000000",
 "X	c #808080808080",
 "o	c #000000000000",
-"O	c #51515151FBFB",
+"O	c #33336666FFFF",
 "                        ",
 "                        ",
 "   ..XXXXXXXXXXXXXXX    ",

@@ -1,0 +1,31 @@
+	Module		MOSAIC_CLD
+	Ident		"01-000"
+
+Define	Verb		MOSAIC
+	Parameter	P1, Label=STARTURL, Value(Type=$REST_OF_LINE), Prompt="Startup URL"
+	Qualifier	COLOR, Nonnegatable
+	Qualifier	MONO, Nonnegatable
+	Qualifier	DEFAULTS, Negatable
+	Qualifier	DISPLAY, Value(Required), Nonnegatable
+	Qualifier	GEOMETRY, Value(Required), Nonnegatable
+	Qualifier	INSTALL_COLORMAP, Negatable
+	Qualifier	ICONIC, Negatable
+	Qualifier	REMOTE, Negatable
+	Qualifier	MAILBOX_NAME, Value(Required), Nonnegatable
+	Qualifier	GROUP, Negatable
+	Qualifier	HOME, Value(Required), Nonnegatable
+	Qualifier	VERSION, Negatable
+	Qualifier	DELAY_IMAGE_LOADS, Negatable
+	Qualifier	GLOBAL_HISTORY, Negatable
+	Qualifier	IMAGE_CACHE_SIZE, Value(Required,Type=$NUMBER), Nonnegatable
+	Qualifier	KIOSK, Value(LIST,TYPE=KIOSK), Negatable
+	Qualifier	TEMP_DIRECTORY, Value(Required,Type=$FILE), Nonnegatable
+	Qualifier	BACKGROUND, Value(Required), NonNegatable
+	Qualifier	FOREGROUND, Value(Required), NonNegatable
+	Qualifier	SYNCHRONOUS, Negatable
+	Qualifier	NOPREFERENCES, Nonnegatable
+	DisAllow	MONO and COLOR
+
+Define	Type		KIOSK
+	Keyword		NOEXIT
+	Keyword		PRINT

@@ -26,19 +26,17 @@
 /*		HTML Object
 **		-----------
 */
-#define MAX_NESTING 20		/* Should be checked by parser */
 
 struct _HTStructured {
-    WWW_CONST HTStructuredClass * 	isa;
-    HTParentAnchor * 		node_anchor;
-    HText * 			text;
-
-    HTStream*			target;			/* Output stream */
+    WWW_CONST HTStructuredClass *isa;
+    HTParentAnchor  		*node_anchor;
+    HText  			*text;
+    HTStream			*target;		/* Output stream */
     HTStreamClass		targetClass;		/* Output routines */
 };
 
 struct _HTStream {
-    WWW_CONST HTStreamClass *	isa;
+    WWW_CONST HTStreamClass *isa;
     /* .... */
 };
 
@@ -46,7 +44,7 @@ struct _HTStream {
 **
 **	This MUST match exactly the table referred to in the DTD!
 */
-static char * ISO_Latin1[] = {
+static char *ISO_Latin1[] = {
   	"\306",	/* capital AE diphthong (ligature) */ 
   	"\301",	/* capital A, acute accent */ 
   	"\302",	/* capital A, circumflex accent */ 
@@ -115,12 +113,11 @@ static char * ISO_Latin1[] = {
 };
 
 
-
 /*		Set character set
 **		----------------
 */
 
-PRIVATE char** p_entity_values = ISO_Latin1;	/* Pointer to translation */
+PRIVATE char **p_entity_values = ISO_Latin1;	/* Pointer to translation */
 
 PUBLIC void HTMLUseCharacterSet ARGS1(HTMLCharacterSet, i)
 {
@@ -138,14 +135,12 @@ PUBLIC void HTMLUseCharacterSet ARGS1(HTMLCharacterSet, i)
 */
 PRIVATE void HTML_put_character ARGS2(HTStructured *, me, char, c)
 {
-  if (!me->text) 
-    {
+  if (!me->text) {
       me->text = HText_new();
       HText_beginAppend(me->text);
-    }
+  }
   HText_appendCharacter(me->text, c);
 }
-
 
 
 /*	String handling
@@ -154,13 +149,12 @@ PRIVATE void HTML_put_character ARGS2(HTStructured *, me, char, c)
 **	This is written separately from put_character becuase the loop can
 **	in some cases be promoted to a higher function call level for speed.
 */
-PRIVATE void HTML_put_string ARGS2(HTStructured *, me, WWW_CONST char*, s)
+PRIVATE void HTML_put_string ARGS2(HTStructured *, me, WWW_CONST char *, s)
 {
-  if (!me->text) 
-    {
+  if (!me->text) {
       me->text = HText_new();
       HText_beginAppend(me->text);
-    }
+  }
   HText_appendText(me->text, s);
 }
 
@@ -168,11 +162,13 @@ PRIVATE void HTML_put_string ARGS2(HTStructured *, me, WWW_CONST char*, s)
 /*	Buffer write
 **	------------
 */
-PRIVATE void HTML_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
+PRIVATE void HTML_write ARGS3(HTStructured *, me, WWW_CONST char *, s, int, l)
 {
-    WWW_CONST char* p;
-    WWW_CONST char* e = s+l;
-    for (p=s; s<e; p++) HTML_put_character(me, *p);
+    WWW_CONST char *p;
+    WWW_CONST char *e = s + l;
+
+    for (p = s; s < e; p++)
+	HTML_put_character(me, *p);
 }
 
 
@@ -181,25 +177,23 @@ PRIVATE void HTML_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
 */
 PRIVATE void HTML_start_element ARGS4(
 	HTStructured *, 	me,
-	int,		element_number,
-	WWW_CONST BOOL*,	 	present,
+	int,			element_number,
+	WWW_CONST BOOL *, 	present,
 	WWW_CONST char **,	value)
 {
-  if (!me->text) 
-    {
+  if (!me->text) {
       me->text = HText_new();
       HText_beginAppend(me->text);
-    }
-  switch (element_number) 
-    {
+  }
+  switch (element_number) {
     case HTML_A:
       {
         char *href = NULL;
-        if (present[HTML_A_HREF]) 
-          {
+
+        if (present[HTML_A_HREF]) {
             StrAllocCopy(href, value[HTML_A_HREF]);
             HTSimplify(href);
-          }
+        }
         HText_beginAnchor(me->text, href);
         free (href);
       }
@@ -253,18 +247,17 @@ PRIVATE void HTML_start_element ARGS4(
     case HTML_IMG:
       {
         char *href = NULL;
-        if (present[HTML_A_HREF]) 
-          {
+
+        if (present[HTML_A_HREF]) {
             StrAllocCopy(href, value[HTML_A_HREF]);
             HTSimplify(href);
-          }
-        if (href)
-          {
+        }
+        if (href) {
             HText_appendText(me->text, "<IMG SRC=\"");
             HText_appendText(me->text, href);
             HText_appendText(me->text, "\">");
             free (href);
-          }
+        }
       }
       break;
     case HTML_H1:
@@ -393,7 +386,6 @@ PRIVATE void HTML_put_entity ARGS2(HTStructured *, me, int, entity_number)
 }
 
 
-
 /*	Free an HTML object
 **	-------------------
 **
@@ -405,29 +397,27 @@ PRIVATE void HTML_put_entity ARGS2(HTStructured *, me, int, entity_number)
 **	If non-interactive, everything is freed off.   No: crashes -listrefs
 **	Otherwise, the interactive object is left.	
 */
-PUBLIC void HTML_free ARGS1(HTStructured *, me)
+PRIVATE void HTML_free ARGS1(HTStructured *, me)
 {
   if (me->text)
     HText_endAppend(me->text);
   
-  if (me->target) 
-    {
+  if (me->target) {
       (*me->targetClass.end_document)(me->target);
       (*me->targetClass.free)(me->target);
-    }
+  }
   free(me);
 }
 
 
-PUBLIC void HTML_handle_interrupt ARGS1(HTStructured *, me)
+PRIVATE void HTML_handle_interrupt ARGS1(HTStructured *, me)
 {
   if (me->text)
-    HText_doAbort (me->text);
+      HText_doAbort(me->text);
   
-  if (me->target) 
-    {
+  if (me->target)
       (*me->targetClass.handle_interrupt)(me->target);
-    }
+
   /* Not necessarily safe... */
   /* free(me); */
 }
@@ -445,7 +435,7 @@ PUBLIC WWW_CONST HTStructuredClass HTMLPresentation = /* As opposed to print etc
 {		
 	"text/html",
 	HTML_free,
-	HTML_end_document, HTML_handle_interrupt,
+	HTML_end_document, 	HTML_handle_interrupt,
 	HTML_put_character, 	HTML_put_string,  HTML_write,
 	HTML_start_element, 	HTML_end_element,
 	HTML_put_entity
@@ -458,37 +448,39 @@ PUBLIC WWW_CONST HTStructuredClass HTMLPresentation = /* As opposed to print etc
 **	The strutcured stream can generate either presentation,
 **	or plain text, or HTML.
 */
-PUBLIC HTStructured* HTML_new ARGS3(
+PUBLIC HTStructured *HTML_new ARGS3(
 	HTParentAnchor *, 	anchor,
 	HTFormat,		format_out,
-	HTStream*,		stream)
+	HTStream *,		stream)
 {
 
-    HTStructured * me;
+    HTStructured *me;
     
 #if 0
     if (format_out != WWW_PLAINTEXT && format_out != WWW_PRESENT) {
-        HTStream * intermediate = HTStreamStack(WWW_HTML, format_out, 0,
+        HTStream *intermediate = HTStreamStack(WWW_HTML, format_out, 0,
 		stream, anchor);
-        fprintf (stderr, "+++ YO in HTML_new\n");
-	if (intermediate) return HTMLGenerator(intermediate);
+
+        fprintf(stderr, "+++ YO in HTML_new\n");
+	if (intermediate)
+	    return HTMLGenerator(intermediate);
         fprintf(stderr, "** Internal error: can't parse HTML to %s\n",
        		HTAtom_name(format_out));
 	exit (-99);
     }
 #endif
 
-    me = (HTStructured*) malloc(sizeof(*me));
-    if (me == NULL) outofmem(__FILE__, "HTML_new");
-
+    me = (HTStructured *) malloc(sizeof(*me));
+    if (me == NULL) 
+	outofmem(__FILE__, "HTML_new");
     me->isa = &HTMLPresentation;
     me->node_anchor =  anchor;
     me->text = 0;
     me->target = stream;
     if (stream) 
-      me->targetClass = *stream->isa;	/* Copy pointers */
+        me->targetClass = *stream->isa;	/* Copy pointers */
     
-    return (HTStructured*) me;
+    return (HTStructured *) me;
 }
 
 
@@ -512,8 +504,8 @@ PUBLIC HTStructured* HTML_new ARGS3(
 */
 
 PUBLIC int HTLoadError ARGS3(
-	HTStream *, 	sink,
-	int,		number,
+	HTStream *, 		sink,
+	int,			number,
 	WWW_CONST char *,	message)
 {
     HTAlert(message);		/* @@@@@@@@@@@@@@@@@@@ */
@@ -522,4 +514,3 @@ PUBLIC int HTLoadError ARGS3(
 #endif
     return -1;
 } 
-

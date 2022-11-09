@@ -12,8 +12,8 @@
  */
 
 
-#ifndef ___HAS_LIST_STUFF_BEEN_INCLUDED_BEFORE___
-#define ___HAS_LIST_STUFF_BEEN_INCLUDED_BEFORE___
+#ifndef ___LIST_STUFF_INCLUDED_BEFORE___
+#define ___LIST_STUFF_INCLUDED_BEFORE___
 
 #include <stdlib.h>
 #include "list.h"

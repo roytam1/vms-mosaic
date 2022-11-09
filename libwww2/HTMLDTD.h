@@ -1,13 +1,13 @@
-/*                                               The HTML DTD -- software interface in libwww
-                              HTML DTD - SOFTWARE INTERFACE
+/*                             HTML DTD - SOFTWARE INTERFACE
                                              
-   SGML purists should excuse the use of the term "DTD" in this file to represent
-   DTD-related information which is not exactly a DTD itself.
+   SGML purists should excuse the use of the term "DTD" in this file to
+   represent DTD-related information which is not exactly a DTD itself.
    
-   The C modular structure doesn't work very well here, as the dtd is partly in the .h and
-   partly in the .c which are not very independent.  Tant pis.
-   
+   The C modular structure doesn't work very well here, as the dtd is
+   partly in the .h and partly in the .c which are not very independent.
+   Tant pis.
  */
+
 #ifndef HTMLDTD_H
 #define HTMLDTD_H
 
@@ -15,16 +15,10 @@
 #include "SGML.h"
 
 /*
-
-Element Numbers
-
- */
-
-/*
-
-   Must Match all tables by element! These include tables in HTMLDTD.c and code in HTML.c
-   .
-   
+ * Element Numbers
+ *
+ * Must Match all tables by element!  These include tables in HTMLDTD.c
+ * and code in HTML.c.
  */
 typedef enum _HTMLElement {
         HTML_A,         HTML_ADDRESS,
@@ -50,15 +44,10 @@ typedef enum _HTMLElement {
 #define HTML_ELEMENTS 45
 
 /*
-
-Attribute numbers
-
- */
-
-/*
-
-   Identifier is HTML_<element>_<attribute>. These must match the tables in HTML.c!
-   
+ * Attribute numbers
+ *
+ * Identifier is HTML_<element>_<attribute>.  These must match the
+ * tables in HTML.c!
  */
 #define HTML_A_HREF             0
 #define HTML_A_NAME             1
@@ -76,7 +65,3 @@ Attribute numbers
 extern WWW_CONST SGML_dtd HTML_dtd;
 
 #endif /* HTMLDTD_H */
-
-/*
-
-   End of module definition  */

@@ -52,6 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2003, 2004, 2005, 2006 - The VMS Mosaic Project */
+
 /* SOCKS mods by:
  * Ying-Da Lee, <ylee@syl.dl.nec.com>
  * NEC Systems Laboratory
@@ -65,6 +67,7 @@
 #include "gui.h"
 #include "pan.h"
 #include "child.h"
+#include "mo-www.h"
 #include "newsrc.h"
 #include "hotlist.h"
 #include "globalhist.h"
@@ -73,7 +76,6 @@
 #endif
 
 #include <signal.h>
-#include <string.h>
 #ifndef VMS
 #include <sys/utsname.h>
 #else
@@ -87,26 +89,30 @@
 #include <errno.h>
 #include <starlet.h>
 #include <lib$routines.h>
+
 #define DVI$_DEVNAM 32
 #define LNM$_STRING 2
+
 char *built_time = BUILD_TIME;
 char *ident_ver = IDENT_VER;
 static int has_mbx = 0;
 static short mbx_channel;
-static char mbx_buf[100];
-void InitExternalDirective();
-unsigned long mbx_event_flag = 23; /* Must be a flag in first cluster ( <32 ) */
+static char mbx_buf[200];
+unsigned long mbx_event_flag = 23; /* Must be a flag in first cluster ( < 32) */
 unsigned short mbx_iosb[4];
-extern void application_user_feedback (char *);
 #endif /* VMS, BSN, GEC */
 
 char *userPath = NULL;
 
+extern mo_root_hotlist *default_hotlist;
+
+/* Normal exit.  Save cookies, etc. */
 void mo_exit(void)
 {
-  mo_write_default_hotlist();
+  if (default_hotlist->modified)
+    mo_write_default_hotlist();
   if (get_pref_boolean(eUSE_COOKIE_FILE))
-    HTStoreCookies(get_pref_string(eCOOKIE_FILE));
+    HTStoreCookies(get_pref_string(eCOOKIE_FILE), get_pref_string(ePERM_FILE));
   newsrc_kill();
   if (get_pref_boolean(eUSE_GLOBAL_HISTORY))
     mo_write_global_history();
@@ -118,12 +124,11 @@ void mo_exit(void)
 }
 
 #ifndef VMS
-MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective (MO_SIGHANDLER_ARGS)
+MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective(MO_SIGHANDLER_ARGS)
 {
   char filename[64];
   char line[MO_LINE_LENGTH], *status, *directive, *url;
   FILE *fp;
-
 
   signal(SIGUSR1, SIG_IGN);
 
@@ -135,20 +140,19 @@ MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective (MO_SIGHANDLER_ARGS)
     goto done;
 
   status = fgets(line, MO_LINE_LENGTH, fp);
-  if (!status || !(*line)) {
+  if (!status || !*line) {
     fclose(fp);
     goto done;
   }
   directive = strdup(line);
 
-  /* We now allow URL to not exist, since some directives
-     don't need it. */
+  /* We now allow URL to not exist, since some directives don't need it. */
   status = fgets(line, MO_LINE_LENGTH, fp);
-  if (!status || !(*line))
+  if (!status || !(*line)) {
     url = strdup("dummy");
-  else
+  } else {
     url = strdup(line);
-  
+  }
   mo_process_external_directive(directive, url);
 
   free(directive);
@@ -159,44 +163,11 @@ MO_SIGHANDLER_RETURNTYPE ProcessExternalDirective (MO_SIGHANDLER_ARGS)
  done:
   signal(SIGUSR1, (void *)ProcessExternalDirective);
   return;
-}  
-#else
-void ProcessExternalDirective (char *cd, int *s, XtInputId *id)
-{
-  char *status, *directive, *url;
-  extern void mo_process_external_directive(char *directive, char *url);
-  int free_url = 0;
-
-  if (!(mbx_iosb[0] & 1))
-	goto done;
-  if (mbx_iosb[1] == 0)
-	goto done;
-  mbx_buf[mbx_iosb[1]] = '\0';
-  directive = mbx_buf;
-
-  /* We now allow URL to not exist, since some directives
-     don't need it. */
-  if ((status = strchr(mbx_buf, '|')) != NULL) {
-    *status = '\0';
-    status++;
-    url = status;
-  } else {
-    url = strdup("No URL specified.");
-    free_url = 1;
-  } /* Need something in URL to prevent crashes */
+}
   
-  mo_process_external_directive(directive, url);
+#else
 
-  if (free_url)
-	free(url);
-
-done:
-  InitExternalDirective(0, 0);
-  return;
-}  
-
-void
-InitExternalDirective (int grp_mbx, char *mbx_name_in)
+void InitExternalDirective(int grp_mbx, char *mbx_name_in)
 {
   char mbx_name[64], mbx_dev[64];
 
@@ -239,6 +210,7 @@ InitExternalDirective (int grp_mbx, char *mbx_name_in)
        */
       if (!(sys$crelnm(0, &tab_desc, &log_desc, 0, &itm) & 1)) {
         char *str;
+
         str = (char *) malloc(256 * sizeof(char));
         sprintf(str,
 	    "Could not enter the mailbox name in the group table.\nError: %s\0",
@@ -249,10 +221,12 @@ InitExternalDirective (int grp_mbx, char *mbx_name_in)
     }
     if (!(sys$crembx(0, &mbx_channel, 0, 0, promsk, 0, &mbx_desc, 0, 0) & 1)) {
       char *str;
+
       str = (char *) malloc(256 * sizeof(char));
       sprintf(str, "Could not open mailbox %s\nError: %s\0", mbx_name,
-         strerror(errno, vaxc$errno));
-      if (grp_mbx) strcat(str,
+              strerror(errno, vaxc$errno));
+      if (grp_mbx)
+	strcat(str,
          "\nCheck your Mosaic process privileges (GRPNAM is needed for a group mailbox).\0");
       application_user_feedback(str);  
       free(str);
@@ -272,10 +246,11 @@ InitExternalDirective (int grp_mbx, char *mbx_name_in)
         sprintf(str,
          "Mailbox for external directive processing is device %s\nName: %s\n\0",
          mbx_dev, mbx_name);
-        if (grp_mbx)
+        if (grp_mbx) {
           strcat(str, "The name is in the group logical table.\0");
-        else
+        } else {
           strcat(str, "The name is in the process logical table only.\0");
+	}
         fnam = (char *)malloc(strlen(home) + 32);
         sprintf(fnam, "%smosaic.mbx", home);
         remove(fnam);
@@ -289,15 +264,15 @@ InitExternalDirective (int grp_mbx, char *mbx_name_in)
         free(str);
       }
     }
-/*
- * Deassign LNM$TEMPORARY_MAILBOX (LNM$GROUP) from LNM$PROCESS_DIRECTORY
- */
+    /*
+     * Deassign LNM$TEMPORARY_MAILBOX (LNM$GROUP) from LNM$PROCESS_DIRECTORY
+     */
     if (grp_mbx)
       sys$dellnm(&tab_desc, &log_desc, 0);
   }
-/*
- * Start to listen to the mailbox.
- */
+  /*
+   * Start to listen to the mailbox.
+   */
   if (has_mbx == 1) {
     if (!(sys$qio(mbx_event_flag, mbx_channel, IO$_READVBLK, mbx_iosb, 0, 0,
                   mbx_buf, sizeof(mbx_buf), 0, 0, 0, 0) & 1)) {
@@ -311,9 +286,42 @@ InitExternalDirective (int grp_mbx, char *mbx_name_in)
     }
   }
 }
+
+void ProcessExternalDirective(XtPointer cd, int *s, XtInputId *id)
+{
+  char *status, *directive, *url;
+  int free_url = 0;
+
+  if (!(mbx_iosb[0] & 1))
+    goto done;
+  if (mbx_iosb[1] == 0)
+    goto done;
+  mbx_buf[mbx_iosb[1]] = '\0';
+  directive = mbx_buf;
+
+  /* We now allow URL to not exist, since some directives don't need it. */
+  if ((status = strchr(mbx_buf, '|')) != NULL) {
+    *status = '\0';
+    status++;
+    url = status;
+  } else {
+    url = strdup("No URL specified.");
+    free_url = 1;
+  } /* Need something in URL to prevent crashes */
+  
+  mo_process_external_directive(directive, url);
+
+  if (free_url)
+    free(url);
+
+ done:
+  InitExternalDirective(0, 0);
+  return;
+}  
 #endif /* VMS, BSN */
 
-static void RealFatal (void)
+/* Fatal exit */
+static void RealFatal(void)
 {
   signal(SIGBUS, 0);
   signal(SIGSEGV, 0);
@@ -329,22 +337,21 @@ static void RealFatal (void)
 }
 
 #ifdef __STDC__
-static void FatalProblem (int sig)
+static void FatalProblem(int sig)
 #else /* not __STDC__ */
 #ifdef _HPUX_SOURCE
-static MO_SIGHANDLER_RETURNTYPE FatalProblem
-  (int sig, int code, struct sigcontext *scp,
-                        char *addr)
+static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
+					     struct sigcontext *scp, char *addr)
 #else
-static MO_SIGHANDLER_RETURNTYPE FatalProblem
-  (int sig, int code, struct sigcontext *scp, char *addr)
+static MO_SIGHANDLER_RETURNTYPE FatalProblem(int sig, int code,
+					     struct sigcontext *scp, char *addr)
 #endif
 #endif /* not __STDC__ */
 {
 #ifndef VMS
   fprintf(stderr, "\nCongratulations, you have found a bug in\n");
   fprintf(stderr, "VMS Mosaic %s on %s.\n\n", MO_VERSION_STRING, 
-           MO_MACHINE_TYPE);
+          MO_MACHINE_TYPE);
   fprintf(stderr, "If a core file was generated in your directory,\n");
   fprintf(stderr, "please do one of the following:\n\n");
   fprintf(stderr, "  %% dbx /path/to/Mosaic /path/to/core\n");
@@ -352,9 +359,11 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem
   fprintf(stderr, "OR\n\n");
   fprintf(stderr, "  %% gdb /path/to/Mosaic /path/to/core\n");
   fprintf(stderr, "  gdb> where\n\n");
-  fprintf(stderr, "Mail the results, and a description of what you were doing at the time,\n");
-  fprintf(stderr, "(include any URLs involved!) to %s.\n\nWe thank you for your support.\n\n", 
-          MO_DEVELOPER_ADDRESS);
+  fprintf(stderr,
+    "Mail the results and a description of what you were doing at the time,\n");
+  fprintf(stderr,
+    "(include any URLs involved!) to %s.\n\nWe thank you for your support.\n\n",
+    MO_DEVELOPER_ADDRESS);
 #else
 #define SYI$_HW_NAME 4362
 #define SYI$_VERSION 4096
@@ -369,25 +378,25 @@ static MO_SIGHANDLER_RETURNTYPE FatalProblem
   int status, pagfilcnt, pgflquota;
   unsigned short l_hardware, l_version;
 
-struct  dsc$descriptor_s
-{
-  unsigned short  dsc$w_length;
-  unsigned char   dsc$b_dtype;
-  unsigned char   dsc$b_class;
-  char            *dsc$a_pointer;
-} hardware_desc = {sizeof(hardware), 14, 1, NULL},
-  VMS_version_desc = {sizeof(VMS_version), 14, 1, NULL};
+  struct dsc$descriptor_s {
+    unsigned short  dsc$w_length;
+    unsigned char   dsc$b_dtype;
+    unsigned char   dsc$b_class;
+    char            *dsc$a_pointer;
+  } hardware_desc = {sizeof(hardware), 14, 1, NULL},
+    VMS_version_desc = {sizeof(VMS_version), 14, 1, NULL};
 
   hardware_desc.dsc$a_pointer = hardware;
   VMS_version_desc.dsc$a_pointer = VMS_version;
 
   fprintf(stderr,
-	"\nCongratulations, you may have found a bug in (your copy of)\n");
+          "\nCongratulations, you may have found a bug in (your copy of)\n");
   fprintf(stderr, "VMS Mosaic %s on %s.\n", MO_VERSION_STRING, MO_MACHINE_TYPE);
+
   status = lib$getjpi((void *)&jpi_pagfilcnt, 0, 0, &pagfilcnt, 0, 0);
   status = lib$getjpi((void *)&jpi_pgflquota, 0, 0, &pgflquota, 0, 0);
   fprintf(stderr, "\nRemaining page file quota %d (page file quota = %d)\n",
-	pagfilcnt, pgflquota);
+	  pagfilcnt, pgflquota);
   if (pagfilcnt < 1000) {
     fprintf(stderr,
 	"You have probably run out of page file quota.  An absolute minimum for Mosaic\n");
@@ -398,56 +407,98 @@ struct  dsc$descriptor_s
   }
 
   fprintf(stderr,
-	"\nIf you did not read the README.VMS-3_x file carefully before installing, it\n");
+      "\nIf you did not read the README.VMS-3_x file carefully before installing, it\n");
   fprintf(stderr,
-	"might be a good time to do it now.  If there were any compilation or linking\n");
+      "might be a good time to do it now.  If there were any compilation or linking\n");
   fprintf(stderr,
-	"errors, you should try to find the reason for them and correct them.\n");
+      "errors, you should try to find the reason for them and correct them.\n");
   fprintf(stderr,
-	"If this does not help, please take note of what happened in as much detail\n");
+      "If this does not help, please take note of what happened in as much detail\n");
   fprintf(stderr, "as possible and send mail to cook@wvnet.edu.\n\n");
-  status = lib$getsyi((void *)&syi_hw_name, 0, &hardware_desc, &l_hardware, 0, 0);
-  status = lib$getsyi((void *)&syi_version, 0, &VMS_version_desc, &l_version, 0, 0);
+
+  status = lib$getsyi((void *)&syi_hw_name, 0, &hardware_desc, &l_hardware,
+		      0, 0);
+  status = lib$getsyi((void *)&syi_version, 0, &VMS_version_desc, &l_version,
+		      0, 0);
   hardware[l_hardware] = '\0';
   VMS_version[l_version] = '\0';
-  for (cp = &VMS_version[l_version-1]; VMS_version; cp--) {
-    if (*cp != ' ') break;
+  for (cp = &VMS_version[l_version - 1]; VMS_version; cp--) {
+    if (*cp != ' ')
+      break;
     *cp = '\0';
   }
   fprintf(stderr, "Your VMS version appears to be %s running on a %s.\n",
-	VMS_version, hardware);
+	  VMS_version, hardware);
+
+  fprintf(stderr, "The TCP/IP software is ");
 #ifdef MULTINET
-  fprintf(stderr, "The TCP/IP software is MultiNet.\n");
+  fprintf(stderr, "MultiNet.\n");
 #elif WIN_TCP
-  fprintf(stderr, "The TCP/IP software is Pathway.\n");
+  fprintf(stderr, "Pathway.\n");
 #elif SOCKETSHR
-  fprintf(stderr, "The TCP/IP software is SOCKETSHR/NETLIB.\n");
+  fprintf(stderr, "SOCKETSHR/NETLIB.\n");
 #else
-  fprintf(stderr, "The TCP/IP software is UCX (or UCX compatible).\n");
+  fprintf(stderr, "TCP/IP Services (or UCX compatible).\n");
 #endif
+
+  fprintf(stderr, "Your Mosaic executable was generated using Motif ");
+#ifdef MOTIF1_5
+  fprintf(stderr, "1.5\n");
+#else
+
+#ifdef MOTIF1_4
+#ifdef MOTIF1_41
+  fprintf(stderr, "1.4-1\n");
+#else
+  fprintf(stderr, "1.4\n");
+#endif
+
+#else
+
+#ifdef MOTIF1_3
+#ifdef MOTIF1_30
+  fprintf(stderr, "1.3-0\n");
+#else
+#ifdef MOTIF1_31
+  fprintf(stderr, "1.3-1\n");
+#else
+  fprintf(stderr, "1.3-x\n");
+#endif
+#endif
+
+#else
+
+#ifdef MOTIF1_26
+  fprintf(stderr, "1.2-6\n");
+#else
 #ifdef MOTIF1_25
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.2-5\n");
+  fprintf(stderr, "1.2-5\n");
 #else
 #ifdef MOTIF1_24
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.2-4\n");
+  fprintf(stderr, "1.2-4\n");
 #else
 #ifdef MOTIF1_23
 #if (MOTIF1_23 == 7)
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.2-3 ECO 7\n");
+  fprintf(stderr, "1.2-3 ECO 7\n");
 #else
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.2-3\n");
+  fprintf(stderr, "1.2-3\n");
 #endif
 #else
 #ifdef MOTIF1_2
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.2\n");
+  fprintf(stderr, "1.2\n");
 #else
-  fprintf(stderr, "Your Mosaic executable was generated using Motif 1.1\n");
+  fprintf(stderr, "1.1\n");
 #endif
 #endif
 #endif
 #endif
+#endif
+#endif
+#endif
+#endif
+
   fprintf(stderr, "and was built on %s with image Ident %s\n", built_time,
-	 ident_ver);
+	  ident_ver);
 #if defined(VAXC) && !defined(__DECC)
   fprintf(stderr, "using VAX C.\n"); 
 #else
@@ -458,20 +509,26 @@ struct  dsc$descriptor_s
 #endif
 #endif
 #ifdef HAVE_SSL
+#ifdef HAVE_HPSSL
+  fprintf(stderr, "It was linked with HP SSL.\n\n"); 
+#else
   fprintf(stderr, "It was linked with OpenSSL.\n\n"); 
+#endif
 #else
   fprintf(stderr, "\n");
 #endif
   cp = getenv("SYS$LOGIN");
-  if (!cp)
+  if (!cp) {
     fprintf(stderr, "The logical SYS$LOGIN is undefined.\n");
-  else
+  } else {
     fprintf(stderr, "The logical SYS$LOGIN points to %s\n", cp);
+  }
   cp = getenv("SYS$SCRATCH");
-  if (!cp)
+  if (!cp) {
     fprintf(stderr, "The logical SYS$SCRATCH is undefined.\n");
-  else
+  } else {
     fprintf(stderr, "The logical SYS$SCRATCH points to %s\n", cp);
+  }
 #endif /* VMS, BSN */
   fprintf(stderr, "...exiting VMS Mosaic now.\n\n");
 
@@ -479,7 +536,7 @@ struct  dsc$descriptor_s
 }
 
 
-main (int argc, char **argv, char **envp)
+main(int argc, char **argv, char **envp)
 {
 #ifndef VMS
   struct utsname u;
@@ -487,40 +544,36 @@ main (int argc, char **argv, char **envp)
 #endif /* VMS, GEC */
 
 #ifndef VMS
-	userPath = getenv("PATH");
+  userPath = getenv("PATH");
 
 /*
-	if (getenv("XKEYSYMDB") == NULL) {
-		fprintf(stderr,
-			"If you have key binding problems, set the environment variable XKEYSYMDB\nto the location of the correct XKeysymDB file on your system.\n");
-	}
-*/
-
-/*
-	if (uname(&u) < 0) {
-		perror("uname");
-	} else {
-		if (!strcmp(u.sysname,"SunOS") && 
-		    (!strcmp(u.release,"5.0")
-		     || !strcmp(u.release,"5.1")
-		     || !strcmp(u.release,"5.2")
-		     || !strcmp(u.release,"5.3")
-		     || !strcmp(u.release,"5.4")
-		     || !strcmp(u.release,"5.5"))) {
-			if (getenv("XKEYSYMDB") == NULL) {
-				if (!(fp = fopen("/usr/openwin/lib/X11/XKeysymDB","r"))) {
-					if (!(fp = fopen("/usr/openwin/lib/XKeysymDB","r"))) {
-					} else {
-						fclose(fp);
-						putenv("XKEYSYMDB=/usr/openwin/lib/XKeysymDB");
-					}
-				} else {
-					fclose(fp);
-					putenv("XKEYSYMDB=/usr/openwin/lib/X11/XKeysymDB");
-				}
-			}
-		}
-	}
+  if (getenv("XKEYSYMDB") == NULL)
+      fprintf(stderr,
+	"If you have key binding problems, set the environment variable XKEYSYMDB\nto the location of the correct XKeysymDB file on your system.\n");
+  if (uname(&u) < 0) {
+      perror("uname");
+  } else {
+      if (!strcmp(u.sysname, "SunOS") && 
+	  (!strcmp(u.release, "5.0") ||
+	   !strcmp(u.release, "5.1") ||
+	   !strcmp(u.release, "5.2") ||
+	   !strcmp(u.release, "5.3") ||
+	   !strcmp(u.release, "5.4") ||
+	   !strcmp(u.release, "5.5"))) {
+          if (getenv("XKEYSYMDB") == NULL) {
+              if (!(fp = fopen("/usr/openwin/lib/X11/XKeysymDB", "r"))) {
+		  if (!(fp = fopen("/usr/openwin/lib/XKeysymDB", "r"))) {
+		  } else {
+		      fclose(fp);
+		      putenv("XKEYSYMDB=/usr/openwin/lib/XKeysymDB");
+		  }
+              } else {
+	          fclose(fp);
+	          putenv("XKEYSYMDB=/usr/openwin/lib/X11/XKeysymDB");
+	      }
+          }
+      }
+  }
 */
 #endif /* VMS, GEC */
 
@@ -547,7 +600,6 @@ main (int argc, char **argv, char **envp)
   signal(SIGCHLD, (void (*)())ChildTerminated);
 #endif
 #endif /* VMS, GEC */
-
 
 #ifdef SOCKS
   SOCKSinit(argv[0]);

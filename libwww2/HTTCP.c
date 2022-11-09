@@ -36,15 +36,6 @@
 #include <sys/file.h>
 #endif
 
-/* Apparently needed for AIX 3.2. */
-#ifndef FD_SETSIZE
-#if defined(VMS) && !defined(MULTINET) && !defined(WIN_TCP)
-#define FD_SETSIZE 32
-#else
-#define FD_SETSIZE 256
-#endif /* Limit # sockets to 32 for UCX, BSN */
-#endif
-
 #ifndef DISABLE_TRACE
 extern int httpTrace;
 extern int www2Trace;
@@ -57,12 +48,6 @@ int broken_crap_hack = 0;
 
 PRIVATE char *hostname = 0;		/* The name of this host */
 
-
-/*	PUBLIC VARIABLES
-*/
-
-/* PUBLIC SockA HTHostAddress; */	/* The internet address of the host */
-					/* Valid after call to HTHostName() */
 
 /*	Encode INET status (as in sys/errno.h)			  inet_status()
 **	------------------
@@ -112,17 +97,15 @@ char *argp;
   int sdc, status;
   unsigned short fun, iosb[4];
   char *p5, *p6;
-  struct comm
-    {
+  struct comm {
       int command;
       char *addr;
-    } ioctl_comm;
-  struct it2
-    {
+  } ioctl_comm;
+  struct it2 {
       unsigned short len;
       unsigned short opt;
       struct comm *addr;
-    } ioctl_desc;
+  } ioctl_desc;
 
   if ((sdc = vaxc$get_sdc(d)) == 0) {
       errno = EBADF;
@@ -146,7 +129,7 @@ char *argp;
   ioctl_comm.command = request;
   ioctl_comm.addr = argp;
 
-  status = sys$qiow (0, sdc, fun, iosb, 0, 0, 0, 0, 0, 0, p5, p6);
+  status = sys$qiow(0, sdc, fun, iosb, 0, 0, 0, 0, 0, 0, p5, p6);
   if (!(status & 01)) {
       errno = status;
       return -1;
@@ -164,21 +147,15 @@ char *argp;
 /*	Report Internet Error
 **	---------------------
 */
-#ifdef __STDC__
 PUBLIC int HTInetStatus(char *where)
-#else
-PUBLIC int HTInetStatus(where)
-    char    *where;
-#endif
 {
 #ifndef VMS
 #ifndef DISABLE_TRACE
-    if (www2Trace) {
+    if (www2Trace)
 	fprintf(stderr,
-	    "TCP: Error %d in `errno' after call to %s() failed.\n\t%s\n",
-	    errno,  where,
-	    errno < sys_nerr ? sys_errlist[errno] : "Unknown error");
-    }
+	        "TCP: Error %d in `errno' after call to %s() failed.\n\t%s\n",
+	        errno,  where,
+	        errno < sys_nerr ? sys_errlist[errno] : "Unknown error");
 #endif
 #else
 #ifndef DISABLE_TRACE
@@ -190,9 +167,8 @@ PUBLIC int HTInetStatus(where)
 #endif
 #ifdef MULTINET
 #ifndef DISABLE_TRACE
-    if (www2Trace) {
+    if (www2Trace)
 	fprintf(stderr, "TCP: Multinet error    = %lx hex\n", socket_errno);
-    }
 #endif
 #endif /* MULTINET, BSN */
 #endif /* VMS, BSN */
@@ -220,13 +196,15 @@ PUBLIC unsigned int HTCardinal ARGS3
 	unsigned int,	max_value)
 {
     int   n;
+
     if ((**pp < '0') || (**pp > '9')) {	    /* Null string is error */
 	*pstatus = -3;  /* No number where one expeceted */
 	return 0;
     }
 
     n = 0;
-    while ((**pp>='0') && (**pp<='9')) n = n*10 + *((*pp)++) - '0';
+    while ((**pp >= '0') && (**pp <= '9'))
+	n = n * 10 + *((*pp)++) - '0';
 
     if (n > max_value) {
 	*pstatus = -4;  /* Cardinal outside range */
@@ -248,6 +226,7 @@ PUBLIC unsigned int HTCardinal ARGS3
 PUBLIC WWW_CONST char *HTInetString ARGS1(SockA *, sin)
 {
     static char string[16];
+
     sprintf(string, "%d.%d.%d.%d",
 	    (int)*((unsigned char *)(&sin->sin_addr)+0),
 	    (int)*((unsigned char *)(&sin->sin_addr)+1),
@@ -276,23 +255,21 @@ PUBLIC int HTParseInet ARGS2(SockA *, sin, WWW_CONST char *, str)
   struct hostent *phost;	/* Pointer to host - See netdb.h */
   int numeric_addr;
   char *tmp;
-  
   static char *cached_host = NULL;
   static char *cached_phost_h_addr = NULL;
   static int cached_phost_h_length = 0;
 
 #ifdef VMS
   if (strlen(str) >= sizeof(host))
-    application_user_feedback("HTParseInet host dimension is too small!");
+      application_user_feedback("HTParseInet host dimension is too small!");
 #endif /* VMS, BSN */
   strcpy(host, str);		/* Make a copy we can mutilate */
   
   /* Parse port number if present */    
   if (port = strchr(host, ':')) {
       *port++ = 0;		/* Chop off port */
-      if ((port[0] >= '0') && (port[0] <= '9')) {
+      if ((port[0] >= '0') && (port[0] <= '9'))
           sin->sin_port = htons(atol(port));
-      }
   }
   
   /* Parse host number if present. */  
@@ -316,20 +293,20 @@ PUBLIC int HTParseInet ARGS2(SockA *, sin, WWW_CONST char *, str)
           if (!phost) {
 #ifndef DISABLE_TRACE
               if (www2Trace) 
-                fprintf(stderr, 
-                   "HTTPAccess: Can't find internet node name `%s'.\n", host);
+                  fprintf(stderr, 
+                     "HTTPAccess: Can't find internet node name `%s'.\n", host);
 #endif
               return -1;  /* Fail? */
           }
 
           /* Free previously cached strings. */
           if (cached_host) {
-            free(cached_host);
-	    cached_host = NULL;
+              free(cached_host);
+	      cached_host = NULL;
 	  }
           if (cached_phost_h_addr) {
-            free(cached_phost_h_addr);
-	    cached_phost_h_addr = NULL;
+              free(cached_phost_h_addr);
+	      cached_phost_h_addr = NULL;
 	  }
 
           /* Cache new stuff. */
@@ -361,11 +338,7 @@ PUBLIC int HTParseInet ARGS2(SockA *, sin, WWW_CONST char *, str)
 **	-------------------------------------------
 **
 */
-#ifdef __STDC__
 PRIVATE void get_host_details(void)
-#else
-PRIVATE void get_host_details()
-#endif
 
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 64		/* Arbitrary limit */
@@ -373,9 +346,6 @@ PRIVATE void get_host_details()
 
 {
     char name[MAXHOSTNAMELEN+1];	/* The name of this host */
-#ifdef NEED_HOST_ADDRESS		/* no -- needs name server! */
-    struct hostent *phost;		/* Pointer to host -- See netdb.h */
-#endif
     int namelength = sizeof(name);
     
     if (hostname)
@@ -383,39 +353,16 @@ PRIVATE void get_host_details()
     gethostname(name, namelength);	/* Without domain */
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) {
+    if (www2Trace)
 	fprintf(stderr, "TCP: Local host name is %s\n", name);
-    }
 #endif
 
     StrAllocCopy(hostname, name);
 
-#ifdef NEED_HOST_ADDRESS		/* no -- needs name server! */
-    phost = gethostbyname(name);	/* See netdb.h */
-    if (!phost) {
-#ifndef DISABLE_TRACE
-	if (www2Trace)
-	    fprintf(stderr, 
-		"TCP: Can't find my own internet node address for `%s'!!\n",
-		name);
-#endif
-	return;  /* Fail! */
-    }
-    StrAllocCopy(hostname, phost->h_name);
-    memcpy(&HTHostAddress, &phost->h_addr, phost->h_length);
-#ifndef DISABLE_TRACE
-    if (www2Trace)
-	fprintf(stderr, "     Name server says that I am `%s' = %s\n",
-	    hostname, HTInetString(&HTHostAddress));
-#endif
-#endif
 }
 
-#ifdef __STDC__
-PUBLIC char * HTHostName(void)
-#else
-PUBLIC char * HTHostName()
-#endif
+
+PUBLIC char *HTHostName(void)
 {
     get_host_details();
     return hostname;
@@ -463,16 +410,18 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
 
 #ifdef SOCKS
   /* SOCKS can't yet deal with non-blocking connect request */
-  status = Rconnect(*s, (struct sockaddr*)&soc_address, sizeof(soc_address));
+  status = Rconnect(*s, (struct sockaddr *)&soc_address, sizeof(soc_address));
   if ((status == 0) && (strcmp(protocol, "FTP") == 0))
      SOCKS_ftpsrv.s_addr = soc_address.sin_addr.s_addr;
+
   {
     int intr;
+
     intr = HTCheckActiveIcon(1);
     if (intr) {
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "*** INTERRUPTED in middle of connect.\n");
+            fprintf(stderr, "*** INTERRUPTED in middle of connect.\n");
 #endif
         status = HT_INTERRUPTED;
         errno = EINTR;
@@ -501,7 +450,7 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
         HTProgress(line);
 #ifndef DISABLE_TRACE
         if (www2Trace)
-		fprintf(stderr, "Could not make connection non-blocking.\n");
+	    fprintf(stderr, "Could not make connection non-blocking.\n");
 #endif
     }
   }
@@ -511,7 +460,7 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
    * and we are non-blocking, this will almost certainly return a negative
    * status.
    */
-  status = connect(*s, (struct sockaddr*)&soc_address, sizeof(soc_address));
+  status = connect(*s, (struct sockaddr *)&soc_address, sizeof(soc_address));
 
   /*
    * According to the Sun man page for connect:
@@ -532,26 +481,24 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
    *                         the normal case.
    */
 #ifdef SVR4
-  if ((status < 0) && ((errno == EINPROGRESS) || (errno == EAGAIN)))
+  if ((status < 0) && ((errno == EINPROGRESS) || (errno == EAGAIN))) {
 #else
 #ifndef MULTINET
-  if ((status < 0) && (errno == EINPROGRESS))
+  if ((status < 0) && (errno == EINPROGRESS)) {
 #else
-  if ((status < 0) && (socket_errno == EINPROGRESS))
+  if ((status < 0) && (socket_errno == EINPROGRESS)) {
 #endif /* MULTINET, BSN */
 #endif /* SVR4 */
-    {
       struct timeval timeout;
       int ret;
 
       ret = 0;
-      while (ret <= 0)
-	{
+      while (ret <= 0) {
           fd_set writefds;
           int intr;
           
           FD_ZERO(&writefds);
-          FD_SET(*s, &writefds);
+          FD_SET((unsigned) *s, &writefds);
 
 	  /* linux (and some other os's, I think) clear timeout... 
 	   * let's reset it every time. */
@@ -559,9 +506,10 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
 	  timeout.tv_usec = 100000;
 
 #if defined(__hpux) || defined(MULTINET) || defined(_DECC_V4_SOURCE) || (defined(__DECC) && !defined(__DECC_VER)) || __DECC_
-          ret = select(FD_SETSIZE, NULL, (int *)&writefds, NULL, &timeout);
+          ret = select((unsigned) *s + 1, NULL, (int *)&writefds, NULL,
+		       &timeout);
 #else
-          ret = select(FD_SETSIZE, NULL, &writefds, NULL, &timeout);
+          ret = select((unsigned) *s + 1, NULL, &writefds, NULL, &timeout);
 #endif
 	  /*
 	   * Again according to the Sun and Motorola man pages for connect:
@@ -573,38 +521,34 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
            * Otherwise if it is EALREADY keep on trying to complete the
 	   * connection.
 	   */
-          if ((ret < 0) && (errno != EALREADY))
-            {
+          if ((ret < 0) && (errno != EALREADY)) {
               status = ret;
               break;
-            }
-          else if (ret > 0)
-            {
+          } else if (ret > 0) {
 	      /*
 	       * Extra check here for connection success, if we try to connect
 	       * again, and get EISCONN, it means we have a successful
 	       * connection.
 	       */
-              status = connect(*s, (struct sockaddr*)&soc_address,
+              status = connect(*s, (struct sockaddr *)&soc_address,
                                sizeof(soc_address));
 #ifndef MULTINET
 #if !defined(VMS) || defined(WIN_TCP) || defined(SOCKETSHR)
-              if ((status < 0) && (errno == EISCONN))
+              if ((status < 0) && (errno == EISCONN)) {
 #else
-/*
- * A UCX feature: Instead of returning EISCONN UCX returns EADDRINUSE.
- * Test for this status also.
- */
-              if ((status < 0) && ((errno == EISCONN) || (errno == EADDRINUSE)))
+	/*
+	 * A UCX feature: Instead of returning EISCONN UCX returns EADDRINUSE.
+	 * Test for this status also.
+	 */
+              if ((status < 0) &&
+		  ((errno == EISCONN) || (errno == EADDRINUSE))) {
 #endif /* VMS, UCX, BSN */
 #else
-              if ((status < 0) && (socket_errno == EISCONN))
+              if ((status < 0) && (socket_errno == EISCONN)) {
 #endif /* MULTINET, BSN */
-                {
                   status = 0;
-                }
+              }
               break;
-            }
 	  /*
 	   * The select says we aren't ready yet.
 	   * Try to connect again to make sure.  If we don't get EALREADY
@@ -612,47 +556,44 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
 	   * For some reason SVR4 returns EAGAIN here instead of EALREADY,
 	   * even though the man page says it should be EALREADY.
 	   */
-          else
-            {
-              status = connect(*s, (struct sockaddr*)&soc_address,
+          } else {
+              status = connect(*s, (struct sockaddr *)&soc_address,
                                sizeof(soc_address));
 #ifdef SVR4
               if ((status < 0) && (errno != EALREADY) && (errno != EAGAIN) &&
-			(errno != EISCONN))
+			(errno != EISCONN)) {
 #else
 #ifndef MULTINET
 #if !defined(VMS) || defined(WIN_TCP) || defined(SOCKETSHR)
-              if ((status < 0) && (errno != EALREADY) && (errno != EISCONN))
+              if ((status < 0) && (errno != EALREADY) && (errno != EISCONN)) {
 #else
-/*
- * UCX pre 3 apparently returns errno = 18242 instead of any of the
- * EALREADY or EISCONN values.
- */
+	/*
+	 * UCX pre 3 apparently returns errno = 18242 instead of any of the
+	 * EALREADY or EISCONN values.
+	 */
               if ((status < 0) && (errno != EALREADY) && (errno != EISCONN) &&
-                  (errno != 18242))
+                  (errno != 18242)) {
 #endif /* UCX, BSN */
 #else
               if ((status < 0) && (socket_errno != EALREADY) &&
-		  (socket_errno != EISCONN))
+		  (socket_errno != EISCONN)) {
 #endif /* MULTINET, BSN */
 #endif /* SVR4 */
-                {
                   break;
-                }
-            }
+              }
+          }
           intr = HTCheckActiveIcon(1);
-          if (intr)
-            {
+          if (intr) {
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                fprintf(stderr, "*** INTERRUPTED in middle of connect.\n");
+                  fprintf(stderr, "*** INTERRUPTED in middle of connect.\n");
 #endif
               status = HT_INTERRUPTED;
               errno = EINTR;
               break;
-            }
-	}
-    }
+          }
+      }
+  }
 
   /*
    * Make the socket blocking again on good connect
@@ -672,18 +613,18 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
           HTProgress(line);
 #ifndef DISABLE_TRACE
           if (www2Trace)
-		fprintf(stderr, "Could not restore socket to blocking.\n");
+	      fprintf(stderr, "Could not restore socket to blocking.\n");
 #endif
       }
   } else {
-  /*
-   * Else the connect attempt failed or was interrupted,
-   * so close up the socket.
-   */
+      /*
+       * Else the connect attempt failed or was interrupted,
+       * so close up the socket.
+       */
 #if !defined(VMS)
-	close(*s);
+      close(*s);
 #else
-	NETCLOSE(*s);
+      NETCLOSE(*s);
 #endif /* VMS */
   }
 
@@ -705,10 +646,10 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
   ready = 0;
   while (!ready) {
 	/*
-	**  Protect against an infinite loop.
+	**  Protect against an infinite loop.  Try for 30 minutes.
 	*/
-	if (tries++ >= 180000) {
-	    HTProgress("Socket read failed for 180,000 tries.");
+	if (tries++ >= 18,000) {
+	    HTProgress("Socket read failed for 18,000 tries.");
 	    return HT_INTERRUPTED;
 	}
 	if (broken_crap_hack && (tries > 40)) {
@@ -720,7 +661,7 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
 	    return 0;
 	}
         FD_ZERO(&readfds);
-        FD_SET(fildes, &readfds);
+        FD_SET((unsigned) fildes, &readfds);
 
 	/* linux (and some other os's, I think) clear timeout... 
 	 * let's reset it every time. */
@@ -728,19 +669,17 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
 	timeout.tv_usec = 100000;
 
 #if defined(__hpux) || defined(MULTINET) || defined(_DECC_V4_SOURCE) || (defined(__DECC) && !defined(__DECC_VER)) || __DECC_
-        ret = select(FD_SETSIZE, (int *)&readfds, NULL, NULL, &timeout);
+        ret = select((unsigned) fildes + 1, (int *)&readfds, NULL, NULL,
+		     &timeout);
 #else
-        ret = select(FD_SETSIZE, &readfds, NULL, NULL, &timeout);
+        ret = select((unsigned) fildes + 1, &readfds, NULL, NULL, &timeout);
 #endif
-        if (ret < 0) {
-                return -1;
-	}
-        if (ret > 0) {
-                ready = 1;
-  	}
-	if (HTCheckActiveIcon(1)) {
-		return HT_INTERRUPTED;
-        }
+        if (ret < 0)
+            return -1;
+        if (ret > 0)
+            ready = 1;
+	if (HTCheckActiveIcon(1))
+            return HT_INTERRUPTED;
   }
 
 #ifndef VMS
@@ -753,11 +692,12 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
 
 	outbuf = buf;
 	for (i = 0; i < ret; i++) {
-		if (isalnum(outbuf[i]) || isspace(outbuf[i]) ||
-		    ispunct(outbuf[i]))
-			fprintf(stderr, "%c", outbuf[i]);
-		else
-			fprintf(stderr, ".");
+	    if (isalnum(outbuf[i]) || isspace(outbuf[i]) ||
+		ispunct(outbuf[i])) {
+		fprintf(stderr, "%c", outbuf[i]);
+	    } else {
+		fprintf(stderr, ".");
+	    }
 	}
   }
 #endif
@@ -785,14 +725,22 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
 	int i;
 	unsigned char *outbuf;
 
+	if (nb <= 0) {
+	    fprintf(stderr, "HTTP: Read errno = %d\n", errno);
+#ifdef VMS
+	    if (errno == EVMSERR)
+		fprintf(stderr, "HTTP: Read vaxc$errno = %d\n", vaxc$errno);
+#endif
+	}
 	outbuf = buf;
 	for (i = 0; i < nb; i++) {
-		if (isalnum(outbuf[i]) ||
-		    (isspace(outbuf[i]) && (outbuf[i] < 128)) ||
-		    (ispunct(outbuf[i]) && (outbuf[i] < 128)))
-			fprintf(stderr, "%c", outbuf[i]);
-		else
-			fprintf(stderr, ".");
+	    if (isalnum(outbuf[i]) ||
+		(isspace(outbuf[i]) && (outbuf[i] < 128)) ||
+		(ispunct(outbuf[i]) && (outbuf[i] < 128))) {
+		fprintf(stderr, "%c", outbuf[i]);
+	    } else {
+		fprintf(stderr, ".");
+	    }
 	}
   }
 #endif

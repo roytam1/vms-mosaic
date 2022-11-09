@@ -52,15 +52,25 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2006  - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
-
+void MCCIRequestDisplay(MCCIPort, int *, char *, char *, char *, char *,
+			int, int);
+void MCCIRequestDoCommand(int *, char *, char *, char *);
+int  MCCIRequestFileToURL(int *, char *, char *);
+void MCCIRequestForm(MCCIPort, int *, char *, char *, int);
+void MCCIRequestGetAnnotation(int *, char *, char **, int *, char *, int);
+void MCCIRequestGetURL(int *, char *, char *, int, char *);
+void MCCIRequestPost(MCCIPort, int *, char *, char *, char *, char *, int, int);
+int  MCCIRequestPutAnnotation(int *, char *, int, char *, char *, int);
+void MCCIRequestQuit(void);
+void MCCIRequestSendAnchor(int *, char *, MCCIPort, int);
+void MCCIRequestSendBrowserView(int *, char *, MCCIPort, int);
+void MCCIRequestSendEvent(int *, char *, MCCIPort, int);
+void MCCIRequestSendOutput(int *, char * , MCCIPort, int, char *);

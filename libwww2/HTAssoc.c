@@ -38,9 +38,12 @@ PUBLIC void HTAssocList_delete ARGS1(HTAssocList *, alist)
     if (alist) {
 	HTAssocList *cur = alist;
 	HTAssoc *assoc;
-	while (NULL != (assoc = (HTAssoc*)HTList_nextObject(cur))) {
-	    if (assoc->name) free(assoc->name);
-	    if (assoc->value) free(assoc->value);
+
+	while (NULL != (assoc = (HTAssoc *)HTList_nextObject(cur))) {
+	    if (assoc->name)
+		free(assoc->name);
+	    if (assoc->value)
+		free(assoc->value);
 	    free(assoc);
 	}
 	HTList_delete(alist);
@@ -49,23 +52,27 @@ PUBLIC void HTAssocList_delete ARGS1(HTAssocList *, alist)
 
 
 PUBLIC void HTAssocList_add ARGS3(HTAssocList *,	alist,
-				  WWW_CONST char *,		name,
-				  WWW_CONST char *,		value)
+				  WWW_CONST char *,	name,
+				  WWW_CONST char *,	value)
 {
     HTAssoc *assoc;
 
     if (alist) {
-	if (!(assoc = (HTAssoc*)malloc(sizeof(HTAssoc))))
+	if (!(assoc = (HTAssoc *)malloc(sizeof(HTAssoc))))
 	    outofmem(__FILE__, "HTAssoc_add");
 	assoc->name = NULL;
 	assoc->value = NULL;
 
-	if (name) StrAllocCopy(assoc->name, name);
-	if (value) StrAllocCopy(assoc->value, value);
-	HTList_addObject(alist, (void*)assoc);
+	if (name)
+	    StrAllocCopy(assoc->name, name);
+	if (value)
+	    StrAllocCopy(assoc->value, value);
+	HTList_addObject(alist, (void *)assoc);
     }
 #ifndef DISABLE_TRACE
-    else if (www2Trace) fprintf(stderr, "HTAssoc_add: ERROR: assoc list NULL!!\n");
+    else if (www2Trace) {
+        fprintf(stderr, "HTAssoc_add: ERROR: assoc list NULL!!\n");
+    }
 #endif
 }
 
@@ -76,7 +83,7 @@ PUBLIC char *HTAssocList_lookup ARGS2(HTAssocList *,	alist,
     HTAssocList *cur = alist;
     HTAssoc *assoc;
 
-    while (NULL != (assoc = (HTAssoc*)HTList_nextObject(cur))) {
+    while (NULL != (assoc = (HTAssoc *)HTList_nextObject(cur))) {
 	if (!my_strncasecmp(assoc->name, name, strlen(name)))
 	    return assoc->value;
     }

@@ -52,22 +52,18 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
-
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
 #ifndef __IMG_H__
 #define __IMG_H__
 
-mo_status mo_free_image_data (void *);
-mo_status mo_register_image_resolution_function (mo_window *);
+extern mo_status mo_free_image_data(void *);
+extern void ImageResolve(Widget w, XtPointer clid, XtPointer calld);
+extern void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs);
 
 #endif
-

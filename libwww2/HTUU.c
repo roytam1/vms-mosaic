@@ -1,4 +1,3 @@
-
 /* MODULE							HTUU.c
 **			UUENCODE AND UUDECODE
 **
@@ -48,6 +47,8 @@ PRIVATE char six2pr[64] = {
 
 PRIVATE unsigned char pr2six[256];
 
+/* ENC is the basic 1 character encoding function to make a char printing */
+#define ENC(c) six2pr[c]
 
 /*--- function HTUU_encode -----------------------------------------------
  *
@@ -73,14 +74,10 @@ PUBLIC int HTUU_encode ARGS3(unsigned char *,	bufin,
 			     unsigned int,	nbytes,
 			     char *,		bufcoded)
 {
-/* ENC is the basic 1 character encoding function to make a char printing */
-#define ENC(c) six2pr[c]
-
    register char *outptr = bufcoded;
    unsigned int i;
-   /* This doesn't seem to be needed (AL):   register unsigned char *inptr  = bufin; */
 
-   for (i=0; i<nbytes; i += 3) {
+   for (i = 0; i < nbytes; i += 3) {
       *(outptr++) = ENC(*bufin >> 2);            /* c1 */
       *(outptr++) = ENC(((*bufin << 4) & 060) | ((bufin[1] >> 4) & 017)); /*c2*/
       *(outptr++) = ENC(((bufin[1] << 2) & 074) | ((bufin[2] >> 6) & 03));/*c3*/
@@ -92,10 +89,10 @@ PUBLIC int HTUU_encode ARGS3(unsigned char *,	bufin,
    /* If nbytes was not a multiple of 3, then we have encoded too
     * many characters.  Adjust appropriately.
     */
-   if(i == nbytes+1) {
+   if (i == nbytes + 1) {
       /* There were only 2 bytes in that last group */
       outptr[-1] = '=';
-   } else if(i == nbytes+2) {
+   } else if (i == nbytes + 2) {
       /* There was only 1 byte in that last group */
       outptr[-1] = '=';
       outptr[-2] = '=';
@@ -104,6 +101,10 @@ PUBLIC int HTUU_encode ARGS3(unsigned char *,	bufin,
    return(outptr - bufcoded);
 }
 
+
+/* single character decode */
+#define DEC(c) pr2six[c]
+#define MAXVAL 63
 
 /*--- function HTUU_decode ------------------------------------------------
  *
@@ -128,25 +129,21 @@ PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
 			     unsigned char *,	bufplain,
 			     int,		outbufsize)
 {
-/* single character decode */
-#define DEC(c) pr2six[c]
-#define MAXVAL 63
-
    static int first = 1;
-
    int nbytesdecoded, j;
-   register unsigned char *bufin = (unsigned char *) bufcoded;
+   register unsigned char *bufin;
    register unsigned char *bufout = bufplain;
    register int nprbytes;
 
    /* If this is the first call, initialize the mapping table.
     * This code should work even on non-ASCII machines.
     */
-   if(first) {
+   if (first) {
       first = 0;
-      for(j=0; j<256; j++) pr2six[j] = MAXVAL+1;
-
-      for(j=0; j<64; j++) pr2six[six2pr[j]] = (unsigned char) j;
+      for (j = 0; j < 256; j++)
+	  pr2six[j] = MAXVAL + 1;
+      for (j = 0; j < 64; j++)
+	  pr2six[six2pr[j]] = (unsigned char) j;
 #if 0
       pr2six['A']= 0; pr2six['B']= 1; pr2six['C']= 2; pr2six['D']= 3; 
       pr2six['E']= 4; pr2six['F']= 5; pr2six['G']= 6; pr2six['H']= 7; 
@@ -169,21 +166,22 @@ PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
 
    /* Strip leading whitespace. */
 
-   while(*bufcoded==' ' || *bufcoded == '\t') bufcoded++;
+   while(*bufcoded==' ' || *bufcoded == '\t')
+      bufcoded++;
 
    /* Figure out how many characters are in the input buffer.
     * If this would decode into more bytes than would fit into
     * the output buffer, adjust the number of input bytes downwards.
     */
-   bufin = bufcoded;
-   while(pr2six[*(bufin++)] <= MAXVAL);
+   bufin = (unsigned char *)bufcoded;
+   while(pr2six[*(bufin++)] <= MAXVAL)
+      ;
    nprbytes = bufin - ((unsigned char *)bufcoded) - 1;
-   nbytesdecoded = ((nprbytes+3)/4) * 3;
-   if(nbytesdecoded > outbufsize) {
-      nprbytes = (outbufsize*4)/3;
-   }
+   nbytesdecoded = ((nprbytes + 3) / 4) * 3;
+   if (nbytesdecoded > outbufsize)
+      nprbytes = (outbufsize * 4) / 3;
 
-   bufin = bufcoded;
+   bufin = (unsigned char *)bufcoded;
    
    while (nprbytes > 0) {
       *(bufout++) = (unsigned char) (DEC(*bufin) << 2 | DEC(bufin[1]) >> 4);
@@ -193,8 +191,8 @@ PUBLIC int HTUU_decode ARGS3(char *,		bufcoded,
       nprbytes -= 4;
    }
    
-   if(nprbytes & 03) {
-      if(pr2six[bufin[-2]] > MAXVAL) {
+   if (nprbytes & 03) {
+      if (pr2six[bufin[-2]] > MAXVAL) {
          nbytesdecoded -= 2;
       } else {
          nbytesdecoded -= 1;

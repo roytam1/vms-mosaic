@@ -52,6 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #ifndef __XMXP_H__
 #define __XMXP_H__
 
@@ -94,7 +96,7 @@
 
 /* Motif Widget-specific includes. */
 #include <Xm/BulletinB.h>
-#include <Xm/CascadeBG.h>
+#include <Xm/CascadeB.h>
 #include <Xm/Command.h>
 #include <Xm/DialogS.h>
 #include <Xm/DrawingA.h>
@@ -112,32 +114,14 @@
 #include <Xm/Scale.h>
 #include <Xm/ScrollBar.h>
 #include <Xm/SelectioB.h>
+#include <Xm/Separator.h>
 #include <Xm/SeparatoG.h>
 #include <Xm/Text.h>
 #include <Xm/TextF.h>
 #include <Xm/ToggleBG.h>
 #include <Xm/ToggleB.h>
 
-#if 0
-
-/* SGI-specific GL Widget inclues. */
-#ifdef __sgi
-#include <X11/Xirisw/GlxMDraw.h>
-#endif
-
-#ifdef _IBMR2
-#include "/usr/lpp/GL/utilities/inc/Glib.h"
-#endif /* _IBMR2 */
-
-#endif /* if 0 */
-
 /* Prototypes for internal routines found in Xmx.c. */
-extern int _XmxMakeClientData (int);
-
-/* Marc's defines. */
-#undef  private
-#define private static
-#undef  public
-#define public
+extern int _XmxMakeClientData(int);
 
 #endif /* __XMXP_H__ */

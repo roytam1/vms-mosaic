@@ -63,7 +63,7 @@ PRIVATE void HTMLGen_put_string ARGS2(HTStructured *, me, WWW_CONST char*, s)
 
 PRIVATE void HTMLGen_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
 {
-    PUTB(s,l);
+    PUTB(s, l);
 }
 
 
@@ -73,12 +73,12 @@ PRIVATE void HTMLGen_write ARGS3(HTStructured *, me, WWW_CONST char*, s, int, l)
 PRIVATE void HTMLGen_start_element ARGS4(
 	HTStructured *, 	me,
 	int,			element_number,
-	WWW_CONST BOOL*,	 	present,
-	WWW_CONST char **,		value)
+	WWW_CONST BOOL *,	present,
+	WWW_CONST char **,	value)
 {
     int i;
+    HTTag *tag = &HTML_dtd.tags[element_number];
 
-    HTTag * tag = &HTML_dtd.tags[element_number];
     PUTC('<');
     PUTS(tag->name);
     if (present) for (i=0; i< tag->number_of_attributes; i++) {
@@ -159,7 +159,7 @@ PRIVATE void HTMLGen_handle_interrupt ARGS1(HTStructured *, me)
 
 PRIVATE void PlainToHTML_end_document ARGS1(HTStructured *, me)
 {
-    PUTS("</PRE></BODY>\n");/* Make sure ends with newline for sed etc etc */
+    PUTS("</PRE></BODY>\n");  /* Make sure ends with newline for sed etc etc */
     (*me->targetClass.end_document)(me->target);
 }
 
@@ -185,8 +185,9 @@ PRIVATE WWW_CONST HTStructuredClass HTMLGeneration = /* As opposed to print etc 
 
 PUBLIC HTStructured * HTMLGenerator ARGS1(HTStream *, output)
 {
-    HTStructured* me = (HTStructured*)malloc(sizeof(*me));
-    if (me == NULL) outofmem(__FILE__, "HTMLGenerator");
+    HTStructured *me = (HTStructured*)malloc(sizeof(*me));
+    if (me == NULL)
+	outofmem(__FILE__, "HTMLGenerator");
     me->isa = &HTMLGeneration;       
 
     me->target = output;
@@ -228,7 +229,7 @@ PUBLIC HTStream* HTPlainToHTML ARGS5(
         HTFormat,               format_in,
         int,                    compressed)
 {
-    HTStream* me = (HTStream*)malloc(sizeof(*me));
+    HTStream *me = (HTStream*)malloc(sizeof(*me));
     me->isa = (HTStreamClass*) &PlainToHTMLConversion;       
 
     me->target = sink;

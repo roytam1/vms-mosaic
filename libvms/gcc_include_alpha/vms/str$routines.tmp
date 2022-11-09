@@ -1,0 +1,79 @@
+/* <str$routines.h>
+ *
+ *	String run-time library routines.
+ */
+#ifndef _STR$ROUTINES_H
+#define _STR$ROUTINES_H
+# ifdef __cplusplus
+extern "C" {
+# endif
+
+/*	STR$ADD			-- add two decimal strings */
+unsigned long str$add();
+/*	STR$ANALYZE_SDESC	-- analyze string descriptor */
+unsigned short str$analyze_sdesc();
+/*	STR$APPEND		-- append string */
+unsigned long str$append();
+/*	STR$CASE_BLIND_COMPARE	-- compare strings without regard to case */
+int str$case_blind_compare();
+/*	STR$COMPARE		-- compare two strings */
+int str$compare();
+/*	STR$COMPARE_EQL		-- compare two strings for equality */
+int str$compare_eql();
+/*	STR$COMPARE_MULTI	-- compare two for equality using multinational character set */
+int str$compare_multi();
+/*	STR$CONCAT		-- concatenate two or more strings */
+unsigned long str$concat();
+/*	STR$COPY_DX		-- copy source passed by descriptor to destination */
+unsigned long str$copy_dx();
+/*	STR$COPY_R		-- copy source passed by reference to destination */
+unsigned long str$copy_r();
+/*	STR$DIVIDE		-- divide two decimal strings */
+unsigned long str$divide();
+/*	STR$DUPL_CHAR		-- duplicate character empty times */
+unsigned long str$dupl_char();
+/*	STR$ELEMENT		-- extract delimited element substring */
+unsigned long str$element();
+/*	STR$FIND_FIRST_IN_SET	-- find first character in set of characters */
+int str$find_first_in_set();
+/*	STR$FIND_FIRST_NOT_IN_SET -- find first that does not occur in set */
+int str$find_first_not_in_set();
+/*	STR$FIND_FIRST_SUBSTRING -- find first substring in input string */
+int str$find_first_substring();
+/*	STR$FREE1_DX		-- free one dynamic string */
+unsigned long str$free1_dx();
+/*	STR$GET1_DX		-- allocate one dynamic string */
+unsigned long str$get1_dx();
+/*	STR$LEFT		-- extract a substring of a string */
+unsigned long str$left();
+/*	STR$LEN_EXTR		-- extract a substring of a string */
+unsigned long str$len_extr();
+/*	STR$MATCH_WILD		-- match wildcard specification */
+unsigned long str$match_wild();
+/*	STR$MUL			-- multiply two decimal strings */
+unsigned long str$mul();
+/*	STR$POS_EXTR		-- extract a substring of a string */
+unsigned long str$pos_extr();
+/*	STR$POSITION		-- return relative position of substring */
+int str$position();
+/*	STR$PREFIX		-- prefix a string */
+unsigned long str$prefix();
+/*	STR$RECIP		-- reciprocal of a decimal string */
+unsigned long str$recip();
+/*	STR$REPLACE		-- replace a substring */
+unsigned long str$replace();
+/*	STR$RIGHT		-- extract a substring of a string */
+unsigned long str$right();
+/*	STR$ROUND		-- round or truncate a decimal string */
+unsigned long str$round();
+/*	STR$TRANSLATE		-- translate matched characters */
+unsigned long str$translate();
+/*	STR$TRIM		-- trim trailing blanks and tabs */
+unsigned long str$trim();
+/*	STR$UPCASE		-- convert string to all uppercase characters */
+unsigned long str$upcase();
+
+# ifdef __cplusplus
+}
+# endif
+#endif	/*_STR$ROUTINES_H*/

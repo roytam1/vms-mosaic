@@ -52,6 +52,10 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+ * The VMS Mosaic Project
+ */
+
 /* 
  * Created: Wed Sep 20 11:05:19 CDT 1995
  * Modified: All the time.
@@ -60,20 +64,30 @@
  */
 #include "../config.h"
 #include "mosaic.h"
+#include "../libnut/str-tools.h"
 
+#ifndef VMS
 #include <pwd.h>
 #include <sys/utsname.h>
+#else
+#include "vms_pwd.h"
+#include "../libnut/system.h"
+#endif
 
 
 /***********/
 /* Defines */
 /***********/
 
-#define PREFS_FILE_IO 0
+#define MAXLINE 512
 
+#ifndef VMS
 #define PREFERENCES_FILENAME ".mosaic-preferences"
-#define PREFERENCES_MAJOR_VERSION 1
-#define PREFERENCES_MINOR_VERSION 0
+#else
+#define PREFERENCES_FILENAME "mosaic.preferences"
+#endif
+#define PREFERENCES_MAJOR_VERSION 2
+#define PREFERENCES_MINOR_VERSION 7
 
 /***************************/
 /* Static Global Variables */
@@ -81,14 +95,12 @@
 
 static prefsStructP thePrefsStructP;
 static char prefs_file_pathname[512];
-
+static Boolean successful = 1;
 
 /********************************/
 /* Static function declarations */
 /********************************/
 
-static Boolean revert_preferences_file(prefsStructP inPrefsStruct);
-static Boolean write_preferences_file(prefsStructP inPrefsStruct);
 static Boolean create_prefs_filename(char *fname);
 
 static Boolean write_pref_string(FILE *fp, long pref_id, char *string);
@@ -110,17 +122,15 @@ static Boolean write_pref_float(FILE *fp, long pref_id, char *string);
  ***************************************************************************/
 Boolean preferences_genesis(void) {
 
-    Boolean successful = 1;
-
-        /* initialize preferences structure */
-    thePrefsStructP = (prefsStructP) malloc (sizeof(prefsStruct));
-    if(thePrefsStructP == NULL) {
+    /* Initialize preferences structure */
+    thePrefsStructP = (prefsStructP) malloc(sizeof(prefsStruct));
+    if (!thePrefsStructP) {
         fprintf(stderr, "Error: no memory for preferences structure\n");
         return 0;
     }
 
-    thePrefsStructP->RdataP = (AppDataPtr) malloc (sizeof(AppData));
-    if(thePrefsStructP->RdataP == NULL) {
+    thePrefsStructP->RdataP = (AppDataPtr) malloc(sizeof(AppData));
+    if (!thePrefsStructP->RdataP) {
         free(thePrefsStructP);
         fprintf(stderr, "Error: no memory for appdata structure\n");
         return 0;
@@ -129,27 +139,22 @@ Boolean preferences_genesis(void) {
     return successful;
 }
 
-
-
+/* Not used */
 /****************************************************************************
    Function: preferences_armegeddon(void)
    Desc:     Kills the preferences manager.
  ***************************************************************************/
-Boolean preferences_armegeddon(void) {
+static Boolean preferences_armegeddon(void) {
 
-    Boolean successful = 1;
+    /* Write the prefs file just to be safe */
+    write_preferences_file(thePrefsStructP);
 
-       /* write the prefs file just to be safe */
-        /*write_preferences_file(thePrefsStructP);*/
-
-       /* free preferences structure */
+    /* Free preferences structure */
     free(thePrefsStructP);
     
-    return(successful);
+    return successful;
 
 }
-
-
 
 /****************************************************************************
  ****************************************************************************
@@ -165,30 +170,143 @@ Boolean preferences_armegeddon(void) {
 static Boolean create_prefs_filename(char *fname) {
 
     char *home_ptr, home[256];
+#ifndef VMS
     struct passwd *pwdent;
+#endif
     
-        /*
-         * Try the HOME environment variable, then the password file, and
-         *   finally give up.
-         */
-    if (!(home_ptr=getenv("HOME"))) {
-        if (!(pwdent=getpwuid(getuid()))) {
+    /*
+     * Try the HOME environment variable, then the password file, and
+     * finally give up.
+     */
+    if (!(home_ptr = getenv("HOME"))) {
+#ifndef VMS
+        if (!(pwdent = getpwuid(getuid()))) {
             return(0);
+        } else {
+            strcpy(home, pwdent->pw_dir);
         }
-        else {
-            strcpy(home,pwdent->pw_dir);
-        }
-    }
-    else {
-        strcpy(home,home_ptr);
+#else
+	return(0);
+#endif
+    } else {
+        strcpy(home, home_ptr);
     }
     
-    sprintf(fname,"%s/%s",home,PREFERENCES_FILENAME);
+#ifndef VMS
+    sprintf(fname, "%s/%s", home, PREFERENCES_FILENAME);
+#else
+    sprintf(fname, "%s%s", home, PREFERENCES_FILENAME);
+#endif
     
-    return(1);
+    return successful;
     
 }
 
+/****************************************************************************
+   Function: check_pref(char *file_str, char *read_str)
+   Desc:     Check if we are looking at same preference 
+ ***************************************************************************/
+static Boolean check_pref(char *file_str, char *read_str) {
+
+    if (my_strncasecmp(file_str, read_str, strlen(file_str) - 1)) {
+        fprintf(stderr, "Error: Preference file corrupted\n");
+        fprintf(stderr, "       Found preference %s when expecting %s:\n",
+		file_str, read_str);
+        return 0;
+    } else {
+        return successful;
+    }
+
+}
+
+/****************************************************************************
+   Function: read_pref_string(FILE *fp, long pref_id, char *string)
+   Desc:     
+ ***************************************************************************/
+static Boolean read_pref_string(FILE *fp, long pref_id, char *string) {
+
+    char line[MAXLINE], preference[50];
+    char *setting;
+
+    fgets(line, MAXLINE, fp);
+    sscanf(line, "%49s", preference);
+    if (!check_pref(preference, string))
+        return 0;
+
+    if (strstr(line, ": ")) {
+        setting = strdup(strstr(line, ": ") + 2);
+        setting[strlen(setting) - 1] = '\0';	/* Get rid of LF */
+    } else {
+        setting = strdup("");
+    }
+    set_pref(pref_id, (void *)setting);
+
+    return successful;
+
+}
+
+/****************************************************************************
+   Function: read_pref_int(FILE *fp, long pref_id, char *string)
+   Desc:     
+ ***************************************************************************/
+static Boolean read_pref_int(FILE *fp, long pref_id, char *string) {
+
+    char line[MAXLINE], preference[50];
+    int number;
+
+    fgets(line, MAXLINE, fp);
+    sscanf(line, "%49s%d", preference, &number);
+    if (!check_pref(preference, string))
+        return 0;
+
+    set_pref_int(pref_id, number);
+
+    return successful;
+    
+}
+
+/****************************************************************************
+   Function: read_pref_boolean(FILE *fp, long pref_id, char *string)
+   Desc:     
+ ***************************************************************************/
+static Boolean read_pref_boolean(FILE *fp, long pref_id, char *string) {
+
+    char line[MAXLINE], preference[50], setting[7] = "False";
+
+    fgets(line, MAXLINE, fp);
+    sscanf(line, "%49s%6s", preference, setting);
+    if (!check_pref(preference, string))
+        return 0;
+
+    if (!my_strcasecmp(setting, "True")) {
+        set_pref_boolean(pref_id, 1);
+    } else {
+        set_pref_boolean(pref_id, 0);
+    }
+
+    return successful;
+    
+}
+
+/****************************************************************************
+   Function: read_pref_float(FILE *fp, long pref_id, char *string)
+   Desc:     
+ ***************************************************************************/
+static Boolean read_pref_float(FILE *fp, long pref_id, char *string) {
+
+    char line[MAXLINE], preference[50];
+    float number;
+
+    fgets(line, MAXLINE, fp);
+    sscanf(line, "%49s%f", preference, &number);
+    if (!check_pref(preference, string))
+        return 0;
+
+    set_pref_float(pref_id, number);
+    
+    return successful;
+    
+}
 
 /****************************************************************************
    Function: read_preferences_file(prefsStructP inPrefsStruct)
@@ -197,55 +315,532 @@ static Boolean create_prefs_filename(char *fname) {
 Boolean read_preferences_file(prefsStructP inPrefsStruct) {
 
     FILE *fp;
-    Boolean successful = 1;
+    char line[MAXLINE];
+    char version[5];
+    Boolean status = 1;
+    long dummy = 1;
 
-
-    /* if the incoming pointer is NULL, then we use the main structure */
-    if(inPrefsStruct == NULL)
+    /* If the incoming pointer is NULL, then we use the main structure */
+    if (!inPrefsStruct)
         inPrefsStruct = thePrefsStructP;
-
-#if PREFS_FILE_IO
     
-    /* look for the file */    
-    if(!create_prefs_filename(prefs_file_pathname)) {
-        fprintf(stderr, "Error: Can't generate pathname for preferences file\n");
+    /* Look for the file */    
+    if (!create_prefs_filename(prefs_file_pathname)) {
+        fprintf(stderr, "Error: Can't generate pathname for preference file\n");
         return 0;
     }
 
-    /* Check to see if the file exists. If it doesn't, then create it */
-
-    if(!file_exists(prefs_file_pathname))
-        if(!write_preferences_file(NULL)) {
+    /* Check to see if the file exists.  If it doesn't, then create it */
+    if (!file_exists(prefs_file_pathname)) {
+        if (!write_preferences_file(NULL)) {
             fprintf(stderr, "Error: Can't find or create preferences file\n");
             return 0;
         }
-
-    
-    /* open it and read all the stuff from the file into the prefs struct */
-    if(!(fp=fopen(prefs_file_pathname, "r"))) {
-
+    }
+    /* Open it and read all the stuff from the file into the prefs struct */
+    if (!(fp = fopen(prefs_file_pathname, "r"))) {
         fprintf(stderr, "Error: Can't open preferences file for reading\n");
         return 0;
     }
     
-    /* but first, check the version number of the prefs file */
+    /* But first, check the version number of the prefs file */
+    fgets(line, MAXLINE, fp);
+    fgets(line, MAXLINE, fp);
+    sscanf(line, "%*s%*s%*s%4s", version);
+    if (strcmp(version, "1.0") && strcmp(version, "1.1") &&
+	strcmp(version, "1.2") && strcmp(version, "1.3") &&
+	strcmp(version, "1.4") && strcmp(version, "1.5") &&
+	strcmp(version, "1.6") && strcmp(version, "1.7") &&
+	strcmp(version, "1.8") && strcmp(version, "2.0") &&
+	strcmp(version, "2.1") && strcmp(version, "2.2") &&
+	strcmp(version, "2.3") && strcmp(version, "2.4") &&
+	strcmp(version, "2.5") && strcmp(version, "2.6") &&
+	strcmp(version, "2.7") && strcmp(version, "2.8") &&
+	strcmp(version, "2.9") && strcmp(version, "3.0") &&
+	strcmp(version, "3.1") && strcmp(version, "3.2") &&
+	strcmp(version, "3.3")) {
+         fprintf(stderr, "Error: Bad version in preferences file\n");
+         fprintf(stderr, "       Skipping it and using defaults instead\n");
+         fclose(fp);
+         return successful;
+    }
+
+    fgets(line, MAXLINE, fp);
+    fgets(line, MAXLINE, fp);
+    fgets(line, MAXLINE, fp);
+
+    if (!read_pref_boolean(fp, eUSE_PREFERENCES, "USE_PREFERENCES")) {
+        fclose(fp);
+        return 0;
+    }
+    if (!get_pref_boolean(eUSE_PREFERENCES)) {
+        fclose(fp);
+        return successful;
+    }
+
+    status = read_pref_boolean(fp,
+	eTRACK_VISITED_ANCHORS, "TRACK_VISITED_ANCHORS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eDISPLAY_URLS_NOT_TITLES, "DISPLAY_URLS_NOT_TITLES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTRACK_POINTER_MOTION, "TRACK_POINTER_MOTION") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTRACK_FULL_URL_NAMES, "TRACK_FULL_URL_NAMES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eANNOTATIONS_ON_TOP, "ANNOTATIONS_ON_TOP") ? status : 0;
+    status = read_pref_boolean(fp,
+	eCONFIRM_DELETE_ANNOTATION, "CONFIRM_DELETE_ANNOTATION") ? status : 0;
+    status = read_pref_string(fp,
+	eANNOTATION_SERVER, "ANNOTATION_SERVER") ? status : 0;
+    status = read_pref_string(fp,
+	eRECORD_COMMAND_LOCATION, "RECORD_COMMAND_LOCATION") ? status : 0;
+    status = read_pref_string(fp,
+	eRECORD_COMMAND, "RECORD_COMMAND") ? status : 0;
+    status = read_pref_boolean(fp,
+	eRELOAD_PRAGMA_NO_CACHE, "RELOAD_PRAGMA_NO_CACHE") ? status : 0;
+    status = read_pref_string(fp,
+	eSENDMAIL_COMMAND, "SENDMAIL_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	eEDIT_COMMAND, "EDIT_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	eXTERM_COMMAND, "XTERM_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	eMAIL_FILTER_COMMAND, "MAIL_FILTER_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	ePRIVATE_ANNOTATION_DIRECTORY, "PRIVATE_ANNOTATION_DIRECTORY") ?
+	status : 0;
+    status = read_pref_string(fp,
+	eHOME_DOCUMENT, "HOME_DOCUMENT") ? status : 0;
+    status = read_pref_string(fp,
+	eTMP_DIRECTORY, "TMP_DIRECTORY") ? status : 0;
+    status = read_pref_string(fp,
+	eDOCS_DIRECTORY, "DOCS_DIRECTORY") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULT_FONT_CHOICE, "DEFAULT_FONT_CHOICE") ? status : 0;
+    status = read_pref_string(fp,
+	eGLOBAL_HISTORY_FILE, "GLOBAL_HISTORY_FILE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSE_GLOBAL_HISTORY, "USE_GLOBAL_HISTORY") ? status : 0;
+    status = read_pref_string(fp,
+	eHISTORY_FILE, "HISTORY_FILE") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULT_HOT_FILE, "DEFAULT_HOT_FILE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eADD_HOTLIST_ADDS_RBM, "ADD_HOTLIST_ADDS_RBM") ? status : 0;
+    status = read_pref_boolean(fp,
+	eADD_RBM_ADDS_RBM, "ADD_RBM_ADDS_RBM") ? status : 0;
+    status = read_pref_string(fp,
+	eDOCUMENTS_MENU_SPECFILE, "DOCUMENTS_MENU_SPECFILE") ? status : 0;
+    status = read_pref_int(fp,
+	eCOLORS_PER_INLINED_IMAGE, "COLORS_PER_INLINED_IMAGE") ? status : 0;
+    status = read_pref_int(fp,
+	eIMAGE_CACHE_SIZE, "IMAGE_CACHE_SIZE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eRELOAD_RELOADS_IMAGES, "RELOAD_RELOADS_IMAGES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eREVERSE_INLINED_BITMAP_COLORS, "REVERSE_INLINED_BITMAP_COLORS") ?
+	status : 0;
+    status = read_pref_boolean(fp,
+	eDELAY_IMAGE_LOADS, "DELAY_IMAGE_LOADS") ? status : 0;
+    status = read_pref_float(fp,
+	eSCREEN_GAMMA, "SCREEN_GAMMA") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULT_AUTHOR_NAME, "DEFAULT_AUTHOR_NAME") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULT_AUTHOR_EMAIL, "DEFAULT_AUTHOR_EMAIL") ? status : 0;
+    status = read_pref_string(fp,
+	eSIGNATURE, "SIGNATURE") ? status : 0;
+    status = read_pref_string(fp,
+	eMAIL_MODE, "MAIL_MODE") ? status : 0;
+    status = read_pref_string(fp,
+	ePRINT_COMMAND, "PRINT_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	eUNCOMPRESS_COMMAND, "UNCOMPRESS_COMMAND") ? status : 0;
+    status = read_pref_string(fp,
+	eGUNZIP_COMMAND, "GUNZIP_COMMAND") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSE_DEFAULT_EXTENSION_MAP, "USE_DEFAULT_EXTENSION_MAP") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSE_DEFAULT_TYPE_MAP, "USE_DEFAULT_TYPE_MAP") ? status : 0;
+    status = read_pref_string(fp,
+	eGLOBAL_EXTENSION_MAP, "GLOBAL_EXTENSION_MAP") ? status : 0;
+    status = read_pref_string(fp,
+	ePERSONAL_EXTENSION_MAP, "PERSONAL_EXTENSION_MAP") ? status : 0;
+    status = read_pref_string(fp,
+	eGLOBAL_TYPE_MAP, "GLOBAL_TYPE_MAP") ? status : 0;
+    status = read_pref_string(fp,
+	ePERSONAL_TYPE_MAP, "PERSONAL_TYPE_MAP") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTWEAK_GOPHER_TYPES, "TWEAK_GOPHER_TYPES") ? status : 0;
+    status = read_pref_string(fp,
+	ePRINT_MODE, "PRINT_MODE") ? status : 0;
+    status = read_pref_string(fp,
+	eGUI_LAYOUT, "GUI_LAYOUT") ? status : 0;
+    status = read_pref_boolean(fp,
+	ePRINT_BANNERS, "PRINT_BANNERS") ? status : 0;
+    status = read_pref_boolean(fp,
+	ePRINT_FOOTNOTES, "PRINT_FOOTNOTES") ? status : 0;
+    status = read_pref_boolean(fp,
+	ePRINT_PAPER_SIZE_US, "PRINT_PAPER_SIZE_US") ? status : 0;
+    status = read_pref_string(fp,
+	ePROXY_SPECFILE, "PROXY_SPECFILE") ? status : 0;
+    status = read_pref_string(fp,
+	eNOPROXY_SPECFILE, "NOPROXY_SPECFILE") ? status : 0;
+    status = read_pref_int(fp,
+	eCCIPORT, "CCIPORT") ? status : 0;
+    status = read_pref_int(fp,
+	eMAX_NUM_OF_CCI_CONNECTIONS, "MAX_NUM_OF_CCI_CONNECTIONS") ? status : 0;
+    status = read_pref_int(fp,
+	eMAX_WAIS_RESPONSES, "MAX_WAIS_RESPONSES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eKIOSK, "KIOSK") ? status : 0;
+    status = read_pref_boolean(fp,
+	eKIOSKPRINT, "KIOSKPRINT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eKIOSKNOEXIT, "KIOSKNOEXIT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eKEEPALIVE, "KEEPALIVE") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_TIMEOUT_VAL, "FTP_TIMEOUT_VAL") ? status : 0;
+    status = read_pref_boolean(fp,
+	eENABLE_TABLES, "ENABLE_TABLES") ? status : 0;
+    status = read_pref_int(fp,
+	eDEFAULT_WIDTH, "DEFAULT_WIDTH") ? status : 0;
+    status = read_pref_int(fp,
+	eDEFAULT_HEIGHT, "DEFAULT_HEIGHT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eAUTO_PLACE_WINDOWS, "AUTO_PLACE_WINDOWS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eINITIAL_WINDOW_ICONIC, "INITIAL_WINDOW_ICONIC") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTITLEISWINDOWTITLE, "TITLEISWINDOWTITLE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSEICONBAR, "USEICONBAR") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSETEXTBUTTONBAR, "USETEXTBUTTONBAR") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTWIRLING_TRANSFER_ICON, "TWIRLING_TRANSFER_ICON") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSECURITYICON, "SECURITYICON") ? status : 0;
+    status = read_pref_int(fp,
+	eTWIRL_INCREMENT, "TWIRL_INCREMENT") ? status : 0;
+    status = read_pref_string(fp,
+	eSAVE_MODE, "SAVE_MODE") ? status : 0;
+
+    if (strcmp(version, "2.0") < 0) {
+	status = read_pref_int(fp,
+	    dummy, "HDF_MAX_IMAGE_DIMENSION") ? status : 0;
+	status = read_pref_int(fp,
+	    dummy, "HDF_MAX_DISPLAYED_DATASETS") ? status : 0;
+	status = read_pref_int(fp,
+	    dummy, "HDF_MAX_DISPLAYED_ATTRIBUTES") ? status : 0;
+	status = read_pref_boolean(fp,
+	    dummy, "HDF_POWER_USER") ? status : 0;
+	status = read_pref_boolean(fp,
+	    dummy, "HDFLONGNAME") ? status : 0;
+    }
+    status = read_pref_string(fp,
+	eFULL_HOSTNAME, "FULL_HOSTNAME") ? status : 0;
+    status = read_pref_int(fp,
+	eLOAD_LOCAL_FILE, "LOAD_LOCAL_FILE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eEDIT_COMMAND_USE_XTERM, "EDIT_COMMAND_USE_XTERM") ? status : 0;
+    status = read_pref_boolean(fp,
+	eCONFIRM_EXIT, "CONFIRM_EXIT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eDEFAULT_FANCY_SELECTIONS, "DEFAULT_FANCY_SELECTIONS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eCATCH_PRIOR_AND_NEXT, "CATCH_PRIOR_AND_NEXT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSIMPLE_INTERFACE, "SIMPLE_INTERFACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	ePROTECT_ME_FROM_MYSELF, "PROTECT_ME_FROM_MYSELF") ? status : 0;
+    status = read_pref_boolean(fp,
+	eGETHOSTBYNAME_IS_EVIL, "GETHOSTBYNAME_IS_EVIL") ? status : 0;
+#ifdef __sgi
+    status = read_pref_boolean(fp,
+	eDEBUGGING_MALLOC, "DEBUGGING_MALLOC") ? status : 0;
+#endif
+    status = read_pref_boolean(fp,
+	eUSEAFSKLOG, "USEAFSKLOG") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSEND_REFERER, "SEND_REFERER") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSEND_AGENT, "SEND_AGENT") ? status : 0;
+    status = read_pref_boolean(fp,
+	eEXPAND_URLS, "EXPAND_URLS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eEXPAND_URLS_WITH_NAME, "EXPAND_URLS_WITH_NAME") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULT_PROTOCOL, "DEFAULT_PROTOCOL") ? status : 0;
+    status = read_pref_string(fp,
+	eMETER_FOREGROUND, "METER_FOREGROUND") ? status : 0;
+    status = read_pref_string(fp,
+	eMETER_BACKGROUND, "METER_BACKGROUND") ? status : 0;
+    status = read_pref_string(fp,
+	eMETER_FONT_FOREGROUND, "METER_FONT_FOREGROUND") ? status : 0;
+    status = read_pref_string(fp,
+	eMETER_FONT_BACKGROUND, "METER_FONT_BACKGROUND") ? status : 0;
+    status = read_pref_boolean(fp,
+	eMETER, "METER") ? status : 0;
+    status = read_pref_boolean(fp,
+	eBACKUP_FILES, "BACKUP_FILES") ? status : 0;
+    status = read_pref_string(fp,
+	ePIX_BASENAME, "PIX_BASENAME") ? status : 0;
+    status = read_pref_int(fp,
+	ePIX_COUNT, "PIX_COUNT") ? status : 0;
+    status = read_pref_string(fp,
+	eACCEPT_LANGUAGE_STR, "ACCEPT_LANGUAGE_STR") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_REDIAL, "FTP_REDIAL") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_REDIAL_SLEEP, "FTP_REDIAL_SLEEP") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_FILENAME_LENGTH, "FTP_FILENAME_LENGTH") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_ELLIPSIS_LENGTH, "FTP_ELLIPSIS_LENGTH") ? status : 0;
+    status = read_pref_int(fp,
+	eFTP_ELLIPSIS_MODE, "FTP_ELLIPSIS_MODE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eTITLE_ISWINDOW_TITLE, "TITLE_ISWINDOW_TITLE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSE_SCREEN_GAMMA, "USE_SCREEN_GAMMA") ? status : 0;
+    status = read_pref_boolean(fp,
+	eDISABLEMIDDLEBUTTON, "DISABLEMIDDLEBUTTON") ? status : 0;
+    status = read_pref_boolean(fp,
+	eHTTPTRACE, "HTTPTRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eWWW2TRACE, "WWW2TRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eHTMLWTRACE, "HTMLWTRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eCCITRACE, "CCITRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSRCTRACE, "SRCTRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eCACHETRACE, "CACHETRACE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eNUTTRACE, "NUTTRACE") ? status : 0;
+
+    if (strcmp(version, "1.0") != 0)
+	    status = read_pref_boolean(fp,
+		eTABLETRACE, "TABLETRACE") ? status : 0;
+
+    status = read_pref_boolean(fp,
+	eANIMATEBUSYICON, "ANIMATEBUSYICON") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSPLASHSCREEN, "SPLASHSCREEN") ? status : 0;
+    status = read_pref_boolean(fp,
+	eINSTALL_COLORMAP, "INSTALL_COLORMAP") ? status : 0;
+    status = read_pref_boolean(fp,
+	eIMAGEVIEWINTERNAL, "IMAGEVIEWINTERNAL") ? status : 0;
+    status = read_pref_int(fp,
+	eURLEXPIRED, "URLEXPIRED") ? status : 0;
+
+    if (strcmp(version, "2.0") < 0)
+	status = read_pref_int(fp, dummy, "RBM_CASCADE_OFFSET") ? status : 0;
+
+    status = read_pref_int(fp,
+	ePOPUPCASCADEMAPPINGDELAY, "POPUPCASCADEMAPPINGDELAY") ? status : 0;
+
+    if (strcmp(version, "2.0") < 0) {
+	status = read_pref_boolean(fp, dummy, "FRAME_HACK") ? status : 0;
+	set_pref_boolean(eFRAME_SUPPORT, 1);
+    } else {
+	status = read_pref_boolean(fp,
+	    eFRAME_SUPPORT, "FRAME_SUPPORT") ? status : 0;
+    }
+    status = read_pref_boolean(fp,
+	eCLIPPING, "CLIPPING") ? status : 0;
+    status = read_pref_int(fp,
+	eMAX_CLIP_TRANSITIONS, "MAX_CLIP_TRANSITIONS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSE_LONG_TEXT_NAMES, "USE_LONG_TEXT_NAMES") ? status : 0;
+    status = read_pref_string(fp,
+	eTOOLBAR_LAYOUT, "TOOLBAR_LAYOUT") ? status : 0;
+
+    status = read_pref_boolean(fp,
+	eUSETHREADVIEW, "USETHREADVIEW") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSHOWREADGROUPS, "SHOWREADGROUPS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eNOTHREADJUMPING, "NOTHREADJUMPING") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSHOWALLGROUPS, "SHOWALLGROUPS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSHOWALLARTICLES, "SHOWALLARTICLES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSEBACKGROUNDFLUSH, "USEBACKGROUNDFLUSH") ? status : 0;
+    status = read_pref_int(fp,
+	eBACKGROUNDFLUSHTIME, "BACKGROUNDFLUSHTIME") ? status : 0;
+    status = read_pref_boolean(fp,
+	ePREVISUNREAD, "PREVISPREVUNREAD") ? status : 0;
+    status = read_pref_boolean(fp,
+	eNEXTISUNREAD, "NEXTISNEXTUNREAD") ? status : 0;
+    status = read_pref_boolean(fp,
+	eUSENEWSRC, "USENEWSRC") ? status : 0;
+    status = read_pref_string(fp,
+	eNEWSRCPREFIX, "NEWSRCPREFIX") ? status : 0;
+    status = read_pref_int(fp,
+	eNEWSAUTHORWIDTH, "NEWSAUTHORWIDTH") ? status : 0;
+    status = read_pref_int(fp,
+	eNEWSSUBJECTWIDTH, "NEWSSUBJECTWIDTH") ? status : 0;
+
+    status = read_pref_boolean(fp,
+	eFOCUS_FOLLOWS_MOUSE, "FOCUS_FOLLOWS_MOUSE") ? status : 0;
+    status = read_pref_boolean(fp,
+	eSESSION_HISTORY_ON_RBM, "SESSION_HISTORY_ON_RBM") ? status : 0;
+    status = read_pref_int(fp,
+	eNUMBER_OF_ITEMS_IN_RBM_HISTORY, "NUMBER_OF_ITEMS_IN_RBM_HISTORY") ?
+	status : 0;
+
+    status = read_pref_boolean(fp,
+	eUSESHORTNEWSRC, "USESHORTNEWSRC") ? status : 0;
+    status = read_pref_boolean(fp,
+	eHOTLIST_ON_RBM, "HOTLIST_ON_RBM") ? status : 0;
+    status = read_pref_boolean(fp,
+	eBODYCOLORS, "BODYCOLORS") ? status : 0;
+    status = read_pref_boolean(fp,
+	eBODYIMAGES, "BODYIMAGES") ? status : 0;
+    status = read_pref_string(fp,
+	eDEFAULTUNDERLINES, "DEFAULTUNDERLINES") ? status : 0;
+    status = read_pref_boolean(fp,
+	eFTP_BINARY_MODE, "FTP_BINARY_MODE") ? status : 0;
+    status = read_pref_string(fp,
+	eKIOSKPROTOCOLS, "KIOSKPROTOCOLS") ? status : 0;
+    status = read_pref_string(fp,
+	eVMS_MAIL_PREFIX, "VMS_MAIL_PREFIX") ? status : 0;
+    status = read_pref_int(fp,
+	eBACKUPFILEVERSIONS, "BACKUPFILEVERSIONS") ? status : 0;
+
+    if (strcmp(version, "1.1") > 0) {
+	    status = read_pref_boolean(fp,
+		eFONTCOLORS, "FONTCOLORS") ? status : 0;
+	    status = read_pref_boolean(fp,
+		ePROGRESSIVE_DISPLAY, "PROGRESSIVE_DISPLAY") ? status : 0;
+    }
+    if (strcmp(version, "1.2") > 0) {
+	    status = read_pref_boolean(fp,
+		eFONTSIZES, "FONTSIZES") ? status : 0;
+	    status = read_pref_int(fp,
+		eFONTBASESIZE, "FONTBASESIZE") ? status : 0;
+    }
+    if (strcmp(version, "1.3") > 0) {
+	    status = read_pref_boolean(fp,
+		eTRACK_TARGET_ANCHORS, "TRACK_TARGET_ANCHORS") ? status : 0;
+	    status = read_pref_boolean(fp,
+		eDEBUG_MENU, "DEBUG_MENU") ? status : 0;
+	    status = read_pref_boolean(fp,
+		eREPORTBUGS, "REPORTBUGS") ? status : 0;
+    }
+    if (strcmp(version, "1.4") > 0) {
+	    status = read_pref_boolean(fp,
+		eIMAGE_ANIMATION, "IMAGE_ANIMATION") ? status : 0;
+	    status = read_pref_int(fp,
+		eMIN_ANIMATION_DELAY, "MIN_ANIMATION_DELAY") ? status : 0;
+    }
+    if (strcmp(version, "1.5") > 0) {
+	    status = read_pref_boolean(fp,
+		eREFRESHTRACE, "REFRESHTRACE") ? status : 0;
+    }
+    if (strcmp(version, "1.6") > 0) {
+	    status = read_pref_boolean(fp,
+		 eREFRESH_URL, "REFRESH_URL") ? status : 0;
+    }
+    if (strcmp(version, "1.7") > 0) {
+	    status = read_pref_boolean(fp,
+		 eBROWSER_SAFE_COLORS, "BROWSER_SAFE_COLORS") ? status : 0;
+    }
+    if (strcmp(version, "1.9") > 0) {
+	    status = read_pref_boolean(fp,
+		 eBLINKING_TEXT, "BLINKING_TEXT") ? status : 0;
+	    status = read_pref_int(fp,
+		 eBLINK_TIME, "BLINK_TIME") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 eCOOKIES, "COOKIES") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 eACCEPT_ALL_COOKIES, "ACCEPT_ALL_COOKIES") ? status : 0;
+    }
+    if (strcmp(version, "2.0") > 0) {
+	    status = read_pref_int(fp,
+		 eMAXPIXMAPWIDTH, "MAXPIXMAPWIDTH") ? status : 0;
+	    status = read_pref_int(fp,
+		 eMAXPIXMAPHEIGHT, "MAXPIXMAPHEIGHT") ? status : 0;
+    }
+    if (strcmp(version, "2.1") > 0) {
+	    status = read_pref_boolean(fp,
+		 eUSE_COOKIE_FILE, "USE_COOKIE_FILE") ? status : 0;
+	    status = read_pref_string(fp,
+		 eCOOKIE_FILE, "COOKIE_FILE") ? status : 0;
+    }
+    if (strcmp(version, "2.2") > 0) {
+	    status = read_pref_string(fp,
+		 eIMAGEDELAY_FILE, "IMAGEDELAY_FILE") ? status : 0;
+    }
+    if (strcmp(version, "2.3") > 0) {
+	    status = read_pref_boolean(fp,
+		 eBROWSERSAFECOLORS_IF_TRUECOLOR,
+		 "BROWSERSAFECOLORS_IF_TRUECOLOR") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 eHOTKEYS, "HOTKEYS") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 eINVALID_COOKIE_PROMPT, "INVALID_COOKIE_PROMPT") ? status : 0;
+	    status = read_pref_int(fp,
+		 eMAX_COOKIES, "MAX_COOKIES") ? status : 0;
+	    status = read_pref_int(fp,
+		 eCOOKIE_DOMAIN_LIMIT, "COOKIE_DOMAIN_LIMIT") ? status : 0;
+    }
+    if (strcmp(version, "2.4") > 0) {
+	    status = read_pref_string(fp,
+		 ePERM_FILE, "PERM_FILE") ? status : 0;
+	    status = read_pref_string(fp,
+		 eFORM_BUTTON_BACKGROUND, "FORM_BUTTON_BACKGROUND") ? status :0;
+    }
+    if (strcmp(version, "2.5") > 0) {
+	    status = read_pref_boolean(fp,
+		 eVERIFY_SSL_CERTIFICATES, "VERIFY_SSL_CERTIFICATES") ? status : 0;
+	    status = read_pref_int(fp,
+		 eHOTLIST_MENU_HEIGHT, "HOTLIST_MENU_HEIGHT") ? status : 0;
+	    status = read_pref_int(fp,
+		 eHOTLIST_MENU_WIDTH, "HOTLIST_MENU_WIDTH") ? status : 0;
+	    status = read_pref_int(fp,
+		 eMARKUP_MEMORY_PREALLOCATION, "MARKUP_MEMORY_PREALLOCATION") ?
+		 status : 0;
+	    status = read_pref_int(fp,
+		 eELEMENT_MEMORY_PREALLOCATION,
+		 "ELEMENT_MEMORY_PREALLOCATION") ? status : 0;
+	    status = read_pref_boolean(fp,
+		eCOOKIETRACE, "COOKIETRACE") ? status : 0;
+    }
+    if (strcmp(version, "2.6") > 0) {
+	    status = read_pref_boolean(fp,
+		 eCLUE_HELP, "CLUE_HELP") ? status : 0;
+	    status = read_pref_string(fp,
+		 eCLUE_FOREGROUND, "CLUE_FOREGROUND") ? status :0;
+	    status = read_pref_string(fp,
+		 eCLUE_BACKGROUND, "CLUE_BACKGROUND") ? status :0;
+	    status = read_pref_int(fp,
+		 eCLUE_POPUP_DELAY, "CLUE_POPUP_DELAY") ? status : 0;
+	    status = read_pref_int(fp,
+		 eCLUE_POPDOWN_DELAY, "CLUE_POPDOWN_DELAY") ? status : 0;
+	    status = read_pref_string(fp,
+		 eCLUE_FONT, "CLUE_FONT") ? status :0;
+	    status = read_pref_boolean(fp,
+		 eCLUE_OVAL, "CLUE_OVAL") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 eCLUE_ROUNDED, "CLUE_ROUNDED") ? status : 0;
+	    status = read_pref_boolean(fp,
+		ePRINT_DUPLEX, "PRINT_DUPLEX") ? status : 0;
+	    status = read_pref_boolean(fp,
+		eMENUBAR_TEAROFF, "MENUBAR_TEAROFF") ? status : 0;
+    }
 
     fclose(fp);
 
-#endif
+    if (!status)
+        return 0;
     
     return successful;
-}
-
-
-/****************************************************************************
-   Function: revert_preferences_file(prefsStructP inPrefsStruct)
-   Desc:     Reverts the incoming prefs struct to the one last saved to 
-                 disk. 
- ***************************************************************************/
-static Boolean revert_preferences_file(prefsStructP inPrefsStruct) {
-
-
 }
 
 
@@ -255,20 +850,16 @@ static Boolean revert_preferences_file(prefsStructP inPrefsStruct) {
  ***************************************************************************/
 static Boolean write_pref_string(FILE *fp, long pref_id, char *string) {
 
-#if PREFS_FILE_IO
-
     char *narf;
 
     narf = get_pref_string(pref_id);
 
-    if(narf == NULL)
+    if (!narf) {
         fprintf(fp, "%s:\n", string);
-    else
+    } else {
         fprintf(fp, "%s: %s\n", string, narf);
-
-    return 1;
-
-#endif
+    }
+    return successful;
     
 }
 
@@ -278,17 +869,11 @@ static Boolean write_pref_string(FILE *fp, long pref_id, char *string) {
  ***************************************************************************/
 static Boolean write_pref_int(FILE *fp, long pref_id, char *string) {
 
-#if PREFS_FILE_IO
-
-    int narf;
-
-    narf = get_pref_int(pref_id);
+    int narf = get_pref_int(pref_id);
 
     fprintf(fp, "%s: %d\n", string, narf);
 
-    return 1;
-    
-#endif
+    return successful;
     
 }
 
@@ -298,20 +883,14 @@ static Boolean write_pref_int(FILE *fp, long pref_id, char *string) {
  ***************************************************************************/
 static Boolean write_pref_boolean(FILE *fp, long pref_id, char *string) {
 
-#if PREFS_FILE_IO
+    Boolean narf = get_pref_boolean(pref_id);
 
-    Boolean  narf;
-
-    narf = get_pref_boolean(pref_id);
-
-    if(narf == 1)
+    if (narf == 1) {
         fprintf(fp, "%s: True\n", string);
-    else if (narf == 0)
+    } else {
         fprintf(fp, "%s: False\n", string);
-
-    return 1;
-    
-#endif
+    }
+    return successful;
     
 }
 
@@ -321,18 +900,11 @@ static Boolean write_pref_boolean(FILE *fp, long pref_id, char *string) {
  ***************************************************************************/
 static Boolean write_pref_float(FILE *fp, long pref_id, char *string) {
 
-#if PREFS_FILE_IO
-
-    float narf;
-
-    narf = get_pref_float(pref_id);
+    float narf = get_pref_float(pref_id);
 
     fprintf(fp, "%s: %f\n", string, narf);
 
-    return 1;
-    
-#endif
-    
+    return successful;
 }
 
 
@@ -340,37 +912,49 @@ static Boolean write_pref_float(FILE *fp, long pref_id, char *string) {
    Function: write_preferences_file(void)
    Desc:     Writes the incoming preferences structure to disk. If the
              incoming pointer is NULL, then we are creating
-		     the prefs file for the first time - although, the prefs struct
+	     the prefs file for the first time - although, the prefs struct
              is already filled in, becuase all the default values are in
              xresources.h.
  ***************************************************************************/
-static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
+Boolean write_preferences_file(prefsStructP inPrefsStruct) {
 
-
-#if PREFS_FILE_IO
-
-    Boolean successful = 1;
     FILE *fp;
     
-    
-    if(!(fp=fopen(prefs_file_pathname, "w"))) {   
+#ifdef VMS
+    if (file_exists(prefs_file_pathname)) {
+        if (get_pref_boolean(eBACKUP_FILES)) {
+	    char *tf = NULL, retBuf[BUFSIZ];
+
+	    tf = (char *)calloc(strlen(prefs_file_pathname) + 
+		                strlen("_backup") + 5, sizeof(char));
+	    sprintf(tf, "%s_backup", prefs_file_pathname);
+	    if (my_copy(prefs_file_pathname, tf, retBuf, BUFSIZ - 1,
+			get_pref_int(eBACKUPFILEVERSIONS)) != SYS_SUCCESS) {
+		fprintf(stderr, "%s\n", retBuf);
+	    }
+	    free(tf);
+        }
+    }
+
+    remove(prefs_file_pathname);
+#endif /* VMS, GEC */
+
+    if (!(fp = fopen(prefs_file_pathname, "w"))) {
         fprintf(stderr, "Error: Can't open preferences file for writing\n");
         return 0;
     }
 
-
-        /* write out our little header... */
-
-    fprintf(fp, "# NCSA Mosaic preferences file\n");
+    /* Write out our little header... */
+    fprintf(fp, "# VMS Mosaic preferences file\n");
     fprintf(fp, "# File Version: %d.%d\n",
             PREFERENCES_MAJOR_VERSION,
             PREFERENCES_MINOR_VERSION);
-    fprintf(fp, "# Warning - this is NOT a user editable file!!!\n");
-    fprintf(fp, "# If a character is out of place...it will be very bad.\n\n");
+    fprintf(fp, "# Warning - only the values are editable!\n");
+    fprintf(fp, "# If a line is out of order or missing... it will be very bad!\n\n");
 
-  
-/* access all the fields in the prefs structure, and write them out */
+    /* Access all the fields in the prefs structure, and write them out */
 
+    write_pref_boolean(fp, eUSE_PREFERENCES, "USE_PREFERENCES");
     write_pref_boolean(fp, eTRACK_VISITED_ANCHORS, "TRACK_VISITED_ANCHORS");
     write_pref_boolean(fp, eDISPLAY_URLS_NOT_TITLES, "DISPLAY_URLS_NOT_TITLES");
     write_pref_boolean(fp, eTRACK_POINTER_MOTION, "TRACK_POINTER_MOTION");
@@ -393,7 +977,7 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
     write_pref_string(fp, eGLOBAL_HISTORY_FILE, "GLOBAL_HISTORY_FILE");
     write_pref_boolean(fp, eUSE_GLOBAL_HISTORY, "USE_GLOBAL_HISTORY");
     write_pref_string(fp, eHISTORY_FILE, "HISTORY_FILE");
-    write_pref_string(fp, eDEFAULT_HOTLIST_FILE, "DEFAULT_HOTLIST_FILE");
+    write_pref_string(fp, eDEFAULT_HOT_FILE, "DEFAULT_HOT_FILE");
     write_pref_boolean(fp, eADD_HOTLIST_ADDS_RBM, "ADD_HOTLIST_ADDS_RBM");
     write_pref_boolean(fp, eADD_RBM_ADDS_RBM, "ADD_RBM_ADDS_RBM");
     write_pref_string(fp, eDOCUMENTS_MENU_SPECFILE, "DOCUMENTS_MENU_SPECFILE");
@@ -428,6 +1012,7 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
     write_pref_int(fp, eMAX_NUM_OF_CCI_CONNECTIONS, "MAX_NUM_OF_CCI_CONNECTIONS");
     write_pref_int(fp, eMAX_WAIS_RESPONSES, "MAX_WAIS_RESPONSES");
     write_pref_boolean(fp, eKIOSK, "KIOSK");
+    write_pref_boolean(fp, eKIOSKPRINT, "KIOSKPRINT");
     write_pref_boolean(fp, eKIOSKNOEXIT, "KIOSKNOEXIT");
     write_pref_boolean(fp, eKEEPALIVE, "KEEPALIVE");
     write_pref_int(fp, eFTP_TIMEOUT_VAL, "FTP_TIMEOUT_VAL");
@@ -443,11 +1028,6 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
     write_pref_boolean(fp, eSECURITYICON, "SECURITYICON");
     write_pref_int(fp, eTWIRL_INCREMENT, "TWIRL_INCREMENT");
     write_pref_string(fp, eSAVE_MODE, "SAVE_MODE");
-    write_pref_int(fp, eHDF_MAX_IMAGE_DIMENSION, "HDF_MAX_IMAGE_DIMENSION");
-    write_pref_int(fp, eHDF_MAX_DISPLAYED_DATASETS, "HDF_MAX_DISPLAYED_DATASETS");
-    write_pref_int(fp, eHDF_MAX_DISPLAYED_ATTRIBUTES, "HDF_MAX_DISPLAYED_ATTRIBUTES");
-    write_pref_boolean(fp, eHDF_POWER_USER, "HDF_POWER_USER");
-    write_pref_boolean(fp, eHDFLONGNAME, "HDFLONGNAME");
     write_pref_string(fp, eFULL_HOSTNAME, "FULL_HOSTNAME");
     write_pref_int(fp, eLOAD_LOCAL_FILE, "LOAD_LOCAL_FILE");
     write_pref_boolean(fp, eEDIT_COMMAND_USE_XTERM, "EDIT_COMMAND_USE_XTERM");
@@ -490,16 +1070,16 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
     write_pref_boolean(fp, eSRCTRACE, "SRCTRACE");
     write_pref_boolean(fp, eCACHETRACE, "CACHETRACE");
     write_pref_boolean(fp, eNUTTRACE, "NUTTRACE");
+    write_pref_boolean(fp, eTABLETRACE, "TABLETRACE");
     write_pref_boolean(fp, eANIMATEBUSYICON, "ANIMATEBUSYICON");
     write_pref_boolean(fp, eSPLASHSCREEN, "SPLASHSCREEN");
     write_pref_boolean(fp, eINSTALL_COLORMAP, "INSTALL_COLORMAP");
     write_pref_boolean(fp, eIMAGEVIEWINTERNAL, "IMAGEVIEWINTERNAL");
     write_pref_int(fp, eURLEXPIRED, "URLEXPIRED");
     write_pref_int(fp, ePOPUPCASCADEMAPPINGDELAY, "POPUPCASCADEMAPPINGDELAY");
-    write_pref_boolean(fp, eFRAME_HACK, "FRAME_HACK");
+    write_pref_boolean(fp, eFRAME_SUPPORT, "FRAME_SUPPORT");
     write_pref_boolean(fp, eCLIPPING, "CLIPPING");
-    write_pref_int(fp, eMAX_CLIPPING_SIZE_X, "MAX_CLIPPING_SIZE_X");
-    write_pref_int(fp, eMAX_CLIPPING_SIZE_Y, "MAX_CLIPPING_SIZE_Y");
+    write_pref_int(fp, eMAX_CLIP_TRANSITIONS, "MAX_CLIP_TRANSITIONS");
     write_pref_boolean(fp, eUSE_LONG_TEXT_NAMES, "USE_LONG_TEXT_NAMES");
     write_pref_string(fp, eTOOLBAR_LAYOUT, "TOOLBAR_LAYOUT");
 
@@ -514,24 +1094,70 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
     write_pref_boolean (fp, eNEXTISUNREAD, "NEXTISNEXTUNREAD");
     write_pref_boolean (fp, eUSENEWSRC, "USENEWSRC");
     write_pref_string  (fp, eNEWSRCPREFIX, "NEWSRCPREFIX");
-    write_pref_int (fp, eNEWSAUTHORWIDTH, "NEWSAUTHORWIDTH");
-    write_pref_int (fp, eNEWSSUBJECTWIDTH, "NEWSSUBJECTWIDTH");
-
+    write_pref_int(fp, eNEWSAUTHORWIDTH, "NEWSAUTHORWIDTH");
+    write_pref_int(fp, eNEWSSUBJECTWIDTH, "NEWSSUBJECTWIDTH");
 
     write_pref_boolean(fp, eFOCUS_FOLLOWS_MOUSE, "FOCUS_FOLLOWS_MOUSE");
     write_pref_boolean(fp, eSESSION_HISTORY_ON_RBM, "SESSION_HISTORY_ON_RBM");
-    write_pref_int(fp, eNUMBER_OF_ITEMS_IN_RBM_HISTORY, 
-		   "NUMBER_OF_ITEMS_IN_RBM_HISTORY");
+    write_pref_int(fp, eNUMBER_OF_ITEMS_IN_RBM_HISTORY, "NUMBER_OF_ITEMS_IN_RBM_HISTORY");
 
     write_pref_boolean (fp, eUSESHORTNEWSRC, "USESHORTNEWSRC");
+    write_pref_boolean (fp, eHOTLIST_ON_RBM, "HOTLIST_ON_RBM");
+    write_pref_boolean (fp, eBODYCOLORS, "BODYCOLORS");
+    write_pref_boolean (fp, eBODYIMAGES, "BODYIMAGES");
+    write_pref_string  (fp, eDEFAULTUNDERLINES, "DEFAULTUNDERLINES");
+    write_pref_boolean (fp, eFTP_BINARY_MODE, "FTP_BINARY_MODE");
+    write_pref_string  (fp, eKIOSKPROTOCOLS, "KIOSKPROTOCOLS");
+    write_pref_string  (fp, eVMS_MAIL_PREFIX, "VMS_MAIL_PREFIX");
+    write_pref_int     (fp, eBACKUPFILEVERSIONS, "BACKUPFILEVERSIONS");
+    write_pref_boolean (fp, eFONTCOLORS, "FONTCOLORS");
+    write_pref_boolean (fp, ePROGRESSIVE_DISPLAY, "PROGRESSIVE_DISPLAY");
+    write_pref_boolean (fp, eFONTSIZES, "FONTSIZES");
+    write_pref_int(fp, eFONTBASESIZE, "FONTBASESIZE");
+    write_pref_boolean(fp, eTRACK_TARGET_ANCHORS, "TRACK_TARGET_ANCHORS");
+    write_pref_boolean(fp, eDEBUG_MENU, "DEBUG_MENU");
+    write_pref_boolean(fp, eREPORTBUGS, "REPORTBUGS");
+    write_pref_boolean(fp, eIMAGE_ANIMATION, "IMAGE_ANIMATION");
+    write_pref_int(fp, eMIN_ANIMATION_DELAY, "MIN_ANIMATION_DELAY");
+    write_pref_boolean(fp, eREFRESHTRACE, "REFRESHTRACE");
+    write_pref_boolean(fp, eREFRESH_URL, "REFRESH_URL");
+    write_pref_boolean(fp, eBROWSER_SAFE_COLORS, "BROWSER_SAFE_COLORS");
+    write_pref_boolean(fp, eBLINKING_TEXT, "BLINKING_TEXT");
+    write_pref_int(fp, eBLINK_TIME, "BLINK_TIME");
+    write_pref_boolean(fp, eCOOKIES, "COOKIES");
+    write_pref_boolean(fp, eACCEPT_ALL_COOKIES, "ACCEPT_ALL_COOKIES");
+    write_pref_int(fp, eMAXPIXMAPWIDTH, "MAXPIXMAPWIDTH");
+    write_pref_int(fp, eMAXPIXMAPHEIGHT, "MAXPIXMAPHEIGHT");
+    write_pref_boolean(fp, eUSE_COOKIE_FILE, "USE_COOKIE_FILE");
+    write_pref_string(fp, eCOOKIE_FILE, "COOKIE_FILE");
+    write_pref_string(fp, eIMAGEDELAY_FILE, "IMAGEDELAY_FILE");
+    write_pref_boolean(fp, eBROWSERSAFECOLORS_IF_TRUECOLOR, "BROWSERSAFECOLORS_IF_TRUECOLOR");
+    write_pref_boolean(fp, eHOTKEYS, "HOTKEYS");
+    write_pref_boolean(fp, eINVALID_COOKIE_PROMPT, "INVALID_COOKIE_PROMPT");
+    write_pref_int(fp, eMAX_COOKIES, "MAX_COOKIES");
+    write_pref_int(fp, eCOOKIE_DOMAIN_LIMIT, "COOKIE_DOMAIN_LIMIT");
+    write_pref_string(fp, ePERM_FILE, "PERM_FILE");
+    write_pref_string(fp, eFORM_BUTTON_BACKGROUND, "FORM_BUTTON_BACKGROUND");
+    write_pref_boolean(fp, eVERIFY_SSL_CERTIFICATES, "VERIFY_SSL_CERTIFICATES");
+    write_pref_int(fp, eHOTLIST_MENU_HEIGHT, "HOTLIST_MENU_HEIGHT");
+    write_pref_int(fp, eHOTLIST_MENU_WIDTH, "HOTLIST_MENU_WIDTH");
+    write_pref_int(fp, eMARKUP_MEMORY_PREALLOCATION, "MARKUP_MEMORY_PREALLOCATION");
+    write_pref_int(fp, eELEMENT_MEMORY_PREALLOCATION, "ELEMENT_MEMORY_PREALLOCATION");
+    write_pref_boolean(fp, eCOOKIETRACE, "COOKIETRACE");
+    write_pref_boolean(fp, eCLUE_HELP, "CLUE_HELP");
+    write_pref_string(fp, eCLUE_FOREGROUND, "CLUE_FOREGROUND");
+    write_pref_string(fp, eCLUE_BACKGROUND, "CLUE_BACKGROUND");
+    write_pref_int(fp, eCLUE_POPUP_DELAY, "CLUE_POPUP_DELAY");
+    write_pref_int(fp, eCLUE_POPDOWN_DELAY, "CLUE_POPDOWN_DELAY");
+    write_pref_string(fp, eCLUE_FONT, "CLUE_FONT");
+    write_pref_boolean(fp, eCLUE_OVAL, "CLUE_OVAL");
+    write_pref_boolean(fp, eCLUE_ROUNDED, "CLUE_ROUNDED");
+    write_pref_boolean(fp, ePRINT_DUPLEX, "PRINT_DUPLEX");
+    write_pref_boolean(fp, eMENUBAR_TEAROFF, "MENUBAR_TEAROFF");
+
     fclose(fp);
     return successful;
-    
-#endif
-    
 }
-
-
 
 /****************************************************************************
  ****************************************************************************
@@ -540,7 +1166,6 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
  ****************************************************************************
  ***************************************************************************/
 
-
 /****************************************************************************
    Function: get_ptr_to_preferences(void)
    Desc:     Returns a pointer to the main preferences structure
@@ -548,9 +1173,7 @@ static Boolean write_preferences_file(prefsStructP inPrefsStruct) {
 prefsStructP get_ptr_to_preferences(void) {
 
     return thePrefsStructP;
-
 }
-
 
 /****************************************************************************
    Function: get_pref(long pref_id)
@@ -561,481 +1184,473 @@ void *get_pref(long pref_id) {
 
     switch(pref_id) {
 
+        case  eUSE_PREFERENCES:
+            return (void *)&(thePrefsStructP->RdataP->use_preferences);
         case  eTRACK_VISITED_ANCHORS:
             return (void *)&(thePrefsStructP->RdataP->track_visited_anchors);
-            break;
         case  eDISPLAY_URLS_NOT_TITLES:
             return (void *)&(thePrefsStructP->RdataP->display_urls_not_titles);
-            break;
         case  eTRACK_POINTER_MOTION:
             return (void *)&(thePrefsStructP->RdataP->track_pointer_motion);
-            break;
         case  eTRACK_FULL_URL_NAMES:
             return (void *)&(thePrefsStructP->RdataP->track_full_url_names);
-            break;
         case  eANNOTATIONS_ON_TOP:
             return (void *)&(thePrefsStructP->RdataP->annotations_on_top);
-            break;
         case  eCONFIRM_DELETE_ANNOTATION:
             return (void *)&(thePrefsStructP->RdataP->confirm_delete_annotation);
-            break;
         case  eANNOTATION_SERVER:
             return (void *)(thePrefsStructP->RdataP->annotation_server);
-            break;
         case  eRECORD_COMMAND_LOCATION:
             return (void *)(thePrefsStructP->RdataP->record_command_location);
-            break;
         case  eRECORD_COMMAND:
             return (void *)(thePrefsStructP->RdataP->record_command);
-            break;
         case  eRELOAD_PRAGMA_NO_CACHE:
             return (void *)&(thePrefsStructP->RdataP->reload_pragma_no_cache);
-            break;
         case  eSENDMAIL_COMMAND:
             return (void *)(thePrefsStructP->RdataP->sendmail_command);
-            break;
         case  eEDIT_COMMAND:
             return (void *)(thePrefsStructP->RdataP->edit_command);
-            break;
         case  eXTERM_COMMAND:
             return (void *)(thePrefsStructP->RdataP->xterm_command);
-            break;
         case  eMAIL_FILTER_COMMAND:
             return (void *)(thePrefsStructP->RdataP->mail_filter_command);
-            break;
         case  ePRIVATE_ANNOTATION_DIRECTORY:
             return (void *)(thePrefsStructP->RdataP->private_annotation_directory);
-            break;
         case  eHOME_DOCUMENT:
             return (void *)(thePrefsStructP->RdataP->home_document);
-            break;
         case  eTMP_DIRECTORY:
             return (void *)(thePrefsStructP->RdataP->tmp_directory);
-            break;
         case  eDOCS_DIRECTORY:
             return (void *)(thePrefsStructP->RdataP->docs_directory);
-            break;
         case  eDEFAULT_FONT_CHOICE:
             return (void *)(thePrefsStructP->RdataP->default_font_choice);
-            break;
         case  eGLOBAL_HISTORY_FILE:
             return (void *)(thePrefsStructP->RdataP->global_history_file);
-            break;
         case  eHISTORY_FILE:
             return (void *)(thePrefsStructP->RdataP->history_file);
-            break;
         case  eUSE_GLOBAL_HISTORY:
             return (void *)&(thePrefsStructP->RdataP->use_global_history);
-            break;
         case  eDEFAULT_HOTLIST_FILE:
             return (void *)(thePrefsStructP->RdataP->default_hotlist_file);
-            break;
         case  eDEFAULT_HOT_FILE:
             return (void *)(thePrefsStructP->RdataP->default_hot_file);
-            break;
         case  eADD_HOTLIST_ADDS_RBM:
             return (void *)&(thePrefsStructP->RdataP->addHotlistAddsRBM);
-            break;
         case  eADD_RBM_ADDS_RBM:
             return (void *)&(thePrefsStructP->RdataP->addRBMAddsRBM);
-            break;
         case  eDOCUMENTS_MENU_SPECFILE:
             return (void *)(thePrefsStructP->RdataP->documents_menu_specfile);
-            break;
         case  eCOLORS_PER_INLINED_IMAGE:
             return (void *)&(thePrefsStructP->RdataP->colors_per_inlined_image);
-            break;
         case  eIMAGE_CACHE_SIZE:
             return (void *)&(thePrefsStructP->RdataP->image_cache_size);
-            break;
         case  eRELOAD_RELOADS_IMAGES:
             return (void *)&(thePrefsStructP->RdataP->reload_reloads_images);
-            break;
         case  eREVERSE_INLINED_BITMAP_COLORS:
             return (void *)&(thePrefsStructP->RdataP->reverse_inlined_bitmap_colors);
-            break;
         case  eDELAY_IMAGE_LOADS:
             return (void *)&(thePrefsStructP->RdataP->delay_image_loads);
-            break;
         case  eDEFAULT_AUTHOR_NAME:
             return (void *)(thePrefsStructP->RdataP->default_author_name);
-            break;
         case  eDEFAULT_AUTHOR_EMAIL:
             return (void *)(thePrefsStructP->RdataP->default_author_email);
-            break;
         case  eSIGNATURE:
             return (void *)(thePrefsStructP->RdataP->signature);
-            break;
         case  eMAIL_MODE:
             return (void *)(thePrefsStructP->RdataP->mail_mode);
-            break;
         case  ePRINT_COMMAND:
             return (void *)(thePrefsStructP->RdataP->print_command);
-            break;
         case  eUNCOMPRESS_COMMAND:
             return (void *)(thePrefsStructP->RdataP->uncompress_command);
-            break;
         case  eGUNZIP_COMMAND:
             return (void *)(thePrefsStructP->RdataP->gunzip_command);
-            break;
         case  eUSE_DEFAULT_EXTENSION_MAP:
             return (void *)&(thePrefsStructP->RdataP->use_default_extension_map);
-            break;
         case  eUSE_DEFAULT_TYPE_MAP:
             return (void *)&(thePrefsStructP->RdataP->use_default_type_map);
-            break;
         case  eGLOBAL_EXTENSION_MAP:
             return (void *)(thePrefsStructP->RdataP->global_extension_map);
-            break;
         case  ePERSONAL_EXTENSION_MAP:
             return (void *)(thePrefsStructP->RdataP->personal_extension_map);
-            break;
         case  eGLOBAL_TYPE_MAP:
             return (void *)(thePrefsStructP->RdataP->global_type_map);
-            break;
         case  ePERSONAL_TYPE_MAP:
             return (void *)(thePrefsStructP->RdataP->personal_type_map);
-            break;
         case  eTWEAK_GOPHER_TYPES:
             return (void *)&(thePrefsStructP->RdataP->tweak_gopher_types);
-            break;
         case eGUI_LAYOUT:
             return (void *)(thePrefsStructP->RdataP->gui_layout);
-            break;
         case  ePRINT_MODE:
             return (void *)(thePrefsStructP->RdataP->print_mode);
-            break;
         case  ePRINT_BANNERS:
             return (void *)&(thePrefsStructP->RdataP->print_banners);
-            break;
         case  ePRINT_FOOTNOTES:
             return (void *)&(thePrefsStructP->RdataP->print_footnotes);
-            break;
         case  ePRINT_PAPER_SIZE_US:
             return (void *)&(thePrefsStructP->RdataP->print_us);
-            break;
         case  ePROXY_SPECFILE:
             return (void *)(thePrefsStructP->RdataP->proxy_specfile);
-            break;
         case  eNOPROXY_SPECFILE:
             return (void *)(thePrefsStructP->RdataP->noproxy_specfile);
-            break;
         case  eCCIPORT:
             return (void *)&(thePrefsStructP->RdataP->cciPort);
-            break;
         case  eMAX_NUM_OF_CCI_CONNECTIONS:
             return (void *)&(thePrefsStructP->RdataP->max_num_of_cci_connections);
-            break;
         case  eMAX_WAIS_RESPONSES:
             return (void *)&(thePrefsStructP->RdataP->max_wais_responses);
-            break;
         case  eKIOSK:
             return (void *)&(thePrefsStructP->RdataP->kiosk);
-            break;
         case  eKIOSKPRINT:
             return (void *)&(thePrefsStructP->RdataP->kioskPrint);
-            break;
         case  eKIOSKNOEXIT:
             return (void *)&(thePrefsStructP->RdataP->kioskNoExit);
-            break;
         case  eKEEPALIVE:
             return (void *)&(thePrefsStructP->RdataP->keepAlive);
-            break;
         case  eFTP_TIMEOUT_VAL:
             return (void *)&(thePrefsStructP->RdataP->ftp_timeout_val);
-            break;
         case  eENABLE_TABLES:
             return (void *)&(thePrefsStructP->RdataP->enable_tables);
-            break;
         case  eDEFAULT_WIDTH:
             return (void *)&(thePrefsStructP->RdataP->default_width);
-            break;
         case  eDEFAULT_HEIGHT:
             return (void *)&(thePrefsStructP->RdataP->default_height);
-            break;
         case  eAUTO_PLACE_WINDOWS:
             return (void *)&(thePrefsStructP->RdataP->auto_place_windows);
-            break;
         case  eINITIAL_WINDOW_ICONIC:
             return (void *)&(thePrefsStructP->RdataP->initial_window_iconic);
-            break;
         case  eTITLEISWINDOWTITLE:
             return (void *)&(thePrefsStructP->RdataP->titleIsWindowTitle);
-            break;
         case  eUSEICONBAR:
             return (void *)&(thePrefsStructP->RdataP->useIconBar);
-            break;
         case  eUSETEXTBUTTONBAR:
             return (void *)&(thePrefsStructP->RdataP->useTextButtonBar);
-            break;
         case  eTWIRLING_TRANSFER_ICON:
             return (void *)&(thePrefsStructP->RdataP->twirling_transfer_icon);
-            break;
         case  eSECURITYICON:
             return (void *)&(thePrefsStructP->RdataP->securityIcon);
-            break;
         case  eTWIRL_INCREMENT:
             return (void *)&(thePrefsStructP->RdataP->twirl_increment);
-            break;
         case  eSAVE_MODE:
             return (void *)(thePrefsStructP->RdataP->save_mode);
-            break;
-        case  eHDF_MAX_IMAGE_DIMENSION:
-            return (void *)&(thePrefsStructP->RdataP->hdf_max_image_dimension);
-            break;
-        case  eHDF_MAX_DISPLAYED_DATASETS:
-            return (void *)&(thePrefsStructP->RdataP->hdf_max_displayed_datasets);
-            break;
-        case  eHDF_MAX_DISPLAYED_ATTRIBUTES:
-            return (void *)&(thePrefsStructP->RdataP->hdf_max_displayed_attributes);
-            break;
-        case  eHDF_POWER_USER:
-            return (void *)&(thePrefsStructP->RdataP->hdf_power_user);
-            break;
-        case  eHDFLONGNAME:
-            return (void *)&(thePrefsStructP->RdataP->hdflongname);
-            break;
         case  eFULL_HOSTNAME:
             return (void *)(thePrefsStructP->RdataP->full_hostname);
-            break;
         case  eLOAD_LOCAL_FILE:
             return (void *)&(thePrefsStructP->RdataP->load_local_file);
-            break;
         case  eEDIT_COMMAND_USE_XTERM:
             return (void *)&(thePrefsStructP->RdataP->edit_command_use_xterm);
-            break;
         case  eCONFIRM_EXIT:
             return (void *)&(thePrefsStructP->RdataP->confirm_exit);
-            break;
         case  eDEFAULT_FANCY_SELECTIONS:
             return (void *)&(thePrefsStructP->RdataP->default_fancy_selections);
-            break;
         case  eCATCH_PRIOR_AND_NEXT:
             return (void *)&(thePrefsStructP->RdataP->catch_prior_and_next);
-            break;
         case  eSIMPLE_INTERFACE:
             return (void *)&(thePrefsStructP->RdataP->simple_interface);
-            break;
         case  ePROTECT_ME_FROM_MYSELF:
             return (void *)&(thePrefsStructP->RdataP->protect_me_from_myself);
-            break;
         case  eGETHOSTBYNAME_IS_EVIL:
             return (void *)&(thePrefsStructP->RdataP->gethostbyname_is_evil);
-            break;
 #ifdef __sgi
         case  eDEBUGGING_MALLOC:
             return (void *)&(thePrefsStructP->RdataP->debugging_malloc);
-            break;
 #endif
         case  eUSEAFSKLOG:
             return (void *)&(thePrefsStructP->RdataP->useAFSKlog);
-            break;
 
-/* New in 2.7 */
-
+	/* New in 2.7 */
         case eSEND_REFERER:
             return (void *)&(thePrefsStructP->RdataP->sendReferer);
-            break;
         case eSEND_AGENT:
             return (void *)&(thePrefsStructP->RdataP->sendAgent);
-            break;
         case eEXPAND_URLS:
             return (void *)&(thePrefsStructP->RdataP->expandUrls);
-            break;
         case eEXPAND_URLS_WITH_NAME:
             return (void *)&(thePrefsStructP->RdataP->expandUrlsWithName);
-            break;
         case eDEFAULT_PROTOCOL:
             return (void *)(thePrefsStructP->RdataP->defaultProtocol);
-            break;
         case eMETER_FOREGROUND:
             return (void *)(thePrefsStructP->RdataP->meterForeground);
-            break;
         case eMETER_BACKGROUND:
             return (void *)(thePrefsStructP->RdataP->meterBackground);
-            break;
         case eMETER_FONT_FOREGROUND:
             return (void *)(thePrefsStructP->RdataP->meterFontForeground);
-            break;
         case eMETER_FONT_BACKGROUND:
             return (void *)(thePrefsStructP->RdataP->meterFontBackground);
-            break;
         case eMETER:
             return (void *)&(thePrefsStructP->RdataP->use_meter);
-            break;
         case eBACKUP_FILES:
             return (void *)&(thePrefsStructP->RdataP->backup_files);
-            break;
         case ePIX_BASENAME:
             return (void *)(thePrefsStructP->RdataP->pix_basename);
-            break;
         case ePIX_COUNT:
             return (void *)&(thePrefsStructP->RdataP->pix_count);
-            break;
         case eACCEPT_LANGUAGE_STR:
             return (void *)(thePrefsStructP->RdataP->acceptlanguage_str);
-            break;
         case eFTP_REDIAL:
             return (void *)&(thePrefsStructP->RdataP->ftpRedial);
-            break;
         case eFTP_REDIAL_SLEEP:
             return (void *)&(thePrefsStructP->RdataP->ftpRedialSleep);
-            break;
         case eFTP_FILENAME_LENGTH:
             return (void *)&(thePrefsStructP->RdataP->ftpFilenameLength);
-            break;
         case eFTP_ELLIPSIS_LENGTH:
             return (void *)&(thePrefsStructP->RdataP->ftpEllipsisLength);
-            break;
         case eFTP_ELLIPSIS_MODE:
             return (void *)&(thePrefsStructP->RdataP->ftpEllipsisMode);
-            break;
         case eTITLE_ISWINDOW_TITLE:
             return (void *)&(thePrefsStructP->RdataP->titleIsWindowTitle);
-            break;
         case eUSE_SCREEN_GAMMA:
             return (void *)&(thePrefsStructP->RdataP->useScreenGamma);
-            break;
         case eSCREEN_GAMMA:
             return (void *)&(thePrefsStructP->RdataP->screen_gamma);
-            break;
         case eDISABLEMIDDLEBUTTON:
-            return (void *)&(thePrefsStructP->RdataP->useScreenGamma);
-            break;
+            return (void *)&(thePrefsStructP->RdataP->disableMiddleButton);
         case eHTTPTRACE:
             return (void *)&(thePrefsStructP->RdataP->httpTrace);
-            break;
         case eWWW2TRACE:
             return (void *)&(thePrefsStructP->RdataP->www2Trace);
-            break;
         case eHTMLWTRACE:
             return (void *)&(thePrefsStructP->RdataP->htmlwTrace);
-            break;
         case eCCITRACE:
             return (void *)&(thePrefsStructP->RdataP->cciTrace);
-            break;
         case eSRCTRACE:
             return (void *)&(thePrefsStructP->RdataP->srcTrace);
-            break;
         case eCACHETRACE:
             return (void *)&(thePrefsStructP->RdataP->cacheTrace);
-            break;
         case eNUTTRACE:
             return (void *)&(thePrefsStructP->RdataP->nutTrace);
-            break;
+        case eTABLETRACE:
+            return (void *)&(thePrefsStructP->RdataP->tableTrace);
         case eANIMATEBUSYICON:
             return (void *)&(thePrefsStructP->RdataP->animateBusyIcon);
-            break;
         case eSPLASHSCREEN:
             return (void *)&(thePrefsStructP->RdataP->splashScreen);
-            break;
         case eINSTALL_COLORMAP:
             return (void *)&(thePrefsStructP->RdataP->instamap);
-            break;
         case eIMAGEVIEWINTERNAL:
             return (void *)&(thePrefsStructP->RdataP->imageViewInternal);
-            break;
         case eURLEXPIRED:
             return (void *)&(thePrefsStructP->RdataP->urlExpired);
-            break;
         case ePOPUPCASCADEMAPPINGDELAY:
             return (void *)&(thePrefsStructP->RdataP->popupCascadeMappingDelay);
-            break;
-        case eFRAME_HACK:
-            return (void *)&(thePrefsStructP->RdataP->frame_hack);
-            break;
+        case eFRAME_SUPPORT:
+            return (void *)&(thePrefsStructP->RdataP->frame_support);
 
         case eUSETHREADVIEW:
 	    return (void *)&(thePrefsStructP->RdataP->newsConfigView);
-	    break;
       
         case eSHOWREADGROUPS:
-	  return (void *)&(thePrefsStructP->RdataP->newsShowReadGroups);
-	  break;
+	    return (void *)&(thePrefsStructP->RdataP->newsShowReadGroups);
 
         case eNOTHREADJUMPING:
-	  return (void *)&(thePrefsStructP->RdataP->newsNoThreadJumping);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsNoThreadJumping);
 
         case eSHOWALLGROUPS:
-	  return (void *)&(thePrefsStructP->RdataP->newsShowAllGroups);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsShowAllGroups);
   
         case eSHOWALLARTICLES:
-	  return (void *)&(thePrefsStructP->RdataP->newsShowAllArticles);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsShowAllArticles);
 
         case eUSEBACKGROUNDFLUSH:
-	  return (void *)&(thePrefsStructP->RdataP->newsUseBackgroundFlush);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsUseBackgroundFlush);
 
         case eBACKGROUNDFLUSHTIME:
-	  return (void *)&(thePrefsStructP->RdataP->newsBackgroundFlushTime);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsBackgroundFlushTime);
 
         case eCLIPPING:
-	  return (void *)&(thePrefsStructP->RdataP->clipping);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->clipping);
 
-        case eMAX_CLIPPING_SIZE_X:
-	  return (void *)&(thePrefsStructP->RdataP->max_clip_x);
-          break;
-
-        case eMAX_CLIPPING_SIZE_Y:
-	  return (void *)&(thePrefsStructP->RdataP->max_clip_y);
-          break;
+        case eMAX_CLIP_TRANSITIONS:
+            return (void *)&(thePrefsStructP->RdataP->max_clip_transitions);
 
         case eUSE_LONG_TEXT_NAMES:
-	  return (void *)&(thePrefsStructP->RdataP->long_text_names);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->long_text_names);
 
         case eTOOLBAR_LAYOUT:
             return (void *)(thePrefsStructP->RdataP->toolbar_layout);
-            break;
 
         case eNEXTISUNREAD:
-	  return (void *)&(thePrefsStructP->RdataP->newsNextIsUnread);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsNextIsUnread);
         case ePREVISUNREAD:
-	  return (void *)&(thePrefsStructP->RdataP->newsPrevIsUnread);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsPrevIsUnread);
         case eUSENEWSRC:
-	  return (void *)&(thePrefsStructP->RdataP->newsUseNewsrc);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsUseNewsrc);
         case eNEWSRCPREFIX:
-	  return (void *)(thePrefsStructP->RdataP->newsNewsrcPrefix);
-          break;
+	    return (void *)(thePrefsStructP->RdataP->newsNewsrcPrefix);
         case eNEWSSUBJECTWIDTH:
-	  return (void *)&(thePrefsStructP->RdataP->newsSubjectWidth);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsSubjectWidth);
         case eNEWSAUTHORWIDTH:
-	  return (void *)&(thePrefsStructP->RdataP->newsAuthorWidth);
-          break;
-
+	    return (void *)&(thePrefsStructP->RdataP->newsAuthorWidth);
 
         case eFOCUS_FOLLOWS_MOUSE:
             return (void *)&(thePrefsStructP->RdataP->focusFollowsMouse);
-            break;
 
         case eSESSION_HISTORY_ON_RBM:
             return (void *)&(thePrefsStructP->RdataP->sessionHistoryOnRBM);
-            break;
 
         case eNUMBER_OF_ITEMS_IN_RBM_HISTORY:
 	    return (void *)&(thePrefsStructP->RdataP->numberOfItemsInRBMHistory);
-            break;
 
         case eHOTLIST_ON_RBM:
 	    return (void *)&(thePrefsStructP->RdataP->hotlistOnRBM);
-	    break;
 
         case eUSESHORTNEWSRC:
-	  return (void *)&(thePrefsStructP->RdataP->newsUseShortNewsrc);
-          break;
+	    return (void *)&(thePrefsStructP->RdataP->newsUseShortNewsrc);
+
+	/* 2.7b6 */
+	case eKIOSKPROTOCOLS:
+	    return (void *)(thePrefsStructP->RdataP->kioskProtocols);
+
+	case eBODYCOLORS:
+	    return (void *)&(thePrefsStructP->RdataP->bodyColors);
+
+	case eBODYIMAGES:
+	    return (void *)&(thePrefsStructP->RdataP->bodyImages);
+
+	case eDEFAULTUNDERLINES:
+	    return (void *)(thePrefsStructP->RdataP->defaultUnderlines);
+
+	case eFTP_BINARY_MODE:
+	    return (void *)&(thePrefsStructP->RdataP->ftp_binary_mode);
+
+        case eVMS_MAIL_PREFIX:
+            return (void *)(thePrefsStructP->RdataP->vms_mail_prefix);
+
+        case eBACKUPFILEVERSIONS:
+            return (void *)&(thePrefsStructP->RdataP->backupFileVersions);
+
+	case eFONTCOLORS:
+	    return (void *)&(thePrefsStructP->RdataP->fontColors);
+
+	case ePROGRESSIVE_DISPLAY:
+	    return (void *)&(thePrefsStructP->RdataP->progressive_display);
+
+	case eFONTSIZES:
+	    return (void *)&(thePrefsStructP->RdataP->fontSizes);
+
+	case eFONTBASESIZE:
+	    return (void *)&(thePrefsStructP->RdataP->fontBaseSize);
+
+        case eTRACK_TARGET_ANCHORS:
+            return (void *)&(thePrefsStructP->RdataP->track_target_anchors);
+
+        case eDEBUG_MENU:
+            return (void *)&(thePrefsStructP->RdataP->debug_menu);
+
+        case eREPORTBUGS:
+            return (void *)&(thePrefsStructP->RdataP->reportBugs);
+
+        case eIMAGE_ANIMATION:
+            return (void *)&(thePrefsStructP->RdataP->image_animation);
+
+	case eMIN_ANIMATION_DELAY:
+	    return (void *)&(thePrefsStructP->RdataP->min_animation_delay);
+
+        case eREFRESHTRACE:
+            return (void *)&(thePrefsStructP->RdataP->refreshTrace);
+
+        case eREFRESH_URL:
+            return (void *)&(thePrefsStructP->RdataP->refresh_URL);
+
+        case eBROWSER_SAFE_COLORS:
+            return (void *)&(thePrefsStructP->RdataP->browser_safe_colors);
+
+        case eBLINKING_TEXT:
+            return (void *)&(thePrefsStructP->RdataP->blinking_text);
+
+	case eBLINK_TIME:
+	    return (void *)&(thePrefsStructP->RdataP->blink_time);
+
+        case eCOOKIES:
+            return (void *)&(thePrefsStructP->RdataP->cookies);
+
+        case eACCEPT_ALL_COOKIES:
+            return (void *)&(thePrefsStructP->RdataP->accept_all_cookies);
+
+	case eMAXPIXMAPWIDTH:
+	    return (void *)&(thePrefsStructP->RdataP->maxPixmapWidth);
+
+	case eMAXPIXMAPHEIGHT:
+	    return (void *)&(thePrefsStructP->RdataP->maxPixmapHeight);
+
+        case eUSE_COOKIE_FILE:
+            return (void *)&(thePrefsStructP->RdataP->use_cookie_file);
+
+        case eCOOKIE_FILE:
+            return (void *)(thePrefsStructP->RdataP->cookie_file);
+
+        case eIMAGEDELAY_FILE:
+            return (void *)(thePrefsStructP->RdataP->imagedelay_file);
+
+        case eBROWSERSAFECOLORS_IF_TRUECOLOR:
+            return (void *)&(thePrefsStructP->RdataP->BSColors_if_Truecolor);
+
+        case eHOTKEYS:
+            return (void *)&(thePrefsStructP->RdataP->hotkeys);
+
+        case eINVALID_COOKIE_PROMPT:
+            return (void *)&(thePrefsStructP->RdataP->invalid_cookie_prompt);
+
+        case eMAX_COOKIES:
+            return (void *)&(thePrefsStructP->RdataP->max_cookies);
+
+        case eCOOKIE_DOMAIN_LIMIT:
+            return (void *)&(thePrefsStructP->RdataP->cookie_domain_limit);
+
+        case ePERM_FILE:
+            return (void *)(thePrefsStructP->RdataP->perm_file);
+
+        case eFORM_BUTTON_BACKGROUND:
+            return (void *)(thePrefsStructP->RdataP->form_button_background);
+
+        case eVERIFY_SSL_CERTIFICATES:
+            return (void *)&(thePrefsStructP->RdataP->verify_ssl_certificates);
+
+        case eHOTLIST_MENU_HEIGHT:
+            return (void *)&(thePrefsStructP->RdataP->hotlist_menu_height);
+
+        case eHOTLIST_MENU_WIDTH:
+            return (void *)&(thePrefsStructP->RdataP->hotlist_menu_width);
+
+        case eMARKUP_MEMORY_PREALLOCATION:
+            return (void *)&(thePrefsStructP->RdataP->markup_memory_preallocation);
+
+        case eELEMENT_MEMORY_PREALLOCATION:
+            return (void *)&(thePrefsStructP->RdataP->element_memory_preallocation);
+
+        case eCOOKIETRACE:
+            return (void *)&(thePrefsStructP->RdataP->cookieTrace);
+
+        case eCLUE_HELP:
+            return (void *)&(thePrefsStructP->RdataP->clue_help);
+
+        case eCLUE_FOREGROUND:
+            return (void *)(thePrefsStructP->RdataP->clueForeground);
+
+        case eCLUE_BACKGROUND:
+            return (void *)(thePrefsStructP->RdataP->clueBackground);
+
+        case eCLUE_POPUP_DELAY:
+            return (void *)&(thePrefsStructP->RdataP->clueDelay);
+
+        case eCLUE_POPDOWN_DELAY:
+            return (void *)&(thePrefsStructP->RdataP->clueDownDelay);
+
+        case eCLUE_FONT:
+            return (void *)(thePrefsStructP->RdataP->clueFont);
+
+        case eCLUE_OVAL:
+            return (void *)&(thePrefsStructP->RdataP->clue_oval);
+        case eCLUE_ROUNDED:
+            return (void *)&(thePrefsStructP->RdataP->clue_rounded);
+        case ePRINT_DUPLEX:
+            return (void *)&(thePrefsStructP->RdataP->print_duplex);
+        case eMENUBAR_TEAROFF:
+            return (void *)&(thePrefsStructP->RdataP->menubar_tearoff);
     }
 
+    fprintf(stderr, "Error: tried to get nonexistant preference\n");
+    return 0;
 }
-
 
 /****************************************************************************
    Function: get_pref_string(long pref_id)
@@ -1043,14 +1658,14 @@ void *get_pref(long pref_id) {
                  denoted by pref_id
  ***************************************************************************/
 char *get_pref_string(long pref_id) {
+
     char *tmp_string = (char *)get_pref(pref_id);
 
-    if(tmp_string == NULL)
+    if (!tmp_string || !*tmp_string) {
         return (char *)NULL;
-    else if(strcmp(tmp_string, "") == 0)
-        return (char *)NULL;
-    else
+    } else {
         return (char *)tmp_string;
+    }
 }
 
 /****************************************************************************
@@ -1059,6 +1674,7 @@ char *get_pref_string(long pref_id) {
                  denoted by pref_id
  ***************************************************************************/
 int get_pref_int(long pref_id) {
+
     return *(int *)get_pref(pref_id);
 }
 
@@ -1068,6 +1684,7 @@ int get_pref_int(long pref_id) {
                  denoted by pref_id
  ***************************************************************************/
 Boolean get_pref_boolean(long pref_id) {
+
     return *(Boolean *)get_pref(pref_id);
 }
 
@@ -1077,10 +1694,9 @@ Boolean get_pref_boolean(long pref_id) {
                  denoted by pref_id
  ***************************************************************************/
 float get_pref_float(long pref_id) {
+
     return *(float *)get_pref(pref_id);
 }
-
-
 
 /****************************************************************************
    Function: set_pref_boolean(long pref_id, int value)
@@ -1088,11 +1704,10 @@ float get_pref_float(long pref_id) {
  ***************************************************************************/
 void set_pref_boolean(long pref_id, int value) {
 
-int val=value;
+    int val = value;
 
-	set_pref(pref_id,&val);
+    set_pref(pref_id, &val);
 }
-
 
 /****************************************************************************
    Function: set_pref_int(long pref_id, int value)
@@ -1100,11 +1715,21 @@ int val=value;
  ***************************************************************************/
 void set_pref_int(long pref_id, int value) {
 
-int val=value;
+    int val = value;
 
-	set_pref(pref_id,&val);
+    set_pref(pref_id, &val);
 }
 
+/****************************************************************************
+   Function: set_pref_float(long pref_id, float value)
+   Desc:     Convenience for float setting.
+ ***************************************************************************/
+void set_pref_float(long pref_id, float value) {
+
+    float val = value;
+
+    set_pref(pref_id, &val);
+}
 
 /****************************************************************************
    Function: set_pref(long pref_id, void *incoming)
@@ -1113,9 +1738,12 @@ int val=value;
  ***************************************************************************/
 void set_pref(long pref_id, void *incoming) {
 
-
     switch(pref_id) {
 
+        case  eUSE_PREFERENCES:
+            thePrefsStructP->RdataP->use_preferences =
+                *((Boolean *)incoming);
+            break;
         case  eTRACK_VISITED_ANCHORS:
             thePrefsStructP->RdataP->track_visited_anchors =
                 *((Boolean *)incoming);
@@ -1408,26 +2036,6 @@ void set_pref(long pref_id, void *incoming) {
             thePrefsStructP->RdataP->save_mode =
                 (char *)incoming;
             break;
-        case  eHDF_MAX_IMAGE_DIMENSION:
-            thePrefsStructP->RdataP->hdf_max_image_dimension =
-                *((int *)incoming);
-            break;
-        case  eHDF_MAX_DISPLAYED_DATASETS:
-            thePrefsStructP->RdataP->hdf_max_displayed_datasets =
-                *((int *)incoming);
-            break;
-        case  eHDF_MAX_DISPLAYED_ATTRIBUTES:
-            thePrefsStructP->RdataP->hdf_max_displayed_attributes =
-                *((int *)incoming);
-            break;
-        case  eHDF_POWER_USER:
-            thePrefsStructP->RdataP->hdf_power_user =
-                *((Boolean *)incoming);
-            break;
-        case  eHDFLONGNAME:
-            thePrefsStructP->RdataP->hdflongname =
-                *((Boolean *)incoming);
-            break;
         case  eFULL_HOSTNAME:
             thePrefsStructP->RdataP->full_hostname =
                 (char *)incoming;
@@ -1475,8 +2083,7 @@ void set_pref(long pref_id, void *incoming) {
                 *((Boolean *)incoming);
             break;
 
-/* New in 2.7 */
-
+	/* New in 2.7 */
         case eSEND_REFERER:
             thePrefsStructP->RdataP->sendReferer =
                 *((Boolean *)incoming);
@@ -1503,6 +2110,14 @@ void set_pref(long pref_id, void *incoming) {
             break;
         case eMETER_BACKGROUND:
             thePrefsStructP->RdataP->meterBackground =
+                (char *)incoming;
+            break;
+        case eMETER_FONT_FOREGROUND:
+            thePrefsStructP->RdataP->meterFontForeground =
+                (char *)incoming;
+            break;
+        case eMETER_FONT_BACKGROUND:
+            thePrefsStructP->RdataP->meterFontBackground =
                 (char *)incoming;
             break;
         case eMETER:
@@ -1554,160 +2169,365 @@ void set_pref(long pref_id, void *incoming) {
                 *((Boolean *)incoming);
             break;
         case eSCREEN_GAMMA:
-            thePrefsStructP->RdataP->screen_gamma =
-                *((float *)incoming);
+            thePrefsStructP->RdataP->screen_gamma = *((float *)incoming);
             break;
         case eDISABLEMIDDLEBUTTON:
             thePrefsStructP->RdataP->disableMiddleButton =
                 *((Boolean *)incoming);
             break;
         case eHTTPTRACE:
-            thePrefsStructP->RdataP->httpTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->httpTrace = *((Boolean *)incoming);
             break;
         case eWWW2TRACE:
-            thePrefsStructP->RdataP->www2Trace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->www2Trace = *((Boolean *)incoming);
             break;
         case eHTMLWTRACE:
-            thePrefsStructP->RdataP->htmlwTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->htmlwTrace = *((Boolean *)incoming);
             break;
         case eCCITRACE:
-            thePrefsStructP->RdataP->cciTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->cciTrace = *((Boolean *)incoming);
             break;
         case eSRCTRACE:
-            thePrefsStructP->RdataP->srcTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->srcTrace = *((Boolean *)incoming);
             break;
         case eCACHETRACE:
-            thePrefsStructP->RdataP->cacheTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->cacheTrace = *((Boolean *)incoming);
             break;
         case eNUTTRACE:
-            thePrefsStructP->RdataP->nutTrace =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->nutTrace = *((Boolean *)incoming);
+            break;
+        case eTABLETRACE:
+            thePrefsStructP->RdataP->tableTrace = *((Boolean *)incoming);
             break;
         case eANIMATEBUSYICON:
-            thePrefsStructP->RdataP->animateBusyIcon =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->animateBusyIcon = *((Boolean *)incoming);
             break;
         case eIMAGEVIEWINTERNAL:
-            thePrefsStructP->RdataP->imageViewInternal =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->imageViewInternal = *((Boolean *)incoming);
             break;
+
         case eSPLASHSCREEN:
-            thePrefsStructP->RdataP->splashScreen =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->splashScreen = *((Boolean *)incoming);
             break;
+
         case eINSTALL_COLORMAP:
-            thePrefsStructP->RdataP->instamap =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->instamap = *((Boolean *)incoming);
             break;
+
         case eURLEXPIRED:
-            thePrefsStructP->RdataP->urlExpired =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->urlExpired = *((Boolean *)incoming);
             break;
+
+        case eFRAME_SUPPORT:
+            thePrefsStructP->RdataP->frame_support = *((Boolean *)incoming);
+            break;
+
         case ePOPUPCASCADEMAPPINGDELAY:
             thePrefsStructP->RdataP->popupCascadeMappingDelay =
                 *((int *)incoming);
-            
 	    break;
 
-        case eUSETHREADVIEW:
+	case eUSETHREADVIEW:
 	    thePrefsStructP->RdataP->newsConfigView = *((int *)incoming);
 	    break;
       
         case eSHOWREADGROUPS:
-	  thePrefsStructP->RdataP->newsShowReadGroups = *((int *)incoming);
-	  break;
+	    thePrefsStructP->RdataP->newsShowReadGroups = *((int *)incoming);
+	    break;
 
         case eNOTHREADJUMPING:
-	  thePrefsStructP->RdataP->newsNoThreadJumping = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsNoThreadJumping = *((int *)incoming);
+            break;
 
         case eSHOWALLGROUPS:
-	  thePrefsStructP->RdataP->newsShowAllGroups = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsShowAllGroups = *((int *)incoming);
+            break;
   
         case eSHOWALLARTICLES:
-	  thePrefsStructP->RdataP->newsShowAllArticles = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsShowAllArticles = *((int *)incoming);
+            break;
 
         case eUSEBACKGROUNDFLUSH:
-	  thePrefsStructP->RdataP->newsUseBackgroundFlush = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsUseBackgroundFlush =
+		*((int *)incoming);
+            break;
 
         case eBACKGROUNDFLUSHTIME:
-	  thePrefsStructP->RdataP->newsBackgroundFlushTime = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsBackgroundFlushTime =
+		*((int *)incoming);
+            break;
 
         case eCLIPPING:
-            thePrefsStructP->RdataP->clipping =
-                *((Boolean *)incoming);
-          break;
+            thePrefsStructP->RdataP->clipping = *((Boolean *)incoming);
+            break;
 
-        case eMAX_CLIPPING_SIZE_X:
-	  thePrefsStructP->RdataP->max_clip_x = *((int *)incoming);
-          break;
-
-        case eMAX_CLIPPING_SIZE_Y:
-	  thePrefsStructP->RdataP->max_clip_y = *((int *)incoming);
-          break;
+        case eMAX_CLIP_TRANSITIONS:
+            thePrefsStructP->RdataP->max_clip_transitions = *((int *)incoming);
+            break;
 
         case eUSE_LONG_TEXT_NAMES:
-            thePrefsStructP->RdataP->long_text_names =
-                *((Boolean *)incoming);
-          break;
+            thePrefsStructP->RdataP->long_text_names = *((Boolean *)incoming);
+            break;
 
         case eTOOLBAR_LAYOUT:
-            thePrefsStructP->RdataP->toolbar_layout =
-                (char *)incoming;
+            thePrefsStructP->RdataP->toolbar_layout = (char *)incoming;
             break;
 
         case eNEXTISUNREAD:
-	  thePrefsStructP->RdataP->newsNextIsUnread = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsNextIsUnread = *((int *)incoming);
+            break;
         case ePREVISUNREAD:
-	  thePrefsStructP->RdataP->newsPrevIsUnread = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsPrevIsUnread = *((int *)incoming);
+            break;
         case eUSENEWSRC:
-	  thePrefsStructP->RdataP->newsUseNewsrc = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsUseNewsrc = *((int *)incoming);
+            break;
         case eNEWSRCPREFIX:
-	  thePrefsStructP->RdataP->newsNewsrcPrefix = (char *)incoming;
-          break;
+	    thePrefsStructP->RdataP->newsNewsrcPrefix = (char *)incoming;
+            break;
         case eNEWSSUBJECTWIDTH:
-	  thePrefsStructP->RdataP->newsSubjectWidth = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsSubjectWidth = *((int *)incoming);
+            break;
         case eNEWSAUTHORWIDTH:
-	  thePrefsStructP->RdataP->newsAuthorWidth = *((int *)incoming);
-          break;
-
+	    thePrefsStructP->RdataP->newsAuthorWidth = *((int *)incoming);
+            break;
 
         case eFOCUS_FOLLOWS_MOUSE:
-            thePrefsStructP->RdataP->focusFollowsMouse =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->focusFollowsMouse = *((Boolean *)incoming);
             break;
         case eSESSION_HISTORY_ON_RBM:
             thePrefsStructP->RdataP->sessionHistoryOnRBM =
                 *((Boolean *)incoming);
             break;  
         case eNUMBER_OF_ITEMS_IN_RBM_HISTORY:
-	    thePrefsStructP->RdataP->numberOfItemsInRBMHistory = *((int *)incoming);
+	    thePrefsStructP->RdataP->numberOfItemsInRBMHistory =
+		*((int *)incoming);
 	    break;
         case eHOTLIST_ON_RBM:
-            thePrefsStructP->RdataP->hotlistOnRBM =
-                *((Boolean *)incoming);
+            thePrefsStructP->RdataP->hotlistOnRBM = *((Boolean *)incoming);
             break;
         case eUSESHORTNEWSRC:
-	  thePrefsStructP->RdataP->newsUseShortNewsrc = *((int *)incoming);
-          break;
+	    thePrefsStructP->RdataP->newsUseShortNewsrc = *((int *)incoming);
+            break;
+
+	/* 2.7b6 */
+	case eKIOSKPROTOCOLS:
+	    thePrefsStructP->RdataP->kioskProtocols = (char *)incoming;
+            break;
+
+	case eBODYCOLORS:
+            thePrefsStructP->RdataP->bodyColors = *((Boolean *)incoming);
+            break;
+
+	case eBODYIMAGES:
+            thePrefsStructP->RdataP->bodyImages = *((Boolean *)incoming);
+            break;
+
+	case eDEFAULTUNDERLINES:
+	    thePrefsStructP->RdataP->defaultUnderlines = (char *)incoming;
+            break;
+
+	case eFTP_BINARY_MODE:
+            thePrefsStructP->RdataP->ftp_binary_mode = *((Boolean *)incoming);
+            break;
+
+        case eVMS_MAIL_PREFIX:
+            thePrefsStructP->RdataP->vms_mail_prefix = (char *)incoming;
+            break;
+
+        case eBACKUPFILEVERSIONS:
+            thePrefsStructP->RdataP->backupFileVersions = *((int *)incoming);
+            break;
+
+	case eFONTCOLORS:
+            thePrefsStructP->RdataP->fontColors = *((Boolean *)incoming);
+            break;
+
+	case ePROGRESSIVE_DISPLAY:
+            thePrefsStructP->RdataP->progressive_display =
+                *((Boolean *)incoming);
+            break;
+
+	case eFONTSIZES:
+            thePrefsStructP->RdataP->fontSizes = *((Boolean *)incoming);
+            break;
+
+	case eFONTBASESIZE:
+            thePrefsStructP->RdataP->fontBaseSize = *((int *)incoming);
+            break;
+
+        case eTRACK_TARGET_ANCHORS:
+            thePrefsStructP->RdataP->track_target_anchors =
+                *((Boolean *)incoming);
+            break;
+
+        case eDEBUG_MENU:
+            thePrefsStructP->RdataP->debug_menu = *((Boolean *)incoming);
+            break;
+
+        case eREPORTBUGS:
+            thePrefsStructP->RdataP->reportBugs = *((Boolean *)incoming);
+            break;
+
+        case eIMAGE_ANIMATION:
+            thePrefsStructP->RdataP->image_animation = *((Boolean *)incoming);
+            break;
+
+	case eMIN_ANIMATION_DELAY:
+            thePrefsStructP->RdataP->min_animation_delay = *((int *)incoming);
+            break;
+
+        case eREFRESHTRACE:
+            thePrefsStructP->RdataP->refreshTrace = *((Boolean *)incoming);
+            break;
+
+        case eREFRESH_URL:
+            thePrefsStructP->RdataP->refresh_URL = *((Boolean *)incoming);
+            break;
+
+        case eBROWSER_SAFE_COLORS:
+            thePrefsStructP->RdataP->browser_safe_colors =
+		*((Boolean *)incoming);
+            break;
+
+        case eBLINKING_TEXT:
+            thePrefsStructP->RdataP->blinking_text = *((Boolean *)incoming);
+            break;
+
+	case eBLINK_TIME:
+            thePrefsStructP->RdataP->blink_time = *((int *)incoming);
+            break;
+
+        case eCOOKIES:
+            thePrefsStructP->RdataP->cookies = *((Boolean *)incoming);
+            break;
+
+        case eACCEPT_ALL_COOKIES:
+            thePrefsStructP->RdataP->accept_all_cookies =
+		*((Boolean *)incoming);
+            break;
+
+	case eMAXPIXMAPWIDTH:
+            thePrefsStructP->RdataP->maxPixmapWidth = *((int *)incoming);
+            break;
+
+	case eMAXPIXMAPHEIGHT:
+            thePrefsStructP->RdataP->maxPixmapHeight = *((int *)incoming);
+            break;
+
+        case eUSE_COOKIE_FILE:
+            thePrefsStructP->RdataP->use_cookie_file = *((Boolean *)incoming);
+            break;
+
+        case eCOOKIE_FILE:
+            thePrefsStructP->RdataP->cookie_file = (char *)incoming;
+            break;
+
+        case eIMAGEDELAY_FILE:
+            thePrefsStructP->RdataP->imagedelay_file = (char *)incoming;
+            break;
+
+        case eBROWSERSAFECOLORS_IF_TRUECOLOR:
+            thePrefsStructP->RdataP->BSColors_if_Truecolor =
+		*((Boolean *)incoming);
+	    break;
+
+        case eHOTKEYS:
+            thePrefsStructP->RdataP->hotkeys = *((Boolean *)incoming);
+	    break;
+
+        case eINVALID_COOKIE_PROMPT:
+            thePrefsStructP->RdataP->invalid_cookie_prompt =
+		*((Boolean *)incoming);
+	    break;
+
+        case eMAX_COOKIES:
+            thePrefsStructP->RdataP->max_cookies = *((int *)incoming);
+	    break;
+
+        case eCOOKIE_DOMAIN_LIMIT:
+            thePrefsStructP->RdataP->cookie_domain_limit = *((int *)incoming);
+	    break;
+
+        case ePERM_FILE:
+            thePrefsStructP->RdataP->perm_file = (char *)incoming;
+            break;
+
+        case eFORM_BUTTON_BACKGROUND:
+            thePrefsStructP->RdataP->form_button_background = (char *)incoming;
+            break;
+
+        case eVERIFY_SSL_CERTIFICATES:
+            thePrefsStructP->RdataP->verify_ssl_certificates =
+		*((Boolean *)incoming);
+	    break;
+
+        case eHOTLIST_MENU_HEIGHT:
+            thePrefsStructP->RdataP->hotlist_menu_height = *((int *)incoming);
+	    break;
+
+        case eHOTLIST_MENU_WIDTH:
+            thePrefsStructP->RdataP->hotlist_menu_width = *((int *)incoming);
+	    break;
+
+        case eMARKUP_MEMORY_PREALLOCATION:
+            thePrefsStructP->RdataP->markup_memory_preallocation =
+		*((int *)incoming);
+	    break;
+
+        case eELEMENT_MEMORY_PREALLOCATION:
+            thePrefsStructP->RdataP->element_memory_preallocation =
+		*((int *)incoming);
+	    break;
+
+        case eCOOKIETRACE:
+            thePrefsStructP->RdataP->cookieTrace = *((Boolean *)incoming);
+            break;
+
+        case eCLUE_HELP:
+            thePrefsStructP->RdataP->clue_help = *((Boolean *)incoming);
+            break;
+
+        case eCLUE_FOREGROUND:
+            thePrefsStructP->RdataP->clueForeground = (char *)incoming;
+            break;
+
+        case eCLUE_BACKGROUND:
+            thePrefsStructP->RdataP->clueBackground = (char *)incoming;
+            break;
+
+        case eCLUE_POPUP_DELAY:
+            thePrefsStructP->RdataP->clueDelay = *((int *)incoming);
+	    break;
+
+        case eCLUE_POPDOWN_DELAY:
+            thePrefsStructP->RdataP->clueDownDelay = *((int *)incoming);
+	    break;
+
+        case eCLUE_FONT:
+            thePrefsStructP->RdataP->clueFont = (char *)incoming;
+            break;
+
+        case eCLUE_OVAL:
+            thePrefsStructP->RdataP->clue_oval = *((Boolean *)incoming);
+            break;
+
+        case eCLUE_ROUNDED:
+            thePrefsStructP->RdataP->clue_rounded = *((Boolean *)incoming);
+            break;
+
+        case ePRINT_DUPLEX:
+            thePrefsStructP->RdataP->print_duplex = *((Boolean *)incoming);
+            break;
+
+        case eMENUBAR_TEAROFF:
+            thePrefsStructP->RdataP->menubar_tearoff = *((Boolean *)incoming);
+            break;
+
+        default:
+            fprintf(stderr, "Error: tried to set nonexistant preference\n");
     }
-
 }
-
 
 /****************************************************************************
  ****************************************************************************
@@ -1715,14 +2535,12 @@ void set_pref(long pref_id, void *incoming) {
  *
  ****************************************************************************
  ***************************************************************************/
-
+#ifndef VMS
 /****************************************************************************
    Function: mo_preferences_dialog(mo_window *win)
    Desc:     Displays the preferences dialog
  ***************************************************************************/
 void mo_preferences_dialog(mo_window *win) {
 
-
 }
-
-
+#endif /* VMS, Useless but gets in way, GEC */

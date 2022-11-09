@@ -51,39 +51,40 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include "mosaic.h"
 #include "gui.h"
 #include "gui-extras.h"
+#include "gui-documents.h"
+#include "gui-dialogs.h"
 #include "mo-www.h"
-#include "libhtmlw/HTML.h"
+#include "../libhtmlw/HTML.h"
 #include <Xm/Xm.h>
 #include <Xm/ScrolledW.h>
 #include <Xm/List.h>
 #include <Xm/Label.h>
 
-
-#include "libnut/system.h"
-
-
-static XmxCallback (links_win_cb);
-static void links_list_cb(Widget w, XtPointer client, XtPointer call);
+#include "../libnut/system.h"
+#include "../libnut/str-tools.h"
 
 
-static XmxCallback (links_win_cb)
+static XmxCallback(links_win_cb)
 {
-  mo_window *win = mo_fetch_window_by_id (XmxExtractUniqid ((int)client_data));
+  mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   int *posns, pcount;
-  char *text,*fnam,*url;
+  char *text, *fnam, *url;
   
-  switch (XmxExtractToken ((int)client_data)){
+  switch (XmxExtractToken((int)client_data)) {
   case 0: /* GOTO */
-      if(XmListGetSelectedPos(win->links_list, &posns, &pcount)){
-          if(pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
-                                       XmSTRING_DEFAULT_CHARSET,
-                                       &text)){
-              if(strncmp(text,"===",3))
-                  mo_access_document(win,text);
+      if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
+          if (pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
+                                        XmSTRING_DEFAULT_CHARSET,
+                                        &text)) {
+              if (strncmp(text, "===", 3))
+                  mo_access_document(win, text);
               XtFree(text);
           }
 	  XtFree((char *)posns);
@@ -93,15 +94,16 @@ static XmxCallback (links_win_cb)
 
       return;
   case 3:
-      if(XmListGetSelectedPos(win->links_list, &posns, &pcount)){
+      if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
           
-          if(pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
-                                       XmSTRING_DEFAULT_CHARSET,
-                                       &text)){
-              if(strncmp(text,"===",3)){
+          if (pcount && XmStringGetLtoR(win->links_items[posns[0]-1],
+                                        XmSTRING_DEFAULT_CHARSET,
+                                        &text)) {
+              if (strncmp(text, "===", 3)) {
                       /* SAVE TO FILE */
-                  url = mo_url_canonicalize (text,win->current_node->url);
-                  if(mo_pull_er_over_virgin(url,fnam = mo_tmpnam(text)))
+                  url = mo_url_canonicalize(text, win->current_node->url);
+		  mo_gui_clear_icon();
+                  if (mo_pull_er_over_virgin(url, fnam = mo_tmpnam(text)))
                       rename_binary_file(fnam);
                   free(url);
                   free(fnam);
@@ -109,20 +111,18 @@ static XmxCallback (links_win_cb)
               XtFree(text);
           }
           XtFree((char *)posns);
-       
       }
 
       mo_gui_done_with_icon();
 
       return;        
   case 1: /* DISMISS */
-      XtUnmanageChild (win->links_win);
+      XtUnmanageChild(win->links_win);
       break;
   case 2: /* HELP */
-      mo_open_another_window
-          (win, 
-           mo_assemble_help_url ("help-on-links.html"),
-             NULL, NULL);
+      mo_open_another_window(win,
+			     mo_assemble_help_url("help-on-links-win.html"),
+                             NULL, NULL);
       break;
   }
 
@@ -135,15 +135,15 @@ static void links_list_cb(Widget w, XtPointer client, XtPointer call)
   char *text;
   XmListCallbackStruct *cs = (XmListCallbackStruct *) call;
   
-  if(XmStringGetLtoR(win->links_items[cs->item_position-1],
-                     XmSTRING_DEFAULT_CHARSET,
-                     &text)){
-      if(strncmp(text,"===",3))
-          mo_access_document(win,text);
+  if (XmStringGetLtoR(win->links_items[cs->item_position-1],
+                      XmSTRING_DEFAULT_CHARSET,
+                      &text)) {
+      if (strncmp(text, "===", 3))
+          mo_access_document(win, text);
       XtFree(text);
   }
 
-/* Don't unmanage the list. */
+  /* Don't unmanage the list. */
   
   return;
 }
@@ -154,15 +154,14 @@ mo_status mo_post_links_window(mo_window *win)
   Widget dialog_sep, buttons_form;
   Widget links_form, list, scroller, label;
     
-  if (!win->links_win)
-    {
+  if (!win->links_win) {
       /* Create it for the first time. */
-      XmxSetUniqid (win->id);
+      XmxSetUniqid(win->id);
 
       Xmx_n = 0;
       win->links_win = XmxMakeFormDialog 
-        (win->base, "NCSA Mosaic: Document Links" );
-      dialog_frame = XmxMakeFrame (win->links_win, XmxShadowOut);
+        (win->base, "VMS Mosaic: Document Links");
+      dialog_frame = XmxMakeFrame(win->links_win, XmxShadowOut);
 
       /* Constraints for base. */
       XmxSetConstraints 
@@ -170,15 +169,19 @@ mo_status mo_post_links_window(mo_window *win)
          XmATTACH_FORM, XmATTACH_FORM, NULL, NULL, NULL, NULL);
       
       /* Main form. */
-      links_form = XmxMakeForm (dialog_frame);
+      links_form = XmxMakeForm(dialog_frame);
       
-      dialog_sep = XmxMakeHorizontalSeparator (links_form);
+      dialog_sep = XmxMakeHorizontalSeparator(links_form);
       
       buttons_form = XmxMakeFormAndFourButtons
           (links_form, links_win_cb, 
            "Goto URL" , "Save" , 
 	   "Dismiss" , "Help..." , 
            0, 3, 1, 2);
+
+      XmxSetButtonClue("Open highlighted URL", "Save highlighted URL to a file",
+  		       "Close this menu", "Open help in new Mosaic window",
+		       NULL);
 
       label = XtVaCreateManagedWidget("Document Links & Images ..." ,
                                       xmLabelWidgetClass,
@@ -193,15 +196,15 @@ mo_status mo_post_links_window(mo_window *win)
       scroller = XtVaCreateWidget("scroller",
                                   xmScrolledWindowWidgetClass,
                                   links_form,
-                                  XmNheight, 100,
-                                      /* form attachments */
+                                  XmNheight, 200,
+                                      /* Form attachments */
                                   XmNleftAttachment, XmATTACH_FORM,
                                   XmNrightAttachment, XmATTACH_FORM,
                                   XmNtopAttachment, XmATTACH_WIDGET,
                                   XmNtopWidget, label,
                                   XmNbottomAttachment, XmATTACH_WIDGET,
                                   XmNbottomWidget, dialog_sep,
-                                      /* offsets */
+                                      /* Offsets */
                                   XmNtopOffset, 10,
                                   XmNbottomOffset, 10,
                                   XmNleftOffset, 8,
@@ -216,7 +219,9 @@ mo_status mo_post_links_window(mo_window *win)
                                      XmNlistSizePolicy, XmCONSTANT,
                                      NULL);
 
-      XtAddCallback(list, XmNdefaultActionCallback, links_list_cb, (XtPointer) win);
+      XtAddCallback(list, XmNdefaultActionCallback, links_list_cb,
+		    (XtPointer) win);
+      XmxAddClue(list, "Double click on entry to visit it");
       
       win->links_list = list;
       win->links_items = NULL;
@@ -224,7 +229,7 @@ mo_status mo_post_links_window(mo_window *win)
       
       XtManageChild(scroller);
 
-      XmxSetArg (XmNtopOffset, 10);
+      XmxSetArg(XmNtopOffset, 10);
       XmxSetConstraints 
         (dialog_sep, 
 	 XmATTACH_NONE, XmATTACH_WIDGET, XmATTACH_FORM, XmATTACH_FORM,
@@ -234,51 +239,53 @@ mo_status mo_post_links_window(mo_window *win)
         (buttons_form, 
 	 XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
-    }
+  }
 
-    XmxManageRemanage (win->links_win);
-    mo_update_links_window(win);
-    
-    return mo_succeed;
+  XmxManageRemanage(win->links_win);
+  mo_update_links_window(win);
+
+  return mo_succeed;
 }
 
 mo_status mo_update_links_window(mo_window *win)
 {
-    char **hrefs,**imgs;
-    int i,p,count,hcount,icount;
+    char **hrefs, **imgs;
+    int i, p, count, hcount, icount;
     XmString *xmstr;
 
-    hrefs = HTMLGetHRefs(win->scrolled_win,&hcount);
-    imgs = HTMLGetImageSrcs(win->scrolled_win,&icount);
+    hrefs = HTMLGetHRefs(win->scrolled_win, &hcount);
+    imgs = HTMLGetImageSrcs(win->scrolled_win, &icount);
 
     count = icount + hcount;
     
-    if(!count){
+    if (!count) {
         XtVaSetValues(win->links_list,
                       XmNitemCount, 0,
                       NULL);
     } else {
-        if(hrefs) count++;
-        if(imgs) count++;
+        if (hrefs)
+	    count++;
+        if (imgs)
+	    count++;
         xmstr = (XmString *) XtMalloc(sizeof(XmString)*count);
-        p=0;
+        p = 0;
 
-        if(hrefs){
+        if (hrefs) {
             xmstr[p++] =
-                XmStringCreateLtoR("=== Links ===" ,XmSTRING_DEFAULT_CHARSET);
-            for(i=0;i<hcount;i++,p++){
+                XmStringCreateLtoR("=== Links ===", XmSTRING_DEFAULT_CHARSET);
+            for (i=0; i < hcount; i++, p++) {
                 xmstr[p] =
-                    XmStringCreateLtoR(hrefs[i],XmSTRING_DEFAULT_CHARSET);
+                    XmStringCreateLtoR(hrefs[i], XmSTRING_DEFAULT_CHARSET);
                 free(hrefs[i]);
             }
             free(hrefs);
         }
-        if(imgs){
+        if (imgs) {
             xmstr[p++] =
-                XmStringCreateLtoR("=== Images ===" ,XmSTRING_DEFAULT_CHARSET);
-            for(i=0;i<icount;i++,p++){
+                XmStringCreateLtoR("=== Images ===", XmSTRING_DEFAULT_CHARSET);
+            for (i=0; i < icount; i++, p++) {
                 xmstr[p] =
-                    XmStringCreateLtoR(imgs[i],XmSTRING_DEFAULT_CHARSET);
+                    XmStringCreateLtoR(imgs[i], XmSTRING_DEFAULT_CHARSET);
                 free(imgs[i]);
             }
             free(imgs);
@@ -289,87 +296,101 @@ mo_status mo_update_links_window(mo_window *win)
                       NULL);
     }
     
-    if(win->links_count) {
-        XtFree((char *)(win->links_items));    
+    if (win->links_count) {
+        XtFree((char *)(win->links_items));
     }
 
     win->links_count = count;
     win->links_items = xmstr;
-    
+
     return mo_succeed;
 }
 
-struct {
+static struct {
     char *name;
     char *expand;
 } abouts[] = {
     {"about",
-     "<TITLE>Some magic words...</TITLE><p><dl><dt>Old Developers<dd>alanb, davet, ebina, marca<dt>HTTPd Developers<dd>blong, spowers<dt>Current Developers<dd>dpape, ms-lee, pbleisch, spowers, swetland, tpreilly"
-     "<dt>Technical Support<dd>jgerard, jhabbley, mitch, mringenb, nhall, pzurich, yingxian<dt>Weird Guy<dd>mag<dt>Products<dd>httpd, mosaic, xmosaic<dt>Help!<dd>cci, cgi, help<dt>Places and Organizations<dd>acm, ncsa, sdg, uiuc<dt>Just For Fun...<dd>babylon5, jargon, jive</dl></p>"},
-/* old developers */
-    {"alanb","0http://www.uiuc.edu/ph/www/alanb/"},
-    {"davet","0http://www.spyglass.com/~dthompso/"},
-    {"ebina","0http://www.netscape.com/people/ebina/"},
-    {"marca","0http://www.netscape.com/people/marca/"},
-/* httpd developers */
-    {"blong","0http://www.uiuc.edu/ph/www/blong"},
-    /* spowers */
-/* current developers */
-    {"dpape","0http://tanelorn.ncsa.uiuc.edu/~dpape"},
-    {"ms-lee","0http://www.cen.uiuc.edu/~ms-lee/"},
-    {"pbleisch","0http://www.uiuc.edu/ph/www/pbleisch"},
-    {"spowers","0http://shire.ncsa.uiuc.edu/"},
-    {"swetland","0http://hagbard.ncsa.uiuc.edu/swetland/"},
-    {"tpreilly","0http://valinor.ncsa.uiuc.edu/~tpreilly/"},
-/* tech support */
-    {"jhabbley","0http://hobbes.ncsa.uiuc.edu/jhabbley/"},
-    {"mitch","0http://hobbes.ncsa.uiuc.edu/"},
-    {"mringenb","0http://www.cen.uiuc.edu/~mringenb/"},
-    {"nhall","0http://hobbes.ncsa.uiuc.edu/nhall/"},
-    {"pzurich","0http://www.cen.uiuc.edu/~pz3900/"},
-    {"yingxian","<title>Not sure...</title><p>She's our new tech support manager...but we're not sure what her website is..."},
-/* weird guy */
-    {"mag","0http://sdg.ncsa.uiuc.edu/~mag/"},
-/* products */
-    {"httpd","0http://hoohoo.ncsa.uiuc.edu/"},
-    {"mosaic","0http://www.ncsa.uiuc.edu/SDG/Software/Mosaic/"},
+	"<TITLE>Some magic words...</TITLE><p><ul>\
+	 <li><a href=\"about:mosaic\">mosaic</a>\
+	 <li><a href=\"about:xmosaic\">xmosaic</a>\
+	 <li><a href=\"about:cci\">cci</a>\
+	 <li><a href=\"about:cgi\">cgi</a>\
+	 <li><a href=\"about:help\">help</a>\
+	 <li><a href=\"about:html\">html</a>\
+	 <li><a href=\"about:motif\">motif</a>\
+         <li><a href=\"about:wvnet\">wvnet</a></ul></p>"},
+    {"mosaic", "0http://vaxa.wvnet.edu/vmswww/vms_mosaic.html"},
     {"xmosaic",
-	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:</p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>.</blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.  Batteries not included. May cause drowsiness.  Must be over 17.  Not available in all states.  Not responsible for acts of God.  Prices subject to change without notice. Proof of purchase required.  Read label before using.  Some assembly required.  Not responsible for typographical errors.  Some restrictions apply.  Subject to local regulation.  Warrantee period limited.  Close cover before striking.  No resemblance to any person, living or dead, is intended.  Subject to availability.  No COD's.  Sales tax not included. Shipping and handling extra.  For external use only. May cause excitability.  Avoid alcoholic beverages while using this software.  If"
-	"symptoms persist, consult your physician.  Keep this and all software out of the reach of children.  Parental guidance suggested.  The buyer assumes all risks associated with using this product.  In case of irritation, flush eyes with cold water and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation. Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.  Store in original containers. Harmful if swallowed.  Do not fold, bend, staple or mutilate. PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product, it may cease to exist or will exist only in a vague and undetermined state.</p>"},
-/* help */
-    {"cci","0http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/CCI/cci-spec.html"},
-    {"cgi","0http://hoohoo.ncsa.uiuc.edu/cgi/overview.html"},
-    {"help","0http://www.ncsa.uiuc.edu/SDG/Software/mosaic-x/"},
-/* places & organizations */
-    {"acm","0http://www.acm.uiuc.edu/"},
-    {"ncsa","0http://www.ncsa.uiuc.edu/"},    
-    {"sdg","0http://sdg.ncsa.uiuc.edu/"},
-    {"uiuc","0http://www.uiuc.edu/"},
-/* for fun */
-    {"babylon5",
-     "<TITLE>Babylon 5 Info</TITLE><H1>Herein lie the secrets of Babylon 5 in X Mosaic</h1><hr><p>First, (if you have the precompiled binary version of X Mosaic) we are all quite proud of our Easter Egg...go to a site with '/b5', 'bab5', or 'babylon5' in the URL...</p><hr><p>Now for the best two Babylon 5 Websites!<br><br><blockquote><a href=\"http://www.hyperion.com/lurk/lurker.html\">The Lurker's Guide to Babylon 5</a><br><a href=\"http://www.babylon5.com/Babylon5/\">The Official Babylon 5 Website</a>"},
-    {"jargon","0http://hagbard.ncsa.uiuc.edu/cgi-bin/jargon"},
-    {"jive","0http://shire.ncsa.uiuc.edu/filters/"},
-    {"mozilla",
-     "<TITLE>Are you lost?</TITLE><H1>Surely you jest?</H1>"},
-    {NULL,NULL}
+#if !defined(VMS) || defined(__DECC)  /* VAX C is different (and has a line length limit) */
+	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:"
+        "</p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>."
+        "</blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.  "
+        "Batteries not included. May cause drowsiness.  Must be over 17.  Not available in all states.  "
+        "Not responsible for acts of God.  Prices subject to change without notice. Proof of purchase required.  "
+        "Read label before using.  Some assembly required.  Not responsible for typographical errors.  Some restrictions apply.  "
+        "Subject to local regulation.  Warrantee period limited.  Close cover before striking.  "
+        "No resemblance to any person, living or dead, is intended.  Subject to availability.  No COD's.  "
+        "Sales tax not included. Shipping and handling extra.  For external use only. May cause excitability.  "
+        "Avoid alcoholic beverages while using this software.  If symptoms persist, consult your physician.  "
+        "Keep this and all software out of the reach of children.  Parental guidance suggested.  "
+        "The buyer assumes all risks associated with using this product.  In case of irritation, flush eyes with cold water "
+        "and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation. "
+        "Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.  "
+        "Store in original containers. Harmful if swallowed.  Do not fold, bend, staple or mutilate. "
+        "PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product, "
+        "it may cease to exist or will exist only in a vague and undetermined state.</p>"},
+#else
+	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:\
+</p><blockquote><a href=\"http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/\">http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/</a>.\
+</blockquote><hr><h1>X-Mosaic Disclaimer (humor)</h1><p>Consult your physician before using this program.\
+  Batteries not included. May cause drowsiness.  Must be over 17.  Not available in all states.\
+  Not responsible for acts of God.  Prices subject to change without notice. Proof of purchase required.\
+  Read label before using.  Some assembly required.  Not responsible for typographical errors.  Some restrictions apply.\
+  Subject to local regulation.  Warrantee period limited.  Close cover before striking.\
+  No resemblance to any person, living or dead, is intended.  Subject to availability.  No COD's.\
+  Sales tax not included. Shipping and handling extra.  For external use only. May cause excitability.\
+  Avoid alcoholic beverages while using this software.  If symptoms persist, consult your physician.\
+  Keep this and all software out of the reach of children.  Parental guidance suggested.\
+  The buyer assumes all risks associated with using this product.  In case of irritation, flush eyes with cold water\
+ and consult your physician.  Not insured by the Federal Deposit Insurance Corporation.  Use with adequate ventilation.\
+ Avoid repeated or prolonged contact with skin.  Contents under pressure; Do not puncture or incinerate.\
+  Store in original containers. Harmful if swallowed.  Do not fold, bend, staple or mutilate.\
+ PLEASE NOTE: Some quantum physics theories suggest that when the consumer is not directly observing this product,\
+ it may cease to exist or will exist only in a vague and undetermined state.</p>"},
+#endif
+    {"blank", "<TITLE>Blank Page</TITLE>"},
+    {"cci", "0http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/CCI/cci-spec.html"},
+    {"cgi", "0http://hoohoo.ncsa.uiuc.edu/cgi/overview.html"},
+    {"help", "0http://wvnvms.wvnet.edu/vmswww/mosaic/d2-userguide.html"},
+    {"html", "0http://wvnvms.wvnet.edu/vmswww/mosaic/htmlprimerall.html"},
+    {"logo", "0http://wvnvms.wvnet.edu/vmswww/mosaic.gif"},
+    {"motif", "0http://www.faqs.org/faqs/motif-faq/"},
+    {"wvnet", "0http://www.wvnet.edu/"},
+    {NULL, NULL}
 };
     
-/* assorted FUN things */
+/* Assorted FUN things */
 char *mo_special_urls(char *url)
 {
     int i;
 
-    if(!url) return NULL;
+    if (!url)
+	return NULL;
 
-    if(strncmp(url,"about:",6)) return NULL;
+    if (my_strncasecmp(url, "about:", 6))
+	return NULL;
     
-    for(i=0;abouts[i].name;i++) {
-        if(!strncmp(&url[6],abouts[i].name,strlen(abouts[i].name))) {
-            if(abouts[i].expand[0]=='0')
+    if (!my_strcasecmp(url, "about:"))
+	return strdup(abouts[0].expand);
+    
+    for (i=0; abouts[i].name; i++) {
+        if (!my_strncasecmp(&url[6], abouts[i].name, strlen(abouts[i].name))) {
+            if (abouts[i].expand[0] == '0') {
                 return abouts[i].expand;
-            else
+            } else {
                 return strdup(abouts[i].expand);
+	    }
         }
     }
 
@@ -377,45 +398,45 @@ char *mo_special_urls(char *url)
 }
 
 
+void GUI_System(char *cmd, char *title)
+{
+    char buf[BUFSIZ], final[BUFSIZ*2];
+    int retValue;
 
-void System(char *cmd, char *title) {
+    *final = '\0';
 
-char buf[BUFSIZ], final[BUFSIZ*2];
-int retValue,skip_output=0;
-
-	*final='\0';
-
-	if ((retValue=my_system(cmd,buf,BUFSIZ))!=SYS_SUCCESS) {
-		/*give them the error code message*/
-		switch(retValue) {
-			case SYS_NO_COMMAND:
-				sprintf(final,"%s%s",final,"There was no command to execute.\n" );
-				break;
-			case SYS_FORK_FAIL:
-				sprintf(final,"%s%s",final,"The fork call failed.\n" );
-				break;
-			case SYS_PROGRAM_FAILED:
-				sprintf(final,"%s%s",final,"The program specified was not able to exec.\n" );
-				break;
-			case SYS_NO_RETBUF:
-				sprintf(final,"%s%s",final,"There was no return buffer.\n" );
-				break;
-			case SYS_FCNTL_FAILED:
-				sprintf(final,"%s%s",final,"Fcntl failed to set non-block on the pipe.\n" );
-				break;
-		}
-		/*give them the output*/
-		if (*buf) {
-			sprintf(final,"%s%s",final,buf);
-		}
+    if ((retValue = my_system(cmd, buf, BUFSIZ)) != SYS_SUCCESS) {
+	/* Give them the error code message */
+	switch(retValue) {
+	    case SYS_NO_COMMAND:
+		sprintf(final, "%s%s", final,
+			"There was no command to execute.\n");
+		break;
+	    case SYS_FORK_FAIL:
+		sprintf(final, "%s%s", final, "The fork call failed.\n");
+		break;
+	    case SYS_PROGRAM_FAILED:
+		sprintf(final, "%s%s", final,
+		       "The program specified could not execute.\n");
+		break;
+	    case SYS_NO_RETBUF:
+		sprintf(final, "%s%s", final, "There was no return buffer.\n");
+		break;
+	    case SYS_FCNTL_FAILED:
+		sprintf(final, "%s%s", final,
+			"Fcntl failed to set non-block on the pipe.\n");
+		break;
 	}
-	else if (*buf) {
-		/*give them the output*/
-		sprintf(final,"%s%s",final,buf);
-		application_error(final,title);
-
-		return;
+	/* Give them the output */
+	if (*buf) {
+	    sprintf(final, "%s%s", final, buf);
 	}
+	application_error(final, title);
+    } else if (*buf) {
+	/* Give them the output */
+	sprintf(final, "%s%s", final, buf);
+	application_error(final, title);
+    }
 
-	return;
+    return;
 }

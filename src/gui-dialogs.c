@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include "../libwww2/HTalert.h"
@@ -61,6 +63,7 @@
 #include "gui-documents.h"
 #include "gui.h"
 #include "mo-www.h"
+#include "mailto.h"
 #include "gui-extras.h"
 
 #include <Xm/LabelG.h>
@@ -73,7 +76,6 @@
 #include <Xm/DrawingA.h>
 #include <Xm/ScrollBar.h>
 #include <Xm/FilesB.h>
-
 #include <Xm/Protocols.h>
 
 #ifdef VMS
@@ -94,6 +96,7 @@ extern int reportBugs;
 extern int HTML_Print_Headers;
 extern int HTML_Print_Footers;
 extern int HTML_Print_Paper_Size_A4;
+extern int HTML_Print_Duplex;
 
 extern int is_uncompressed;
 
@@ -109,7 +112,6 @@ extern int errno;
 #ifndef VMS
 int pathEval(char *dest, char *src);
 #endif
-char *getFileName(char *file_src);
 
 extern char *saveFileName;
 
@@ -125,170 +127,173 @@ XmxOptionMenuStruct *format_opts;
 
 
 #ifdef VMS
-void VMS_ErrorDialog(char *fname, mo_window *win)
+static void VMS_ErrorDialog(char *fname, mo_window *win)
 {
   char *str;
+
   str = (char *)malloc(1024 * sizeof(char));
   sprintf(str, "Unable to save document to file %s\nError: %s",
-            fname, strerror(errno, vaxc$errno));
+          fname, strerror(errno, vaxc$errno));
   XmxMakeErrorDialog(win->base, str, "Save Error");
   XtManageChild(Xmx_w);
   free(str);
 }
 
-void Saved_it(char *text)
+static void Saved_it(char *text)
 {
   char *line;
-  line = (char *)malloc(1024 * sizeof(char));
+
+  line = (char *)malloc(128 * sizeof(char));
   sprintf(line, "Saved %d bytes of data.", strlen(text));
   HTProgress(line);
   free(line);
 }
+
 /*
  * VMS fputs has a limited buffer size (65534 chars).  Redefine to
  * use write instead, which seems to write unlimited amounts.
  */
 #define FPUTS(text, fp, fname, win) \
-  if (write(fileno(fp), text, strlen(text)) < 0) \
-    { \
-       VMS_ErrorDialog(fname, win); \
-    } \
-  else \
-    { \
-       Saved_it(text); \
-    }
+  if (write(fileno(fp), text, strlen(text)) < 0) { \
+      VMS_ErrorDialog(fname, win); \
+  } else { \
+      Saved_it(text); \
+  }
 #endif /* VMS, BSN, GEC */
 
-static XmxCallback (save_print_header_cb)
+
+static XmxCallback(save_print_header_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_BANNERS,
+		     XmToggleButtonGetState(win->print_header_toggle_save));
+    return;
 }
 
-
-static XmxCallback (mail_print_header_cb)
+static XmxCallback(mail_print_header_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_BANNERS,
+		     XmToggleButtonGetState(win->print_header_toggle_mail));
+    return;
 }
 
-
-static XmxCallback (print_print_header_cb)
+static XmxCallback(print_print_header_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_BANNERS,
+		     XmToggleButtonGetState(win->print_header_toggle_print));
+    return;
 }
 
-
-static XmxCallback (save_print_footer_cb)
+static XmxCallback(save_print_footer_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_FOOTNOTES,
+		     XmToggleButtonGetState(win->print_footer_toggle_save));
+    return;
 }
 
-
-static XmxCallback (mail_print_footer_cb)
+static XmxCallback(mail_print_footer_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_FOOTNOTES,
+		     XmToggleButtonGetState(win->print_footer_toggle_mail));
+    return;
 }
 
-
-static XmxCallback (print_print_footer_cb)
+static XmxCallback(print_print_footer_cb)
 {
-  return;
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+
+    set_pref_boolean(ePRINT_FOOTNOTES,
+		     XmToggleButtonGetState(win->print_footer_toggle_print));
+    return;
 }
 
-
-static XmxCallback (save_print_a4_cb)
+static XmxCallback(save_print_size_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    int us_size = !XmToggleButtonGetState(win->print_us_toggle_save);
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid ((int)client_data));
+    XmxSetToggleButton(win->print_a4_toggle_save,
+		       !XmToggleButtonGetState(win->print_a4_toggle_save));
+    XmxSetToggleButton(win->print_us_toggle_save, us_size);
 
-	XmxSetToggleButton(win->print_a4_toggle_save,
-			   !XmToggleButtonGetState(win->print_a4_toggle_save));
-	XmxSetToggleButton(win->print_us_toggle_save,
-			   !XmToggleButtonGetState(win->print_us_toggle_save));
+    set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
 
-	return;
+    return;
 }
 
-
-static XmxCallback (print_url_cb)
+static XmxCallback(print_url_cb)
 {
-    mo_window *win =
-        mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
     XmxSetToggleButton(win->print_doc_only,
                        !XmToggleButtonGetState(win->print_doc_only));
     XmxSetToggleButton(win->print_url_only,
                        !XmToggleButtonGetState(win->print_url_only));
+    return;
 }
 
-
-
-static XmxCallback (mail_print_a4_cb)
+static XmxCallback(mail_print_size_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    int us_size = !XmToggleButtonGetState(win->print_us_toggle_mail);
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    XmxSetToggleButton(win->print_a4_toggle_mail,
+		       !XmToggleButtonGetState(win->print_a4_toggle_mail));
+    XmxSetToggleButton(win->print_us_toggle_mail, us_size);
 
-	XmxSetToggleButton(win->print_a4_toggle_mail,
-			   !XmToggleButtonGetState(win->print_a4_toggle_mail));
-	XmxSetToggleButton(win->print_us_toggle_mail,
-			   !XmToggleButtonGetState(win->print_us_toggle_mail));
+    set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
 
-	return;
+    return;
 }
 
-
-static XmxCallback (print_print_a4_cb)
+static XmxCallback(print_print_size_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    int us_size = !XmToggleButtonGetState(win->print_us_toggle_print);
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    XmxSetToggleButton(win->print_a4_toggle_print,
+		       !XmToggleButtonGetState(win->print_a4_toggle_print));
+    XmxSetToggleButton(win->print_us_toggle_print, us_size);
 
-	XmxSetToggleButton(win->print_a4_toggle_print,
-			   !XmToggleButtonGetState(win->print_a4_toggle_print));
-	XmxSetToggleButton(win->print_us_toggle_print,
-			   !XmToggleButtonGetState(win->print_us_toggle_print));
+    set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
 
-	return;
+    return;
 }
 
-
-static XmxCallback (save_print_us_cb)
+static XmxCallback(save_print_duplex_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-	XmxSetToggleButton(win->print_a4_toggle_save,
-			   !XmToggleButtonGetState(win->print_a4_toggle_save));
-	XmxSetToggleButton(win->print_us_toggle_save,
-			   !XmToggleButtonGetState(win->print_us_toggle_save));
-
-	return;
+    set_pref_boolean(ePRINT_DUPLEX,
+		     XmToggleButtonGetState(win->print_duplex_toggle_save));
+    return;
 }
 
-
-static XmxCallback (mail_print_us_cb)
+static XmxCallback(mail_print_duplex_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-	XmxSetToggleButton(win->print_a4_toggle_mail,
-			   !XmToggleButtonGetState(win->print_a4_toggle_mail));
-	XmxSetToggleButton(win->print_us_toggle_mail,
-			   !XmToggleButtonGetState(win->print_us_toggle_mail));
-
-	return;
+    set_pref_boolean(ePRINT_DUPLEX,
+		     XmToggleButtonGetState(win->print_duplex_toggle_mail));
+    return;
 }
 
-
-static XmxCallback (print_print_us_cb)
+static XmxCallback(print_print_duplex_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-	XmxSetToggleButton(win->print_a4_toggle_print,
-			   !XmToggleButtonGetState(win->print_a4_toggle_print));
-	XmxSetToggleButton(win->print_us_toggle_print,
-			   !XmToggleButtonGetState(win->print_us_toggle_print));
-
-	return;
+    set_pref_boolean(ePRINT_DUPLEX,
+		     XmToggleButtonGetState(win->print_duplex_toggle_print));
+    return;
 }
 
 
@@ -297,19 +302,18 @@ mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 /* ------------------------------------------------------------------------ */
 
 mo_status mo_save_window(mo_window *win, char *fname, 
-					mo_format_token save_format)
+			 mo_format_token save_format)
 {
   char *efname = (char *)malloc(sizeof(char) * (__MAX_HOME_LEN__ * 2));
+  char *text;
   FILE *fp;
   mo_window *next = NULL;
   mo_window *top = win;
 
   if (pathEval(efname, fname) < 0) {
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
-		fprintf(stderr,
-			"Error in evaluating the path. (gui-dialogs.c)\n");
-	}
+      if (srcTrace)
+	  fprintf(stderr, "Error in evaluating the path. (gui-dialogs.c)\n");
 #endif
   }
 
@@ -323,76 +327,76 @@ mo_status mo_save_window(mo_window *win, char *fname,
   if (!fp) {
 
 #ifndef VMS   /* PGE, Unused variables */
-	char *buf, *final, tmpbuf[80];
-	int final_len;
+      char *buf, *final, tmpbuf[80];
+      int final_len;
 #endif
 #ifdef CCI
-	/* Don't display dialog if command issued by cci application */
-	if (cci_docommand)
-		return mo_fail;
+      /* Don't display dialog if command issued by cci application */
+      if (cci_docommand)
+	  return mo_fail;
 #endif
 #ifndef VMS   /* PGE, Moved around because now supporting CCI */
-	buf = my_strerror(errno);
-	if (!buf || !*buf || !strcmp(buf, "Error 0")) {
-		sprintf(tmpbuf, "Unknown Error");
-		buf = tmpbuf;
-	}
+      buf = my_strerror(errno);
+      if (!buf || !*buf || !strcmp(buf, "Error 0")) {
+	  sprintf(tmpbuf, "Unknown Error");
+	  buf = tmpbuf;
+      }
+      final_len = 30 + ((!efname || !*efname ? 3 : strlen(efname)) + 13) + 15 +
+		 (strlen(buf) + 3);
+      final = (char *)calloc(final_len, sizeof(char));
 
-	final_len = 30 + ((!efname || !*efname ? 3 : strlen(efname)) + 13) +
-		15 + (strlen(buf) + 3);
-	final = (char *)calloc(final_len, sizeof(char));
+      sprintf(final,
+	      "\nUnable to save document:\n   %s\n\nSave Error:\n   %s\n",
+	      (!efname || !*efname ? " " : efname), buf);
 
-	sprintf(final,
-		"\nUnable to save document:\n   %s\n\nSave Error:\n   %s\n",
-		(!efname || !*efname ? " " : efname), buf);
+      application_error(final, "Save Error");
 
-	application_error(final, "Save Error");
-
-	if (final) {
-		free(final);
-		final = NULL;
-	}
+      if (final) {
+	  free(final);
+	  final = NULL;
+      }
 #else
-        VMS_ErrorDialog(efname, win);
+      VMS_ErrorDialog(efname, win);
 #endif /* VMS, BSN */
   } else {
 
 #ifdef CCI
-      if (!cci_docommand)
+      if (!cci_docommand) {
 #endif
-	{
           HTML_Print_Headers =
 			XmToggleButtonGetState(win->print_header_toggle_save);
           HTML_Print_Footers =
 			XmToggleButtonGetState(win->print_footer_toggle_save);
           HTML_Print_Paper_Size_A4 = 
 			XmToggleButtonGetState(win->print_a4_toggle_save);
-	}
+          HTML_Print_Duplex = 
+			XmToggleButtonGetState(win->print_duplex_toggle_save);
 #ifdef CCI
-      else /* CCI app telling mosaic to save a file */
-	{
+      } else {  /* CCI app telling mosaic to save a file */
 	  if (save_format == mo_postscript) {
-	    HTML_Print_Headers = 1;
-	    HTML_Print_Footers = 1;
-	    HTML_Print_Paper_Size_A4 = 0;
+	      HTML_Print_Headers = 1;
+	      HTML_Print_Footers = 1;
+	      HTML_Print_Paper_Size_A4 = 0;
+	      HTML_Print_Duplex = 1;
 	  } else {
-	    HTML_Print_Headers = 0;
-	    HTML_Print_Footers = 0;
-	    HTML_Print_Paper_Size_A4 = 0;
+	      HTML_Print_Headers = 0;
+	      HTML_Print_Footers = 0;
+	      HTML_Print_Paper_Size_A4 = 0;
+	      HTML_Print_Duplex = 0;
 	  }
-  	}
+      }
 #endif
     while (win) {
-     if (!win->frames || (save_format == mo_html)) {
+     /* Do if no frames except inline frames or html requested */
+     if (!win->frames || (win->frames->is_frame == 2) ||
+	 (save_format == mo_html)) {
       if (save_format == mo_plaintext) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
 	      text = HTMLGetText(win->scrolled_win, 0, win->frameurl, 0);
-	  else
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 0,
-		  win->current_node->url, 0);
-
+				 win->current_node->url, 0);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -402,14 +406,12 @@ mo_status mo_save_window(mo_window *win, char *fname,
               free(text);
           }
       } else if (save_format == mo_formatted_text) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
 	      text = HTMLGetText(win->scrolled_win, 1, win->frameurl, 0);
-	  else
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 1,
-		  win->current_node->url, 0);
-
+				 win->current_node->url, 0);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -419,15 +421,14 @@ mo_status mo_save_window(mo_window *win, char *fname,
               free(text);
           }
       } else if (save_format == mo_postscript) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
 	      text = HTMLGetText(win->scrolled_win, 2 + win->font_family, 
-		  win->frameurl, " ");
-	  else
+				 win->frameurl, " ");
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 2 + win->font_family, 
-		  win->current_node->url, win->current_node->last_modified);
-
+				 win->current_node->url,
+				 win->current_node->last_modified);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -458,9 +459,8 @@ mo_status mo_save_window(mo_window *win, char *fname,
      } else {
          win = win->next_frame;
      }
-     if (!win && next) {
+     if (!win && next)
          win = next;
-     }
     }
     fclose(fp);
   }
@@ -471,9 +471,10 @@ mo_status mo_save_window(mo_window *win, char *fname,
 
 /* ------------------------- mo_post_save_window -------------------------- */
 
-static XmxCallback (save_win_cb)
+static XmxCallback(save_win_cb)
 {
-  char *fname = (char *)malloc(sizeof(char) * 128), efname[128+1];
+  char *fname = (char *)malloc(sizeof(char) * 128);
+  char efname[128 + 1];
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
   XtUnmanageChild(win->save_win);
@@ -481,7 +482,6 @@ static XmxCallback (save_win_cb)
   XmStringGetLtoR(((XmFileSelectionBoxCallbackStruct *)call_data)->value,
                    XmSTRING_DEFAULT_CHARSET,
                    &fname);
-
   pathEval(efname, fname);
 
   mo_save_window(win, efname, win->save_format);
@@ -491,109 +491,96 @@ static XmxCallback (save_win_cb)
   return;
 }
 
-void format_sensitive(mo_window *win, int format) {
-
-Arg args[2];
-int n;
+static void format_sensitive(mo_window *win, int format)
+{
+	Arg args[2];
+	int n = 0;
   
-	if (format == mo_plaintext) { /* PLAIN */
-		XmxSetToggleButton(win->print_header_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_a4_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_us_toggle_save,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_save,args,n);
-		XtSetValues(win->print_footer_toggle_save,args,n);
-		XtSetValues(win->print_a4_toggle_save,args,n);
-		XtSetValues(win->print_us_toggle_save,args,n);
-	}
-	else if (format == mo_formatted_text) { /* FORMATTED */
-		XmxSetToggleButton(win->print_header_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_a4_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_us_toggle_save,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_save,args,n);
-		XtSetValues(win->print_footer_toggle_save,args,n);
-		XtSetValues(win->print_a4_toggle_save,args,n);
-		XtSetValues(win->print_us_toggle_save,args,n);
-	}
-	else if (format == mo_postscript) { /* POSTSCRIPT */
+	if ((format == mo_plaintext) || (format == mo_formatted_text) ||
+	    (format == mo_html)) {
+		XmxSetToggleButton(win->print_header_toggle_save, XmxNotSet);
+		XmxSetToggleButton(win->print_footer_toggle_save, XmxNotSet);
+		XmxSetToggleButton(win->print_a4_toggle_save, XmxNotSet);
+		XmxSetToggleButton(win->print_us_toggle_save, XmxNotSet);
+		XmxSetToggleButton(win->print_duplex_toggle_save, XmxNotSet);
+
+		XtSetArg(args[n], XmNsensitive,FALSE);
+		n++;
+		XtSetValues(win->print_header_toggle_save, args,n);
+		XtSetValues(win->print_footer_toggle_save, args, n);
+		XtSetValues(win->print_a4_toggle_save, args, n);
+		XtSetValues(win->print_us_toggle_save, args, n);
+		XtSetValues(win->print_duplex_toggle_save, args, n);
+
+	} else if (format == mo_postscript) { /* POSTSCRIPT */
+		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+
                 XmxSetToggleButton(win->print_header_toggle_save,
-			get_pref_boolean(ePRINT_BANNERS));
+				   get_pref_boolean(ePRINT_BANNERS));
                 XmxSetToggleButton(win->print_footer_toggle_save,
-			get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_save,
-			!get_pref_boolean(ePRINT_PAPER_SIZE_US));
-                XmxSetToggleButton(win->print_us_toggle_save,
-			get_pref_boolean(ePRINT_PAPER_SIZE_US));
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,TRUE); n++;
-		XtSetValues(win->print_header_toggle_save,args,n);
-		XtSetValues(win->print_footer_toggle_save,args,n);
-		XtSetValues(win->print_a4_toggle_save,args,n);
-		XtSetValues(win->print_us_toggle_save,args,n);
-	}
-	else if (format == mo_html) { /* HTML */
-		XmxSetToggleButton(win->print_header_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_a4_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_us_toggle_save,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_footer_toggle_save,args,n);
-		XtSetValues(win->print_header_toggle_save,args,n);
-		XtSetValues(win->print_a4_toggle_save,args,n);
-		XtSetValues(win->print_us_toggle_save,args,n);
-	}
-	else { /* Boom...Bam...Error... */
+				   get_pref_boolean(ePRINT_FOOTNOTES));
+                XmxSetToggleButton(win->print_a4_toggle_save, !us_size);
+                XmxSetToggleButton(win->print_us_toggle_save, us_size);
+                XmxSetToggleButton(win->print_duplex_toggle_save,
+				   get_pref_boolean(ePRINT_DUPLEX));
+
+		XtSetArg(args[n], XmNsensitive, TRUE);
+		n++;
+		XtSetValues(win->print_header_toggle_save, args, n);
+		XtSetValues(win->print_footer_toggle_save, args, n);
+		XtSetValues(win->print_a4_toggle_save, args, n);
+		XtSetValues(win->print_us_toggle_save, args, n);
+		XtSetValues(win->print_duplex_toggle_save, args, n);
+
+	} else { /* Boom...Bam...Error... */
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
+		if (srcTrace || reportBugs)
 			fprintf(stderr,
 				 "ERROR! Format callback has no format!\n");
-		}
 #endif
-
-		XmxSetToggleButton(win->print_header_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_a4_toggle_save,XmxNotSet);
-		XmxSetToggleButton(win->print_us_toggle_save,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_save,args,n);
-		XtSetValues(win->print_footer_toggle_save,args,n);
-		XtSetValues(win->print_a4_toggle_save,args,n);
-		XtSetValues(win->print_us_toggle_save,args,n);
 	}
-
 	return;
 }
 
 
-static XmxCallback (format_optmenu_cb) {
-
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-  
-	win->save_format = XmxExtractToken((int)client_data);
-
-	format_sensitive(win, win->save_format);
-
-	return;
-}
-
-mo_status mo_post_save_window (mo_window *win)
+static XmxCallback(format_optmenu_cb)
 {
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    char *mode;
+  
+    win->save_format = XmxExtractToken((int)client_data);
+    format_sensitive(win, win->save_format);
 
-int i;
-XmString sfn, fbfn;
-char fileBuf[2048], *fileBoxFileName;
+    switch (win->save_format) {
+	case mo_plaintext:
+	    mode = strdup(MODE_PLAIN);
+	    break;
+	case mo_postscript:
+	    mode = strdup(MODE_POSTSCRIPT);
+	    break;
+	case mo_formatted_text:
+	    mode = strdup(MODE_FORMATTED);
+	    break;
+	case mo_html:
+	    mode = strdup(MODE_HTML);
+    }
+    set_pref(eSAVE_MODE, (void *)mode);
+
+    return;
+}
+
+mo_status mo_post_save_window(mo_window *win)
+{
+  int i;
+  XmString sfn, fbfn;
+  char fileBuf[2048];
+  char *fileBoxFileName;
 
   XmxSetUniqid(win->id);
   if (!win->save_win) {
       Widget frame, workarea, format_label;
       Widget paper_size_toggle_box;
+      char *mode;
 
       win->save_win = XmxMakeFileSBDialog
         (win->base, "VMS Mosaic: Save Document", "Name for saved document:",
@@ -606,67 +593,70 @@ char fileBuf[2048], *fileBoxFileName;
       workarea = XmxMakeForm(frame);
 
       win->print_header_toggle_save = XmxMakeToggleButton(workarea,
-		"Include Banners", save_print_header_cb, 0);
+			 "Include Banners", save_print_header_cb, 0);
       XmxSetToggleButton(win->print_header_toggle_save,
-		get_pref_boolean(ePRINT_BANNERS));
+			 get_pref_boolean(ePRINT_BANNERS));
       win->print_footer_toggle_save = XmxMakeToggleButton(workarea,
-	"Include Footnotes", save_print_footer_cb, 0);
+			 "Include Footnotes", save_print_footer_cb, 0);
       XmxSetToggleButton(win->print_footer_toggle_save,
-		get_pref_boolean(ePRINT_FOOTNOTES));
+			 get_pref_boolean(ePRINT_FOOTNOTES));
       
       paper_size_toggle_box = XmxMakeRadioBox(workarea);
       win->print_a4_toggle_save = XmxMakeToggleButton
-	(paper_size_toggle_box, "A4 Paper Size", save_print_a4_cb, 0);
+	   (paper_size_toggle_box, "A4 Paper Size", save_print_size_cb, 0);
       win->print_us_toggle_save = XmxMakeToggleButton
-	(paper_size_toggle_box, "US Letter Paper Size", save_print_us_cb, 0);
+	   (paper_size_toggle_box, "US Letter Paper Size",
+	   save_print_size_cb, 0);
       XmxSetToggleButton(win->print_a4_toggle_save,
-		!get_pref_boolean(ePRINT_PAPER_SIZE_US));
+			 !get_pref_boolean(ePRINT_PAPER_SIZE_US));
       XmxSetToggleButton(win->print_us_toggle_save,
-		get_pref_boolean(ePRINT_PAPER_SIZE_US));      
+			 get_pref_boolean(ePRINT_PAPER_SIZE_US));      
+
+      win->print_duplex_toggle_save = XmxMakeToggleButton(workarea,
+			"Duplex printing", save_print_duplex_cb, 0);
+      XmxSetToggleButton(win->print_duplex_toggle_save,
+			 get_pref_boolean(ePRINT_DUPLEX));
+
       format_label = XmxMakeLabel(workarea, "Format for document:");
       /* XmxSetArg(XmNwidth, 210); */
 
-	if (!(get_pref_string(eSAVE_MODE)) || !*(get_pref_string(eSAVE_MODE))) {
-		char tbuf[BUFSIZ];
+      mode = get_pref_string(eSAVE_MODE);
+      if (!mode || !*mode) {
+	  char tbuf[BUFSIZ];
 
-		sprintf(tbuf,
-			"You have set the default %s mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-			"save", "plain text save");
-		application_user_info_wait(tbuf);
-		set_pref(eSAVE_MODE, (void *)strdup(MODE_PLAIN));
-	}
+	  sprintf(tbuf,
+		  "You have set the default %s mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		  "save", "plain text save");
+	  application_user_info_wait(tbuf);
+	  set_pref(eSAVE_MODE, (void *)strdup(MODE_PLAIN));
+	  mode = get_pref_string(eSAVE_MODE);
+      }
 
-	for (i=0; i<4; i++) {
-		format_opts[i].set_state = XmxNotSet;
-	}
+      for (i = 0; i < 4; i++)
+	  format_opts[i].set_state = XmxNotSet;
 
-	if (!my_strcasecmp(get_pref_string(eSAVE_MODE), MODE_HTML)) {
-                format_opts[3].set_state = XmxSet;
-		win->save_format = mo_html;
-	}
-        else if (!my_strcasecmp(get_pref_string(eSAVE_MODE), MODE_POSTSCRIPT)) {
-                format_opts[2].set_state = XmxSet;
-		win->save_format = mo_postscript;
-	}
-        else if (!my_strcasecmp(get_pref_string(eSAVE_MODE), MODE_FORMATTED)) {
-                format_opts[1].set_state = XmxSet;
-		win->save_format = mo_formatted_text;
-	}
-        else if (!my_strcasecmp(get_pref_string(eSAVE_MODE), MODE_PLAIN)) {
-                format_opts[0].set_state = XmxSet;
-		win->save_format = mo_plaintext;
-	}
-        else {
-		char tbuf[BUFSIZ];
+      if (!my_strcasecmp(mode, MODE_HTML)) {
+          format_opts[3].set_state = XmxSet;
+	  win->save_format = mo_html;
+      } else if (!my_strcasecmp(mode, MODE_POSTSCRIPT)) {
+          format_opts[2].set_state = XmxSet;
+	  win->save_format = mo_postscript;
+      } else if (!my_strcasecmp(mode, MODE_FORMATTED)) {
+          format_opts[1].set_state = XmxSet;
+	  win->save_format = mo_formatted_text;
+      } else if (!my_strcasecmp(mode, MODE_PLAIN)) {
+          format_opts[0].set_state = XmxSet;
+	  win->save_format = mo_plaintext;
+      } else {
+	  char tbuf[BUFSIZ];
 
-		sprintf(tbuf,
-		    "You have set the default %s mode to:\n     [%d], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-		    "save", get_pref_boolean(eSAVE_MODE), "plain text save");
-
-		application_user_info_wait(tbuf);
-                format_opts[0].set_state = XmxSet;
-		win->save_format = mo_plaintext;
-	}
+	  sprintf(tbuf,
+		  "You have set the default %s mode to:\n     [%d], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		  "save", mode, "plain text save");
+	  application_user_info_wait(tbuf);
+          format_opts[0].set_state = XmxSet;
+	  win->save_format = mo_plaintext;
+      }
 
       win->format_optmenu = XmxRMakeOptionMenu(workarea, "",
                                                format_optmenu_cb, 
@@ -689,9 +679,13 @@ char fileBuf[2048], *fileBoxFileName;
          XmATTACH_FORM, XmATTACH_NONE,
          win->print_header_toggle_save, NULL, NULL, NULL);
       XmxSetConstraints
-	(paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_FORM,
+	(paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_NONE,
 	 XmATTACH_FORM, XmATTACH_NONE,
 	 win->print_footer_toggle_save, NULL, NULL, NULL);
+      XmxSetConstraints
+	(win->print_duplex_toggle_save, XmATTACH_WIDGET, XmATTACH_FORM,
+	 XmATTACH_FORM, XmATTACH_NONE,
+	 paper_size_toggle_box, NULL, NULL, NULL);
 
       format_sensitive(win, win->save_format);
   } else {
@@ -703,23 +697,21 @@ char fileBuf[2048], *fileBoxFileName;
                 NULL);
   if (!XmStringGetLtoR(fbfn, XmSTRING_DEFAULT_CHARSET, &fileBoxFileName)) {
 #ifndef DISABLE_TRACE
-	if (srcTrace || reportBugs) {
-		fprintf(stderr,
-			"Internal Error In Save As... PLEASE REPORT THIS!\n");
-	}
+      if (srcTrace || reportBugs)
+	  fprintf(stderr,
+		  "Internal Error In Save As... PLEASE REPORT THIS!\n");
 #endif
 
-        return mo_fail;
+      return mo_fail;
   }
   if (*fileBoxFileName && win && win->current_node && win->current_node->url &&
       *(win->current_node->url)) {
-        /* No need to check on NULL from getFileName as we know url exists */
-        sprintf(fileBuf, "%s%s", fileBoxFileName,
-		getFileName(win->current_node->url));
-        sfn = XmStringCreateLtoR(fileBuf, XmSTRING_DEFAULT_CHARSET);
-        XtVaSetValues(win->save_win,
-                      XmNdirSpec, sfn,
-                      NULL);
+
+      /* No need to check on NULL from getFileName as we know url exists */
+      sprintf(fileBuf, "%s%s", fileBoxFileName,
+	      getFileName(win->current_node->url));
+      sfn = XmStringCreateLtoR(fileBuf, XmSTRING_DEFAULT_CHARSET);
+      XtVaSetValues(win->save_win, XmNdirSpec, sfn, NULL);
   }
 
   XmxManageRemanage(win->save_win);
@@ -740,50 +732,47 @@ char fileBuf[2048], *fileBoxFileName;
    idea and code starting point. */
 static char *temp_binary_fnam;
 
-static XmxCallback (savebinary_cancel_cb)
+static XmxCallback(savebinary_cancel_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
 #ifndef VMS
-  if (unlink(temp_binary_fnam) < 0) 
-    {
-	char *buf, *final, tmpbuf[80];
-	int final_len;
+  if (unlink(temp_binary_fnam) < 0) {
+      char *buf, *final;
+      char tmpbuf[80];
+      int final_len;
 
-	buf = my_strerror(errno);
-	if (!buf || !*buf || !strcmp(buf, "Error 0")) {
-		sprintf(tmpbuf, "Unknown Error");
-		buf = tmpbuf;
-	}
+      buf = my_strerror(errno);
+      if (!buf || !*buf || !strcmp(buf, "Error 0")) {
+	  sprintf(tmpbuf, "Unknown Error");
+	  buf = tmpbuf;
+      }
 
-	final_len = 30 +
+      final_len = 30 +
 		((!temp_binary_fnam || !*temp_binary_fnam ? 3 :
 		 strlen(temp_binary_fnam)) + 13) + 15 + (strlen(buf) + 13);
-	final = (char *)calloc(final_len, sizeof(char));
+      final = (char *)calloc(final_len, sizeof(char));
 
-	sprintf(final,
+      sprintf(final,
 	     "\nUnable to Remove Local File:\n   %s\n\nRemove Error:\n   %s\n",
 	     (!temp_binary_fnam || !*temp_binary_fnam ? " " : temp_binary_fnam),
 	     buf);
 
-	XmxMakeErrorDialog(win->base,
-                           final, 
-                           "Remove Error" );
-	XtManageChild(Xmx_w);
+      XmxMakeErrorDialog(win->base, final, "Remove Error");
+      XtManageChild(Xmx_w);
 
-	if (final) {
-		free(final);
-		final = NULL;
-	}
-    }
+      if (final) {
+	  free(final);
+	  final = NULL;
+      }
+  }
 #else
-  if (remove(temp_binary_fnam))
-    {
+  if (remove(temp_binary_fnam)) {
       XmxMakeErrorDialog(win->base,
                          "Unable to remove local copy of binary file.", 
                          "Remove Error");
       XtManageChild(Xmx_w);
-    }
+  }
 #endif /* VMS, BSN */
 
   /* This was dup'd down below... */
@@ -792,14 +781,130 @@ static XmxCallback (savebinary_cancel_cb)
   return;
 }
 
-static XmxCallback (savebinary_win_cb)
+#if defined(VMS)
+#include <fab.h>
+#include <rmsdef.h>		/* RMS status codes */
+#include <iodef.h>		/* I/O function codes */
+#include <fibdef.h>		/* file information block defs */
+#include <atrdef.h>		/* attribute request codes */
+#define FCH$V_CONTIGB	0x005			/* pos of cont best try bit */
+#define FCH$M_CONTIGB	(1 << FCH$V_CONTIGB)	/* contig best try bit mask */
+/* VMS I/O User's Reference Manual: Part I (V5.x doc set) */
+struct fatdef {
+    unsigned char	fat$b_rtype,	fat$b_rattrib;
+    unsigned short	fat$w_rsize;
+    unsigned long	fat$l_hiblk,	fat$l_efblk;
+    unsigned short	fat$w_ffbyte;
+    unsigned char	fat$b_bktsize,	fat$b_vfcsize;
+    unsigned short	fat$w_maxrec,	fat$w_defext,	fat$w_gbc;
+    unsigned	: 16, : 32, : 16;   /* 6 bytes reserved, 2 bytes not used */
+    unsigned short	fat$w_versions;
+};
+
+/* Arbitrary descriptor without type and class info */
+typedef struct dsc { unsigned short len, mbz; void *adr; } Desc;
+
+extern unsigned long	sys$open(),  sys$qiow(),  sys$dassgn();
+
+#define syswork(sts)	((sts) & 1)
+#define sysfail(sts)	(!syswork(sts))
+
+/*
+ *  Originally by:
+ *  25-Jul-1995 - Pat Rankin (rankin@eql.caltech.edu)
+ *
+ *  Force a file to be marked as having fixed-length, 512 byte records
+ *  without implied carriage control, and with best_try_contiguous set.
+ */
+static unsigned long VMS_FixedLengthRecords(char *filename)
 {
-  char *fname = (char *)malloc(sizeof (char) * 128), efname[128+1];
+    struct FAB	    fab;		/* RMS file access block */
+    struct fibdef   fib;		/* XQP file information block */
+    struct fatdef   recattr;		/* XQP file "record" attributes */
+    struct atrdef   attr_rqst_list[3];	/* XQP attribute request itemlist */
+
+    Desc	    fib_dsc;
+    unsigned short  channel,  iosb[4];
+    unsigned long   fchars,  sts,  tmp;
+
+    /* Initialize file access block */
+    fab = cc$rms_fab;
+    fab.fab$l_fna = filename;
+    fab.fab$b_fns = (unsigned char) strlen(filename);
+    fab.fab$l_fop = FAB$M_UFO;	/* User file open; no further RMS processing */
+    fab.fab$b_fac = FAB$M_PUT;	/* Need write access */
+    fab.fab$b_shr = FAB$M_NIL;	/* Exclusive access */
+
+    sts = sys$open(&fab);	/* Channel in stv; $dassgn to close */
+    if (sts == RMS$_FLK) {
+	/* For MultiNet, at least, if the file was just written by a remote
+	   NFS client, the local NFS server might still have it open, and the
+	   failed access attempt will provoke it to be closed, so try again. */
+	sts = sys$open(&fab);
+    }
+    if (sysfail(sts))
+	return sts;
+
+    /* RMS supplies a user-mode channel (see FAB$L_FOP FAB$V_UFO doc) */
+    channel = (unsigned short) fab.fab$l_stv;
+
+    /* Set up ACP interface structures */
+    /* File information block, passed by descriptor; it's okay to start with
+     * an empty FIB after RMS has accessed the file for us */
+    fib_dsc.len = sizeof fib;
+    fib_dsc.mbz = 0;
+    fib_dsc.adr = &fib;
+    memset((void *)&fib, 0, sizeof fib);
+    /* Attribute request list */
+    attr_rqst_list[0].atr$w_size = sizeof recattr;
+    attr_rqst_list[0].atr$w_type = ATR$C_RECATTR;
+    *(void **)&attr_rqst_list[0].atr$l_addr = (void *)&recattr;
+    attr_rqst_list[1].atr$w_size = sizeof fchars;
+    attr_rqst_list[1].atr$w_type = ATR$C_UCHAR;
+    *(void **)&attr_rqst_list[1].atr$l_addr = (void *)&fchars;
+    attr_rqst_list[2].atr$w_size = attr_rqst_list[2].atr$w_type = 0;
+    attr_rqst_list[2].atr$l_addr = 0;
+    /* File "record" attributes */
+    memset((void *)&recattr, 0, sizeof recattr);
+    fchars = 0; 	/* file characteristics */
+
+    /* Get current attributes */
+    sts = sys$qiow(0, channel, IO$_ACCESS, iosb, (void(*)())0, 0,
+		   &fib_dsc, 0, 0, 0, attr_rqst_list, 0);
+    if (syswork(sts))
+	sts = iosb[0];
+
+    /* Set desired attributes */
+    if (syswork(sts)) {
+	recattr.fat$b_rtype = FAB$C_SEQ | FAB$C_FIX;	/* org=seq, rfm=fix */
+	recattr.fat$w_rsize = recattr.fat$w_maxrec = 512;   /* lrl=mrs=512 */
+	recattr.fat$b_rattrib = 0;			/* rat=none */
+	fchars |= FCH$M_CONTIGB;		/* contiguous-best-try */
+	sts = sys$qiow(0, channel, IO$_DEACCESS, iosb, (void(*)())0, 0,
+		       &fib_dsc, 0, 0, 0, attr_rqst_list, 0);
+	if (syswork(sts))
+	    sts = iosb[0];
+    }
+
+    /* All done */
+    tmp = sys$dassgn(channel);
+    if (syswork(sts))
+	sts = tmp;
+    return sts;
+}
+#endif /* VMS */
+
+static XmxCallback(savebinary_win_cb)
+{
+  char *fname = (char *)malloc(sizeof(char) * 128);
+  char efname[128 + 1];
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+  char retBuf[BUFSIZ];
+  int status;
 
 #ifdef VMS
   if (!temp_binary_fnam)
-	return;
+      return;
 #endif/* VMS, GEC for ML */
 
   XtUnmanageChild(win->savebinary_win);
@@ -809,19 +914,17 @@ static XmxCallback (savebinary_win_cb)
                    &fname);
 
   pathEval(efname, fname);
-	/* New "mv" fucntion to take care of these /bin/mv things */
-	{
-	char retBuf[BUFSIZ];
-	int status;
 
-		if ((status = my_move(
-		     temp_binary_fnam, efname, retBuf, BUFSIZ, 1)) !=
-		     SYS_SUCCESS) {
-			application_user_info_wait(retBuf);
-		}
-	}
+  /* New "mv" function to take care of these /bin/mv things */
+  if ((status = my_move(temp_binary_fnam, efname, retBuf, BUFSIZ, 1)) !=
+      SYS_SUCCESS)
+      application_user_info_wait(retBuf);
 
-  /* This was dup'd down below... */
+#ifdef VMS
+  /* Make it fixed 512 */
+  VMS_FixedLengthRecords(efname);
+#endif
+
   free(temp_binary_fnam);
   temp_binary_fnam = NULL;
 
@@ -830,17 +933,16 @@ static XmxCallback (savebinary_win_cb)
 }
 
 
-static mo_status mo_post_savebinary_window (mo_window *win) {
-
-XmString sfn, fbfn;
-char fileBuf[2048], *fileBoxFileName;
+static mo_status mo_post_savebinary_window(mo_window *win)
+{
+	XmString sfn, fbfn;
+	char fileBuf[2048];
+	char *fileBoxFileName;
 
 	XmxSetUniqid(win->id);
 	if (!win->savebinary_win) {
-		XmxSetArg(XmNdialogStyle,
-			  XmDIALOG_FULL_APPLICATION_MODAL);
-		win->savebinary_win =
-			XmxMakeFileSBDialog(win->base,
+		XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+		win->savebinary_win = XmxMakeFileSBDialog(win->base,
 				"VMS Mosaic: Save Binary File To Local Disk", 
 				"Name for binary file on local disk:",
 				savebinary_win_cb, 0);
@@ -858,16 +960,13 @@ char fileBuf[2048], *fileBoxFileName;
 		      NULL);
 	if (!XmStringGetLtoR(fbfn, XmSTRING_DEFAULT_CHARSET,&fileBoxFileName)) {
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
-		   fprintf(stderr,
-		      "Internal Error In Save Binary... PLEASE REPORT THIS!\n");
-		}
+		if (srcTrace || reportBugs)
+			fprintf(stderr, "Internal Error In Save Binary\n");
 #endif
-
 		return mo_fail;
 	}
 	if (*fileBoxFileName && saveFileName && *saveFileName) {
-		char *sptr = NULL, *ptr = NULL, *ptr2 = NULL;
+		char *sptr, *ptr, *ptr2;
 
 		/* No need to check for NULL as we know url exists */
 		sptr = getFileName(saveFileName);
@@ -896,19 +995,20 @@ char fileBuf[2048], *fileBoxFileName;
 	return mo_succeed;
 }
 
-void rename_binary_file (char *fnam)
+void rename_binary_file(char *fnam)
 {
   mo_window *win = current_win;
+
   temp_binary_fnam = strdup(fnam);
   mo_post_savebinary_window(win);
 }
 
 /* ---------------------- mo_post_open_local_window ----------------------- */
 
-static XmxCallback (open_local_win_cb)
+static XmxCallback(open_local_win_cb)
 {
   char *fname = NULL;
-  char efname[128+1];
+  char efname[128 + 1];
   char *url;
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
@@ -917,12 +1017,11 @@ static XmxCallback (open_local_win_cb)
   XmStringGetLtoR(((XmFileSelectionBoxCallbackStruct *)call_data)->value,
                   XmSTRING_DEFAULT_CHARSET,
                   &fname);
-
   pathEval(efname, fname);
 
   url = mo_url_canonicalize_local(efname);
-  if (url[strlen(url)-1] == '/')
-	url[strlen(url)-1] = '\0';
+  if (url[strlen(url) - 1] == '/')
+      url[strlen(url) - 1] = '\0';
   mo_load_window_text(win, url, NULL);
 
   free(url);
@@ -931,15 +1030,14 @@ static XmxCallback (open_local_win_cb)
   return;
 }
 
-mo_status mo_post_open_local_window (mo_window *win)
+mo_status mo_post_open_local_window(mo_window *win)
 {
   XmxSetUniqid(win->id);
   if (!win->open_local_win) {
-
       win->open_local_win = XmxMakeFileSBDialog(win->base,
-		"VMS Mosaic: Open Local Document", 
-         	"Name of local document to open:",
-         	open_local_win_cb, 0);
+					      "VMS Mosaic: Open Local Document",
+ 	   			       	      "Name of local document to open:",
+  					      open_local_win_cb, 0);
   } else {
       XmFileSelectionDoSearch(win->open_local_win, NULL);
   }
@@ -950,66 +1048,62 @@ mo_status mo_post_open_local_window (mo_window *win)
 
 /* ----------------------- mo_post_open_window ------------------------ */
 
-static XmxCallback (open_win_cb)
+static XmxCallback(open_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   char *url, *xurl;
 
-  switch (XmxExtractToken((int)client_data))
-    {
+  switch (XmxExtractToken((int)client_data)) {
     case 0:
+    case 4:
       XtUnmanageChild(win->open_win);
-      url = XmxTextGetString(win->open_text);
-      if (!url || !strlen(url)) {
-		/* Nothing here so do nothing */
-		return;
-      }
-      mo_convert_newlines_to_spaces(url);
+      url = mo_clean_and_escape_url(XmxTextGetString(win->open_text), 1);
+      if (!url || !*url)
+	  /* Nothing here so do nothing */
+	  return;
 
       /* If URL is enclosed inside <brackets> then extract it */
       if (strstr(url, "<"))
-	url = strtok(url, "<>");
-      
-      xurl = mo_url_prepend_protocol(url);
-      mo_load_window_text(win, xurl, NULL);
-      /* The following free breaks things under the following conditions:
+	  url = strtok(url, "<>");
 
-         Start Mosaic with home page something that can't be fetched.
-         Interrupt, hit 'open', enter a URL, fetch document.
-         Follow relative link. */
-      /* free (url); */
+      xurl = mo_url_prepend_protocol(url);
+
+      if (XmxExtractToken((int)client_data) == 0) {
+	  mo_load_window_text(win, xurl, NULL);
+      } else {
+	  mo_open_another_window(win, xurl, NULL, NULL);
+      }
+      free(url);
       free(xurl);
       break;
     case 1:
+      /* Dismiss it */
       XtUnmanageChild(win->open_win);
-      /* Do nothing. */
       break;
     case 2:
-      mo_open_another_window
-        (win, 
-         mo_assemble_help_url("docview-menubar-file.html"),
-         NULL, NULL);
+      /* Open help */
+      mo_open_another_window(win,
+			     mo_assemble_help_url("docview-menubar-file.html"),
+			     NULL, NULL);
       break;
     case 3:
       XmxTextSetString(win->open_text, "");
       break;
-    }
+  }
 
   return;
 }
 
-mo_status mo_post_open_window (mo_window *win)
+mo_status mo_post_open_window(mo_window *win)
 {
-  if (!win->open_win)
-    {
+  if (!win->open_win) {
       Widget dialog_frame;
       Widget dialog_sep, buttons_form;
       Widget open_form, label;
       
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->open_win = XmxMakeFormDialog 
-        (win->base, "VMS Mosaic: Open Document");
+      win->open_win = XmxMakeFormDialog(win->base, "VMS Mosaic: Open Document");
       dialog_frame = XmxMakeFrame(win->open_win, XmxShadowOut);
 
       /* Constraints for base. */
@@ -1021,17 +1115,18 @@ mo_status mo_post_open_window (mo_window *win)
       open_form = XmxMakeForm(dialog_frame);
       
       label = XmxMakeLabel(open_form, "URL To Open: ");
-      XmxSetArg(XmNwidth, 310);
+      XmxSetArg(XmNwidth, 320);
       win->open_text = XmxMakeTextField(open_form);
       XmxAddCallbackToText(win->open_text, open_win_cb, 0);
       
       dialog_sep = XmxMakeHorizontalSeparator(open_form);
       
-      buttons_form = XmxMakeFormAndFourButtons
-        (open_form, open_win_cb, "Open", 
-         "Clear", "Dismiss", 
-         "Help...", 
-         0, 3, 1, 2);
+      buttons_form = XmxMakeFormAndFiveButtons(open_form, open_win_cb,
+	 "Open", "Open New", "Clear", "Dismiss", "Help...", 
+         0, 4, 3, 1, 2);
+      XmxSetButtonClue("Open in current window", "Open in new window",
+  		       "Clear URL", "Close this menu",
+		       "Open help in new Mosaic window");
 
       /* Constraints for open_form. */
       XmxSetOffsets(label, 14, 0, 10, 0);
@@ -1051,7 +1146,7 @@ mo_status mo_post_open_window (mo_window *win)
         (buttons_form, XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, 
          XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
-    }
+  }
   
   XmxManageRemanage(win->open_win);
   
@@ -1061,10 +1156,11 @@ mo_status mo_post_open_window (mo_window *win)
 
 /* ------------------------- mo_post_mail_window -------------------------- */
 
-static XmxCallback (mail_win_cb)
+static XmxCallback(mail_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-  char *to, *subj, *text = 0, *content_type;
+  char *to, *subj, *content_type;
+  char *text = 0;
   int free_text;
 
   switch (XmxExtractToken((int)client_data)) {
@@ -1072,19 +1168,21 @@ static XmxCallback (mail_win_cb)
       XtUnmanageChild(win->mail_win);
 
       HTML_Print_Headers = XmToggleButtonGetState(
-		win->print_header_toggle_mail);
+			win->print_header_toggle_mail);
       HTML_Print_Footers = XmToggleButtonGetState(
-		win->print_footer_toggle_mail);
+			win->print_footer_toggle_mail);
       HTML_Print_Paper_Size_A4 = XmToggleButtonGetState(
-		win->print_a4_toggle_mail);
+			win->print_a4_toggle_mail);
+      HTML_Print_Duplex = XmToggleButtonGetState(
+			win->print_duplex_toggle_mail);
 
+      /* Ignore missing info for now.  Will cause error display later. */
       to = XmxTextGetString(win->mail_to_text);
-      if (!to || (to[0] == '\0'))
-        return;
-
+      if (!to) 
+	  to = strdup("\0");
       subj = XmxTextGetString(win->mail_subj_text);
       if (!subj)
-        subj = strdup("\0");
+	  subj = strdup("\0");
 
       if (win->mail_format == mo_plaintext) {
           text = HTMLGetText(win->scrolled_win, 0, win->current_node->url, 0);
@@ -1109,26 +1207,25 @@ static XmxCallback (mail_win_cb)
           free_text = 0;
       }
 
-      if (text)
-        mo_send_mail_message(text, to, subj,
-                             XmToggleButtonGetState(win->print_url_only)?
+      /* Ignore blank text for now.  Will cause error display later. */
+      mo_send_mailto_message(text, to, subj,
+                             XmToggleButtonGetState(win->print_url_only) ?
                              "url_only" : content_type,
 			     win->current_node ? win->current_node->url : NULL);
-      
       if (free_text && text)
-        free(text);
+          free(text);
       free(to);
       free(subj);
       
       break;
     case 1:
+      /* Dismiss and return */
       XtUnmanageChild(win->mail_win);
-      /* Do nothing. */
       break;
     case 2:
       mo_open_another_window(win, 
-         mo_assemble_help_url("docview-menubar-file.html#mail"), 
-         NULL, NULL);
+			 mo_assemble_help_url("docview-menubar-file.html#mail"),
+			 NULL, NULL);
       break;
   }
 
@@ -1136,98 +1233,85 @@ static XmxCallback (mail_win_cb)
 }
 
 
-void mail_sensitive(mo_window *win, int format)
+static void mail_sensitive(mo_window *win, int format)
 {
 	Arg args[2];
-	int n;
+	int n = 0;
   
-	if (format == mo_plaintext) { /* PLAIN */
+	if ((format == mo_plaintext) || (format == mo_formatted_text) ||
+	    (format == mo_html)) {
 		XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
 		XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
                 XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
                 XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
-		n = 0;
-		XtSetArg(args[n], XmNsensitive, FALSE); n++;
+                XmxSetToggleButton(win->print_duplex_toggle_mail, XmxNotSet);
+
+		XtSetArg(args[n], XmNsensitive, FALSE);
+		n++;
 		XtSetValues(win->print_header_toggle_mail, args, n);
 		XtSetValues(win->print_footer_toggle_mail, args, n);
                 XtSetValues(win->print_a4_toggle_mail, args, n);
                 XtSetValues(win->print_us_toggle_mail, args, n);
-	}
-	else if (format == mo_formatted_text) { /* FORMATTED */
-		XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
-		n = 0;
-		XtSetArg(args[n], XmNsensitive, FALSE); n++;
-		XtSetValues(win->print_header_toggle_mail, args, n);
-		XtSetValues(win->print_footer_toggle_mail, args, n);
-                XtSetValues(win->print_a4_toggle_mail, args, n);
-                XtSetValues(win->print_us_toggle_mail, args, n);
-	}
-	else if (format == mo_postscript) { /* POSTSCRIPT */
+                XtSetValues(win->print_duplex_toggle_mail, args, n);
+
+	} else if (format == mo_postscript) { /* POSTSCRIPT */
+		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+
                 XmxSetToggleButton(win->print_header_toggle_mail,
-			get_pref_boolean(ePRINT_BANNERS));
+				   get_pref_boolean(ePRINT_BANNERS));
                 XmxSetToggleButton(win->print_footer_toggle_mail,
-			get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_mail,
-			!get_pref_boolean(ePRINT_PAPER_SIZE_US));
-                XmxSetToggleButton(win->print_us_toggle_mail,
-			get_pref_boolean(ePRINT_PAPER_SIZE_US));
-		n = 0;
-		XtSetArg(args[n], XmNsensitive, TRUE); n++;
+				   get_pref_boolean(ePRINT_FOOTNOTES));
+                XmxSetToggleButton(win->print_a4_toggle_mail, !us_size);
+                XmxSetToggleButton(win->print_us_toggle_mail, us_size);
+                XmxSetToggleButton(win->print_duplex_toggle_mail,
+				   get_pref_boolean(ePRINT_DUPLEX));
+
+		XtSetArg(args[n], XmNsensitive, TRUE);
+		n++;
 		XtSetValues(win->print_header_toggle_mail, args, n);
 		XtSetValues(win->print_footer_toggle_mail, args, n);
                 XtSetValues(win->print_a4_toggle_mail, args, n);
                 XtSetValues(win->print_us_toggle_mail, args, n);
-	}
-	else if (format == mo_html) { /* HTML */
-		XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
-		n = 0;
-		XtSetArg(args[n], XmNsensitive, FALSE); n++;
-		XtSetValues(win->print_header_toggle_mail, args, n);
-		XtSetValues(win->print_footer_toggle_mail, args, n);
-                XtSetValues(win->print_a4_toggle_mail, args, n);
-                XtSetValues(win->print_us_toggle_mail, args, n);
-	}
-	else { /* Boom...Bam...Error... */
+                XtSetValues(win->print_duplex_toggle_mail, args, n);
+
+	} else { /* Boom...Bam...Error... */
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
+		if (srcTrace || reportBugs)
 			fprintf(stderr,
 				"ERROR! Format callback has no format!\n");
-		}
 #endif
-		XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
-		n = 0;
-		XtSetArg(args[n], XmNsensitive, FALSE); n++;
-		XtSetValues(win->print_header_toggle_mail, args, n);
-		XtSetValues(win->print_footer_toggle_mail, args, n);
-                XtSetValues(win->print_a4_toggle_mail, args, n);
-                XtSetValues(win->print_us_toggle_mail, args, n);
 	}
 
 	return;
 }
 
-
-static XmxCallback (mail_fmtmenu_cb) {
-
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+static XmxCallback(mail_fmtmenu_cb)
+{
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    char *mode;
   
-	win->mail_format = XmxExtractToken((int)client_data);
+    win->mail_format = XmxExtractToken((int)client_data);
+    mail_sensitive(win, win->mail_format);
 
-	mail_sensitive(win, win->mail_format);
+    switch (win->mail_format) {
+	case mo_plaintext:
+	    mode = strdup(MODE_PLAIN);
+	    break;
+	case mo_postscript:
+	    mode = strdup(MODE_POSTSCRIPT);
+	    break;
+	case mo_formatted_text:
+	    mode = strdup(MODE_FORMATTED);
+	    break;
+	case mo_html:
+	    mode = strdup(MODE_HTML);
+    }
+    set_pref(eMAIL_MODE, (void *)mode);
 
-	return;
+    return;
 }
 
-mo_status mo_post_mail_window (mo_window *win)
+mo_status mo_post_mail_window(mo_window *win)
 {
   int i;
 
@@ -1238,7 +1322,6 @@ mo_status mo_post_mail_window (mo_window *win)
       Widget frame, workarea, format_label;
       Widget paper_size_toggle_box;
       Widget frame2, url_toggle_box;
-      
           
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
@@ -1261,81 +1344,82 @@ mo_status mo_post_mail_window (mo_window *win)
       win->mail_subj_text = XmxMakeTextField(mail_form);
 
       {
+	int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+	char *mode;
+
         XmxSetArg(XmNmarginWidth, 5);
         XmxSetArg(XmNmarginHeight, 5);
         frame = XmxMakeFrame(mail_form, XmxShadowEtchedIn);
         workarea = XmxMakeForm(frame);
         
         win->print_header_toggle_mail = XmxMakeToggleButton(workarea,
-          "Include Banners", mail_print_header_cb, 0);
+        	"Include Banners", mail_print_header_cb, 0);
         XmxSetToggleButton(win->print_header_toggle_mail,
 		get_pref_boolean(ePRINT_BANNERS));
 
         win->print_footer_toggle_mail = XmxMakeToggleButton(workarea,
-          "Include Footnotes", mail_print_footer_cb, 0);
+        	"Include Footnotes", mail_print_footer_cb, 0);
         XmxSetToggleButton(win->print_footer_toggle_mail,
 		get_pref_boolean(ePRINT_FOOTNOTES));
 
 	paper_size_toggle_box = XmxMakeRadioBox(workarea);
 	win->print_a4_toggle_mail = XmxMakeToggleButton
-		(paper_size_toggle_box, "A4 Paper Size", mail_print_a4_cb, 0);
+		(paper_size_toggle_box, "A4 Paper Size", mail_print_size_cb, 0);
 	win->print_us_toggle_mail = XmxMakeToggleButton
 		(paper_size_toggle_box, "US Letter Paper Size",
-		 mail_print_us_cb, 0);
-	XmxSetToggleButton(win->print_a4_toggle_mail,
-		!get_pref_boolean(ePRINT_PAPER_SIZE_US));
-	XmxSetToggleButton(win->print_us_toggle_mail,
-		get_pref_boolean(ePRINT_PAPER_SIZE_US));
+		 mail_print_size_cb, 0);
+	XmxSetToggleButton(win->print_a4_toggle_mail, !us_size);
+	XmxSetToggleButton(win->print_us_toggle_mail, us_size);
+
+        win->print_duplex_toggle_mail = XmxMakeToggleButton(workarea,
+        	"Duplex Printing", mail_print_duplex_cb, 0);
+        XmxSetToggleButton(win->print_duplex_toggle_mail,
+			   get_pref_boolean(ePRINT_DUPLEX));
 
         format_label = XmxMakeLabel(workarea, "Format for document:");
 
         /* Set the default mode */
-	if (!get_pref_string(eMAIL_MODE) || !*(get_pref_string(eMAIL_MODE))) {
-		char tbuf[BUFSIZ];
+	mode = get_pref_string(eMAIL_MODE);
+	if (!mode || !*mode) {
+	    char tbuf[BUFSIZ];
 
-		sprintf(tbuf,
-			"You have set the default %s mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-			"mail", "plain text mail");
-		application_user_info_wait(tbuf);
-		set_pref(eMAIL_MODE, (void *)strdup(MODE_PLAIN));
-	}
-
-        for (i=0; i < 4; i++) {
-                format_opts[i].set_state = XmxNotSet;
+	    sprintf(tbuf,
+		    "You have set the default %s mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		    "mail", "plain text mail");
+	    application_user_info_wait(tbuf);
+	    set_pref(eMAIL_MODE, (void *)strdup(MODE_PLAIN));
+	    mode = get_pref_string(eMAIL_MODE);
 	}
 
-	if (!my_strcasecmp(get_pref_string(eMAIL_MODE), MODE_HTML)) {
-                format_opts[3].set_state = XmxSet;
-		win->mail_format = mo_html;
-	}
-        else if (!my_strcasecmp(get_pref_string(eMAIL_MODE), MODE_POSTSCRIPT)) {
-                format_opts[2].set_state = XmxSet;
-		win->mail_format = mo_postscript;
-	}
-        else if (!my_strcasecmp(get_pref_string(eMAIL_MODE), MODE_FORMATTED)) {
-                format_opts[1].set_state = XmxSet;
-		win->mail_format = mo_formatted_text;
-	}
-        else if (!my_strcasecmp(get_pref_string(eMAIL_MODE), MODE_PLAIN)) {
-                format_opts[0].set_state = XmxSet;
-		win->mail_format = mo_plaintext;
-	}
-        else {
-		char tbuf[BUFSIZ];
+        for (i = 0; i < 4; i++)
+            format_opts[i].set_state = XmxNotSet;
 
-		sprintf(tbuf,
-			"You have set the default %s mode to:\n     [%s], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-			"mail", get_pref_string(eMAIL_MODE), "plain text mail");
+	if (!my_strcasecmp(mode, MODE_HTML)) {
+            format_opts[3].set_state = XmxSet;
+	    win->mail_format = mo_html;
+	} else if (!my_strcasecmp(mode, MODE_POSTSCRIPT)) {
+            format_opts[2].set_state = XmxSet;
+	    win->mail_format = mo_postscript;
+	} else if (!my_strcasecmp(mode, MODE_FORMATTED)) {
+            format_opts[1].set_state = XmxSet;
+	    win->mail_format = mo_formatted_text;
+	} else if (!my_strcasecmp(mode, MODE_PLAIN)) {
+            format_opts[0].set_state = XmxSet;
+	    win->mail_format = mo_plaintext;
+	} else {
+	    char tbuf[BUFSIZ];
 
-		application_user_info_wait(tbuf);
-                format_opts[0].set_state = XmxSet;
-		win->mail_format = mo_plaintext;
+	    sprintf(tbuf,
+		    "You have set the default %s mode to:\n     [%s], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		    "mail", mode, "plain text mail");
+
+	    application_user_info_wait(tbuf);
+            format_opts[0].set_state = XmxSet;
+	    win->mail_format = mo_plaintext;
 	}
 
-	win->mail_fmtmenu = XmxRMakeOptionMenu(workarea, "",
-                                               mail_fmtmenu_cb, 
+	win->mail_fmtmenu = XmxRMakeOptionMenu(workarea, "", mail_fmtmenu_cb,
                                                format_opts);
-
         XmxSetArg(XmNtopOffset, 7);
         XmxSetConstraints
           (format_label, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_FORM,
@@ -1347,20 +1431,23 @@ mo_status mo_post_mail_window (mo_window *win)
         XmxSetArg(XmNtopOffset, 15);
         XmxSetConstraints
            (win->print_header_toggle_mail, XmATTACH_WIDGET, XmATTACH_NONE,
-           XmATTACH_FORM, XmATTACH_NONE,
-           format_label, NULL, NULL, NULL);
+            XmATTACH_FORM, XmATTACH_NONE,
+            format_label, NULL, NULL, NULL);
         XmxSetConstraints
            (win->print_footer_toggle_mail, XmATTACH_WIDGET, XmATTACH_NONE,
-           XmATTACH_FORM, XmATTACH_NONE,
-           win->print_header_toggle_mail, NULL, NULL, NULL);
+            XmATTACH_FORM, XmATTACH_NONE,
+            win->print_header_toggle_mail, NULL, NULL, NULL);
 	XmxSetConstraints
-		(paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_FORM,
-		 XmATTACH_FORM, XmATTACH_NONE,
-		 win->print_footer_toggle_mail, NULL, NULL, NULL);
+	   (paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_NONE,
+	    XmATTACH_FORM, XmATTACH_NONE,
+	    win->print_footer_toggle_mail, NULL, NULL, NULL);
+	XmxSetConstraints
+	   (win->print_duplex_toggle_mail, XmATTACH_WIDGET, XmATTACH_FORM,
+	    XmATTACH_FORM, XmATTACH_NONE,
+	    paper_size_toggle_box, NULL, NULL, NULL);
 
         mail_sensitive(win, win->mail_format);
       }
-
 
       frame2 = XmxMakeFrame(mail_form, XmxShadowEtchedIn);
       url_toggle_box = XmxMakeRadioBox(frame2);
@@ -1370,7 +1457,6 @@ mo_status mo_post_mail_window (mo_window *win)
       win->print_url_only = XmxMakeToggleButton(url_toggle_box,
                                                 "Mail URL Only",
                                                 print_url_cb, 0);
-          
       XmxSetToggleButton(win->print_doc_only, 1);
       XmxSetToggleButton(win->print_url_only, 0);
       dialog_sep = XmxMakeHorizontalSeparator(mail_form);
@@ -1426,10 +1512,10 @@ mo_status mo_post_mail_window (mo_window *win)
   return mo_succeed;
 }
 
-mo_status mo_print_window(mo_window *win, 
-			  mo_format_token print_format, char *lpr)
+mo_status mo_print_window(mo_window *win, mo_format_token print_format,
+			  char *lpr)
 {
-  char *fnam, *cmd;
+  char *fnam, *cmd, *text;
   FILE *fp;
   mo_window *next = NULL;
   mo_window *top = win;
@@ -1444,13 +1530,15 @@ mo_status mo_print_window(mo_window *win,
 #ifdef CCI
   if (cci_docommand) {
     if (print_format == mo_postscript) {
-      HTML_Print_Headers= 1;
-      HTML_Print_Footers= 1;
+      HTML_Print_Headers = 1;
+      HTML_Print_Footers = 1;
       HTML_Print_Paper_Size_A4 = 0;
+      HTML_Print_Duplex = 1;
     } else {
-      HTML_Print_Headers= 0;
-      HTML_Print_Footers= 0;
+      HTML_Print_Headers = 0;
+      HTML_Print_Footers = 0;
       HTML_Print_Paper_Size_A4 = 0;
+      HTML_Print_Duplex = 0;
     }
   } else
 #endif
@@ -1458,7 +1546,8 @@ mo_status mo_print_window(mo_window *win,
     HTML_Print_Headers = XmToggleButtonGetState(win->print_header_toggle_print);
     HTML_Print_Footers = XmToggleButtonGetState(win->print_footer_toggle_print);
     HTML_Print_Paper_Size_A4 =
-	XmToggleButtonGetState(win->print_a4_toggle_print);
+			     XmToggleButtonGetState(win->print_a4_toggle_print);
+    HTML_Print_Duplex = XmToggleButtonGetState(win->print_duplex_toggle_print);
   }
 
 #ifndef VMS
@@ -1476,17 +1565,16 @@ mo_status mo_print_window(mo_window *win,
 #endif /* VMS, BSN, PGE */
 
   while (win) {
-    if (!win->frames || (print_format == mo_html)) {
+    /* Do if no frames except inline frames or html requested */
+    if (!win->frames || (win->frames->is_frame == 2) ||
+	(print_format == mo_html)) {
       if (print_format == mo_plaintext) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
+	      text = HTMLGetText(win->scrolled_win, 0, win->frameurl, 0);
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 0,
-		  win->frameurl, 0);
-	  else
-	      text = HTMLGetText(win->scrolled_win, 0,
-		  win->current_node->url, 0);
-
+				 win->current_node->url, 0);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -1496,15 +1584,12 @@ mo_status mo_print_window(mo_window *win,
               free(text);
           }
       } else if (print_format == mo_formatted_text) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
+	      text = HTMLGetText(win->scrolled_win, 1, win->frameurl, 0);
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 1,
-		  win->frameurl, 0);
-	  else
-	      text = HTMLGetText(win->scrolled_win, 1,
-		  win->current_node->url, 0);
-
+				 win->current_node->url, 0);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -1514,15 +1599,14 @@ mo_status mo_print_window(mo_window *win,
               free(text);
           }
       } else if (print_format == mo_postscript) {
-          char *text;
-
-	  if (win->is_frame)
+	  if (win->is_frame) {
 	      text = HTMLGetText(win->scrolled_win, 2 + win->font_family,
-		  win->frameurl, " ");
-	  else
+				 win->frameurl, " ");
+	  } else {
 	      text = HTMLGetText(win->scrolled_win, 2 + win->font_family,
-		  win->current_node->url, win->current_node->last_modified);
-
+				 win->current_node->url,
+				 win->current_node->last_modified);
+	  }
           if (text) {
 #ifndef VMS
               fputs(text, fp);
@@ -1553,21 +1637,15 @@ mo_status mo_print_window(mo_window *win,
     } else {
         win = win->next_frame;
     }
-    if (!win && next) {
+    if (!win && next)
 	win = next;
-    }
-	
   }
   fclose(fp);
 
   cmd = (char *)malloc((strlen(lpr) + strlen(fnam) + 24));
   sprintf(cmd, "%s %s", lpr, fnam);
 
-#ifndef VMS  /* PGE, conflict with DECC runtime library */
-  System(cmd, "Print Information");
-#else
   GUI_System(cmd, "Print Information");
-#endif
 
   free(cmd);
 
@@ -1584,7 +1662,7 @@ mo_status mo_print_window(mo_window *win,
 
 /* ----------------------- mo_post_print_window ------------------------ */
 
-static XmxCallback (print_win_cb)
+static XmxCallback(print_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   char *lpr;
@@ -1594,21 +1672,20 @@ static XmxCallback (print_win_cb)
       XtUnmanageChild(win->print_win);
 
       lpr = XmxTextGetString(win->print_text);
-       
-      if (!lpr || (lpr[0] == '\0'))
-        return;
+      if (!lpr || !*lpr)
+          return;
 
       mo_print_window(win, win->print_format, lpr);
 
       break;
     case 1:
+      /* Dismiss it and return */
       XtUnmanageChild(win->print_win);
-      /* Do nothing. */
       break;
     case 2:
-      mo_open_another_window
-        (win, mo_assemble_help_url("docview-menubar-file.html#print"),
-		NULL, NULL);
+      mo_open_another_window(win,
+			mo_assemble_help_url("docview-menubar-file.html#print"),
+			NULL, NULL);
       break;
   }
 
@@ -1616,98 +1693,86 @@ static XmxCallback (print_win_cb)
 }
 
 
-void print_sensitive(mo_window *win, int format) {
-
-Arg args[2];
-int n;
+static void print_sensitive(mo_window *win, int format)
+{
+	Arg args[2];
+	int n = 0;
   
-	if (format == mo_plaintext) { /* PLAIN */
-		XmxSetToggleButton(win->print_header_toggle_print,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_print,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_print,args,n);
-		XtSetValues(win->print_footer_toggle_print,args,n);
-                XtSetValues(win->print_a4_toggle_print,args,n);
-                XtSetValues(win->print_us_toggle_print,args,n);
-	}
-	else if (format == mo_formatted_text) { /* FORMATTED */
-		XmxSetToggleButton(win->print_header_toggle_print,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_print,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_print,args,n);
-		XtSetValues(win->print_footer_toggle_print,args,n);
-                XtSetValues(win->print_a4_toggle_print,args,n);
-                XtSetValues(win->print_us_toggle_print,args,n);
-	}
-	else if (format == mo_postscript) { /* POSTSCRIPT */
+	if ((format == mo_plaintext) || (format == mo_formatted_text) ||
+	    (format == mo_html)) {
+		XmxSetToggleButton(win->print_header_toggle_print, XmxNotSet);
+		XmxSetToggleButton(win->print_footer_toggle_print, XmxNotSet);
+                XmxSetToggleButton(win->print_a4_toggle_print, XmxNotSet);
+                XmxSetToggleButton(win->print_us_toggle_print, XmxNotSet);
+                XmxSetToggleButton(win->print_duplex_toggle_print, XmxNotSet);
+
+		XtSetArg(args[n], XmNsensitive, FALSE);
+		n++;
+		XtSetValues(win->print_header_toggle_print, args, n);
+		XtSetValues(win->print_footer_toggle_print, args, n);
+                XtSetValues(win->print_a4_toggle_print, args, n);
+                XtSetValues(win->print_us_toggle_print, args, n);
+                XtSetValues(win->print_duplex_toggle_print, args, n);
+
+	} else if (format == mo_postscript) { /* POSTSCRIPT */
+		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+
 		XmxSetToggleButton(win->print_header_toggle_print,
-			get_pref_boolean(ePRINT_BANNERS));
+				   get_pref_boolean(ePRINT_BANNERS));
 		XmxSetToggleButton(win->print_footer_toggle_print,
-			get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_print,
-			!get_pref_boolean(ePRINT_PAPER_SIZE_US));
-                XmxSetToggleButton(win->print_us_toggle_print,
-			get_pref_boolean(ePRINT_PAPER_SIZE_US));
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,TRUE); n++;
-		XtSetValues(win->print_header_toggle_print,args,n);
-		XtSetValues(win->print_footer_toggle_print,args,n);
-                XtSetValues(win->print_a4_toggle_print,args,n);
-                XtSetValues(win->print_us_toggle_print,args,n);
-	}
-	else if (format == mo_html) { /* HTML */
-		XmxSetToggleButton(win->print_header_toggle_print,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_print,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_print,args,n);
-		XtSetValues(win->print_footer_toggle_print,args,n);
-                XtSetValues(win->print_a4_toggle_print,args,n);
-                XtSetValues(win->print_us_toggle_print,args,n);
-	}
-	else { /* Boom...Bam...Error... */
+				   get_pref_boolean(ePRINT_FOOTNOTES));
+                XmxSetToggleButton(win->print_a4_toggle_print, !us_size);
+                XmxSetToggleButton(win->print_us_toggle_print, us_size);
+                XmxSetToggleButton(win->print_duplex_toggle_print,
+				   get_pref_boolean(ePRINT_DUPLEX));
+
+		XtSetArg(args[n], XmNsensitive, TRUE);
+		n++;
+		XtSetValues(win->print_header_toggle_print, args, n);
+		XtSetValues(win->print_footer_toggle_print, args, n);
+                XtSetValues(win->print_a4_toggle_print, args, n);
+                XtSetValues(win->print_us_toggle_print, args, n);
+                XtSetValues(win->print_duplex_toggle_print, args, n);
+
+	} else { /* Boom...Bam...Error... */
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
+		if (srcTrace || reportBugs)
 			fprintf(stderr,
 				"ERROR! Format callback has no format!\n");
-		}
 #endif
-		XmxSetToggleButton(win->print_header_toggle_print,XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_print,XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_print,XmxNotSet);
-		n = 0;
-		XtSetArg(args[n],XmNsensitive,FALSE); n++;
-		XtSetValues(win->print_header_toggle_print,args,n);
-		XtSetValues(win->print_footer_toggle_print,args,n);
-                XtSetValues(win->print_a4_toggle_print,args,n);
-                XtSetValues(win->print_us_toggle_print,args,n);
 	}
 
 	return;
 }
 
 
-static XmxCallback (print_fmtmenu_cb) {
+static XmxCallback(print_fmtmenu_cb)
+{
+    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    char *mode;
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-  
-	win->print_format = XmxExtractToken((int)client_data);
+    win->print_format = XmxExtractToken((int)client_data);
+    print_sensitive(win, win->print_format);
 
-	print_sensitive(win, win->print_format);
+    switch (win->print_format) {
+	case mo_plaintext:
+	    mode = strdup(MODE_PLAIN);
+	    break;
+	case mo_postscript:
+	    mode = strdup(MODE_POSTSCRIPT);
+	    break;
+	case mo_formatted_text:
+	    mode = strdup(MODE_FORMATTED);
+	    break;
+	case mo_html:
+	    mode = strdup(MODE_HTML);
+    }
+    set_pref(ePRINT_MODE, (void *)mode);
 
-	return;
+    return;
 }
 
-mo_status mo_post_print_window (mo_window *win)
+mo_status mo_post_print_window(mo_window *win)
 {
   int i;
 
@@ -1720,7 +1785,7 @@ mo_status mo_post_print_window (mo_window *win)
 
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
-      win->print_win = XmxMakeFormDialog 
+      win->print_win = XmxMakeFormDialog
         (win->base, "VMS Mosaic: Print Document");
       dialog_frame = XmxMakeFrame(win->print_win, XmxShadowOut);
 
@@ -1728,86 +1793,88 @@ mo_status mo_post_print_window (mo_window *win)
       XmxSetConstraints 
         (dialog_frame, XmATTACH_FORM, XmATTACH_FORM, 
          XmATTACH_FORM, XmATTACH_FORM, NULL, NULL, NULL, NULL);
-      
-      /* Main form. */
+
+      /* Main form */
       print_form = XmxMakeForm(dialog_frame);
-      
+
       print_label = XmxMakeLabel(print_form, "Print Command: ");
       XmxSetArg(XmNwidth, 400);
-      if (get_pref_boolean(eKIOSK) && get_pref_boolean(eKIOSKPRINT)) {
+      if (get_pref_boolean(eKIOSK) && get_pref_boolean(eKIOSKPRINT))
 	XmxSetArg (XmNsensitive, False);
-      }
+
       win->print_text = XmxMakeTextField(print_form);
       XmxTextSetString(win->print_text, get_pref(ePRINT_COMMAND));
 
       {
+	int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+	char *mode;
+
         XmxSetArg(XmNmarginWidth, 5);
         XmxSetArg(XmNmarginHeight, 5);
         frame = XmxMakeFrame(print_form, XmxShadowEtchedIn);
         workarea = XmxMakeForm(frame);
-        
+
 	win->print_header_toggle_print = XmxMakeToggleButton(workarea,
 		"Include Banners", print_print_header_cb, 0);
 	XmxSetToggleButton(win->print_header_toggle_print,
-		get_pref_boolean(ePRINT_BANNERS));
+			   get_pref_boolean(ePRINT_BANNERS));
 
 	win->print_footer_toggle_print = XmxMakeToggleButton(workarea,
 		"Include Footnotes", print_print_footer_cb, 0);
 	XmxSetToggleButton(win->print_footer_toggle_print,
-		get_pref_boolean(ePRINT_FOOTNOTES));
+			   get_pref_boolean(ePRINT_FOOTNOTES));
 
 	paper_size_toggle_box = XmxMakeRadioBox(workarea);
 	win->print_a4_toggle_print = XmxMakeToggleButton
-		(paper_size_toggle_box, "A4 Paper Size", print_print_a4_cb, 0);
+		(paper_size_toggle_box, "A4 Paper Size",
+		print_print_size_cb, 0);
 	win->print_us_toggle_print = XmxMakeToggleButton
-		(paper_size_toggle_box,"US Letter Paper Size",
-		 print_print_us_cb, 0);
-	XmxSetToggleButton(win->print_a4_toggle_print,
-		!get_pref_boolean(ePRINT_PAPER_SIZE_US));
-	XmxSetToggleButton(win->print_us_toggle_print,
-		get_pref_boolean(ePRINT_PAPER_SIZE_US));
+		(paper_size_toggle_box, "US Letter Paper Size",
+		 print_print_size_cb, 0);
+	XmxSetToggleButton(win->print_a4_toggle_print, !us_size);
+	XmxSetToggleButton(win->print_us_toggle_print, us_size);
+
+	win->print_duplex_toggle_print = XmxMakeToggleButton(workarea,
+		"Duplex printing", print_print_duplex_cb, 0);
+	XmxSetToggleButton(win->print_duplex_toggle_print,
+			   get_pref_boolean(ePRINT_DUPLEX));
 
         format_label = XmxMakeLabel(workarea, "Format for document:");
 
         /* Set the default mode */
-	if (!(get_pref_string(ePRINT_MODE)) ||
-	    !*(get_pref_string(ePRINT_MODE))) {
+	mode = get_pref_string(ePRINT_MODE);
+	if (!mode || !*mode) {
 		char tbuf[BUFSIZ];
 
 		sprintf(tbuf,
-		    "You have set the default %s mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-		    "print", "plain text print");
-
+		    "You have set the default print mode to:\n     [NULL], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		    "plain text print");
 		application_user_info_wait(tbuf);
 		set_pref(ePRINT_MODE, (void *)strdup(MODE_PLAIN));
+		mode = get_pref_string(ePRINT_MODE);
 	}
 
-        for (i=0; i < 4; i++) {
+        for (i = 0; i < 4; i++)
                 format_opts[i].set_state = XmxNotSet;
-	}
 
-	if (!my_strcasecmp(get_pref_string(ePRINT_MODE), MODE_HTML)) {
+	if (!my_strcasecmp(mode, MODE_HTML)) {
                 format_opts[3].set_state = XmxSet;
 		win->print_format = mo_html;
-	}
-        else if (!my_strcasecmp(get_pref_string(ePRINT_MODE),MODE_POSTSCRIPT)) {
+	} else if (!my_strcasecmp(mode, MODE_POSTSCRIPT)) {
                 format_opts[2].set_state = XmxSet;
 		win->print_format = mo_postscript;
-	}
-        else if (!my_strcasecmp(get_pref_string(ePRINT_MODE), MODE_FORMATTED)) {
+	} else if (!my_strcasecmp(mode, MODE_FORMATTED)) {
                 format_opts[1].set_state = XmxSet;
 		win->print_format = mo_formatted_text;
-	}
-        else if (!my_strcasecmp(get_pref_string(ePRINT_MODE), MODE_PLAIN)) {
+	} else if (!my_strcasecmp(mode, MODE_PLAIN)) {
                 format_opts[0].set_state = XmxSet;
 		win->print_format = mo_plaintext;
-	}
-        else {
+	} else {
 		char tbuf[BUFSIZ];
 
 		sprintf(tbuf,
-		    "You have set the default %s mode to:\n     [%s], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
-		    "print", get_pref_string(ePRINT_MODE), "plain text print");
+		    "You have set the default print mode to:\n     [%s], which is not valid. Defaulting to %s mode.\n\nPlease use one of the following:\n     plain, formatted, postscript, or html.",
+		    mode, "plain text print");
 
 		application_user_info_wait(tbuf);
                 format_opts[0].set_state = XmxSet;
@@ -1817,7 +1884,6 @@ mo_status mo_post_print_window (mo_window *win)
 	win->print_fmtmenu = XmxRMakeOptionMenu(workarea, "",
                                                 print_fmtmenu_cb, 
                                                 format_opts);
-
         XmxSetArg(XmNtopOffset, 7);
         XmxSetConstraints
           (format_label, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_FORM,
@@ -1836,16 +1902,20 @@ mo_status mo_post_print_window (mo_window *win)
 		 XmATTACH_NONE, XmATTACH_FORM, XmATTACH_NONE,
 		 win->print_header_toggle_print, NULL, NULL, NULL);
 	XmxSetConstraints
-		(paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_FORM,
+		(paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_NONE,
 		 XmATTACH_FORM, XmATTACH_NONE,
 		 win->print_footer_toggle_print, NULL, NULL, NULL);
+	XmxSetConstraints
+		(win->print_duplex_toggle_print, XmATTACH_WIDGET, XmATTACH_FORM,
+		 XmATTACH_FORM, XmATTACH_NONE,
+		 paper_size_toggle_box, NULL, NULL, NULL);
 
         print_sensitive(win, win->print_format);
       }
 
       dialog_sep = XmxMakeHorizontalSeparator(print_form);
       
-      buttons_form = XmxMakeFormAndThreeButtonsSqueezed
+      buttons_form = XmxMakeFormAndThreeButtonsTight
         (print_form, print_win_cb, "Print",
 	 "Dismiss", "Help...",
 	 0, 1, 2);
@@ -1892,13 +1962,12 @@ Reverse searching is screwed up as far as where the point that gets highlighted
 and the actual cursor position.  Should be easy to fix with a little work.
 */
 
-void source_position(Widget source_view, int pos, int end) {
-
-	XmTextSetSelection(source_view,
-			   pos,
+static void source_position(Widget source_view, int pos, int end)
+{
+	XmTextSetSelection(source_view, pos,
 			   (end == (-1) ? pos : end),
 			   CurrentTime);
-
+	XmTextShowPosition(source_view, pos);
 	return;
 }
 
@@ -1906,16 +1975,14 @@ void source_position(Widget source_view, int pos, int end) {
 mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 				  int caseless)
 {
-	int searchlen, start, str_len = strlen(str);
+	int searchlen, start;
+	int str_len = strlen(str);
 	char *ptr = NULL, *tptr = NULL, *my_str = NULL;
 
-	if (!(win) ||
-	    !(win->current_node) ||
-	    !(win->current_node->text) ||
+	if (!win || !win->current_node || !win->current_node->text ||
 	    !*(win->current_node->text)) {
 		application_user_info_wait(
 		    "This is a bug! Please report what you were\ndoing and the URL you are current at to:\n\ncook@wvnet.edu\n\nThank You!!");
-
 		return(mo_fail);
 	}
 
@@ -1923,9 +1990,8 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 
 #ifdef CCI
 	/* Search the first hit every time if by cci application */ 
-	if (cci_docommand) {
+	if (cci_docommand)
 		win->src_search_pos = 0;
-	}
 #endif
 	/*
 	 * If we are going forwards, the start position is the current
@@ -1935,7 +2001,7 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 	 * If the current position is non-zero, this is a "find again" type
 	 *   search which is why the "backwards" way works.
 	 */
-	if (!backward) { /* Forward Search */
+	if (!backward) {  /* Forward Search */
 		start = win->src_search_pos;
 		if (start >= searchlen) {
 			if (win->src_search_pos) {
@@ -1945,16 +2011,14 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 				application_user_info_wait(
 				    "Sorry, no matches in this document.");
 			}
-
 			return(mo_fail);
 		}
 		my_str = strdup((win->current_node->text + start));
 		ptr = my_str;
-	}
-	else { /* Backwards Search */
+	} else {  /* Backwards Search */
 		if (!win->src_search_pos) { /* First time...go to end */
 			start = searchlen;
-		} else { /* "Find Again" */
+		} else {  /* "Find Again" */
 			start = win->src_search_pos - str_len;
 			if (start < 0) {
 				if (win->src_search_pos) {
@@ -1964,7 +2028,6 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 					application_user_info_wait(
 					     "Sorry, no matches in this document.");
 				}
-
 				return(mo_fail);
 			}
 		}
@@ -1989,58 +2052,46 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 				tptr = ptr = strchr(ptr, *str);
 			}
 		} else {
-			if (tptr) {
+			if (tptr)
 				*tptr = '\0';
-			}
 			if (caseless) {
-				/* Find occurrence */
 				tptr = ptr = strrcasechr(my_str, *str);
 			} else {
-				/* Find occurrence */
 				tptr = ptr = strrchr(my_str, *str);
 			}
 		}
 
-		if (!ptr) {
+		if (!ptr)
 			break;
-		}
 
 		if (caseless) {
-			if (!my_strncasecmp(ptr, str, str_len)) {
+			if (!my_strncasecmp(ptr, str, str_len))
 				break;
-			}
 			continue;
-		}
-		else {
-			if (!strncmp(ptr, str, str_len)) {
+		} else {
+			if (!strncmp(ptr, str, str_len))
 				break;
-			}
 			continue;
 		}
 	}
-
 	if (!ptr) {
 		free(my_str);
 
 		if (win->src_search_pos) {
 			application_user_info_wait(
 				"Sorry, no more matches in this document.");
-		}
-		else {
+		} else {
 			application_user_info_wait(
 				"Sorry, no matches in this document.");
 		}
-
 		return(mo_fail);
 	}
-
 	if (!backward) {
 		win->src_search_pos = (ptr - my_str) + start + str_len;
 		source_position(win->source_text,
 				win->src_search_pos - str_len,
 				win->src_search_pos);
-	}
-	else {
+	} else {
 		win->src_search_pos = (ptr - my_str);
 		source_position(win->source_text,
 				win->src_search_pos,
@@ -2053,67 +2104,55 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 }
 
 
-static XmxCallback(source_search_win_cb) {
+static XmxCallback(source_search_win_cb)
+{
+	mo_window *win =
+		mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-	if (!win) {
+	if (!win)
 		win = current_win;
-	}
 
 	switch (XmxExtractToken((int)client_data)) {
-		case 0: { /* Search */
-			char *str = XmxTextGetString(win->src_search_win_text);
+	    case 0: {  /* Search */
+		char *str = XmxTextGetString(win->src_search_win_text);
 
-			if (str && *str) {
-				mo_source_search_window(win, str,
-					XmToggleButtonGetState(
+		if (str && *str) {
+			mo_source_search_window(win, str,
+					  XmToggleButtonGetState(
 					      win->src_search_backwards_toggle),
-					XmToggleButtonGetState(
+					  XmToggleButtonGetState(
 					      win->src_search_caseless_toggle));
-			}
-
-			break;
 		}
+		break;
+	    }
 
-		case 1: { /* Reset */
-			/* Clear out the search text. */
-			XmxTextSetString(win->src_search_win_text,
-					 "");
+	    case 1:  /* Reset */
+		/* Clear out the search text. */
+		XmxTextSetString(win->src_search_win_text, "");
 
-			/* Subsequent searches start at the beginning. */
-			win->src_search_pos = 0;
+		/* Subsequent searches start at the beginning. */
+		win->src_search_pos = 0;
 
-			/* Reposition document at top of screen. */
-			source_position(win->source_text,
-					0,
-					(-1));
+		/* Reposition document at top of screen. */
+		source_position(win->source_text, 0, (-1));
+		break;
 
-			break;
-		}
+	    case 2:  /* Dismiss */
+		XtUnmanageChild(win->src_search_win);
+		break;
 
-		case 2: { /* Dismiss */
-			XtUnmanageChild(win->src_search_win);
-
-			break;
-		}
-
-		case 3: { /* Help */
-			mo_open_another_window(win, 
-			      mo_assemble_help_url(
-			      	"docview-menubar-file.html#search"),
-			      NULL, NULL);
-
-			break;
-		}
+	    case 3:  /* Help */
+		mo_open_another_window(win, mo_assemble_help_url(
+			      	            "docview-menubar-file.html#search"),
+			      	       NULL, NULL);
+		break;
 	}
 
 	return;
 }
 
-
-mo_status mo_post_source_search_window(mo_window *win) {
-
+static mo_status mo_post_source_search_window(mo_window *win)
+{
 	if (!win->src_search_win) {
 		Widget dialog_frame;
 		Widget dialog_sep, buttons_form;
@@ -2122,7 +2161,7 @@ mo_status mo_post_source_search_window(mo_window *win) {
 		/* Create it for the first time. */
 		XmxSetUniqid(win->id);
 		win->src_search_win = XmxMakeFormDialog(win->base,
-				          "VMS Mosaic: Search in Source View");
+				           "VMS Mosaic: Search in Source View");
 		dialog_frame = XmxMakeFrame(win->src_search_win, XmxShadowOut);
 
 		/* Constraints for base. */
@@ -2135,7 +2174,6 @@ mo_status mo_post_source_search_window(mo_window *win) {
 				  NULL,
 				  NULL, 
 				  NULL);
-      
 		/* Main form. */
 		search_form = XmxMakeForm(dialog_frame);
       
@@ -2145,18 +2183,22 @@ mo_status mo_post_source_search_window(mo_window *win) {
 		win->src_search_win_text = XmxMakeText(search_form);
 		XmxAddCallbackToText(win->src_search_win_text,
 				     source_search_win_cb, 0);
+#ifdef MOTIF1_2 /* Not in Motif 1.1 */
 		/* Make keyboardFocusPolicy:explicit work properly */
 		XmxSetArg(XmNinitialFocus, (XtArgVal)win->src_search_win_text);
 		XmxSetValues(search_form);
-
+#endif
 		win->src_search_caseless_toggle =
 			XmxMakeToggleButton(search_form, "Caseless Search",
 					    NULL, 0);
 		XmxSetToggleButton(win->src_search_caseless_toggle, XmxSet);
+		XmxAddClue(win->src_search_caseless_toggle,
+			   "Ignores upper/lower case when selected");
 		win->src_search_backwards_toggle =
 			XmxMakeToggleButton(search_form, "Backwards Search",
 					    NULL, 0);
-
+		XmxAddClue(win->src_search_backwards_toggle,
+			   "Search in reverse direction when selected");
 		dialog_sep = XmxMakeHorizontalSeparator(search_form);
       
 		buttons_form = XmxMakeFormAndFourButtons(search_form,
@@ -2165,11 +2207,10 @@ mo_status mo_post_source_search_window(mo_window *win) {
 						  "Reset",
 						  "Dismiss",
 						  "Help...",
-						  0,
-						  1,
-						  2,
-						  3);
-
+						  0, 1, 2, 3);
+		XmxSetButtonClue("Find string in source window",
+				 "Reset this menu", "Close this menu",
+				 "Open help in new Mosaic window", NULL);
 		/* Constraints for search_form. */
 		XmxSetOffsets(label, 13, 0, 10, 0);
 		/* Label attaches top to form, bottom to nothing,
@@ -2245,50 +2286,41 @@ mo_status mo_post_source_search_window(mo_window *win) {
 				  NULL,
 				  NULL);
 	}
-  
 	XmxManageRemanage(win->src_search_win);
   
 	return(mo_succeed);
 }
 
 
-static XmxCallback (source_win_cb) {
-
-mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+static XmxCallback(source_win_cb)
+{
+	mo_window *win =
+	    mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
 	switch (XmxExtractToken((int)client_data)) {
-		case 0: { /* Dismiss */
-			XtUnmanageChild(win->source_win);
-			if (win->src_search_win &&
-			    XtIsManaged(win->src_search_win)) {
-				XtUnmanageChild(win->src_search_win);
-			}
+	    case 0:  /* Dismiss */
+		XtUnmanageChild(win->source_win);
+		if (win->src_search_win && XtIsManaged(win->src_search_win))
+			XtUnmanageChild(win->src_search_win);
+		break;
 
-			break;
-		}
+	    case 1:  /* Help */
+		mo_open_another_window(win, mo_assemble_help_url(
+					    "docview-menubar-file.html#source"),
+			      	       NULL, NULL);
+		break;
 
-		case 1: { /* Help */
-			mo_open_another_window(win, 
-			      mo_assemble_help_url(
-				"docview-menubar-file.html#source"),
-			      NULL, NULL);
-
-			break;
-		}
-
-		case 2: { /* Search */
-			mo_post_source_search_window(win);
-
-			break;
-		}
+	    case 2:  /* Search */
+		mo_post_source_search_window(win);
+		break;
 	}
 
 	return;
 }
 
 
-mo_status mo_post_source_window(mo_window *win) {
-
+mo_status mo_post_source_window(mo_window *win)
+{
 	if (!win->source_win) {
 		Widget dialog_frame;
 		Widget dialog_sep, buttons_form;
@@ -2298,20 +2330,12 @@ mo_status mo_post_source_window(mo_window *win) {
 		XmxSetUniqid(win->id);
 		win->source_win = XmxMakeFormDialog(win->base,
 					  "VMS Mosaic: Document Source View");
-		dialog_frame = XmxMakeFrame(win->source_win,
-				     XmxShadowOut);
+		dialog_frame = XmxMakeFrame(win->source_win, XmxShadowOut);
 
 		/* Constraints for base. */
 		XmxSetConstraints(dialog_frame,
-				  XmATTACH_FORM,
-				  XmATTACH_FORM, 
-				  XmATTACH_FORM,
-				  XmATTACH_FORM,
-				  NULL,
-				  NULL,
-				  NULL,
-				  NULL);
-      
+				  XmATTACH_FORM, XmATTACH_FORM, XmATTACH_FORM,
+				  XmATTACH_FORM, NULL, NULL, NULL, NULL);
 		/* Main form. */
 		source_form = XmxMakeForm(dialog_frame);
       
@@ -2336,84 +2360,63 @@ mo_status mo_post_source_window(mo_window *win) {
       
 		dialog_sep = XmxMakeHorizontalSeparator(source_form);
 
-		buttons_form = XmxMakeFormAndThreeButtonsSqueezed(source_form,
-							   source_win_cb,
-							   "Search...",
-							   "Dismiss",
-							   "Help...",
-							   2,
-							   0,
-							   1);
+		buttons_form = XmxMakeFormAndThreeButtonsTight(source_form,
+							       source_win_cb,
+							       "Search...",
+							       "Dismiss",
+							       "Help...",
+							       2, 0, 1);
+		XmxSetButtonClue("Open source search menu", "Close this menu",
+				 "Open help in new Mosaic window", NULL, NULL);
 
 		/* Constraints for source_form. */
 		XmxSetOffsets(label, 13, 0, 10, 0);
 		XmxSetConstraints(label,
 				  XmATTACH_FORM,
-				  XmATTACH_NONE, 
+				  XmATTACH_NONE,
 				  XmATTACH_FORM,
 				  XmATTACH_NONE,
-				  NULL,
-				  NULL,
-				  NULL,
-				  NULL);
+				  NULL, NULL, NULL, NULL);
 		XmxSetOffsets(dlabel, 18, 0, 10, 0);
 		XmxSetConstraints(dlabel,
 				  XmATTACH_WIDGET,
 				  XmATTACH_NONE, 
 				  XmATTACH_FORM,
 				  XmATTACH_NONE,
-				  label,
-				  NULL,
-				  NULL,
-				  NULL);
+				  label, NULL, NULL, NULL);
 		XmxSetOffsets(win->source_url_text, 10, 0, 5, 10);
 		XmxSetConstraints(win->source_url_text,
 				  XmATTACH_FORM,
 				  XmATTACH_NONE,
 				  XmATTACH_WIDGET,
 				  XmATTACH_FORM,
-				  NULL,
-				  NULL,
-				  label,
-				  NULL);
+				  NULL, NULL, label, NULL);
 		XmxSetOffsets(win->source_date_text, 10, 0, 5, 10);
 		XmxSetConstraints(win->source_date_text,
 				  XmATTACH_WIDGET,
 				  XmATTACH_NONE,
 				  XmATTACH_WIDGET,
 				  XmATTACH_FORM,
-				  win->source_url_text,
-				  NULL,
-				  dlabel,
-				  NULL);
+				  win->source_url_text, NULL, dlabel, NULL);
 		XmxSetConstraints(XtParent(win->source_text),
 				  XmATTACH_WIDGET,
 				  XmATTACH_WIDGET, 
 				  XmATTACH_FORM,
 				  XmATTACH_FORM,
-				  win->source_date_text,
-				  dialog_sep, 
-				  NULL,
-				  NULL);
+				  win->source_date_text, dialog_sep, NULL,NULL);
 		XmxSetArg(XmNtopOffset, 10);
 		XmxSetConstraints(dialog_sep,
 				  XmATTACH_NONE,
 				  XmATTACH_WIDGET,
 				  XmATTACH_FORM, 
 				  XmATTACH_FORM,
-				  NULL,
-				  buttons_form,
-				  NULL,
-				  NULL);
+				  NULL, buttons_form, NULL, NULL);
 		XmxSetConstraints(buttons_form,
 				  XmATTACH_NONE,
 				  XmATTACH_FORM,
 				  XmATTACH_FORM, 
 				  XmATTACH_FORM,
-				  NULL,
-				  NULL,
-				  NULL,
-				  NULL);
+				  NULL, NULL, NULL, NULL);
 	}
   
 	XmxManageRemanage(win->source_win);
@@ -2434,114 +2437,106 @@ mo_status mo_post_source_window(mo_window *win) {
 
 /* ----------------------- mo_search_window ------------------------ */
 mo_status mo_search_window(mo_window *win, char *str, int backward,
-	int caseless, int news)
+			   int caseless, int news)
 {
   int rc;
 
 #ifdef CCI
   /* Search the first hit every time if by cci application */ 
-  if (cci_docommand || news) {
+  if (cci_docommand || news)
 #else
-  if (news) {
+  if (news)
 #endif
-    ((ElementRef *)win->search_start)->id = 0;
-  }
+      ((ElementRef *)win->search_start)->id = 0;
 
   if (!backward) {
-    /* Either win->search_start->id is 0, in which case the search
-     * should start from the beginning, or it's non-0, in which case
-     * at least one search step has already been taken.
-     * If the latter, it should be incremented so as to start
-     * the search after the last hit.  Right? */
-    if (((ElementRef *)win->search_start)->id) {
-        ((ElementRef *)win->search_start)->id =
+      /* Either win->search_start->id is 0, in which case the search
+       * should start from the beginning, or it's non-0, in which case
+       * at least one search step has already been taken.
+       * If the latter, it should be incremented so as to start
+       * the search after the last hit.  Right? */
+      if (((ElementRef *)win->search_start)->id) {
+          ((ElementRef *)win->search_start)->id =
 			((ElementRef *)win->search_end)->id;
-        ((ElementRef *)win->search_start)->pos =
+          ((ElementRef *)win->search_start)->pos =
 		        ((ElementRef *)win->search_end)->pos;
-     }
-   }
+      }
+  }
 
-   if (news) {
-	rc = HTMLSearchNews(win->scrolled_win,
+  if (news) {
+      rc = HTMLSearchNews(win->scrolled_win,
 			  (ElementRef *)win->search_start,
 			  (ElementRef *)win->search_end);
-   } else {
-	rc = HTMLSearchText(win->scrolled_win, str, 
-			    (ElementRef *)win->search_start,
-			    (ElementRef *)win->search_end, 
-			    backward,
-			    caseless);
-   }
+  } else {
+      rc = HTMLSearchText(win->scrolled_win, str, 
+			  (ElementRef *)win->search_start,
+			  (ElementRef *)win->search_end, 
+			  backward, caseless);
+  }
 
-   if (rc == -1) {
+  if (rc == -1) {
 #ifdef CCI
-     if (cci_docommand) {
-	if (news) {
-		((ElementRef *)win->search_start)->id = 0;
-	}
-	return mo_fail;
-     } else
+      if (cci_docommand) {
+	  if (news)
+	      ((ElementRef *)win->search_start)->id = 0;
+	  return mo_fail;
+      } else
 #endif
-     {
-       /* No match was found. */
-       if (!news) {
-	 if (((ElementRef *)win->search_start)->id)
-		application_user_info_wait(
+      {
+          /* No match was found. */
+          if (!news) {
+	      if (((ElementRef *)win->search_start)->id) {
+	          application_user_info_wait(
 			"Sorry, no more matches in this document.");
-	 else
-		application_user_info_wait(
+	      } else {
+	          application_user_info_wait(
 			"Sorry, no matches in this document.");
-       }
-       if (news) {
-		((ElementRef *)win->search_start)->id = 0;
-       }
-       return mo_fail;
-     }
-   } else {
-        /* Now search_start and search_end are starting and ending
-           points of the match. */
-   	HTMLGotoId(win->scrolled_win,
-			((ElementRef *)win->search_start)->id,
-			 (news ? (-1) : 0));
+	      }
+          }
+          if (news)
+	      ((ElementRef *)win->search_start)->id = 0;
+          return mo_fail;
+      }
+  } else {
+      /* Now search_start and search_end are starting and ending
+         points of the match. */
+      HTMLGotoId(win->scrolled_win,
+		 ((ElementRef *)win->search_start)->id,
+		 (news ? (-1) : 0));
 
-        /* Set the selection. */
-	if (!news) {
+      /* Set the selection. */
+      if (!news) {
 	  HTMLSetSelection(win->scrolled_win, (ElementRef *)win->search_start,
-				  (ElementRef *)win->search_end);
-	}
-   } /* Found a target */
+			   (ElementRef *)win->search_end);
+      }
+  } /* Found a target */
 
-	if (news) {
-		((ElementRef *)win->search_start)->id = 0;
-	}
+  if (news)
+      ((ElementRef *)win->search_start)->id = 0;
 
-   return mo_succeed;
+  return mo_succeed;
 }
 
-static XmxCallback (search_win_cb)
+static XmxCallback(search_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
-  if (!win) {
-	win = current_win;
-  }
+  if (!win)
+      win = current_win;
 
-  switch (XmxExtractToken((int)client_data))
-    {
-    case 0: /* Search */
-      {
+  switch (XmxExtractToken((int)client_data)) {
+    case 0: {	/* Search */
         char *str = XmxTextGetString(win->search_win_text);
-        if (str && *str)
-          {
+
+        if (str && *str) {
             int backward = XmToggleButtonGetState(win->search_backwards_toggle);
             int caseless = XmToggleButtonGetState(win->search_caseless_toggle);
 
 	    mo_search_window(win, str, backward, caseless, 0);
-	  }
-
+	}
       }
       break;
-    case 1: /* Reset */
+    case 1:  /* Reset */
       /* Clear out the search text. */
       XmxTextSetString(win->search_win_text, "");
 
@@ -2551,23 +2546,22 @@ static XmxCallback (search_win_cb)
       /* Reposition document at top of screen. */
       HTMLGotoId(win->scrolled_win, 0, 0);
       break;
-    case 2: /* Dismiss */
+    case 2:  /* Dismiss */
       XtUnmanageChild(win->search_win);
       break;
-    case 3: /* Help */
+    case 3:  /* Help */
       mo_open_another_window(win, 
-         mo_assemble_help_url("docview-menubar-file.html#search"),
-         NULL, NULL);
+         	       mo_assemble_help_url("docview-menubar-file.html#search"),
+         	       NULL, NULL);
       break;
-    }
+  }
 
   return;
 }
 
-mo_status mo_post_search_window (mo_window *win)
+mo_status mo_post_search_window(mo_window *win)
 {
-  if (!win->search_win)
-    {
+  if (!win->search_win) {
       Widget dialog_frame;
       Widget dialog_sep, buttons_form;
       Widget search_form, label;
@@ -2589,15 +2583,20 @@ mo_status mo_post_search_window (mo_window *win)
       XmxSetArg(XmNcolumns, 25);
       win->search_win_text = XmxMakeText(search_form);
       XmxAddCallbackToText(win->search_win_text, search_win_cb, 0);
+#ifdef MOTIF1_2 /* Not in Motif 1.1 */
       /* Make keyboardFocusPolicy:explicit work properly */
       XmxSetArg(XmNinitialFocus, (XtArgVal)win->search_win_text);
       XmxSetValues(search_form);
-
+#endif
       win->search_caseless_toggle = XmxMakeToggleButton 
         (search_form, "Caseless Search", NULL, 0);
       XmxSetToggleButton (win->search_caseless_toggle, XmxSet);
+      XmxAddClue(win->search_caseless_toggle,
+		 "Ignores upper/lower case when selected");
       win->search_backwards_toggle = XmxMakeToggleButton 
         (search_form, "Backwards Search", NULL, 0);
+      XmxAddClue(win->search_backwards_toggle,
+		 "Search in reverse direction when selected");
 
       dialog_sep = XmxMakeHorizontalSeparator(search_form);
       
@@ -2606,6 +2605,9 @@ mo_status mo_post_search_window (mo_window *win)
          "Find", "Reset",
 	 "Dismiss", "Help...",
 	 0, 1, 2, 3);
+      XmxSetButtonClue("Find string in current window", "Reset this menu",
+  		       "Close this menu", "Open help in new Mosaic window",
+		       NULL);
 
       /* Constraints for search_form. */
       XmxSetOffsets (label, 13, 0, 10, 0);
@@ -2648,7 +2650,7 @@ mo_status mo_post_search_window (mo_window *win)
         (buttons_form, XmATTACH_NONE, XmATTACH_FORM, XmATTACH_FORM, 
          XmATTACH_FORM,
          NULL, NULL, NULL, NULL);
-    }
+  }
   
   XmxManageRemanage(win->search_win);
   
@@ -2661,34 +2663,38 @@ typedef struct {
 	mo_window *win;
 	char *fileName;
 	char *url;
-	} EditFile;
+} EditFile;
 
-void mo_done_editing(EditFile *e, int pid) {
-
+static void mo_done_editing(EditFile *e, int pid)
+{
 	char *url;
 	extern char *url_base_override;
 	extern int keep_url_base_override;
-
-	/****** Check to see if e->win still exists */
+	mo_window *win = NULL;
+	int foundit = 0;
 
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
+	if (srcTrace)
 		fprintf(stderr, "Done Editing: pid = %d, file %s, url=%s\n",
 			pid, e->fileName, e->url);
-	}
 #endif
-
-  	url = mo_url_canonicalize_local(e->fileName);
-	if (url[strlen(url)-1] == '/') {
-		url[strlen(url)-1] = '\0';
+	/* Does window still exist? */
+	while (win = mo_next_window(win)) {
+		if (win == e->win)
+			foundit = 1;
 	}
+	if (foundit) {
+	  	url = mo_url_canonicalize_local(e->fileName);
+		if (url[strlen(url) - 1] == '/')
+			url[strlen(url) - 1] = '\0';
 
-	/* Force a BASE url for the document */
-	keep_url_base_override = 1;
-	url_base_override = strdup(e->url);
+		/* Force a BASE url for the document */
+		keep_url_base_override = 1;
+		url_base_override = strdup(e->url);
 
-	mo_load_window_text(e->win, url, e->url);
-
+		mo_load_window_text(e->win, url, e->url);
+		free(url);
+	}
 #ifdef VMS
 	/* Remove all versions */
 	strcat(e->fileName, ";*");
@@ -2698,13 +2704,12 @@ void mo_done_editing(EditFile *e, int pid) {
 	free(e->fileName);
 	free(e->url);
 	free(e);
-	free(url);
 }
 
-
-mo_status mo_source_date(mo_window *win) {
-
-char msg[200];
+/* Not currently used anywhere */
+static mo_status mo_source_date(mo_window *win)
+{
+	char msg[200];
 
 	if (win->current_node->last_modified) {
 		sprintf(msg, "Source Last Modified Date:\n  %s\n",
@@ -2721,30 +2726,23 @@ char msg[200];
 
 mo_status mo_edit_source(mo_window *win)
 {
-  char *sourceFileName;
-  FILE *fp;
-  int  length;
-  char *editorName;
-  char execString[1024];
-  char editorTitle[1024];
-  char editorCommand[1024];
-  char *execArg[20];
-  char *tmp;
-  int  argCount;
-  int  pid;
-  EditFile *e;
+	char *sourceFileName;
+	FILE *fp;
+	int  length;
+	char *editorName;
+	char execString[1024];
+	char editorTitle[1024];
+	char editorCommand[1024];
+	char *execArg[20];
+	char *tmp;
+	int  argCount;
+	int  pid;
+	EditFile *e;
+	char *edit_command;
+	extern void AddChildProcessHandler(int, void (*)(), void *);
 
-  char *edit_command;
-
-  extern void AddChildProcessHandler(int, void (*)(), void *);
-
-
-	if (!win->current_node) {
+	if (!win->current_node || !win->current_node->text)
 		return mo_fail;
-	}
-	if (!win->current_node->text) {
-		return mo_fail;
-	}
 
 	/* Get editor */
 	edit_command = get_pref_string(eEDIT_COMMAND);
@@ -2752,14 +2750,12 @@ mo_status mo_edit_source(mo_window *win)
 		editorName = edit_command;
 	} else {
 		editorName = getenv("EDITOR");
-		if ((!editorName) || (!strlen(editorName))) {
+		if (!editorName || !strlen(editorName))
 #ifndef VMS
 			editorName = "vi";   /* Default to vi */
 #else
 			editorName = "EDIT"; /* Default to EDIT */
 #endif /* VMS, GEC */
-		}
-		
 	}
 
 	/* Write out source to tmp file with .html extension */
@@ -2780,17 +2776,19 @@ mo_status mo_edit_source(mo_window *win)
 			buf = tmpbuf;
 		}
 
-		final_len=30+((!sourceFileName || !*sourceFileName?3:strlen(sourceFileName))+13)+15+(strlen(buf)+3);
+		final_len = 30 +
+		    ((!sourceFileName ||
+		      !*sourceFileName ? 3 : strlen(sourceFileName)) + 13) +
+		    15 + (strlen(buf) + 3);
 		final = (char *)calloc(final_len, sizeof(char));
 
-		sprintf(final, "\nUnable to Open Editor Temp File:\n   %s\n\nOpen Error:\n   %s\n",
-			(!sourceFileName || !*sourceFileName?" ":sourceFileName),
+		sprintf(final,
+			"\nUnable to Open Editor Temp File:\n   %s\n\nOpen Error:\n   %s\n",
+			(!sourceFileName ||
+			 !*sourceFileName ? " " : sourceFileName),
 			buf);
 
-		XmxMakeErrorDialog (win->base,
-				    final, 
-				    "Edit Source Error");
-
+		XmxMakeErrorDialog(win->base, final, "Edit Source Error");
 		if (final) {
 			free(final);
 			final = NULL;
@@ -2800,6 +2798,7 @@ mo_status mo_edit_source(mo_window *win)
         if (!(fp = fopen(sourceFileName, "w", "shr = nil", "rop = WBH",
                          "mbf = 4", "mbc = 32", "deq = 8", "fop = tef"))) {
                 char *str;
+
                 str = (char *)calloc(1024, sizeof(char));
                 sprintf(str,
 			"Unable to Open Editor Temp File: %s\nOpen Error: %s",
@@ -2826,29 +2825,32 @@ mo_status mo_edit_source(mo_window *win)
 				buf = tmpbuf;
 			}
 
-			final_len=30+((!sourceFileName || !*sourceFileName?3:strlen(sourceFileName))+13)+15+(strlen(buf)+3);
+			final_len = 30 +
+			    ((!sourceFileName ||
+			      !*sourceFileName ? 3 : strlen(sourceFileName)) +
+			     13) + 15 + (strlen(buf) + 3);
 			final = (char *)calloc(final_len, sizeof(char));
 
 			sprintf(final,
-	"\nUnable to Write Editor Temp File:\n   %s\n\nWrite Error:\n   %s\n"
-	,(!sourceFileName || !*sourceFileName ? " " : sourceFileName), buf);
+          "\nUnable to Write Editor Temp File:\n   %s\n\nWrite Error:\n   %s\n",
+          (!sourceFileName || !*sourceFileName ? " " : sourceFileName), buf);
 
 			XmxMakeErrorDialog(win->base, final,
 					   "Edit Write Error");
-
 			if (final) {
 				free(final);
 				final = NULL;
 			}
 #else
-                char *str;
-                str = (char *)calloc(1024, sizeof(char));
-                sprintf(str,
-			"Unable to Write Editor Temp File: %s\nWrite Error: %s",
-			sourceFileName, strerror(errno, vaxc$errno));
-                XmxMakeErrorDialog(win->base, str, "Edit Source Error");
-                XtManageChild(Xmx_w);
-                free(str);
+                	char *str;
+
+                	str = (char *)calloc(1024, sizeof(char));
+                	sprintf(str,
+			      "Unable to Write Editor Temp File: %s\nError: %s",
+			      sourceFileName, strerror(errno, vaxc$errno));
+                	XmxMakeErrorDialog(win->base, str, "Edit Source Error");
+                	XtManageChild(Xmx_w);
+                	free(str);
 #endif /* VMS, GEC */
 		}
 		return mo_fail;
@@ -2869,13 +2871,13 @@ mo_status mo_edit_source(mo_window *win)
 	argCount = 0;
 	if (get_pref_boolean(eEDIT_COMMAND_USE_XTERM)) {
 #ifndef VMS
-	  sprintf(execString, "%s -T %s -e %s",
+		sprintf(execString, "%s -T %s -e %s",
 #else
-          sprintf(execString, "%s%s %s",
+        	sprintf(execString, "%s%s %s",
 #endif /* VMS, GEC */
-		  get_pref_string(eXTERM_COMMAND),
-		  editorTitle,
-		  editorCommand);
+		        get_pref_string(eXTERM_COMMAND),
+		        editorTitle,
+		        editorCommand);
 
 		execArg[argCount++] = get_pref_string(eXTERM_COMMAND);
 		execArg[argCount++] = "-T";
@@ -2901,36 +2903,36 @@ mo_status mo_edit_source(mo_window *win)
 		/* I'm the child */
 	        execvp(execArg[0], execArg); 
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
+		if (srcTrace)
 			fprintf(stderr, "Couldn't execute:\n%s\n", execString);
-		}
 #endif
 
 		_exit(-1); /* Don't use regular exit() or mom's I/O channels 
 			      will close */
-		}
+	}
 
 #else
-{
-#define NOWAIT                  1       /* No wait flag for LIB$SPAWN */
-void ChildTerminated();
-extern int child_count;
-int flags = NOWAIT;
-int status;
+    {
+#define NOWAIT 1	       /* No wait flag for LIB$SPAWN */
+	void ChildTerminated();
+	extern int child_count;
+	int flags = NOWAIT;
+	int status;
 #include <descrip.h>
 #define $NEW_DESCRIPTOR(name) \
         struct dsc$descriptor_s name = { \
             0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0}
-        $NEW_DESCRIPTOR (cmd_desc);
+        $NEW_DESCRIPTOR(cmd_desc);
 
         cmd_desc.dsc$w_length = strlen(execString);
         cmd_desc.dsc$a_pointer = execString;
 
 	child_count = child_count + 1;
         status = lib$spawn(&cmd_desc, 0, 0, &flags, 0, &pid, 0, 0,
-		ChildTerminated, child_count);
+			   ChildTerminated, child_count);
         if (status != 1) {
                 char *str;
+
                 str = (char *)malloc(1024 * sizeof(char));
                 sprintf(str,
 		      "Unable to Execute Editor Command: %s\nCommand Error: %s",
@@ -2939,18 +2941,15 @@ int status;
                 XtManageChild(Xmx_w);
                 free(str);
 	}
-}
+    }
 #endif /* VMS, GEC */       
-
 
 	/* Need to save file name and pid for later reading of source */
 	if (!(e = (EditFile *) malloc(sizeof(EditFile)))) {
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
+		if (srcTrace || reportBugs)
 			fprintf(stderr, "Out of Memory!\n");
-		}
 #endif
-
 		return mo_fail;
 	}
 
@@ -2960,9 +2959,8 @@ int status;
 
 	AddChildProcessHandler(pid, mo_done_editing, e);
 
-  return mo_succeed;
+	return mo_succeed;
 } 
-
 
 
 /*---------------------------Utility Functions-----------------------------*/
@@ -2989,12 +2987,12 @@ int status;
  *	3) Else...use /tmp.
  *
  */
-int pathEval(char *dest, char *src) {
-
-int i;
-char *sptr, *hptr, home[__MAX_HOME_LEN__];
+int pathEval(char *dest, char *src)
+{
+	int i;
+	char *sptr, *hptr, home[__MAX_HOME_LEN__];
 #ifndef VMS
-struct passwd *pwdent;
+	struct passwd *pwdent;
 #endif
 
 	/*
@@ -3002,9 +3000,8 @@ struct passwd *pwdent;
 	 */
 	if (!dest) {
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs) {
+		if (srcTrace || reportBugs)
 		       fprintf(stderr, "No place to put the Evaluated Path!\n");
-		}
 #endif
 		return(-1);
 	}
@@ -3041,7 +3038,6 @@ struct passwd *pwdent;
 	hptr = getenv("HOME");
 	strcpy(home, hptr);
 #endif
-
 	sptr = src;
 	sptr++;
 	/*
@@ -3072,7 +3068,7 @@ struct passwd *pwdent;
 	 *   this is not the slash that could possibly be at the _very_ end
 	 *   of home, home[i] is not a slash, and i is >= 0.
 	 *
-	 * If a slash is not found (i<0), then we assume that HOME is a
+	 * If a slash is not found (i < 0), then we assume that HOME is a
 	 *   directory off of the root directory, or something strange like
 	 *   that...so we simply ignore "home" and return the src without
 	 *   the ~.
@@ -3082,12 +3078,13 @@ struct passwd *pwdent;
 	 *   dest and return.
 	 */
 	for (i = strlen(home);
-	     ((i >= 0) && (home[i] != '/')) || (i == strlen(home)); i--);
+	     ((i >= 0) && (home[i] != '/')) || (i == strlen(home)); i--)
+		;
 
 	if (i < 0) {
 		strcpy(dest, sptr);
 	} else {
-		home[i+1] = '\0';
+		home[i + 1] = '\0';
 		strcpy(dest, home);
 		strcat(dest, sptr);
 	}

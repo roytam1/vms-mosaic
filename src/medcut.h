@@ -52,15 +52,15 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
-
+void MedianCut(unsigned char *data, int w, int h, XColor *colrs, int start_cnt,
+	       int end_cnt);
+unsigned char *MedianCut24BitTo8(unsigned char *data, int w, int h,
+				 XColor *colrs, int end_cnt, int max_cnt);

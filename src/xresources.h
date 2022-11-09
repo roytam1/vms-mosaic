@@ -52,127 +52,151 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2003, 2004, 2005, 2006 - The VMS Mosaic Project */
+
 /* This document should be included in whatever source document
-   sets up the Intrinsics.  It is in a separate file so it doesn't
-   clutter up that file.  So sue me. */
+ * sets up the Intrinsics.  It is in a separate file so it doesn't
+ * clutter up that file.  So sue me. */
 
 #ifndef __MOSAIC_XRESOURCES_H__
+#define __MOSAIC_XRESOURCES_H__
 
 /* ----------------------------- X Resources ------------------------------ */
-#define offset(x) XtOffset (AppDataPtr, x)
+#define offset(x) XtOffset(AppDataPtr, x)
 
 static XtResource resources[] = {
 
+  { "appDefaultsVersion", "AppDefaultsVersion", XtRInt, sizeof(int),
+      offset(app_defaults_version), XtRString, "1" },
+
   /* Default font choice from Options menu choices */
   { "defaultFontChoice", "DefaultFontChoice", XtRString, sizeof(char *),
-    offset(default_font_choice), XtRString, "TimesRegular" },
+      offset(default_font_choice), XtRString, "TimesRegular" },
+
   { "kiosk", "Kiosk", XtRBoolean, sizeof(Boolean),
       offset(kiosk), XtRString, "False" },
+
   { "kioskPrint", "KioskPrint", XtRBoolean, sizeof(Boolean), 
       offset(kioskPrint), XtRString, "False" },
+
   { "kioskNoExit", "KioskNoExit", XtRBoolean, sizeof(Boolean),
       offset(kioskNoExit), XtRString, "False" },
+
   /* Whether Mosaic reads and writes global history from 
      ~/.mosaic-global-history
      and thus provides persistent history tracking. */
   { "useGlobalHistory", "UseGlobalHistory", XtRBoolean, sizeof(Boolean),
-    offset(use_global_history), XtRString, "True" },
-  /* Whether titles will be displayed wherever URL's are normally
-     displayed. */
-  { "displayURLsNotTitles", "DisplayURLsNotTitles", XtRBoolean, 
-    sizeof(Boolean),
-    offset(display_urls_not_titles), XtRString, "False" },
+      offset(use_global_history), XtRString, "True" },
+
+  /* Whether titles will be displayed wherever URL's are normally displayed. */
+  { "displayURLsNotTitles", "DisplayURLsNotTitles", XtRBoolean, sizeof(Boolean),
+      offset(display_urls_not_titles), XtRString, "False" },
+
   /* Default width for a Document View window.  This will change as windows
      are cloned. */
   { "defaultWidth", "DefaultWidth", XtRInt, sizeof(int),
       offset(default_width), XtRString, "740" },
+
   /* Default height for a Document View window. */
   { "defaultHeight", "DefaultHeight", XtRInt, sizeof(int),
       offset(default_height), XtRString, "840" },
+
   /* Startup document. */
   { "homeDocument", "HomeDocument", XtRString, sizeof(char *),
-      offset(home_document), XtRString, 
-      HOME_PAGE_DEFAULT },
+      offset(home_document), XtRString, HOME_PAGE_DEFAULT },
+
   { "confirmExit", "ConfirmExit", XtRBoolean, sizeof(Boolean),
       offset(confirm_exit), XtRString, "True" },
+
   /* THIS USED TO BE mailCommand BUT IS NOW sendmailCommand. */
-#ifdef __bsdi__
   { "sendmailCommand", "SendmailCommand", XtRString, sizeof(char *),
+#ifdef __bsdi__
 #ifndef VMS
       offset(sendmail_command), XtRString, "/usr/sbin/sendmail -t" },
 #else
       offset(sendmail_command), XtRString, "Mail$$" },
 #endif /* VMS, BSN */
 #else
-  { "sendmailCommand", "SendmailCommand", XtRString, sizeof(char *),
       offset(sendmail_command), XtRString, "/usr/lib/sendmail -t" },
 #endif
+
   /* Ignore this.  Stealth feature. */
   { "mailFilterCommand", "MailFilterCommand", XtRString, sizeof(char *),
       offset(mail_filter_command), XtRString, NULL },
+
   { "printCommand", "PrintCommand", XtRString, sizeof(char *),
 #if defined(VMS)     /* VMS, BSN, moved by PGE (put above __alpha) */
       offset(print_command), XtRString, PRINT_DEFAULT },
 #else
       offset(print_command), XtRString, "lpr" },
 #endif
+
   { "cciPort", "CCIPort", XtRInt, sizeof(int),
       offset(cciPort), XtRString, "0" },
+
   { "maxNumCCIConnect", "MaxNumCCIConnect", XtRInt, sizeof(int),
       offset(max_num_of_cci_connections), XtRString, "0" },
+
   { "loadLocalFile", "LoadLocalFile", XtRInt, sizeof(int),
       offset(load_local_file), XtRString, "1"},
-#ifndef VMS
+
   { "editCommand", "EditCommand", XtRString, sizeof(char *),
+#ifndef VMS
       offset(edit_command), XtRString, NULL },
 #else
-  { "editCommand", "EditCommand", XtRString, sizeof(char *),
       offset(edit_command), XtRString, EDITOR_DEFAULT },
 #endif
+
   { "editCommandUseXterm", "EditCommandUseXterm", XtRBoolean, sizeof(Boolean),
       offset(edit_command_use_xterm), XtRString, "True" },
+
+  { "xtermCommand", "XtermCommand", XtRString, sizeof(char *),
 #ifdef _AIX
-  { "xtermCommand", "XtermCommand", XtRString, sizeof(char *),
       offset(xterm_command), XtRString, "aixterm -v" },
-#else /* not _AIX */
+#else
 #ifndef VMS
-  { "xtermCommand", "XtermCommand", XtRString, sizeof(char *),
       offset(xterm_command), XtRString, "xterm" },
 #else
-  { "xtermCommand", "XtermCommand", XtRString, sizeof(char *),
       offset(xterm_command), XtRString, 
       "Create/Term/NoDetach/Insert/Wait/Window=(Init=Window,Title=\"Mosaic DECterm\")"
     },
-#endif /* VMS, BSN */
-#endif /* not _AIX */
+#endif
+#endif
+
   { "globalHistoryFile", "GlobalHistoryFile", XtRString, sizeof(char *),
 #ifndef VMS
       offset(global_history_file), XtRString, ".mosaic-global-history" },
 #else
       offset(global_history_file), XtRString, "mosaic.global-history" },
 #endif /* VMS, BSN */
+
   { "historyFile", "HistoryFile", XtRString, sizeof(char *),
 #ifndef VMS
       offset(history_file), XtRString, ".mosaic-x-history" },
 #else
       offset(history_file), XtRString, "mosaic.x-history" },
 #endif
+
   { "defaultHotlistFile", "DefaultHotlistFile", XtRString, sizeof(char *),
 #ifndef VMS
       offset(default_hotlist_file), XtRString, ".mosaic-hotlist-default" },
 #else
       offset(default_hotlist_file), XtRString, "mosaic-hotlist-default" },
 #endif /* VMS, BSN */
+
   { "defaultHotFile", "DefaultHotFile", XtRString, sizeof(char *),
 #ifndef VMS
       offset(default_hot_file), XtRString, ".mosaic-hot.html" },
 #else
       offset(default_hot_file), XtRString, "mosaic-hot.html" },
 #endif /* VMS, PGE */
+
   { "addHotlistAddsRBM", "AddHotlistAddsRBM", XtRBoolean, sizeof(Boolean),
       offset(addHotlistAddsRBM), XtRString, "True" },
+
   { "addRBMAddsRBM", "AddRBMAddsRBM", XtRBoolean, sizeof(Boolean),
       offset(addRBMAddsRBM), XtRString, "True" },
+
   { "personalAnnotationDirectory", "PersonalAnnotationDirectory", XtRString, 
       sizeof(char *),
       offset(private_annotation_directory), XtRString,
@@ -181,21 +205,26 @@ static XtResource resources[] = {
 #else
       "mosaic-annotations" },
 #endif /* VMS, BSN */
+
   /* Whether selections should be fancy, by default. */
-  { "fancySelections", "FancySelections", XtRBoolean,
-      sizeof(Boolean), offset(default_fancy_selections), 
-      XtRString, "False" },
+  { "fancySelections", "FancySelections", XtRBoolean, sizeof(Boolean),
+      offset(default_fancy_selections), XtRString, "False" },
+
   { "defaultAuthorName", "DefaultAuthorName", XtRString, sizeof(char *),
       offset(default_author_name), XtRString, NULL },
+
   { "defaultAuthorEmail", "DefaultAuthorEmail", XtRString, sizeof(char *),
       offset(default_author_email), XtRString, NULL },
+
   { "signature", "Signature", XtRString, sizeof(char *),
       offset(signature), XtRString, NULL },
+
   { "annotationsOnTop", "AnnotationsOnTop", XtRBoolean, sizeof(Boolean),
       offset(annotations_on_top), XtRString, "False" },
 
   { "colorsPerInlinedImage", "ColorsPerInlinedImage", XtRInt, sizeof(int),
       offset(colors_per_inlined_image), XtRString, "50" },
+
   { "trackVisitedAnchors", "TrackVisitedAnchors", XtRBoolean, sizeof(Boolean),
       offset(track_visited_anchors), XtRString, "True" },
 
@@ -205,88 +234,85 @@ static XtResource resources[] = {
 #else
       offset(uncompress_command), XtRString, "gzip -dfn" },
 #endif /* Use gunzip for uncompress on VMS, BSN */
-#ifndef VMS
+
   { "gunzipCommand", "GunzipCommand", XtRString, 
+#ifndef VMS
       sizeof(char *), offset(gunzip_command), XtRString, "gunzip -f -n" },
 #else
-  { "gunzipCommand", "GunzipCommand", XtRString, 
       sizeof(char *), offset(gunzip_command), XtRString, "gzip -dfn" },
 #endif /* Use gzip in place of gunzip on VMS, PGE */
 
-#if defined(__hpux)
   { "recordCommandLocation", "RecordCommandLocation", XtRString, 
       sizeof(char *), offset(record_command_location), XtRString,
+#if defined(__hpux)
       "/usr/audio/bin/srecorder" },
 #else
 #if defined(__sgi)
-  { "recordCommandLocation", "RecordCommandLocation", XtRString, 
-      sizeof(char *), offset(record_command_location), XtRString,
       "/usr/sbin/recordaiff" },
 #else
 #if defined (sun)
-  { "recordCommandLocation", "RecordCommandLocation", XtRString, 
-      sizeof(char *), offset(record_command_location), XtRString,
       "/usr/demo/SOUND/record" },
 #else
-  { "recordCommandLocation", "RecordCommandLocation", XtRString, 
-      sizeof(char *), offset(record_command_location), XtRString,
       "/bin/true" },
-#endif /* if sun */
-#endif /* if sgi */
-#endif /* ifdef */
+#endif
+#endif
+#endif
 
-#ifdef __hpux
   { "recordCommand", "RecordCommand", XtRString, sizeof(char *),
       offset(record_command), XtRString,
+#ifdef __hpux
       "srecorder -au" },
 #else
 #if defined(__sgi)
-  { "recordCommand", "RecordCommand", XtRString, sizeof(char *),
-      offset(record_command), XtRString,
       "recordaiff -n 1 -s 8 -r 8000" },
 #else
 #if defined (sun)
-  { "recordCommand", "RecordCommand", XtRString, sizeof(char *),
-      offset(record_command), XtRString,
       "record" },
 #else
-  { "recordCommand", "RecordCommand", XtRString, sizeof(char *),
-      offset(record_command), XtRString,
       "true" },
-#endif /* if sun */
-#endif /* if sgi */
-#endif /* ifdef */
+#endif
+#endif
+#endif
 
   { "gethostbynameIsEvil", "GethostbynameIsEvil", XtRBoolean, sizeof(Boolean),
       offset(gethostbyname_is_evil), XtRString, "False" },
+
   { "autoPlaceWindows", "AutoPlaceWindows", XtRBoolean, sizeof(Boolean),
       offset(auto_place_windows), XtRString, "True" },
+
   { "initialWindowIconic", "InitialWindowIconic", XtRBoolean, sizeof(Boolean),
       offset(initial_window_iconic), XtRString, "False" },
 
   { "tmpDirectory", "TmpDirectory", XtRString, sizeof(char *),
       offset(tmp_directory), XtRString, NULL },
+
   { "annotationServer", "AnnotationServer", XtRString, sizeof(char *),
       offset(annotation_server), XtRString, NULL },
+
   { "catchPriorAndNext", "CatchPriorAndNext", XtRBoolean, sizeof(Boolean),
       offset(catch_prior_and_next), XtRString, "True" },
 
   { "fullHostname", "FullHostname", XtRString, sizeof(char *),
       offset(full_hostname), XtRString, NULL },
+
   { "reverseInlinedBitmapColors", "ReverseInlinedBitmapColors", XtRBoolean,
       sizeof(Boolean),
       offset(reverse_inlined_bitmap_colors), XtRString, "False" },
+
   { "confirmDeleteAnnotation", "ConfirmDeleteAnnotation", 
       XtRBoolean, sizeof(Boolean),
       offset(confirm_delete_annotation), XtRString, "True"},
+
   { "tweakGopherTypes", "TweakGopherTypes", XtRBoolean, sizeof(Boolean),
       offset(tweak_gopher_types), XtRString, "True" },
 
   { "guiLayout", "GuiLayout", XtRString, sizeof(char *),
-    offset(gui_layout), XtRString, NULL},
-  /* --- new in 2.0 --- */
+      offset(gui_layout), XtRString, NULL },
+
+  /* --- New in 2.0 --- */
   { "trackPointerMotion", "TrackPointerMotion", XtRBoolean, sizeof(Boolean),
       offset(track_pointer_motion), XtRString, "True" },
+
   { "trackFullURLs", "TrackFullURLs", XtRBoolean, sizeof(Boolean),
       offset(track_full_url_names), XtRString, "True" },
 
@@ -303,28 +329,33 @@ static XtResource resources[] = {
 
   { "reloadReloadsImages", "ReloadReloadsImages", XtRBoolean, sizeof(Boolean),
       offset(reload_reloads_images), XtRString, "False" },
+
   { "reloadPragmaNoCache", "ReloadPragmaNoCache", XtRBoolean, sizeof(Boolean),
       offset(reload_pragma_no_cache), XtRString, "False" },
+
   { "simpleInterface", "SimpleInterface", XtRBoolean, sizeof(Boolean),
       offset(simple_interface), XtRString, "False" },
 
   { "maxWaisResponses", "MaxWaisResponses", XtRInt, sizeof(int),
       offset(max_wais_responses), XtRString, "200" },
+
   { "delayImageLoads", "DelayImageLoads", XtRBoolean, sizeof(Boolean),
       offset(delay_image_loads), XtRString, "False" },
+
   { "enableTables", "EnableTables", XtRBoolean, sizeof(Boolean),
       offset(enable_tables), XtRString, "True" },
+
   { "disableMiddleButton", "DisableMiddleButton", XtRBoolean, sizeof(Boolean),
       offset(disableMiddleButton), XtRString, "False" },
 
   { "useDefaultExtensionMap", "UseDefaultExtensionMap", 
       XtRBoolean, sizeof(Boolean),
       offset(use_default_extension_map), XtRString, "True" },
-  { "globalExtensionMap", "GlobalExtensionMap",
-      XtRString, sizeof(char *),
+
+  { "globalExtensionMap", "GlobalExtensionMap", XtRString, sizeof(char *),
       offset(global_extension_map), XtRString, GLOBAL_EXTENSION_MAP },
-  { "personalExtensionMap", "PersonalExtensionMap", 
-      XtRString, sizeof(char *),
+
+  { "personalExtensionMap", "PersonalExtensionMap", XtRString, sizeof(char *),
 #ifndef VMS
       offset(personal_extension_map), XtRString, ".mime.types" },
 #else
@@ -333,8 +364,10 @@ static XtResource resources[] = {
 
   { "useDefaultTypeMap", "UseDefaultTypeMap", XtRBoolean, sizeof(Boolean),
       offset(use_default_type_map), XtRString, "True" },
+
   { "globalTypeMap", "GlobalTypeMap", XtRString, sizeof(char *),
       offset(global_type_map), XtRString, GLOBAL_TYPE_MAP },
+
   { "personalTypeMap", "PersonalTypeMap", XtRString, sizeof(char *),
 #ifndef VMS
       offset(personal_type_map), XtRString, ".mailcap" },
@@ -342,9 +375,9 @@ static XtResource resources[] = {
       offset(personal_type_map), XtRString, "mailcap." },
 #endif /* VMS, BSN */
 
-  { "twirlingTransferIcon", "TwirlingTransferIcon", 
-      XtRBoolean, sizeof(Boolean),
+  { "twirlingTransferIcon", "TwirlingTransferIcon", XtRBoolean, sizeof(Boolean),
       offset(twirling_transfer_icon), XtRString, "True" },
+
   { "twirlIncrement", "TwirlIncrement", XtRInt, sizeof(int),
       offset(twirl_increment), XtRString, "4096" },
 
@@ -354,8 +387,7 @@ static XtResource resources[] = {
   { "imageCacheSize", "ImageCacheSize", XtRInt, sizeof(int),
       offset(image_cache_size), XtRString, "2048" },
 
-  { "protectMeFromMyself", "ProtectMeFromMyself", 
-      XtRBoolean, sizeof(Boolean),
+  { "protectMeFromMyself", "ProtectMeFromMyself", XtRBoolean, sizeof(Boolean),
       offset(protect_me_from_myself), XtRString, "False" },
 
   { "printMode", "PrintMode", XtRString, sizeof(char *),
@@ -469,14 +501,12 @@ static XtResource resources[] = {
   { "backupDataFiles", "BackupDataFiles", XtRBoolean, sizeof(Boolean),
       offset(backup_files), XtRString, "True" },
 
-/* Icon Animation Stuff */
   { "iconPixBasename", "IconPixBasename", XtRString, sizeof(char *),
       offset(pix_basename), XtRString, "default" },
 
   { "iconPixCount", "IconPixCount", XtRInt, sizeof(int),
       offset(pix_count), XtRString, "0" },
 
-/* Accept-Language stuff */
   { "acceptLanguage", "AcceptLanguage", XtRString, sizeof(char *),
       offset(acceptlanguage_str), XtRString, NULL },
 
@@ -490,7 +520,7 @@ static XtResource resources[] = {
       offset(ftpRedialSleep), XtRString, "3" },
 
   { "ftpFilenameLength", "FtpFilenameLength", XtRInt, sizeof(int),
-      offset(ftpFilenameLength), XtRString, "22" },
+      offset(ftpFilenameLength), XtRString, "26" },
 
   { "ftpEllipsisLength", "FtpEllipsisLength", XtRInt, sizeof(int),
       offset(ftpEllipsisLength), XtRString, "3" },
@@ -535,103 +565,104 @@ static XtResource resources[] = {
   { "screenGamma", "ScreenGamma", XtRFloat, sizeof(float),
       offset(screen_gamma), XtRString, "2.2" },
 
-  { "popupCascadeMappingDelay", "PopupCascadeMappingDelay", XtRInt, 
-    sizeof(int), offset(popupCascadeMappingDelay), XtRString, "500" },
+  { "popupCascadeMappingDelay", "PopupCascadeMappingDelay", XtRInt, sizeof(int),
+      offset(popupCascadeMappingDelay), XtRString, "500" },
 
   { "frameSupport", "FrameSupport", XtRBoolean, sizeof(Boolean),
-    offset(frame_support), XtRString, "True" },
+      offset(frame_support), XtRString, "True" },
   
   /* New news stuff in 2.7b4 */
-  { "newsUseThreadView", "NewsUseThreadView", XtRBoolean,
-    sizeof(Boolean), offset(newsConfigView), XtRString, "True" },
+  { "newsUseThreadView", "NewsUseThreadView", XtRBoolean, sizeof(Boolean),
+      offset(newsConfigView), XtRString, "True" },
   
-  { "newsNoThreadJumping", "NewsNoThreadJumping", XtRBoolean,
-    sizeof(Boolean), offset(newsNoThreadJumping), XtRString, "True" },
+  { "newsNoThreadJumping", "NewsNoThreadJumping", XtRBoolean, sizeof(Boolean),
+      offset(newsNoThreadJumping), XtRString, "True" },
 
-  { "newsShowAllGroups", "NewsShowAllGroups", XtRBoolean,
-    sizeof(Boolean), offset(newsShowAllGroups), XtRString, "False" },
+  { "newsShowAllGroups", "NewsShowAllGroups", XtRBoolean, sizeof(Boolean),
+      offset(newsShowAllGroups), XtRString, "False" },
 
-  { "newsShowReadGroups", "NewsShowReadGroups", XtRBoolean,
-    sizeof(Boolean), offset(newsShowReadGroups), XtRString, "False" },
+  { "newsShowReadGroups", "NewsShowReadGroups", XtRBoolean, sizeof(Boolean),
+      offset(newsShowReadGroups), XtRString, "False" },
 
-  { "newsShowAllArticles", "NewsShowAllArticles", XtRBoolean,
-    sizeof(Boolean), offset(newsShowAllArticles), XtRString, "True" },
+  { "newsShowAllArticles", "NewsShowAllArticles", XtRBoolean, sizeof(Boolean),
+      offset(newsShowAllArticles), XtRString, "True" },
 
   { "newsUseBackgroundFlush", "NewsUseBackgroundFlush", XtRBoolean,
-    sizeof(Boolean), offset(newsUseBackgroundFlush), XtRString, "True" },
+      sizeof(Boolean), offset(newsUseBackgroundFlush), XtRString, "True" },
 
-  { "newsBackgroundFlushTime", "NewsBackgroundFlushTime", XtRInt,
-    sizeof(int), offset(newsBackgroundFlushTime), XtRString, "300" },
+  { "newsBackgroundFlushTime", "NewsBackgroundFlushTime", XtRInt, sizeof(int),
+      offset(newsBackgroundFlushTime), XtRString, "300" },
 
   /* New in 2.7b5 */
-  { "newsPrevIsPrevUnread", "NewsPrevIsPrevUnread", XtRBoolean,
-    sizeof(Boolean), offset(newsPrevIsUnread), XtRString, "False" },
+  { "newsPrevIsPrevUnread", "NewsPrevIsPrevUnread", XtRBoolean, sizeof(Boolean),
+    offset(newsPrevIsUnread), XtRString, "False" },
 
-  { "newsNextIsNextUnread", "NewsNextIsNextUnread", XtRBoolean,
-    sizeof(Boolean), offset(newsNextIsUnread), XtRString, "True" },
+  { "newsNextIsNextUnread", "NewsNextIsNextUnread", XtRBoolean, sizeof(Boolean),
+    offset(newsNextIsUnread), XtRString, "True" },
 
-  { "newsNewsrcPrefix", "NewsNewsrcPrefix", XtRString,
+  { "newsNewsrcPrefix", "NewsNewsrcPrefix", XtRString, sizeof(char *),
 #ifndef VMS
-    sizeof(char *), offset(newsNewsrcPrefix), XtRString, ".newsrc" },
+    offset(newsNewsrcPrefix), XtRString, ".newsrc" },
 #else
-    sizeof(char *), offset(newsNewsrcPrefix), XtRString, "news.rc" },
+    offset(newsNewsrcPrefix), XtRString, "news.rc" },
 #endif
 
-  { "newsUseNewsrc", "NewsUseNewsrc", XtRBoolean,
-    sizeof(Boolean), offset(newsUseNewsrc), XtRString, "True" },
+  { "newsUseNewsrc", "NewsUseNewsrc", XtRBoolean, sizeof(Boolean),
+    offset(newsUseNewsrc), XtRString, "True" },
 
-  { "newsSubjectWidth", "NewsSubjectWidth", XtRInt,
-    sizeof(int), offset(newsSubjectWidth), XtRString, "38" },
+  { "newsSubjectWidth", "NewsSubjectWidth", XtRInt, sizeof(int),
+    offset(newsSubjectWidth), XtRString, "38" },
 
-  { "newsAuthorWidth", "NewsAuthorWidth", XtRInt,
-    sizeof(int), offset(newsAuthorWidth), XtRString, "30" },
+  { "newsAuthorWidth", "NewsAuthorWidth", XtRInt, sizeof(int),
+    offset(newsAuthorWidth), XtRString, "30" },
 
-  { "focusFollowsMouse", "FocusFollowsMouse", XtRBoolean,
-    sizeof(Boolean), offset(focusFollowsMouse), XtRString, "False" },
+  { "focusFollowsMouse", "FocusFollowsMouse", XtRBoolean, sizeof(Boolean),
+    offset(focusFollowsMouse), XtRString, "False" },
 
-  { "sessionHistoryOnRBM", "SessionHistoryOnRBM", XtRBoolean,
-    sizeof(Boolean), offset(sessionHistoryOnRBM), XtRString, "True" },
+  { "sessionHistoryOnRBM", "SessionHistoryOnRBM", XtRBoolean, sizeof(Boolean),
+    offset(sessionHistoryOnRBM), XtRString, "True" },
   
   { "numberOfItemsInRBMHistory", "NumberOfItemsInRBMHistory", XtRInt,
-    sizeof(int), offset(numberOfItemsInRBMHistory), XtRString, "12" },
+    sizeof(int),
+    offset(numberOfItemsInRBMHistory), XtRString, "12" },
 
-  { "hotlistOnRBM", "HotlistOnRBM", XtRBoolean,
-    sizeof(Boolean), offset(hotlistOnRBM), XtRString, "True" },
+  { "hotlistOnRBM", "HotlistOnRBM", XtRBoolean, sizeof(Boolean),
+    offset(hotlistOnRBM), XtRString, "True" },
 
-  { "newsUseShortNewsrc", "NewsUseShortNewsrc", XtRBoolean,
-    sizeof(Boolean), offset(newsUseShortNewsrc), XtRString, "False" },
+  { "newsUseShortNewsrc", "NewsUseShortNewsrc", XtRBoolean, sizeof(Boolean),
+    offset(newsUseShortNewsrc), XtRString, "False" },
 
   /* New in 2.7b6 */
-  { "usePreferences", "UsePreferences", XtRBoolean,
-    sizeof(Boolean), offset(use_preferences), XtRString, "False" },
+  { "usePreferences", "UsePreferences", XtRBoolean, sizeof(Boolean),
+    offset(use_preferences), XtRString, "False" },
 
-  { "bodyColors", "BodyColors", XtRBoolean,
-    sizeof(Boolean), offset(bodyColors), XtRString, "True" },
+  { "bodyColors", "BodyColors", XtRBoolean, sizeof(Boolean),
+    offset(bodyColors), XtRString, "True" },
 
-  { "bodyImages", "BodyImages", XtRBoolean,
-    sizeof(Boolean), offset(bodyImages), XtRString, "True" },
+  { "bodyImages", "BodyImages", XtRBoolean, sizeof(Boolean),
+    offset(bodyImages), XtRString, "True" },
 
-  { "defaultUnderlines", "DefaultUnderlines", XtRString,
-    sizeof(char *), offset(defaultUnderlines), XtRString, "Default" },
+  { "defaultUnderlines", "DefaultUnderlines", XtRString, sizeof(char *),
+    offset(defaultUnderlines), XtRString, "Default" },
 
-  { "ftpBinaryMode", "FtpBinaryMode", XtRBoolean,
-    sizeof(Boolean), offset(ftp_binary_mode), XtRString, "True" },
+  { "ftpBinaryMode", "FtpBinaryMode", XtRBoolean, sizeof(Boolean),
+    offset(ftp_binary_mode), XtRString, "True" },
 
-  { "kioskProtocols", "KioskProtocols", XtRString,
-    sizeof(char *), offset(kioskProtocols), XtRString, NULL },
+  { "kioskProtocols", "KioskProtocols", XtRString, sizeof(char *),
+    offset(kioskProtocols), XtRString, NULL },
 
   /* New in 3.0 */
-  { "fontColors", "FontColors", XtRBoolean,
-    sizeof(Boolean), offset(fontColors), XtRString, "True" },
+  { "fontColors", "FontColors", XtRBoolean, sizeof(Boolean),
+    offset(fontColors), XtRString, "True" },
 
-  { "progressiveDisplay", "ProgressiveDisplay", XtRBoolean,
-    sizeof(Boolean), offset(progressive_display), XtRString, "True" },
+  { "progressiveDisplay", "ProgressiveDisplay", XtRBoolean, sizeof(Boolean),
+    offset(progressive_display), XtRString, "True" },
 
-  { "fontSizes", "FontSizes", XtRBoolean,
-    sizeof(Boolean), offset(fontSizes), XtRString, "True" },
+  { "fontSizes", "FontSizes", XtRBoolean, sizeof(Boolean),
+    offset(fontSizes), XtRString, "True" },
 
-  { "fontBaseSize", "FontBaseSize", XtRInt,
-    sizeof(int), offset(fontBaseSize), XtRString, "3" },
+  { "fontBaseSize", "FontBaseSize", XtRInt, sizeof(int),
+    offset(fontBaseSize), XtRString, "3" },
 
   { "trackTargetAnchors", "TrackTargetAnchors", XtRBoolean, sizeof(Boolean),
     offset(track_target_anchors), XtRString, "True" },
@@ -645,8 +676,8 @@ static XtResource resources[] = {
   { "imageAnimation", "ImageAnimation", XtRBoolean, sizeof(Boolean),
     offset(image_animation), XtRString, "True" },
 
-  { "minAnimationDelay", "MinAnimationDelay", XtRInt,
-    sizeof(int), offset(min_animation_delay), XtRString, "1" },
+  { "minAnimationDelay", "MinAnimationDelay", XtRInt, sizeof(int),
+    offset(min_animation_delay), XtRString, "1" },
 
   { "refreshTrace", "RefreshTrace", XtRBoolean, sizeof(Boolean),
     offset(refreshTrace), XtRString, "False" },
@@ -679,11 +710,98 @@ static XtResource resources[] = {
   { "maxPixmapWidth", "MaxPixmapWidth", XtRInt, sizeof(int),
     offset(maxPixmapWidth), XtRString, "0" },
 
+  /* New in 3.6 */
   { "useCookieFile", "UseCookieFile", XtRBoolean, sizeof(Boolean),
     offset(use_cookie_file), XtRString, "True" },
 
   { "cookieFile", "CookieFile", XtRString, sizeof(char *),
-    offset(cookie_file), XtRString, "mosaic.cookies" }
+    offset(cookie_file), XtRString, "mosaic.cookies" },
+
+  /* New in 3.6-2 */
+  { "imageDelayFile", "ImageDelayFile", XtRString, sizeof(char *),
+#ifndef VMS
+    offset(imagedelay_file), XtRString, ".mosaic-imageselect-sites" },
+#else
+    offset(imagedelay_file), XtRString, "mosaic-imageselect-sites." },
+#endif
+
+  /* New in 3.7 */
+  { "browserSafeColors_if_Truecolor", "BrowserSafeColors_if_Truecolor",
+    XtRBoolean, sizeof(Boolean),
+    offset(BSColors_if_Truecolor), XtRString, "False" },
+
+  { "hotkeys", "Hotkeys", XtRBoolean, sizeof(Boolean),
+    offset(hotkeys), XtRString, "True" },
+
+  { "invalidCookiePrompt", "InvalidCookiePrompt", XtRBoolean, sizeof(Boolean),
+    offset(invalid_cookie_prompt), XtRString, "False" },
+
+  { "maxCookies", "MaxCookies", XtRInt, sizeof(int),
+    offset(max_cookies), XtRString, "500" },
+
+  { "cookieDomainLimit", "CookieDomainLimit", XtRInt, sizeof(int),
+    offset(cookie_domain_limit), XtRString, "50" },
+
+  /* New in 3.8 */
+  { "permFile", "PermFile", XtRString, sizeof(char *),
+    offset(perm_file), XtRString, "mosaic.hostperm" },
+
+  { "formButtonBackground", "FormButtonBackground", XtRString, sizeof(char *),
+    offset(form_button_background), XtRString, "#BFBFBFBFBFBF" },
+
+  /* New in 3.9 */
+  { "verifySSLCertificates", "VerifySSLCertificates", XtRBoolean,
+    sizeof(Boolean),
+    offset(verify_ssl_certificates), XtRString, "True" },
+
+  { "hotlistMenuHeight", "HotlistMenuHeight", XtRInt, sizeof(int),
+    offset(hotlist_menu_height), XtRString, "502" },
+
+  { "hotlistMenuWidth", "HotlistMenuWidth", XtRInt, sizeof(int),
+    offset(hotlist_menu_width), XtRString, "475" },
+
+  { "markupMemoryPreallocation", "MarkupMemoryPreallocation", XtRInt,
+    sizeof(int),
+    offset(markup_memory_preallocation), XtRString, "2000" },
+
+  { "elementMemoryPreallocation", "ElementMemoryPreallocation", XtRInt,
+    sizeof(int),
+    offset(element_memory_preallocation), XtRString, "1200" },
+
+  { "cookieTrace", "CookieTrace", XtRBoolean, sizeof(Boolean),
+    offset(cookieTrace), XtRString, "False" },
+
+  /* New in 4.0 */
+  { "clueHelp", "ClueHelp", XtRBoolean, sizeof(Boolean),
+    offset(clue_help), XtRString, "True" },
+
+  { "clueForeground", "ClueForeground", XtRString, sizeof(char *),
+    offset(clueForeground), XtRString, "#292925256F6F" },
+
+  { "clueBackground", "ClueBackground", XtRString, sizeof(char *),
+    offset(clueBackground), XtRString, "#BFBFBFBFBFBF" },
+
+  { "clueDelay", "ClueDelay", XtRInt, sizeof(int),
+    offset(clueDelay), XtRString, "750" },
+
+  { "clueDownDelay", "ClueDownDelay", XtRInt, sizeof(int),
+    offset(clueDownDelay), XtRString, "4000" },
+
+  { "clueFont", "ClueFont", XtRString, sizeof(char *),
+    offset(clueFont), XtRString, "New Century" },
+
+  { "clueOval", "ClueOval", XtRBoolean, sizeof(Boolean),
+    offset(clue_oval), XtRString, "False" },
+
+  { "clueRounded", "ClueRounded", XtRBoolean, sizeof(Boolean),
+    offset(clue_rounded), XtRString, "True" },
+
+  { "printDuplex", "PrintDuplex", XtRBoolean, sizeof(Boolean),
+      offset(print_duplex), XtRString, "True" },
+
+  { "menubarTearoff", "MenubarTearoff", XtRBoolean, sizeof(Boolean),
+      offset(menubar_tearoff), XtRString, "True" }
+
 };
 
 #undef offset
@@ -722,18 +840,19 @@ static XrmOptionDescRec options[] = {
 };
 
 static String color_resources[] = {
+  "*AppDefaultsVersion:		0",
   "*XmLabel*fontList:   		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
-  "*XmLabelGadget*fontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
+  "*XmLabelGadget*fontList:		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmScale*fontList:   		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmBulletinBoard*labelFontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*optionmenu.XmLabelGadget*fontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmPushButton*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmPushButtonGadget*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
-  "*XmToggleButton*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmToggleButton*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmToggleButtonGadget*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*optionmenu*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmIconGadget*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
-  "*XmBulletinBoard*buttonFontList: -*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmBulletinBoard*buttonFontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*menubar*fontList:   		-*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmPushButton*fontList:  -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmLabelGadget*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
@@ -745,7 +864,7 @@ static String color_resources[] = {
   "*XmMenuShell*XmToggleButton*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmToggleButtonGadget*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*pulldownmenu*fontList:	-*-helvetica-bold-o-normal-*-14-*-iso8859-1",
-  "*XmList*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmList*fontList:	  -*-helvetica-medium-r-normal-*-14-*-iso8859-1",
 #ifndef VMS   /* PGE, Use multiple font names */
   "*XmText.fontList:      -*-lucidatypewriter-medium-r-normal-*-14-*-iso8859-1",
   "*XmTextField.fontList: -*-lucidatypewriter-medium-r-normal-*-14-*-iso8859-1",
@@ -769,10 +888,13 @@ static String color_resources[] = {
   "*menubar.spacing:  		7",
   "*XmMenuShell*marginLeft:  	3",
   "*XmMenuShell*marginRight:  	4",
-  "*XmMenuShell*XmToggleButtonGadget*spacing: 	 2",
+  "*XmMenuShell*XmToggleButton*spacing: 	    2",
+  "*XmMenuShell*XmToggleButton*marginHeight:        0",
+  "*XmMenuShell*XmToggleButton*indicatorSize:       12",
+  "*XmMenuShell*XmToggleButtonGadget*spacing: 	    2",
   "*XmMenuShell*XmToggleButtonGadget*marginHeight:  0",
   "*XmMenuShell*XmToggleButtonGadget*indicatorSize: 12",
-  "*XmMenuShell*XmLabelGadget*marginHeight: 4",
+  "*XmMenuShell*XmLabelGadget*marginHeight:	    4",
   "*XmToggleButtonGadget*spacing: 	4",
   "*XmToggleButton*spacing:		4",
   "*XmScrolledWindow*spacing:		0",
@@ -794,14 +916,13 @@ static String color_resources[] = {
   /* "*geometry:                           +400+200", */
   /* "*keyboardFocusPolicy:                pointer",*/
   
-
-  "*TitleFont: -adobe-times-bold-r-normal-*-24-*-*-*-*-*-iso8859-1",
+  "*TitleFont:      -adobe-times-bold-r-normal-*-24-*-*-*-*-*-iso8859-1",
 #ifndef VMS   /* PGE, Use multiple font names */
-  "*Font: -adobe-times-medium-r-normal-*-17-*-*-*-*-*-iso8859-1",
-  "*ItalicFont: -adobe-times-medium-i-normal-*-17-*-*-*-*-*-iso8859-1",
-  "*BoldFont: -adobe-times-bold-r-normal-*-17-*-*-*-*-*-iso8859-1",
+  "*Font:           -adobe-times-medium-r-normal-*-17-*-*-*-*-*-iso8859-1",
+  "*ItalicFont:     -adobe-times-medium-i-normal-*-17-*-*-*-*-*-iso8859-1",
+  "*BoldFont:       -adobe-times-bold-r-normal-*-17-*-*-*-*-*-iso8859-1",
   "*BoldItalicFont: -adobe-times-bold-i-normal-*-17-*-*-*-*-*-iso8859-1",
-  "*FixedFont: -adobe-courier-medium-r-normal-*-17-*-*-*-*-*-iso8859-1",
+  "*FixedFont:      -adobe-courier-medium-r-normal-*-17-*-*-*-*-*-iso8859-1",
 #else
   "*Font: -adobe-times-medium-r-normal-*-17-*-*-*-*-*-iso8859-1/-adobe-times-medium-r-normal-*-18-*-*-*-*-*-iso8859-1",
   "*ItalicFont: -adobe-times-medium-i-normal-*-17-*-*-*-*-*-iso8859-1/-adobe-times-medium-i-normal-*-18-*-*-*-*-*-iso8859-1",
@@ -824,58 +945,30 @@ static String color_resources[] = {
 #else
   "*AddressFont: -adobe-times-medium-i-normal-*-17-*-*-*-*-*-iso8859-1/-adobe-times-medium-i-normal-*-18-*-*-*-*-*-iso8859-1",
 #endif /* 17 pt fonts, BSN */
-  "*PlainFont: -adobe-courier-medium-r-normal-*-14-*-*-*-*-*-iso8859-1",
+  "*PlainFont:   -adobe-courier-medium-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*ListingFont: -adobe-courier-medium-r-normal-*-12-*-*-*-*-*-iso8859-1",
-  "*MeterFont: -adobe-courier-bold-r-normal-*-14-*-*-*-*-*-*-*",
+  "*MeterFont:   -adobe-courier-bold-r-normal-*-14-*-*-*-*-*-*-*",
   "*ToolbarFont: -adobe-times-bold-r-normal-*-12-*-*-*-*-*-iso8859-1",
   "*AnchorUnderlines:                   1",
   "*VisitedAnchorUnderlines:            1",
-  "*DashedVisitedAnchorUnderlines:      True",
+  "*DashVisitedAnchorUnderlines:        True",
   "*VerticalScrollOnRight:              True",
 #ifdef VMS
   "*CatchPriorAndNext:                  True",
 #endif /* VMS, BSN */
 
-#ifdef __sgi
-  "*Foreground:			 	#000000000000",
-  "*XmScrollBar*Foreground:             #afafafafafaf",
-  "*Background:                         #afafafafafaf",
-  "*bodyBG:                             #afafafafafaf",
-  "*XmList*Background:     		#afafafafafaf",
-  "*XmText*Background:	 	        #afafafafafaf",
-  "*TroughColor:                        #545454545454",
-  "*XmSelectionBox*Background:	 	#afafafafafaf",
-  "*XmMessageBox*Background:	 	#afafafafafaf",
-  "*XmLabel*Foreground:                 #1d1d15155b5b",
-  "*XmToggleButton*Foreground:          #1d1d15155b5b",
-  "*XmPushButton*Foreground:            #5b5b00000000",
-  "*logo*Foreground:                    #1d1d15155b5b",
-  "*searchindex_button*Foreground:      #1d1d15155b5b",
-  "*XmTextField*Background: 		#8c8c8c8c8c8c",
-  "*SelectColor:			#ffffffff0000",
-  "*HighlightColor:		 	#afafafafafaf",
-
-  "*TopShadowColor:                     #dfdfdfdfdfdf",
-  "*XmList*TopShadowColor:              #dfdfdfdfdfdf",
-  "*XmText*TopShadowColor:              #dfdfdfdfdfdf",
-  "*XmSelectionBox*TopShadowColor:      #dfdfdfdfdfdf",
-  "*XmMessageBox*TopShadowColor:        #dfdfdfdfdfdf",
-  
-  "*visitedAnchorColor:                 #272705055b5b",
-  "*anchorColor:                        #00000000b0b0",
-  "*activeAnchorFG:                     #ffff00000000",
-  "*activeAnchorBG:                     #afafafafafaf",
-#else /* not sgi */
   "*Foreground:			 	#000000000000",
   "*XmScrollBar*Foreground:             #bfbfbfbfbfbf",
   "*XmLabel*Foreground:                 #292925256f6f",
+  "*XmMenuShell*XmToggleButton*Foreground: #000000000000",
   "*XmToggleButton*Foreground:          #292925256f6f",
+  "*XmMenuShell*XmPushButton*Foreground: #000000000000",
   "*XmPushButton*Foreground:            #000000003333",
   "*logo*Foreground:                    #292925256f6f",
   "*searchindex_button*Foreground:      #292925256f6f",
 
   "*Background:                         #bfbfbfbfbfbf",
-  "*bodyBG:                             #bfbfbfbfbfbf",
+  "*bodyBG:                             #ffffffffffff",
 
   "*XmList*Background:     		#bfbfbfbfbfbf",
   "*XmText*Background:	 	        #bfbfbfbfbfbf",
@@ -898,27 +991,28 @@ static String color_resources[] = {
   "*anchorColor:                        #00000000cccc",
   "*activeAnchorFG:                     #ffff00000000",
   "*activeAnchorBG:                     #bfbfbfbfbfbf",
-#endif
+
   /* Disable Motif Drag-N-Drop */
-  "*dragInitiatorProtocolStyle: XmDRAG_NONE",
-  "*dragReceiverProtocolStyle:  XmDRAG_NONE",
+  "*dragInitiatorProtocolStyle:		XmDRAG_NONE",
+  "*dragReceiverProtocolStyle:		XmDRAG_NONE",
  
-  NULL,
+  NULL
 };
 
 static String mono_resources[] = {
+  "*AppDefaultsVersion:		0",
   "*XmLabel*fontList:   		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
-  "*XmLabelGadget*fontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
+  "*XmLabelGadget*fontList:		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmScale*fontList:   		-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmBulletinBoard*labelFontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*optionmenu.XmLabelGadget*fontList:	-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*XmPushButton*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmPushButtonGadget*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
-  "*XmToggleButton*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmToggleButton*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmToggleButtonGadget*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*optionmenu*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*XmIconGadget*fontList:		-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
-  "*XmBulletinBoard*buttonFontList: -*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmBulletinBoard*buttonFontList: 	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
   "*menubar*fontList:   		-*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmPushButton*fontList:  -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmLabelGadget*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
@@ -930,7 +1024,7 @@ static String mono_resources[] = {
   "*XmMenuShell*XmToggleButton*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*XmMenuShell*XmToggleButtonGadget*fontList: -*-helvetica-bold-o-normal-*-14-*-iso8859-1",
   "*pulldownmenu*fontList:	-*-helvetica-bold-o-normal-*-14-*-iso8859-1",
-  "*XmList*fontList:	-*-helvetica-medium-r-normal-*-14-*-iso8859-1",
+  "*XmList*fontList:	  -*-helvetica-medium-r-normal-*-14-*-iso8859-1",
 #ifndef VMS   /* PGE, Use multiple font names */
   "*XmText.fontList:      -*-lucidatypewriter-medium-r-normal-*-14-*-iso8859-1",
   "*XmTextField.fontList: -*-lucidatypewriter-medium-r-normal-*-14-*-iso8859-1",
@@ -954,10 +1048,13 @@ static String mono_resources[] = {
   "*menubar.spacing:  		7",
   "*XmMenuShell*marginLeft:  	3",
   "*XmMenuShell*marginRight:  	4",
-  "*XmMenuShell*XmToggleButtonGadget*spacing: 	 2",
+  "*XmMenuShell*XmToggleButton*spacing: 	    2",
+  "*XmMenuShell*XmToggleButton*marginHeight:        0",
+  "*XmMenuShell*XmToggleButton*indicatorSize:       12",
+  "*XmMenuShell*XmToggleButtonGadget*spacing: 	    2",
   "*XmMenuShell*XmToggleButtonGadget*marginHeight:  0",
   "*XmMenuShell*XmToggleButtonGadget*indicatorSize: 12",
-  "*XmMenuShell*XmLabelGadget*marginHeight: 4",
+  "*XmMenuShell*XmLabelGadget*marginHeight:         4",
   "*XmToggleButtonGadget*spacing: 	4",
   "*XmToggleButton*spacing: 		4",
   "*XmScrolledWindow*spacing:		0",
@@ -1008,9 +1105,9 @@ static String mono_resources[] = {
 #else
   "*AddressFont: -adobe-times-medium-i-normal-*-17-*-*-*-*-*-iso8859-1/-adobe-times-medium-i-normal-*-18-*-*-*-*-*-iso8859-1",
 #endif /* 17 pt fonts, GEC */
-  "*PlainFont: -adobe-courier-medium-r-normal-*-14-*-*-*-*-*-iso8859-1",
+  "*PlainFont:   -adobe-courier-medium-r-normal-*-14-*-*-*-*-*-iso8859-1",
   "*ListingFont: -adobe-courier-medium-r-normal-*-12-*-*-*-*-*-iso8859-1",
-  "*MeterFont: -adobe-courier-bold-r-normal-*-14-*-*-*-*-*-*-*",
+  "*MeterFont:   -adobe-courier-bold-r-normal-*-14-*-*-*-*-*-*-*",
   "*ToolbarFont: -adobe-times-bold-r-normal-*-12-*-*-*-*-*-iso8859-1",
 
   "*Foreground:                         black",
@@ -1026,17 +1123,15 @@ static String mono_resources[] = {
   "*SelectColor:                        black",
   "*AnchorUnderlines:                   1",
   "*VisitedAnchorUnderlines:            1",
-  "*DashedVisitedAnchorUnderlines:      True",
+  "*DashVisitedAnchorUnderlines:        True",
   "*VerticalScrollOnRight:              True",
   /* Disable Motif Drag-N-Drop */
-  "*dragInitiatorProtocolStyle: XmDRAG_NONE",
-  "*dragReceiverProtocolStyle:  XmDRAG_NONE",
+  "*dragInitiatorProtocolStyle:		XmDRAG_NONE",
+  "*dragReceiverProtocolStyle:		XmDRAG_NONE",
 #ifdef VMS
   "*CatchPriorAndNext:                  True",
 #endif /* VMS, BSN */
-  
-  NULL,
+  NULL
 };
 
-#define __MOSAIC_XRESOURCES_H__
 #endif /* __MOSAIC_XRESOURCES_H__ */

@@ -76,6 +76,7 @@
 #include "HTAnchor.h"
 #include "HTFile.h"
 #include "HTChunk.h"
+#include "HTIcon.h"
 #include "HTSort.h"
 #include "HText.h"
 
@@ -96,7 +97,7 @@
 #endif /* GNU C, probably should do in tcp.h, GEC */
 
 #ifndef IPPORT_FTP
-#define IPPORT_FTP	21
+#define IPPORT_FTP 21
 #endif
 
 #ifdef __STDC__
@@ -115,23 +116,15 @@ extern int www2Trace;
 */
 #include "HTML.h"
 
-#define PUTC(c) (*targetClass.put_character)(target, c)
-#define PUTS(s) (*targetClass.put_string)(target, s)
-#define START(e) (*targetClass.start_element)(target, e, 0, 0)
-#define END(e) (*targetClass.end_element)(target, e)
-#define END_TARGET (*targetClass.end_document)(target)
-#define FREE_TARGET (*targetClass.free)(target)
 struct _HTStructured {
-	WWW_CONST HTStructuredClass *	isa;
+	WWW_CONST HTStructuredClass *isa;
 	/* ... */
 };
 
 struct _HTStream {
-      WWW_CONST HTStreamClass*	isa;
-      /* ... */
+        WWW_CONST HTStreamClass *isa;
+        /* ... */
 };
-
-static int CLOSE_CONTROL(int s);
 
 extern int broken_crap_hack;
 
@@ -141,14 +134,13 @@ extern int broken_crap_hack;
 extern XtAppContext app_context;
 extern int ftp_timeout_val;
 extern int securityType;
-static void close_it_up();
 
-char *prompt_for_password(char *msg);
+extern char *prompt_for_password(char *msg);
 
 /* SWP -- Yukky Cool Kludge */
 int ftpKludge = 0;
 extern int loading_length;
-BOOL usingNLST = 0;
+static BOOL usingNLST = 0;
 
 /* FTP "redial" using ftpRedial resource for number of times */
 extern int ftpRedial;
@@ -158,61 +150,108 @@ extern int ftpEllipsisLength;
 extern int ftpEllipsisMode;
 
 /* Directory parsing */
-int ParseDate(char *szBuffer, char *szFileInfo, char *szMonth, char *szDay, char *szYear, char *szTime);
-int ParseFileSizeAndName(char *szBuffer, char *szFileName, char *szSize);
+static int ParseDate(char *szBuffer, char *szFileInfo, char *szMonth,
+		     char *szDay, char *szYear, char *szTime);
+static int ParseFileSizeAndName(char *szBuffer, char *szFileName, char *szSize);
 
-HText *HT;
-int fTimerStarted = 0;
-XtIntervalId timer;
-  static struct ftpcache {
-		int control;
-		char p1[256];
-		char host[256];
-		char username[BUFSIZ];
-		char password[BUFSIZ];
-	} ftpcache = {
-		-1,
-		"",
-		"",
-		"",
-		""
-	};
+static HText *HT;
+static int fTimerStarted = 0;
+static XtIntervalId timer;
+
+static struct ftpcache {
+	int control;
+	char host[256];
+	char username[BUFSIZ];
+	char password[BUFSIZ];
+    } ftpcache = {
+	-1,
+	"",
+	"",
+	""
+    };
 
 #ifdef SOCKS
-extern struct in_addr SOCKS_ftpsrv;	/* In HTFTP.C */
+extern struct in_addr SOCKS_ftpsrv;	/* In HTTCP.C */
 #endif
+
+/*	Module-Wide Variables
+**	---------------------
+*/
+PRIVATE char  response_text[LINE_LENGTH + 1];  /* Last response from NewsHost */
+PRIVATE int   control = -1;		/* Current connection */
+PRIVATE int   data_soc = -1;		/* Socket for data transfer */
+
+PRIVATE int   master_socket = -1;	/* Listening socket = invalid */
+PRIVATE char  port_command[255];	/* Command for setting the port */
+
+#define DATA_BUFFER_SIZE 2048
+PRIVATE char data_buffer[DATA_BUFFER_SIZE];	/* Input data buffer */
+PRIVATE char *data_read_pointer;
+PRIVATE char *data_write_pointer;
+PRIVATE char ftp_root_directory[100];
+PUBLIC char ftp_type[16];
+
+/*
+ * ProFTPD 1.2.5rc1 is known to have a broken implementation of RETR.  If asked
+ * to retrieve a directory, it gets confused and fails subsequent commands such
+ * as CWD and LIST.  Lynx fix - TD 2004/1/1.
+ */
+static int ProFTPD_bug = FALSE;
+static int ProFTPD_nodisplay = FALSE;
+
 
 /* HTFTPClearCache ()
    Expects: Nothing
    Returns: Nothing
 */
-void HTFTPClearCache (void)
+void HTFTPClearCache(void)
 {
-  ftpcache.password[0] = '\0';
-  ftpcache.control = -1;
-  ftpcache.p1[0] = 0;
-  ftpcache.host[0] = 0;
-  ftpcache.username[0] = 0;
+    ftpcache.password[0] = '\0';
+    ftpcache.control = -1;
+    ftpcache.host[0] = 0;
+    ftpcache.username[0] = 0;
 }
 
 
-/*	Module-Wide Variables
-**	---------------------
+/*	Close Master (listening) socket
+**	-------------------------------
 */
-PRIVATE char    response_text[LINE_LENGTH+1]; /* Last response from NewsHost */
-PRIVATE int	control = -1;		/* Current connection */
-PRIVATE int	data_soc = -1;		/* Socket for data transfer */
+static void close_master_socket()
+{
+#ifndef DISABLE_TRACE
+    if (www2Trace) 
+        fprintf(stderr, "FTP: Closing master socket %d\n", master_socket);
+#endif
+    if (master_socket != -1)
+        NETCLOSE(master_socket);
+    master_socket = -1;
 
-PRIVATE int     master_socket = -1;	/* Listening socket = invalid	*/
-PRIVATE char	port_command[255];	/* Command for setting the port */
+    return;
+}
 
 
-#define DATA_BUFFER_SIZE 2048
-PRIVATE char data_buffer[DATA_BUFFER_SIZE];		/* Input data buffer */
-PRIVATE char *data_read_pointer;
-PRIVATE char *data_write_pointer;
-PUBLIC char ftp_type[16];
-PUBLIC char ftp_root_directory[100];
+/* Close control and master sockets if open */
+static void close_control()
+{
+    if (control != -1) {
+	NETCLOSE(control);
+	control = -1;
+    }
+    ftpcache.control = -1;
+
+    if (master_socket != -1)
+        close_master_socket();
+}
+
+
+/* Timer routine to close cached sockets after some period */
+static void close_it_up()
+{
+    NETCLOSE(ftpcache.control);
+    ftpcache.control = -1;
+    if (master_socket != -1)
+        close_master_socket();
+}
 
 
 /* Convert_VMS_FTP_name  Convert a filename to use VMS directory syntax
@@ -220,7 +259,7 @@ PUBLIC char ftp_root_directory[100];
 **             filename, including the path.
 ** Returns     pointer to the new name
 */
-PRIVATE char *Convert_VMS_FTP_name ARGS1 ( char *, name )
+PRIVATE char *Convert_VMS_FTP_name ARGS1 (char *, name)
 {
    char *filename = name;
    char *ptr;
@@ -237,7 +276,7 @@ PRIVATE char *Convert_VMS_FTP_name ARGS1 ( char *, name )
       **
       ** Following added by PGE.
       ** /dir1/dir2.../dirn converted to [.dir1.dir2..dirn] is handled later.
-      ** Also /* becomes * so: /name.type becomes name.type, /dir1 becomes
+      ** Also /x becomes x so: /name.type becomes name.type, /dir1 becomes
       ** dir1, and /disk:[rootdir.dir1]name.type becomes
       ** disk:[rootdir.dir1]name.type.
       **
@@ -252,12 +291,12 @@ PRIVATE char *Convert_VMS_FTP_name ARGS1 ( char *, name )
       file_temp[0] = '[';
       file_temp[1] = '.';
       if (filename[0] == '/')
-	  i1 = 1;      /* Always true, PGE */
+	 i1 = 1;      /* Always true, PGE */
       for (; i1 < strlen(filename); i1++, i3++) {
          if (filename[i1] != '/') {
             /* Handle /disk:[rootdir.dir1]/dir2/file.type, PGE */
             if ((filename[i1] != ']') ||
-                (strchr(&(filename[i1+1]), '/') == 0)) {
+                (strchr(&(filename[i1 + 1]), '/') == 0)) {
                /* Normal, copy the character. */
                file_temp[i3] = filename[i1];
             } else {
@@ -272,14 +311,16 @@ PRIVATE char *Convert_VMS_FTP_name ARGS1 ( char *, name )
             continue;
          }
          file_temp[i3] = ']';
-         if (i2 > 1) file_temp[i2] = '.';
+         if (i2 > 1)
+	    file_temp[i2] = '.';
          i2 = i3;
       }
-      if (i2 == 1) i4 = 2;  /* PGE, remove [. at the start of file_temp */
+      if (i2 == 1)
+	 i4 = 2;	    /* PGE, remove [. at the start of file_temp */
       file_temp[i3] = ' ';  /* Add a space for later expansion room */
-      file_temp[i3+1] = '\0';
+      file_temp[i3 + 1] = '\0';
       free(filename);
-      StrAllocCopy(filename, &(file_temp [i4]));
+      StrAllocCopy(filename, &(file_temp[i4]));
       free(file_temp);
 
       /* Remove spaces from end of string. */
@@ -290,10 +331,10 @@ PRIVATE char *Convert_VMS_FTP_name ARGS1 ( char *, name )
       }
    }
 
-   if ((strcmp(filename, "[]")
-	&& (ptr = strchr(filename, ']')) != 0)
-	&& (ptr != (char*)strlen(filename))
-	&& !strchr(ptr, '.')) {
+   if ((strcmp(filename, "[]") &&
+       (ptr = strchr(filename, ']')) != 0) &&
+       (ptr != (char*)strlen(filename)) &&
+       !strchr(ptr, '.')) {
       /*
       ** Handle the /dir1/dir2../dirn converted to
       ** [.dir1.dir2..dirn] case by changing
@@ -330,13 +371,15 @@ PRIVATE int interrupted_in_next_data_char = 0;
 PRIVATE char next_data_char NOARGS
 {
   int status;
+
   interrupted_in_next_data_char = 0;
+
   if (data_read_pointer >= data_write_pointer) {
       status = NETREAD(data_soc, data_buffer, DATA_BUFFER_SIZE);
       if (status == HT_INTERRUPTED)
-        interrupted_in_next_data_char = 1;
+          interrupted_in_next_data_char = 1;
       if (status <= 0) 
-        return (char)-1;
+          return (char)-1;
       data_write_pointer = data_buffer + status;
       data_read_pointer = data_buffer;
   }
@@ -365,28 +408,20 @@ PRIVATE char next_data_char NOARGS
 **	returns:  The first digit of the reply type,
 **		  or negative for communication failure.
 */
-#ifdef __STDC__
-PRIVATE int response (char * cmd)
-#else
-PRIVATE int response (cmd)
-    char * cmd;
-#endif
+static int response(char *cmd)
 {
   int result;				/* Three-digit decimal code */
   int status;
   char continuation;
   int multiline_response = 0;
-
   int messageStarted = 0;
-
-char *ptr;
-char bytestr[256], *byteptr;
-int bytes;
+  char *ptr;
+  int bytes;
   
   if (!control || (control == -1)) {
 #ifndef DISABLE_TRACE
-      if(www2Trace) 
-        fprintf(stderr, "FTP: No control connection set up!!\n");
+      if (www2Trace) 
+          fprintf(stderr, "FTP: No control connection set up!!\n");
 #endif
       return -99;
   }
@@ -394,19 +429,18 @@ int bytes;
   if (cmd) {
 #ifndef DISABLE_TRACE
       if (www2Trace) 
-        fprintf(stderr, "  Tx: %s", cmd);
+          fprintf(stderr, "  Tx: %s", cmd);
 #endif
       
       status = NETWRITE(control, cmd, (int)strlen(cmd));
       if (status < 0) {
 #ifndef DISABLE_TRACE
           if (www2Trace)
-		fprintf(stderr, 
-                        "FTP: Error %d sending command: closing socket %d\n",
-                        status, control);
+	      fprintf(stderr, 
+                      "FTP: Error %d sending command: closing socket %d\n",
+                      status, control);
 #endif
-          CLOSE_CONTROL(control);
-          control = -1;
+          close_control();
           return status;
       }
   }
@@ -415,12 +449,11 @@ int bytes;
   /* Multiline responses start with a number and a hyphen;
      end with same number and a space.  When it ends, the number must
      be flush left. */
-  do 
-    {
+  do {
       char *p = response_text;
       /* If nonzero, it's set to initial code of multiline response */
-      for (;;)
-        {
+
+      for (;;) {
           int foo;
           /* This is set to 0 at the start of HTGetCharacter. */
           extern int interrupted_in_htgetcharacter;
@@ -429,11 +462,10 @@ int bytes;
           if (interrupted_in_htgetcharacter) {
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                fprintf(stderr,
-			"FTP: Interrupted in HTGetCharacter, apparently.\n");
+                  fprintf(stderr,
+			  "FTP: Interrupted in HTGetCharacter, apparently.\n");
 #endif
-              CLOSE_CONTROL(control);
-              control = -1;
+              close_control();
               return HT_INTERRUPTED;
           }
           
@@ -441,7 +473,7 @@ int bytes;
               *p++ = 0;                 /* Terminate the string */
 #ifndef DISABLE_TRACE
               if (www2Trace) 
-                fprintf(stderr, "    Rx: %s", response_text);
+                  fprintf(stderr, "    Rx: %s", response_text);
 #endif
 	      if (!strncmp(response_text, "150", 3)) {
                   if ((ptr = strrchr(response_text, '(')) && *ptr &&
@@ -450,36 +482,32 @@ int bytes;
 		  } else {
                       bytes = 0;
                   }
-		if (bytes == 0) {
-			loading_length = -1;
-		} else {
-			loading_length = bytes;
-		}
+		  if (bytes == 0) {
+		      loading_length = -1;
+		  } else {
+		      loading_length = bytes;
+		  }
 	      } else {
-		HTMeter(100, NULL);
+		  HTMeter(100, NULL);
 	      }
 
+	      result = 0;
               sscanf(response_text, "%d%c", &result, &continuation);
 
-		if ((response_text[0] == '2') || (response_text[0] == '5')) {
-				
-			if (continuation == '-') {
-				char *p;
+	      /* Display login text */
+	      if (((result == 230) || !strncmp(response_text, "220-", 4))
+		  && !ProFTPD_nodisplay) {
+		  if (messageStarted == 0) {
+		      HText_appendText(HT, "<PRE>\n");
+        	      HTProgress("Receiving message");
+		      messageStarted = 1;
+		  }
+		  HText_appendText(HT, response_text + 4);
+	      } else if (messageStarted && multiline_response &&
+			 strncmp(response_text, "220 ", 4)) {
+		  HText_appendText(HT, response_text);
+	      }
 
-				if (messageStarted == 0) {
-				    HText_appendText(HT, "<PRE>\n");
-        			    HTProgress("Receiving directory message");
-				    messageStarted = 1;
-				}
-
-				p = strchr(response_text, '-');
-				p++;
-				if (p)
-				    HText_appendText(HT, p);
-			}
-		}
-
-				
               if (continuation == '-' && !multiline_response) {
                   multiline_response = result;
               } else if (multiline_response && continuation == ' ' &&
@@ -488,42 +516,41 @@ int bytes;
                   /* End of response (number must be flush on left) */
                   multiline_response = 0;
               }
+
+	      if (result == 220 && strstr(response_text, "ProFTPD 1.2.5"))
+		  ProFTPD_bug = TRUE;
+
               break;
           } /* if end of line */
           
-          if (*(p-1) == (char)EOF) {
+          if (*(p - 1) == (char)EOF) {
 #ifndef DISABLE_TRACE
               if (www2Trace) 
-                fprintf(stderr, "Error on rx: closing socket %d\n",
-                        control);
+                  fprintf(stderr, "Error on rx: closing socket %d\n", control);
 #endif
 	      loading_length = -1;
               strcpy(response_text, "000 *** TCP read error on response\n");
-              CLOSE_CONTROL(control);
-              control = -1;
+              close_control();
               return -1;	/* End of file on response */
           }
-        } /* Loop over characters */
-    } 
-  while (multiline_response);
+      } /* Loop over characters */
+  } while (multiline_response);
 
   if (messageStarted)
-	  HText_appendText(HT, "</PRE><HR>\n");
+      HText_appendText(HT, "</PRE><HR>\n");
 
   if (result == 421) {
 #ifndef DISABLE_TRACE
-      if(www2Trace) 
-        fprintf(stderr, "FTP: They close so we close socket %d\n",
-                control);
+      if (www2Trace) 
+          fprintf(stderr, "FTP: They close so we close socket %d\n", control);
 #endif
       loading_length = -1;
-      CLOSE_CONTROL(control);
+      close_control();
       return -1;
   }
 
-  if (result == 550) {
-	HTProgress(response_text);
-  }
+  if (result == 550)
+      HTProgress(response_text);
 
   return result/100;
 }
@@ -545,40 +572,45 @@ int bytes;
 **	It ensures they have the port number transferred.
 */
 
-PRIVATE int get_connection ARGS1 (char *,arg)
+PRIVATE int get_connection ARGS1 (char *, arg)
 {
   int status, con;
-  
-  static char host[BUFSIZ];
-  static char username[BUFSIZ];
-  static char password[BUFSIZ];
-  char dummy[MAXHOSTNAMELEN+32];  
-
+  char host[BUFSIZ];
+  char username[BUFSIZ];
+  char password[BUFSIZ];
+  char dummy[MAXHOSTNAMELEN + 32];
   int redial = 0;
 
+  ProFTPD_bug = FALSE;
+
   if (!arg || !*arg) 
-    return -1;
+      return -1;
   
 #ifndef DISABLE_TRACE
   if (www2Trace) 
-    fprintf(stderr, "FTP: Looking for %s\n", arg);
+      fprintf(stderr, "FTP: Looking for %s\n", arg);
 #endif
 
   {
     char *p1 = HTParse(arg, "", PARSE_HOST);
     char *p2 = strrchr(p1, '@');        /* user? */
-    char * pw;
-    char * un;
+    char *pw;
+    char *un;
 
     /* Save the actual host */
     {
 	char *tmpptr;
 
-	strcpy(host, p1);
-	tmpptr = strchr(host, '/');
-	if (tmpptr) {
-		*tmpptr = '\0';
+	if (strlen(p1) < 256) {		/* Sanity check */
+	    strcpy(host, p1);
+	} else {
+	    free(p1);
+	    close_control();
+	    return -1;
 	}
+	tmpptr = strchr(host, '/');
+	if (tmpptr)
+	    *tmpptr = '\0';
     }
 
     if (p2) {
@@ -588,66 +620,84 @@ PRIVATE int get_connection ARGS1 (char *,arg)
         pw = strchr(un, ':');
         if (pw) {
             *pw++ = 0;
-        }
-	if (strcmp(un, username)) { /* New username */
-		strcpy(username, un);
-		if (pw) {
-			strcpy(password, pw);
-		} else {
-			*password = '\0';
-		}
-	} else { /* Same username */
-		if (!*(ftpcache.host) || (*(ftpcache.host) &&
-		    strcmp(host, ftpcache.host))) { /* New host */
-			*password = '\0';
-		}
-	}
-    }
-    /* No username */
-    else { 
-	if (strcmp(username, "anonymous")) { /* Last one was not anon */
-		*username = '\0';
+	    if (strlen(pw) < BUFSIZ) {
+		strcpy(password, pw);
+	    } else {
 		*password = '\0';
+	    }
+        } else {
+	    *password = '\0';
 	}
+
+	if (strlen(un) < BUFSIZ) {
+	    strcpy(username, un);
+	} else {
+	    *username = '\0';
+	}
+    } else {
+	*username = '\0';
+	*password = '\0';
     }
-
     /* Copy hostname into dummy URL, since username:password@ 
-       might have been part of original */ 
-    sprintf(dummy, "ftp://%s", p1);
-
+     * might have been part of original */
+    if (strlen(p1) < (MAXHOSTNAMELEN + 24)) {	  /* Sanity check */
+	sprintf(dummy, "ftp://%s", p1);
+    } else {
+	free(p1);
+	close_control();
+	return -1;
+    }
 #ifndef DISABLE_TRACE
     if (www2Trace)
     	fprintf(stderr, "FTP: set dummy to %s\n", dummy);
 #endif
 
     /* Is the cache connection still good? */
-    if (ftpcache.control != (-1) && *(ftpcache.host) &&
-	!strcmp(ftpcache.host, host) && *username) {
-	/* Did we use a username before? */
-	if (!*username) {
-		return(ftpcache.control);
-	}
+    if (ftpcache.control != (-1)) {
+	if (*(ftpcache.host) &&	!strcmp(ftpcache.host, host)) {
+	    /* Did URL have a username? */
+	    if (!*username) {
+#ifndef DISABLE_TRACE
+	        if (www2Trace)
+		    fprintf(stderr,
+			    "FTP: Cached connection with no username\n");
+#endif
+	        if (ftpcache.username[0] &&
+		    strcmp(ftpcache.username, "anonymous") &&
+		    strcmp(ftpcache.username, "ftp")) {
+		    /* Not anon login...assuming a real login */
+	            securityType = HTAA_LOGIN;
+	        } else {
+		    securityType = HTAA_NONE;
+	        }
+	        free(p1);
+	        return(ftpcache.control);
+	    }
 
-	/* Is the username and password used the same? */
-	if (*username && !strcmp(ftpcache.username,username) &&
-	    *password && !strcmp(ftpcache.password,password)) {
-		/* For security Icon */
-		if (*username && strcmp(username, "anonymous") &&
-		    strcmp(username, "ftp")) {
-			/* Not anon login...assuming a real login */
-			securityType = HTAA_LOGIN;
-		} else {
-			securityType = HTAA_NONE;
-		}
-		return(ftpcache.control);
-	} else {
-		/* Something has changed...reopen connection */
-		close(ftpcache.control);
+	    /* Is the username and password used the same? */
+	    if (ftpcache.username[0] && !strcmp(ftpcache.username, username) &&
+	        *password && ftpcache.password[0] &&
+	        !strcmp(ftpcache.password, password)) {
+	        /* For security Icon */
+	        if (strcmp(username, "anonymous") && strcmp(username, "ftp")) {
+		    /* Not anon login...assuming a real login */
+		    securityType = HTAA_LOGIN;
+	        } else {
+		    securityType = HTAA_NONE;
+	        }
+#ifndef DISABLE_TRACE
+	        if (www2Trace)
+		    fprintf(stderr, "FTP: Cached connection with username %s\n",
+			    username);
+#endif
+	        free(p1);
+	        return(ftpcache.control);
+	    }
 	}
+	/* Cached connection is not useable.  Close it. */
+	close_control();
     }
 
-    /* Connection is not good.  Reopen */
-    strcpy(ftpcache.p1, p1);
     strcpy(ftpcache.host, host);
     if (*username) {
 	strcpy(ftpcache.username, username);
@@ -660,377 +710,316 @@ PRIVATE int get_connection ARGS1 (char *,arg)
 	ftpcache.password[0] = '\0';
     }
 
-    if (!*username) {
-      free(p1);
-    }
+    free(p1);
   }
 
   /* Default the redial values if out of range */
-  if (ftpRedial < 0) {
-	ftpRedial = 0;
-  }
-  if (ftpRedialSleep < 1) {
-	ftpRedialSleep = 1;
-  }
+  if (ftpRedial < 0)
+      ftpRedial = 0;
+  if (ftpRedialSleep < 1)
+      ftpRedialSleep = 1;
+
+#ifndef DISABLE_TRACE
+  if (www2Trace)
+      fprintf(stderr, "FTP: New connection with username %s\n", username);
+#endif
 
 redialFTP:
 
   con = -1;
-
-#ifndef DISABLE_TRACE
-  if (www2Trace)
-	fprintf(stderr, "dummy = %s\n", dummy);
-#endif
 
   status = HTDoConnect(dummy, "FTP", IPPORT_FTP, &con);
   
   if (status < 0) {
 #ifndef DISABLE_TRACE
       if (www2Trace) {
-          if (status == HT_INTERRUPTED)
-            fprintf(stderr,
-                    "FTP: Interrupted on connect\n");
-          else
-            fprintf(stderr, 
-                    "FTP: Unable to connect to remote host for `%s'.\n",
-                    arg);
+          if (status == HT_INTERRUPTED) {
+              fprintf(stderr, "FTP: Interrupted on connect\n");
+          } else {
+              fprintf(stderr, "FTP: Unable to connect to host for `%s'\n", arg);
+	  }
       }
 #endif
       if (status == HT_INTERRUPTED)
-        HTProgress ("Connection interrupted.");
-      if (con != -1) {
-          CLOSE_CONTROL(con);
-          con = -1;
-      }
-/*
-      if (username) 
-        free(username);
-*/
+          HTProgress ("Connection interrupted.");
+      if (con != -1)
+	  NETCLOSE(con);
       HTProgress("Unable to connect to remote host.");
       return status;			/* Bad return */
   }
   
 #ifndef DISABLE_TRACE
   if (www2Trace) 
-    fprintf(stderr, "FTP connected, assigning control socket %d\n", con);
+      fprintf(stderr, "FTP: Connected, control socket = %d\n", con);
 #endif
-  control = con;			/* Current control connection */
 
-  ftpcache.control = control;
+  /* Current control connection */
+  ftpcache.control = control = con;
 
-  /* Initialise buffering for control connection */
+  /* Initialize buffering for control connection */
   HTInitInput(con);
   
-
   /* Now we log in; Look up username, prompt for pw. */
   {
-    int status = response(NIL);	/* Get greeting */
+    int status = response(NIL);  /* Get greeting */
 
     if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "FTP: Interrupted at beginning of login.\n");
+            fprintf(stderr, "FTP: Interrupted at start of login.\n");
 #endif
 	loading_length = -1;
-        HTProgress("Connection interrupted.");
-        CLOSE_CONTROL(control);
-        control = -1;
-        return HT_INTERRUPTED;
+	goto Interrupted;
     }
-    if (status == 2) 
-      {		/* Send username */
+    if (status == 2) {		/* Send username */
         char *command;
-/*
- * Try to figure out what type of server we deal with. Only MultiNet and
- * MadGoat seem to announce themself properly (IMHO). Just take a chance
- * for UCX and TWG.
- */
+
+        /*
+         * Try to figure out what type of server we deal with. Only MultiNet and
+         * MadGoat seem to announce themself properly (IMHO). Just take a chance
+         * for UCX and TWG.
+         */
         ftp_type[0] = '\0';   /* Default to Unix */
         ftp_root_directory [0] = '\0';   /* root directory is unknown */
 #ifndef DISABLE_TRACE
         if (www2Trace)
-		fprintf(stderr, "FTP: login response is %s.\n", response_text);
+	    fprintf(stderr, "FTP: login response is %s.\n", response_text);
 #endif
-
-        if (strstr(response_text, "MultiNet")) strcpy(ftp_type, "MultiNet");
-        if (strstr(response_text, "MadGoat")) strcpy(ftp_type, "MadGoat");
-        if (strstr(response_text, "UCX")) strcpy(ftp_type, "UCX");
-        if (strstr(response_text, "Process Software"))
-		strcpy(ftp_type, "TCPware");
-        if (strstr(response_text, "FTP Server (")) strcpy(ftp_type, "UCX");
-        if (strstr(response_text, "CMU")) strcpy(ftp_type, "CMU");
-/*
- * Pathway comment:
- * We have to assume... we have gone out of our way to make it so
- * nobody can tell when our server is available on a machine. Ie,
- * configurable greeeting. So if it is not them, it could be us.
- */
-        if (strstr(response_text, "Wollongong")) strcpy(ftp_type, "TWG");
-        if (strstr(response_text, "FTP Service")) strcpy(ftp_type, "TWG");
-
+        if (strstr(response_text, "MultiNet")) {
+	    strcpy(ftp_type, "MultiNet");
+        } else if (strstr(response_text, "MadGoat") ||
+		   strstr(response_text, "HGFTP")) {
+	    strcpy(ftp_type, "MadGoat");
+        } else if (strstr(response_text, "UCX") ||
+		   strstr(response_text, "FTP Server (V")) {
+	    strcpy(ftp_type, "UCX");
+        } else if (strstr(response_text, "Process Software")) {
+	    strcpy(ftp_type, "TCPware");
+        } else if (strstr(response_text, "CMU")) {
+	    strcpy(ftp_type, "CMU");
+	/*
+	 * Pathway comment:
+	 * We have to assume... we have gone out of our way to make it so
+	 * nobody can tell when our server is available on a machine. Ie,
+	 * configurable greeting.  So if it is not them, it could be us.
+	 */
+        } else if (strstr(response_text, "Wollongong")) {
+	    strcpy(ftp_type, "TWG");
+	}
         if (*username) {
-            command = (char*)malloc(10 + strlen(username) + 2 + 1);
+            command = (char *)malloc(10 + strlen(username) + 2 + 1);
             sprintf(command, "USER %s%c%c", username, CR, LF);
 	    if (!*password) {
-		char *pw = NULL;
+		char *pw;
 
 		pw = prompt_for_password("Please Enter Your FTP Password:");
 		if (pw && *pw) {
-			strcpy(password, pw);
-			strcpy(ftpcache.password, password);
-			free(pw);
+		    strcpy(password, pw);
+		    strcpy(ftpcache.password, password);
+		    free(pw);
 		} else {
-			*password = '\0';
-			*(ftpcache.password) = '\0';
-        		HTProgress("Connection aborted.");
-        		CLOSE_CONTROL(control);
-        		control = -1;
-        		return HT_INTERRUPTED;
+		    *password = '\0';
+		    *(ftpcache.password) = '\0';
+        	    HTProgress("Connection aborted.");
+        	    close_control();
+        	    return HT_INTERRUPTED;
 		}
 	    }
         } else {
             command = (char *)malloc(25);
             sprintf(command, "USER anonymous%c%c", CR, LF);
-	    strcpy(username, "anonymous");
-	    strcpy(ftpcache.username, username);
-        }
-        status = response(command);
-        free(command);
-        if (status == HT_INTERRUPTED)
-          {
-#ifndef DISABLE_TRACE
-            if (www2Trace)
-              fprintf(stderr, "FTP: Interrupted while sending username.\n");
-#endif
-	    loading_length = -1;
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
-          }
-      }
-    if (status == 3) {		/* Send password */
-        char * command;
-        if (*password) {
-            command = (char*)malloc(10+strlen(password)+2+1);
-            sprintf(command, "PASS %s%c%c", password, CR, LF);
-        } else {
-#ifndef VMS
-            char * user = getenv("USER");
-#else
-            char * user = (char *)getenv("USER");
-#endif /* VMS, BSN */
-            extern char *machine_with_domain;
-            char *host = machine_with_domain;
-            if (!user) 
-              user = "WWWuser";
-            /* If not fully qualified, suppress it as ftp.uu.net
-               prefers a blank to a bad name */
-            if (!strchr(host, '.'))
-	      host = "";
-
-            command = (char*)malloc(20 + strlen(host)+2+1);
-            sprintf(command,
-		    "PASS %s@%s%c%c", user ? user : "WWWuser",
-		    host, CR, LF); /*@@*/
-	    sprintf(password, "%s@%s", (user ? user : "WWWuser"), host);
-	    strcpy(ftpcache.password, password);
         }
         status = response(command);
         free(command);
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr,
-                       "FTP: Interrupted while sending password.\n");
+                fprintf(stderr, "FTP: Interrupted while sending username.\n");
+#endif
+	    loading_length = -1;
+	    goto Interrupted;
+        }
+    }
+    if (status == 3) {		/* Send password */
+        char *command;
+
+        if (*password) {
+            command = (char *)malloc(10 + strlen(password) + 2 + 1);
+            sprintf(command, "PASS %s%c%c", password, CR, LF);
+        } else {
+#ifndef VMS
+            char *user = getenv("USER");
+#else
+            char *user = (char *)getenv("USER");
+#endif /* VMS, BSN */
+            extern char *machine_with_domain;
+            char *host = machine_with_domain;
+
+            if (!user) 
+                user = "WWWuser";
+            /* If not fully qualified, suppress it as ftp.uu.net
+             * prefers a blank to a bad name */
+            if (!strchr(host, '.'))
+	        host = "";
+
+            command = (char *)malloc(20 + strlen(host) + 2 + 1);
+            sprintf(command,
+		    "PASS %s@%s%c%c", user ? user : "WWWuser",
+		    host, CR, LF); /*@@*/
+        }
+        status = response(command);
+        free(command);
+        if (status == HT_INTERRUPTED) {
+#ifndef DISABLE_TRACE
+            if (www2Trace)
+                fprintf(stderr, "FTP: Interrupted while sending password.\n");
 #endif
 	    loading_length = (-1);
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
+	    goto Interrupted;
         }
     }
     
     if (status == 3) {
         char temp[80];
-/*
-    	if (username) 
-		free(username);
-*/
+
         sprintf(temp, "ACCT noaccount%c%c", CR, LF);
         status = response(temp);
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr,
-                       "FTP: Interrupted while sending ACCT.\n");
+                fprintf(stderr, "FTP: Interrupted while sending ACCT.\n");
 #endif
 	    loading_length = (-1);
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
+	    goto Interrupted;
         }
     }
-    if (status != 2) 
-      {
+    if (status != 2) {
 	if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
-		if (www2Trace)
-			fprintf(stderr,
-				 "FTP: Interrupted in redial attempt.\n");
+	    if (www2Trace)
+		fprintf(stderr, "FTP: Interrupted in redial attempt.\n");
 #endif
-		loading_length = (-1);
-		HTProgress("Connection interrupted.");
-		CLOSE_CONTROL(control);
-		control = -1;
-		return HT_INTERRUPTED;
+	    loading_length = (-1);
+	    goto Interrupted;
 	}
 
 	if (*username && strcmp(username, "anonymous")) {
-		HText_appendText(HT, "<H2>FTP login using username \"");
-		HText_appendText(HT, username);
-		HText_appendText(HT, "\" failed.</H2><BR>");
-		if (*password) {
-			HText_appendText(HT, "If you have a login ");
-			HText_appendText(HT, "on this machine please check ");
-			HText_appendText(HT, "to make sure the password you ");
-			HText_appendText(HT, "are specifying is correct.");
-		} else {
-			HText_appendText(HT, "This is probably because you ");
-			HText_appendText(HT, "didn't specify a password ");
-			HText_appendText(HT, "along with your username.<BR>");
-			HText_appendText(HT, "To do this you have to specify ");
-			HText_appendText(HT, "the FTP line like this:<BR>");
-			HText_appendText(HT, "<P>");
-			HText_appendText(HT, "ftp://username:password@ftp_site/");
-			HText_appendText(HT, "<P>");
-			HText_appendText(HT, "<strong>OR</strong>");
-			HText_appendText(HT, "<P>");
-			HText_appendText(HT, "You can now just specify a username ");
-			HText_appendText(HT, "and you will be prompted for your ");
-			HText_appendText(HT, "password.");
-			HText_appendText(HT, "<P>");
-			HText_appendText(HT, "e.g. ftp://username@ftp_site/");
-		}
+	    HText_appendText(HT, "<H2>FTP login using username \"");
+	    HText_appendText(HT, username);
+	    HText_appendText(HT, "\" failed.</H2><BR>");
+	    if (*password) {
+		HText_appendText(HT,
+		    "If you have a login on this machine please check ");
+		HText_appendText(HT,
+		    "to make sure the password you are specifying is correct.");
+	    } else {
+		HText_appendText(HT,
+		    "This is probably because you didn't specify a password ");
+		HText_appendText(HT,
+		    "along with your username.<BR>To do this you have to ");
+		HText_appendText(HT, "specify the FTP line like this:<BR>");
+		HText_appendText(HT,
+		    "<P>ftp://username:password@ftp_site/<P><strong>OR");
+		HText_appendText(HT,
+		    "</strong><P>You can now just specify a username ");
+		HText_appendText(HT, "and you will be prompted for your ");
+		HText_appendText(HT,
+		    "password.<P>e.g. ftp://username@ftp_site/");
+	    }
 	} else {
-		char buf[BUFSIZ];
+	    char buf[BUFSIZ];
 
-		if (redial < ftpRedial) {
-			/* Close down current connection */
-			ftpcache.control = -1;
-			CLOSE_CONTROL(control);
-			control = -1;
+	    if (redial < ftpRedial) {
+		/* Close down current connection */
+		close_control();
 
-			/* Tell them in the progress string */
-			sprintf(buf,
-				"Login failed. Redial Attempt %d/%d. Sleeping %d seconds.",
-				redial, ftpRedial, ftpRedialSleep);
-			HTProgress(buf);
+		/* Tell them in the progress string */
+		sprintf(buf,
+		     "Login failed. Redial attempt %d/%d. Sleeping %d seconds.",
+		      redial, ftpRedial, ftpRedialSleep);
+		HTProgress(buf);
 
-			/* If we're tracing, explain it all */
+		/* If we're tracing, explain it all */
 #ifndef DISABLE_TRACE
-			if (www2Trace) 
-				fprintf(stderr,
-					"FTP: Login fail: %s", response_text);
+		if (www2Trace) 
+		    fprintf(stderr, "FTP: Login fail: %s", response_text);
 #endif
-/*
-			sleep(ftpRedialSleep);
-*/
+
 /* Commented out until we get a new "sleep" routine...SWP
 
-			if (my_sleep(ftpRedialSleep, 1)) {
+		if (my_sleep(ftpRedialSleep, 1)) {
 #ifndef DISABLE_TRACE
-				if (www2Trace)
-				    fprintf(stderr,
-					"FTP: Interrupted in sleep during redial attempt.\n");
+		    if (www2Trace)
+			fprintf(stderr,
+			  "FTP: Interrupted in sleep during redial attempt.\n");
 #endif
-				loading_length = (-1);
-				HTProgress("Connection interrupted.");
-				CLOSE_CONTROL(control);
-				control = -1;
-				return HT_INTERRUPTED;
-			}
-
-*/
-
-			/* Index redial and try again */
-			redial++;
-			goto redialFTP;
+		    loading_length = (-1);
+		    goto Interrupted;
 		}
+*/
+		/* Index redial and try again */
+		redial++;
+		goto redialFTP;
+	    }
 
-		/* Printout message and stop retrying */
-		sprintf(buf,
-		    "<H2>Anonymous FTP login failed.<br><br>There were %d redial attempts made.</h2>",
-		    redial);
-		HText_appendText(HT, buf);
-
+	    /* Printout message and stop retrying */
+	    sprintf(buf,
+	      "<H2>Anonymous FTP login failed.<br><br>There were %d redial attempts made.</h2>",
+	      redial);
+	    HText_appendText(HT, buf);
 	}
         HTProgress("Login failed");
 #ifndef DISABLE_TRACE
         if (www2Trace) 
-          fprintf(stderr, "FTP: Login fail: %s", response_text);
+            fprintf(stderr, "FTP: Login fail: %s", response_text);
 #endif
-
 	HText_appendText(HT,
-		"\n\n<hr><p>Reason for Failure:<br><br><plaintext>\n");
+		         "\n\n<hr><p>Reason for Failure:<br><br><plaintext>\n");
 	HText_appendText(HT, response_text);
 
+        close_control();
 	loading_length = -1;
-
-	ftpcache.control = -1;
-        *password = '\0';
-
-        CLOSE_CONTROL(control);
-        control = -1;
         return -1;		/* Bad return */
-      }
+    }
 #ifndef DISABLE_TRACE
     if (www2Trace) 
-      fprintf(stderr, "FTP: Logged in.\n");
+        fprintf(stderr, "FTP: Logged in.\n");
 #endif
     /* If MultiNet, then force it to VMS directory style. GEC */
-    if (!strcmp(ftp_type, "MultiNet")) {
-        char  temp[80];
+    if (!strcmp(ftp_type, "MultiNet") || !strcmp(ftp_type, "MadGoat")) {
+        char temp[80];
 
         sprintf(temp, "CWD []%c%c", CR, LF);
         status = response(temp);
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr,
-                      "FTP: Interrupted while sending CD [].\n");
+                fprintf(stderr, "FTP: Interrupted while sending CD [].\n");
 #endif
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
+	    goto Interrupted;
         }
     }
-/*
- * Try to determine the ftp server type if not already done. TWG replies
- * with the present directory in VMS format
- */
+    /*
+     * Try to determine the ftp server type if not already done. TWG replies
+     * with the present directory in VMS format
+     */
 #ifndef DISABLE_TRACE
-      if (ftp_type[0] == '\0')
-         if (www2Trace)
-		fprintf(stderr, "FTP: login response2 is %s.\n", response_text);
+    if (www2Trace && (ftp_type[0] == '\0'))
+	fprintf(stderr, "FTP: login response2 is %s.\n", response_text);
 #endif
 
-      if (ftp_type[0] == '\0')
-        if (strstr(response_text, "[") && strstr (response_text, "]"))
-          strcpy(ftp_type, "TWG");
+    if (ftp_type[0] == '\0') {
+        if (strstr(response_text, "[") && strstr(response_text, "]"))
+            strcpy(ftp_type, "TWG");
+    }
 #ifndef DISABLE_TRACE
-      if (ftp_type[0] == '\0')
-         if (www2Trace)
-		fprintf(stderr, "FTP: login response2.5 is %s.\n",
-			response_text);
+    if (www2Trace && (ftp_type[0] == '\0'))
+	fprintf(stderr, "FTP: login response2.5 is %s.\n", response_text);
 #endif
-/*
- * Try a remotehelp site to see if it is UCX
- */
-      if (ftp_type[0] == '\0') {
+    /*
+     * Try a remotehelp site to see if it is UCX
+     */
+    if (ftp_type[0] == '\0') {
         char temp[80];
 
         sprintf(temp, "HELP site%c%c", CR, LF);
@@ -1038,69 +1027,64 @@ redialFTP:
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr,
-                      "FTP: Interrupted while sending remotehelp.\n");
+                fprintf(stderr, "FTP: Interrupted while sending remotehelp.\n");
 #endif
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
+	    goto Interrupted;
         }
 #ifndef DISABLE_TRACE
         if (www2Trace)
-		fprintf(stderr, "FTP: login response3 is %s.\n", response_text);
+	    fprintf(stderr, "FTP: login response3 is %s.\n", response_text);
 #endif
         if (strstr(response_text, "214 Syntax: SITE <sp> Vms | ULtrix | UNix"))
-          strcpy(ftp_type, "UCX");
-      }
+            strcpy(ftp_type, "UCX");
+    }
 
     /* Need to know login directory, sys$login doesn't work on MultiNet. PGE */
     if (ftp_type[0] != '\0') {
-        char  temp[80];
+        char temp[80];
 
         sprintf(temp, "PWD%c%c", CR, LF);
         status = response(temp);
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr,
-                       "FTP: Interrupted while sending pwd.\n");
+                fprintf(stderr, "FTP: Interrupted while sending pwd.\n");
 #endif
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            return HT_INTERRUPTED;
+	    goto Interrupted;
         }
         if (strstr(response_text, "257 \"")) {
-          sscanf(response_text, "257 \"%s", ftp_root_directory);
-          if (ftp_root_directory [0] == '\0')
-            strcpy(ftp_root_directory, "sys$login");
-          else
-            /* Strip closing quote. */
-            ftp_root_directory[strlen(ftp_root_directory) - 1] = '\0';
+            sscanf(response_text, "257 \"%99s", ftp_root_directory);
+            if (ftp_root_directory [0] == '\0') {
+                strcpy(ftp_root_directory, "sys$login");
+            } else {
+                /* Strip closing quote. */
+                ftp_root_directory[strlen(ftp_root_directory) - 1] = '\0';
+	    }
 #ifndef DISABLE_TRACE
-          if (www2Trace)
+            if (www2Trace)
 		fprintf(stderr, "FTP: root directory is %s.\n",
-		ftp_root_directory);
+		        ftp_root_directory);
 #endif
         } else {
 #ifndef DISABLE_TRACE
-          if (www2Trace)
+            if (www2Trace)
 		fprintf(stderr, "FTP: pwd response is %s.\n", response_text);
 #endif
         }
     }
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) 
-      if (ftp_type[0] == '\0')
-        fprintf(stderr, "FTP: Server type is null (UNIX).\n");
-      else
-        fprintf(stderr, "FTP: Server type is %s.\n", ftp_type);
+    if (www2Trace) {
+        if (ftp_type[0] == '\0') {
+            fprintf(stderr, "FTP: Server type is null (UNIX).\n");
+        } else {
+            fprintf(stderr, "FTP: Server type is %s.\n", ftp_type);
+        }
+    }
 #endif
 
     /* For security Icon */
-    if (*username && strcmp(username,"anonymous") && strcmp(username,"ftp")) {
+    if (*username && strcmp(username, "anonymous") && strcmp(username, "ftp")) {
 	/* Not anon login...assuming a real login */
 	securityType = HTAA_LOGIN;
     } else {
@@ -1109,29 +1093,13 @@ redialFTP:
   }
   
   return con;			/* Good return */
+
+ Interrupted:
+  HTProgress("Connection interrupted.");
+  close_control();
+  return HT_INTERRUPTED;
+
 } /* Scope of con */
-
-
-/*	Close Master (listening) socket
-**	-------------------------------
-**
-**
-*/
-#ifdef __STDC__
-PRIVATE void close_master_socket(void)
-#else
-PRIVATE void close_master_socket()
-#endif
-{
-#ifndef DISABLE_TRACE
-  if (www2Trace) 
-    fprintf(stderr, "FTP: Closing master socket %d\n", master_socket);
-#endif
-  NETCLOSE(master_socket);
-  master_socket = -1;
-
-  return;
-}
 
 
 /*	Open a master socket for listening on
@@ -1148,30 +1116,26 @@ PRIVATE void close_master_socket()
 **	master_socket	is socket number if good, else negative.
 **	port_number	is valid if good.
 */
-#ifdef __STDC__
-PRIVATE int get_listen_socket(void)
-#else
-PRIVATE int get_listen_socket()
-#endif
+static int get_listen_socket()
 {
   struct sockaddr_in soc_address;	/* Binary network address */
   struct sockaddr_in *sin = &soc_address;
   int new_socket;			/* Will be master_socket */
-  
+
   /* Create internet socket */
   new_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   
   if (new_socket < 0)
-    return -1;
+      return -1;
   
 #ifndef DISABLE_TRACE
   if (www2Trace) 
-    fprintf(stderr, "FTP: Opened master socket number %d\n", new_socket);
+      fprintf(stderr, "FTP: Opened master socket number %d\n", new_socket);
 #endif
     
   /* Search for a free port. */
-  sin->sin_family = AF_INET;	    /* Family = internet, host order  */
-  sin->sin_addr.s_addr = INADDR_ANY; /* Any peer address */
+  sin->sin_family = AF_INET;	       /* Family = internet, host order  */
+  sin->sin_addr.s_addr = INADDR_ANY;   /* Any peer address */
   {
     int status;
 #if !defined(VMS) || (__DECC_VER < 50230003)
@@ -1179,21 +1143,19 @@ PRIVATE int get_listen_socket()
 #else
     size_t address_length = sizeof(soc_address);
 #endif
+
 #ifdef SOCKS
     status = Rgetsockname(control,
 #else
     status = getsockname(control,
 #endif
-                         (struct sockaddr *)&soc_address,
-			 &address_length);
+                         (struct sockaddr *)&soc_address, &address_length);
     if (status < 0) 
-      return -1;
+        return -1;
 
 #ifndef DISABLE_TRACE
-      if (www2Trace) {
-	fprintf(stderr, "FTP: This host is %s\n",
-		HTInetString(sin));
-      }
+    if (www2Trace)
+        fprintf(stderr, "FTP: This host is %s\n", HTInetString(sin));
 #endif
 
     soc_address.sin_port = 0; /* Unspecified: please allocate */
@@ -1202,43 +1164,40 @@ PRIVATE int get_listen_socket()
 #else
     status = bind(new_socket,
 #endif
-              (struct sockaddr*)&soc_address,
+                  (struct sockaddr *)&soc_address,
                 /* Cast to generic sockaddr */
 #ifdef SOCKS
-              sizeof(soc_address), SOCKS_ftpsrv.s_addr);
+                  sizeof(soc_address), SOCKS_ftpsrv.s_addr);
 #else
-              sizeof(soc_address));
+                  sizeof(soc_address));
 #endif
-      if (status < 0) 
+    if (status < 0) 
         return -1;
       
-      address_length = sizeof(soc_address);
+    address_length = sizeof(soc_address);
 #ifdef SOCKS
     status = Rgetsockname(new_socket,
 #else
     status = getsockname(new_socket,
 #endif
-                           (struct sockaddr*)&soc_address,
-                           &address_length);
+                          (struct sockaddr *)&soc_address, &address_length);
     if (status < 0) 
-      return -1;
+        return -1;
   }
   
 #ifndef DISABLE_TRACE
-  if (www2Trace) {
-	fprintf(stderr, "FTP: bound to port %d on %s\n",
-		(int)ntohs(sin->sin_port),
-		HTInetString(sin));
-  }
+  if (www2Trace)
+      fprintf(stderr, "FTP: bound to port %d on %s\n",
+	      (int)ntohs(sin->sin_port), HTInetString(sin));
 #endif
 
-  if (master_socket >= 0) 
-    close_master_socket ();
-  
+  if (master_socket >= 0)
+      close_master_socket();
+
   master_socket = new_socket;
   
   /* Now we must find out who we are to tell the other guy */
-  (void)HTHostName(); 	/* Make address valid - doesn't work*/
+  (void)HTHostName(); 	/* Make address valid - doesn't work */
   sprintf(port_command, "PORT %d,%d,%d,%d,%d,%d%c%c",
           (int)*((unsigned char *)(&sin->sin_addr)+0),
           (int)*((unsigned char *)(&sin->sin_addr)+1),
@@ -1250,23 +1209,87 @@ PRIVATE int get_listen_socket()
   
   /* Inform TCP that we will accept connections */
 #ifdef SOCKS
-  if (Rlisten(master_socket, 1) < 0) 
+  if (Rlisten(master_socket, 1) < 0) {
 #else
-  if (listen(master_socket, 1) < 0) 
+  if (listen(master_socket, 1) < 0) {
 #endif
-    {
       close_master_socket();
       return -1;
-    }
+  }
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) {
-	fprintf(stderr, "FTP: Master socket(), bind() and listen() all OK\n");
-    }
+  if (www2Trace)
+      fprintf(stderr, "FTP: Master socket(), bind() and listen() all OK\n");
 #endif
 
   return master_socket;		/* Good */
 } /* get_listen_socket */
+
+
+/* Set up a connection including a listen socket */
+static int setup_connection(char *name)
+{
+  int retry;
+  int status;
+
+  for (retry = 0; retry < 2; retry++) {
+#ifndef DISABLE_TRACE
+      if (www2Trace)
+          fprintf(stderr,
+		  "FTP: setup_connection: retry attempt %d\n", retry);
+#endif
+      status = get_connection(name);
+      if (status < 0) {
+          close_control();
+          /* HT_INTERRUPTED will fall through. */
+	  loading_length = -1;
+          return status;
+      }
+      
+      status = get_listen_socket();
+      if (status < 0) {
+	  HText_appendText(HT, "FTP terminated because login failed");
+	  HTProgress("Login failed");
+          close_control();
+	  loading_length = -1;
+          /* HT_INTERRUPTED would fall through, if we could interrupt
+           * somehow in the middle of it, which we currently can't. */
+          return status;
+      }
+      
+      /* Inform the server of the port number we will listen on */
+      {
+        status = response(port_command);
+        if (status == HT_INTERRUPTED) {
+#ifndef DISABLE_TRACE
+            if (www2Trace)
+               fprintf(stderr, "FTP: Interrupted in response (port_command)\n");
+#endif
+	    HTProgress("Connection interrupted.");
+	    close_control();
+	    loading_length = -1;
+	    return HT_INTERRUPTED;
+        }
+        if (status != 2) {		/* Could have timed out */
+            if (status < 0) {
+                close_control();
+                continue;		/* Try again - net error */
+            }
+            close_control();
+	    loading_length = -1;
+            return HT_NOT_LOADED;	/* Bad reply */
+        }
+#ifndef DISABLE_TRACE
+        if (www2Trace)
+            fprintf(stderr, "FTP: Port defined.\n");
+#endif
+      }
+      status = 0;
+      break;	/* No more retries */
+  } /* For retries */
+
+  return status;
+}
 
 
 /*	Read a directory into an hypertext object from the data socket
@@ -1284,12 +1307,12 @@ PRIVATE int get_listen_socket()
 ** Completely re-wrote this chunk of code to present FTP directory information
 ** in a much more useful manner.  Also included the use of icons. -Crh
 */
-PRIVATE int read_directory
-ARGS4 (
-  HTParentAnchor *,		parent,
-  WWW_CONST char *,		address,
-  HTFormat,			format_out,
-  HTStream *,			sink )
+PRIVATE int read_directory ARGS5 (
+    HTParentAnchor *,		parent,
+    WWW_CONST char *,		address,
+    HTFormat,			format_out,
+    HTStream *,			sink,
+    int,			do_header )
 {
   HTFormat format;
   HTAtom *pencoding;
@@ -1305,9 +1328,6 @@ ARGS4 (
   char *ellipsis_string = (char *)calloc(1024, sizeof(char));
   int nTime;
   char szDate[256];
-  int nStringLen;
-  int nSpaces;
-  int nOldSpaces;
   char szFileInfo[32];
   char szMonth[32];
   char szDay[16];
@@ -1315,110 +1335,146 @@ ARGS4 (
   char szTime[32];
   int lfirst = 0;
   int lcont = 0;
+  int first_line = 1;
+  int lcount = 0;
 
-  HTProgress("Reading FTP directory");
-
-  HText_appendText(HT, "<H1>FTP Directory ");
-  HText_appendText(HT, filename);
-  HText_appendText(HT, "</H1>\n");
-  HText_appendText(HT, "<PRE>");
-  HText_appendText(HT, "<DL>\n");
   data_read_pointer = data_write_pointer = data_buffer;
 
-  /* If this isnt the root level, spit out a parent directory entry */
+  if (do_header) {
+      HTProgress("Reading FTP directory");
 
-  if (strcmp(filename, "/")) {
-      HText_appendText(HT, "<DD>");
+      HText_appendText(HT, "<H1>FTP Directory ");
+      HText_appendText(HT, filename);
+      HText_appendText(HT, "</H1>\n<PRE><DL>\n");
 
-      HText_appendText(HT, "<A HREF=\"");
-      
-      strcpy(buffer, filename);
-      ptr = strrchr(buffer, '/');
-      
-      if (ptr)
-        *ptr='\0';
-      
-      if (buffer[0] == '\0') 
-        HText_appendText(HT, "/");
-      else
-        HText_appendText(HT, buffer);
-      
-      HText_appendText(HT, "\"><IMG SRC=\"");
-      HText_appendText(HT, HTgeticonname(NULL, "directory"));
-      HText_appendText(HT, "\"> Parent Directory</a>\n");
+      /* If this is not the root level, spit out a parent directory entry */
+
+      if (strcmp(filename, "/")) {
+          HText_appendText(HT, "<DD><A HREF=\"");
+     
+          strcpy(buffer, filename);
+          ptr = strrchr(buffer, '/');
+
+          if (ptr)
+              *ptr = '\0';
+
+          if (buffer[0] == '\0') {
+              HText_appendText(HT, "/");
+          } else {
+              HText_appendText(HT, buffer);
+          }
+          HText_appendText(HT, "\"><IMG SRC=\"");
+          HText_appendText(HT, HTgeticonname(NULL, "directory"));
+          HText_appendText(HT, "\"> Parent Directory</a>\n");
+      }
   }
-  
+
   /* Loop until we hit EOF */
-  while(1)
-    {
+  while (1) {
+      lcount++;
       /* Read in a line of data */
       for (count = 0; count < BUFSIZ; count++) {
           c = next_data_char();
+
+	AgainForVMSserver:
           if (interrupted_in_next_data_char) {
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                fprintf(stderr,
-		        "FTP: Picked up interrupted_in_next_data_char\n");
+                  fprintf(stderr, "FTP: read dir interrupted\n");
 #endif
               return HT_INTERRUPTED;
           }
-          
           if (c == '\r') {
               c = next_data_char();
               if (interrupted_in_next_data_char) {
 #ifndef DISABLE_TRACE
                   if (www2Trace)
-                    fprintf(stderr,
-		            "FTP: Picked up interrupted_in_next_data_char\n");
+                      fprintf(stderr, "FTP: read dir interrupted\n");
 #endif
                   return HT_INTERRUPTED;
               }
-              
               if (c != '\n') 
-                break;
+                  break;
           }
-          
-          if (c == '\n' || c == (char)EOF) 
-            break;
-          
+          if (c == '\n') { 
+	      /* Handle VMS server long line wrapping */
+	      if (count && (ftp_type[0] != '\0')) {
+	          if ((data_read_pointer < data_write_pointer) &&
+		      (*data_read_pointer == ' ')) {
+		      data_read_pointer++;
+	          } else if (data_read_pointer >= data_write_pointer) {
+		      int status;
+
+		      status = NETREAD(data_soc, data_buffer, DATA_BUFFER_SIZE);
+		      if (status == HT_INTERRUPTED) {
+		          interrupted_in_next_data_char = 1;
+		          goto AgainForVMSserver;
+		      }
+		      if (status <= 0) {
+		          c = (char)-1;
+		          break;
+		      }
+		      data_write_pointer = data_buffer + status;
+		      data_read_pointer = data_buffer;
+		      if (*data_read_pointer == ' ') {
+		          data_read_pointer++;
+		      } else { 
+		         break;
+		      }
+	          } else {
+		      break;
+		  }
+	      } else {
+	          break;
+	      }
+          } else if (c == (char)EOF) {
+              break;
+          }
           buffer[count] = c;
       }
       
-      if (c == (char)EOF) 
-        break;
-      
+      if (c == (char)EOF)
+          break;
+
       buffer[count] = 0;
       
 #ifndef DISABLE_TRACE
       if (www2Trace)
-	fprintf(stderr, "FTP: Rx: %s\n", buffer);
+	  fprintf(stderr, "FTP: Rx: %s\n", buffer);
 #endif
       /* Parse the input buffer, extract the item type, and the item size */
       /* Retain whole string -- we don't use it at the moment, but we will. */
       full_ftp_name = strdup(buffer);
+
       /* Read but disregard itemsize -- this effectively guarantees we will know
-         what we should display and what we shouldn't -- don't ask. */
+       * what we should display and what we shouldn't -- don't ask. */
       if (usingNLST == 1) {
 	  ret = sscanf(buffer, "%c%*9s %*d %*s %*s %s", &itemtype, itemsize);
 	  if (ret != 2) {
-		free(full_ftp_name);
-		continue;
+	      if (first_line && !strncmp(buffer, ".", 1)) {
+		  /* Appears to be a name only list */
+		  usingNLST = 2;
+	      } else {
+	          free(full_ftp_name);
+	          continue;
+	      }
 	  }
-      } else if (usingNLST == 2) { /* Only name */
-	if (!strcmp(buffer, ".") || !strcmp(buffer, "..")) {
-		free(full_ftp_name);
-		continue;
-	}
-
-	ptr = strrchr(buffer, '.');
-	itemtype = '-';
-	if (ptr && *ptr) {
-		if (!my_strncasecmp(ptr, ".dir", 4)) {
-			*ptr = '\0';
-			itemtype = 'd';
-		}
-	}
-      } else { /* Using LIST command */
+	  first_line = 0;
+      }
+      if (usingNLST == 2) {	/* Only name */
+	  if (!strcmp(buffer, ".") || !strcmp(buffer, "..")) {
+	      free(full_ftp_name);
+	      continue;
+	  }
+	  ptr = strrchr(buffer, '.');
+	  itemtype = '-';
+	  if (ptr && *ptr) {
+	      if (!my_strncasecmp(ptr, ".dir", 4)) {
+		  *ptr = '\0';
+		  itemtype = 'd';
+	      }
+	  }
+      } else if (!usingNLST) {	/* Using LIST command */
         if (ftp_type[0] == '\0') {
 	    ret = sscanf(buffer, "%c%*9s %*d %*s %*s %s", &itemtype, itemsize);
 	    if (ret != 2) {
@@ -1459,16 +1515,17 @@ ARGS4 (
                  ptr = strchr(itemname, '.');
                  *ptr = '\0';
              } else {
-               itemtype = '-';
+                 itemtype = '-';
 	     }
           } else {
 
              /* MultiNet and MadGoat servers LIST support. */
-             if (lcont)
-               ret = sscanf(buffer, " %s %s %s", itemsize, date1, date2);
-             else
-               ret = sscanf(buffer, "%s %s %s %s", itemname, itemsize, date1,
-			    date2);
+             if (lcont) {
+                 ret = sscanf(buffer, " %s %s %s", itemsize, date1, date2);
+             } else {
+                 ret = sscanf(buffer, "%s %s %s %s", itemname, itemsize, date1,
+			      date2);
+	     }
 	     /* Check for empty directory */
 	     if (!lcont && (ret >= 1) && !strncmp(itemname, "*.*;", 4)) {
                  free(full_ftp_name);
@@ -1505,79 +1562,75 @@ ARGS4 (
                  ptr = strchr(itemname, '.');
                  *ptr = '\0';
              } else {
-               itemtype = '-';
+                 itemtype = '-';
 	     }
           }
 	}
       }
 
-      if (!buffer || !*buffer) {
+      if (!buffer || !*buffer)
 	continue;
-      }
 
       if (usingNLST == 2) { /* Only name */
 	strcpy(itemname, buffer);
 	nTime = -1;
       } else {
         if (ftp_type[0] == '\0') {
-	    /* Due to the various time stamp formats, its "safer" to retrieve the        */
-	    /* filename by taking it from the right side of the string, we do that here. */
+	    /* Due to the various time stamp formats, its "safer" to retrieve
+	     * the filename by taking it from the right side of the string,
+             * so we do that here. */
 	    ptr = strrchr(buffer, ' ');
-      
 	    if (ptr == NULL) 
 		continue;
       
-	    strcpy(itemname, ptr+1);
+	    strcpy(itemname, ptr + 1);
 
 	    if (!strcmp(itemname, ".") || !strcmp(itemname, "..")) {
 		free(full_ftp_name);
 		continue;
 	    }
-
 	    nTime = ParseDate(buffer, szFileInfo, szMonth, szDay, szYear,
-		 szTime);
-
-	    if (usingNLST == 1) {
+		              szTime);
+	    if (usingNLST == 1)
 		ParseFileSizeAndName(buffer, itemname, itemsize);
-	    }
 
-	    if (nTime == 3) {  /* ie a dos or NT server possibly */
+	    if (nTime == 3) {  /* A dos or NT server possibly */
 		if (!ParseFileSizeAndName(buffer, itemname, itemsize)) {
-			itemtype = 'd';
+		    itemtype = 'd';
 		} else {
-			itemtype = '-';
+		    itemtype = '-';
 		}
 	    }
         } else {
-          nTime = -2;
+            nTime = -2;
         }
       }
 
-      HText_appendText(HT, "<DD>");
       /* Spit out the anchor refrence, and continue on... */
       
-      HText_appendText(HT, "<A HREF=\"");
+      HText_appendText(HT, "<DD><A HREF=\"");
       /* Assuming it's a relative reference... */
       if (itemname && itemname[0] != '/') {
           HText_appendText(HT, filename);
-          if (filename[strlen(filename)-1] != '/') 
-            HText_appendText(HT, "/");
+          if (filename[strlen(filename) - 1] != '/') 
+              HText_appendText(HT, "/");
       }
       HText_appendText(HT, itemname);
       HText_appendText(HT, "\">");
       
-      /* There are 3 "types", directory, link and file.  If its a directory we     */
-      /* just spit out the name with a directory icon.  If its a link, we go       */
-      /* retrieve the proper name (i.e. the input looks like bob -> ../../../bob   */
-      /* so we want to hop past the -> and just grab bob.  The link case falls     */
-      /* through to the filetype case.  The filetype shows name and filesize, and  */
-      /* then attempts to select the correct icon based on file extension.         */
+      /* There are 3 "types", directory, link and file.  If its a directory we
+       * just spit out the name with a directory icon.  If its a link, we go
+       * retrieve the proper name (i.e. the input looks like bob -> ../../../bob
+       * so we want to hop past the -> and just grab bob.  The link case falls
+       * through to the filetype case.  The filetype shows name and filesize,
+       * and then attempts to select the correct icon based on file extension.
+       */
       switch (itemtype) {
         case 'd': {
-	    if (compact_string(itemname, ellipsis_string, ftpFilenameLength,
-			       ftpEllipsisMode, ftpEllipsisLength)) {
+	    if ((usingNLST != 2) &&
+		compact_string(itemname, ellipsis_string, ftpFilenameLength,
+			       ftpEllipsisMode, ftpEllipsisLength))
 		strcpy(itemname, ellipsis_string);
-	    }
             sprintf(buffer, "%s", itemname);
             HText_appendText(HT, "<IMG SRC=\"");
             HText_appendText(HT, HTgeticonname(NULL, "directory"));
@@ -1596,12 +1649,12 @@ ARGS4 (
                 ptr = strrchr(buffer, ' ');
             }
             if (ptr)
-		strcpy(itemname, ptr+1);
+		strcpy(itemname, ptr + 1);
 
-	    if (compact_string(itemname, ellipsis_string, ftpFilenameLength,
-		       ftpEllipsisMode, ftpEllipsisLength)) {
+	    if ((usingNLST != 2) &&
+		compact_string(itemname, ellipsis_string, ftpFilenameLength,
+		               ftpEllipsisMode, ftpEllipsisLength))
 		strcpy(itemname, ellipsis_string);
-	    }
         }
           
         case '-': {
@@ -1610,10 +1663,12 @@ ARGS4 (
                it is probably a directory so lets not show the byte
                count */
 
-		if (compact_string(itemname,ellipsis_string,ftpFilenameLength,ftpEllipsisMode,ftpEllipsisLength)) {
-			strcpy(itemname, ellipsis_string);
-		}
-                sprintf(buffer, "%s", itemname);
+	    if ((usingNLST != 2) &&
+	        compact_string(itemname, ellipsis_string, ftpFilenameLength,
+			       ftpEllipsisMode, ftpEllipsisLength))
+		strcpy(itemname, ellipsis_string);
+
+            sprintf(buffer, "%s", itemname);
 
 	    if (ftp_type[0] != '\0')
 		strip_VMS_version(itemname);
@@ -1659,76 +1714,110 @@ ARGS4 (
 	HText_appendText(HT, buffer);
 	HText_appendText(HT, "</A>");
 
-	nStringLen = strlen(buffer);
-	nSpaces = ftpFilenameLength - nStringLen;
-/*
-	if (itemtype != 'd') {
-*/
+	if (usingNLST != 2) {
+		int nStringLen = strlen(buffer);
+		int nSpaces = ftpFilenameLength - nStringLen;
 
 		if (nTime == 1) {
 			struct tm *ptr;
 			time_t t;
+			int day;
 
 			t = time(0);
 			ptr = localtime(&t);
-			sprintf(szYear, "%d", 1900+ptr->tm_year);
+			day = atoi(szDay);
+			if ((!my_strncasecmp("Jan", szMonth, 3) &&
+			     ((ptr->tm_mon > 0) ||
+			     ((ptr->tm_mon == 0) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Feb", szMonth, 3) &&
+			     ((ptr->tm_mon > 1) ||
+			     ((ptr->tm_mon == 1) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Mar", szMonth, 3) &&
+			     ((ptr->tm_mon > 2) ||
+			     ((ptr->tm_mon == 2) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Apr", szMonth, 3) &&
+			     ((ptr->tm_mon > 3) ||
+			     ((ptr->tm_mon == 3) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("May", szMonth, 3) &&
+			     ((ptr->tm_mon > 4) ||
+			     ((ptr->tm_mon == 4) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Jun", szMonth, 3) &&
+			     ((ptr->tm_mon > 5) ||
+			     ((ptr->tm_mon == 5) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Jul", szMonth, 3) &&
+			     ((ptr->tm_mon > 6) ||
+			     ((ptr->tm_mon == 6) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Aug", szMonth, 3) &&
+			     ((ptr->tm_mon > 7) ||
+			     ((ptr->tm_mon == 7) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Sep", szMonth, 3) &&
+			     ((ptr->tm_mon > 8) ||
+			     ((ptr->tm_mon == 8) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Oct", szMonth, 3) &&
+			     ((ptr->tm_mon > 9) ||
+			     ((ptr->tm_mon == 9) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Nov", szMonth, 3) &&
+			     ((ptr->tm_mon > 10) ||
+			     ((ptr->tm_mon == 10) && (ptr->tm_mday >= day)))) ||
+			    (!my_strncasecmp("Dec", szMonth, 3) &&
+			     (ptr->tm_mday >= day))) {
+				sprintf(szYear, "%d", 1900 + ptr->tm_year);
+			} else {
+				sprintf(szYear, "%d", 1899 + ptr->tm_year);
+			}
 			sprintf(szDate, "%*s%9s %s %s %s %2.2s, %s", nSpaces,
 				" ", itemsize, szFileInfo, szTime, szMonth,
 				szDay, szYear); 
-		}
-		else if (nTime == 0) {
+		} else if (nTime == 0) {
 			sprintf(szDate, "%*s%9s %s %s %s %2.2s, %s", nSpaces,
 				" ", itemsize, szFileInfo, "     ", szMonth,
 				szDay, szYear);
-		}
-		else {
-			/* nSpaces += strlen(itemsize); */
+		} else {
 			sprintf(szDate, "%*s  %9.9s  %s %s", nSpaces, " ",
 				itemsize, szMonth, szTime);
 		}
-/*
-	} else {
-		nOldSpaces = nSpaces;
-		nSpaces += 22;
-		if (nTime == 1) {
-			sprintf(szDate, "%*s  %s %s %2.2s", nSpaces, szFileInfo, szTime, szMonth, szDay); 
-		}
-		else if (nTime == 0) {
-			sprintf(szDate, "%*s  %s %s %2.2s, %s", nSpaces, szFileInfo, "00:00", szMonth, szDay, szYear); 
-		}
-		else {
-			sprintf(szDate, "%*s             %s %s", nOldSpaces, " ", szMonth, szTime);  
-		}
-	}
-*/
-
-	if (usingNLST != 2) {
 		HText_appendText(HT, szDate);
 	}
+
 	HText_appendText(HT, "\n");
 
-	free (full_ftp_name);
-    }
+	free(full_ftp_name);
+  }
   
-  HText_appendText(HT, "</DL>\n");
-  HText_appendText(HT, "</PRE>\n");
+  /* It probably didn't like the -Lla and only sent an EOF */ 
+  if ((lcount <= 1) && (c == (char)EOF)) {
+      broken_crap_hack = 2;
+      rv = response(NIL);
+      broken_crap_hack = 0;
+      return HT_BAD_EOF;
+  }
+
+  HText_appendText(HT, "</DL>\n</PRE>\n");
   HText_endAppend(HT);
 
   /* Some server (wu) don't return a status line at this point */
   broken_crap_hack = 2;
   rv = response(NIL);
   if (broken_crap_hack == 0) {
-    return HT_LOADED;
+      return HT_LOADED;
   } else {
-    broken_crap_hack = 0;
+      broken_crap_hack = 0;
   }
 
   if (rv == HT_INTERRUPTED)
-    return rv;
-  return rv == 2 ? HT_LOADED : -1;
+      return rv;
+  return rv == 2 ? HT_LOADED : HT_FAILED;
 }
 
 
+#ifdef SOCKETSHR
+static jmp_buf accept_env;
+
+static void hung_accept()
+{
+  longjmp(accept_env, 1);
+}
+#endif
 
 /*	Retrieve File from Server
 **	-------------------------
@@ -1739,29 +1828,19 @@ ARGS4 (
 **	returns		Socket number for file if good.
 **			<0 if bad.
 */
-
-#ifdef SOCKETSHR
-jmp_buf accept_env;
-
-void hung_accept()
-{
-  longjmp(accept_env,1);
-}
-#endif /* SOCKETSHR, GEC */
-
-PUBLIC int HTFTPLoad
-ARGS4 (
-  char *,			name,
-  HTParentAnchor *,		anchor,
-  HTFormat,			format_out,
-  HTStream *,			sink
+PUBLIC int HTFTPLoad ARGS4 (
+    char *,			name,
+    HTParentAnchor *,		anchor,
+    HTFormat,			format_out,
+    HTStream *,			sink
 )
 {
   BOOL isDirectory = NO;
   int status;
-  int retry;			/* How many times tried? */
   HTFormat format;
   int compressed = 0;
+  char *filename;
+  int no_Lla = 0;
 #ifdef SOCKETSHR
   int retrya = 0;
   int retryl = 0;
@@ -1771,97 +1850,35 @@ ARGS4 (
 #ifdef SOCKETSHR
 do {
 #endif
+  filename = NULL;		/* For interrupted_exit: */
+
   HTProgress("Retrieval in progress");
   if (fTimerStarted) {
-	XtRemoveTimeOut(timer);
-	fTimerStarted = 0;
+      XtRemoveTimeOut(timer);
+      fTimerStarted = 0;
   }
   HT = HText_new();
   HText_beginAppend(HT);
-  
-  for (retry = 0; retry < 2; retry++) {
-#ifndef DISABLE_TRACE
-      if (www2Trace)
-        fprintf(stderr, "FTP: TRYING in HTFTPLoad, attempt %d\n", retry);
-#endif
-      status = get_connection(name);
-      if (status < 0) {
-          CLOSE_CONTROL(control);
-          control = -1;
-          /* HT_INTERRUPTED will fall through. */
-	  loading_length = -1;
-          return status;
-      }
-      
-      status = get_listen_socket();
-      if (status < 0)
-        {
-	  HText_appendText(HT, "FTP terminated because login failed");
-	  HTProgress("Login failed");
-          CLOSE_CONTROL(control);
-          control = -1;
-          close_master_socket();
-	  loading_length = -1;
-          /* HT_INTERRUPTED would fall through, if we could interrupt
-             somehow in the middle of it, which we currently can't. */
-          return status;
-        }
-      
-      /* Inform the server of the port number we will listen on */
-      {
-        status = response(port_command);
-        if (status == HT_INTERRUPTED) {
-#ifndef DISABLE_TRACE
-            if (www2Trace)
-              fprintf(stderr, "FTP: Interrupted in response (port_command)\n");
-#endif
-	    loading_length = (-1);
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            close_master_socket ();
-            return HT_INTERRUPTED;
-        }
-        if (status != 2) {		/* Could have timed out */
-            if (status < 0) {
-                CLOSE_CONTROL(control);
-                control = -1;
-                close_master_socket();
-                continue;		/* Try again - net error*/
-            }
 
-            CLOSE_CONTROL(control);
-            control = -1;
-            close_master_socket();
-	    loading_length = -1;
-            return HT_NOT_LOADED;	/* Bad reply */
-        }
-#ifndef DISABLE_TRACE
-        if (www2Trace)
-          fprintf(stderr, "FTP: Port defined.\n");
-#endif
-      }
-      status = 0;
-      break;	/* No more retries */
-  } /* For retries */
+ retry_dir:
+  /* Get connection including listen port */
+  status = setup_connection(name);
 
   if (status < 0) {
-      close_master_socket();
-      CLOSE_CONTROL(control);
-      control = -1;
       loading_length = -1;
       return status;	/* Failed with this code */
   }
   
   /* Ask for the file: */    
   {
-    char *filename = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
-    char *fname, *ptr;
-    char command[LINE_LENGTH+1];
+    char *fname;
+    char command[LINE_LENGTH + 1];
     HTAtom *encoding;
 
-    if(!filename || !(*filename)) 
-      StrAllocCopy(filename, "/");
+    filename = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
+
+    if (!filename || !*filename) 
+        StrAllocCopy(filename, "/");
 
     if (ftp_type[0] != '\0') {
 	/* VMS FTP server, so strip version for testing file format */
@@ -1870,10 +1887,10 @@ do {
 	temp_filename = strdup(filename);
 	strip_VMS_version(temp_filename);
 	format = HTFileFormat(temp_filename, &encoding, WWW_PLAINTEXT,
-		&compressed);
+		              &compressed);
         free(temp_filename);
     } else {
-      format = HTFileFormat(filename, &encoding, WWW_PLAINTEXT, &compressed);
+        format = HTFileFormat(filename, &encoding, WWW_PLAINTEXT, &compressed);
     }
 #ifndef DISABLE_TRACE
     if (www2Trace)
@@ -1883,42 +1900,40 @@ do {
         filename = Convert_VMS_FTP_name(filename);
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "FTP: VMS filename is %s\n", filename);
+            fprintf(stderr, "FTP: VMS filename is %s\n", filename);
 #endif
     }
-
-/*
- * The UCX and TWG servers return data differently depending on whether
- * binary or ASCII mode is set.  MultiNet and MadGoat as well as UNIX servers
- * work well with all binary.
- * For UCX and TWG, check the setting in the Options menu, ftp binary
- * mode box.
- * CMU and TCPware are unknown for now so assume they are different.
- *
- * Give UNIX users the choice, because it does make a difference in some
- *   cases.
- */
-    if (ftp_type[0]=='\0' ||
+    /*
+     * The UCX and TWG servers return data differently depending on whether
+     * binary or ASCII mode is set.  MultiNet and MadGoat as well as UNIX
+     * servers work well with all binary.
+     * For UCX and TWG, check the setting in the Options menu, ftp binary
+     * mode box.
+     * CMU and TCPware are unknown for now so assume they are different.
+     *
+     * Give UNIX users the choice, because it does make a difference in some
+     *   cases.
+     */
+    if ((ftp_type[0] == '\0') ||
 	!strcmp(ftp_type, "UCX") || !strcmp(ftp_type, "TWG") ||
         !strcmp(ftp_type, "CMU") || !strcmp(ftp_type, "TCPware")) {
-      if (get_pref_boolean(eFTP_BINARY_MODE))
-        sprintf(command, "TYPE %s%c%c", "I", CR, LF);
-      else
-        sprintf(command, "TYPE %s%c%c", "A", CR, LF);
+        if (get_pref_boolean(eFTP_BINARY_MODE)) {
+            sprintf(command, "TYPE %s%c%c", "I", CR, LF);
+        } else {
+            sprintf(command, "TYPE %s%c%c", "A", CR, LF);
+        }
     } else {
-      sprintf(command, "TYPE %s%c%c", "I", CR, LF);
+        sprintf(command, "TYPE %s%c%c", "I", CR, LF);
     }
 
     status = response(command);
     if (status != 2) {
         if (status == HT_INTERRUPTED)
-          HTProgress("Connection interrupted.");
-        close_master_socket();
-        CLOSE_CONTROL(control);
-        control = -1;
+            goto interrupted_exit;
+        close_control();
         free(filename);
-	loading_length = (-1);
-        return (status == HT_INTERRUPTED) ? HT_INTERRUPTED : -1;
+	loading_length = -1;
+        return -1;
     }
 
     fname = strdup(filename);
@@ -1931,19 +1946,35 @@ do {
             if (www2Trace)
 		fprintf(stderr, "FTP: Interrupted while sending CWD\n");
 #endif
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            close_master_socket();
-            free(filename);
-            loading_length = -1;
-            return HT_INTERRUPTED;
+	    free(fname);
+	    goto interrupted_exit;
         }
     }
 
     if ((ftp_type[0] == '\0') || (fname[strlen(fname) - 1] != ']')) {
 	sprintf(command, "RETR %s%c%c", fname, CR, LF);
 	status = response(command);
+	if ((status >= 5) && ProFTPD_bug) {
+	    int pstatus;
+
+	    fprintf(stderr, "FTP: working around broken ProFTPD server.\n");
+	    close_control();
+
+	    /* Do not redisplay login text */
+	    ProFTPD_nodisplay = TRUE;
+
+	    pstatus = setup_connection(name);
+	    ProFTPD_nodisplay = FALSE;
+
+	    if (pstatus < 0) {
+		fprintf(stderr, "FTP: failed reconnect to ProFTPD server.\n");
+		free(filename);
+		free(fname);
+		loading_length = -1;
+		return -1;
+	    }
+	    ftpcache.control = -1;	/* Must always restart when ProFTPD */
+	}
     } else {
 	/* Don't try to retrieve a VMS directory */
 	status = 5;
@@ -1951,15 +1982,10 @@ do {
     if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "FTP: Interrupted while sending RETR\n");
+            fprintf(stderr, "FTP: Interrupted while sending RETR\n");
 #endif
-        HTProgress("Connection interrupted.");
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        free(filename);
-	loading_length = -1;
-        return HT_INTERRUPTED;
+	free(fname);
+	goto interrupted_exit;
     }
 
     if (status != 1) {  /* Failed : try to CWD to it */
@@ -1968,25 +1994,19 @@ do {
         if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
             if (www2Trace)
-              fprintf(stderr, "FTP: Interrupted while sending CWD\n");
+                fprintf(stderr, "FTP: Interrupted while sending CWD\n");
 #endif
-            HTProgress("Connection interrupted.");
-            CLOSE_CONTROL(control);
-            control = -1;
-            close_master_socket();
-            free(filename);
-	    loading_length = -1;
-            return HT_INTERRUPTED;
+	    free(fname);
+	    goto interrupted_exit;
         }
 
 	/* If we failed CWD and are using VMS server, skip it */
-	if ((status == 5) && (ftp_type[0] != '\0')) {
-		goto skipDir;
-	}
+	if ((status == 5) && (ftp_type[0] != '\0'))
+	    goto skipDir;
 
 	/* If status is 2, we successfully did a CWD */
         if (status == 2) {
-                if (ftp_type[0] == '\0') {
+                if ((ftp_type[0] == '\0') && !no_Lla) {
 		    /* Successed : let's NLST it */
 		    isDirectory = YES;
 		    usingNLST = 1;
@@ -1995,16 +2015,11 @@ do {
 		    if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
 			if (www2Trace)
-				fprintf(stderr,
-				       "FTP: Interrupted while sending LIST\n");
+			    fprintf(stderr,
+				    "FTP: Interrupted while sending LIST\n");
 #endif
-			HTProgress("Connection interrupted.");
-			CLOSE_CONTROL(control);
-			control = -1;
-			close_master_socket();
-			free(filename);
-			loading_length = (-1);
-			return HT_INTERRUPTED;
+			free(fname);
+			goto interrupted_exit;
 		    }
                 } else {
 		    status = 5;
@@ -2021,17 +2036,12 @@ do {
 			status = response(command);
 			if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
-				if (www2Trace)
-				    fprintf(stderr,
+			    if (www2Trace)
+				 fprintf(stderr,
 				       "FTP: Interrupted while sending NLST\n");
 #endif
-				HTProgress("Connection interrupted.");
-				CLOSE_CONTROL(control);
-				control = -1;
-				close_master_socket();
-				free(filename);
-				loading_length = -1;
-				return HT_INTERRUPTED;
+			    free(fname);
+			    goto interrupted_exit;
 			}
 		    }
                 }
@@ -2043,37 +2053,30 @@ do {
 			status = response(command);
 			if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
-				if (www2Trace)
-				    fprintf(stderr,
+			    if (www2Trace)
+				fprintf(stderr,
 				       "FTP: Interrupted while sending LIST\n");
 #endif
-				HTProgress("Connection interrupted.");
-				CLOSE_CONTROL(control);
-				control = -1;
-				close_master_socket();
-				free(filename);
-				loading_length = (-1);
-				return HT_INTERRUPTED;
+			    free(fname);
+			    goto interrupted_exit;
 			}
 		}
 	}
     }
 
-skipDir:
+ skipDir:
 
     free(filename);
+    filename = NULL;
     free(fname);
+
     if (status != 1) {
-#ifdef SOCKETSHR
 #ifndef DISABLE_TRACE
         if (www2Trace)
-	  fprintf(stderr, "FTP: LIST directory returned with status %d\n",
-		status);
+	    fprintf(stderr, "FTP: LIST directory returned with status %d\n",
+		    status);
 #endif
-#endif
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
+        close_control();
 #ifdef SOCKETSHR
 	if (retryl != 8) {
 	    retryl++;
@@ -2083,7 +2086,7 @@ skipDir:
 	}
 #ifndef DISABLE_TRACE
         if (www2Trace)
-	  fprintf(stderr, "FTP: Retries failed.  Now return.\n");
+	    fprintf(stderr, "FTP: Retries failed.  Now return.\n");
 #endif
         HTProgress("Directory list failed due to SOCKETSHR/NETLIB bug.");
 #endif
@@ -2102,103 +2105,108 @@ skipDir:
     size_t soc_addrlen = sizeof(soc_address);
 #endif
 #ifdef SOCKETSHR
-    if (setjmp(accept_env))
-      {
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-	if (retrya != 8)
-	  {
+    if (setjmp(accept_env)) {
+        close_control();
+	if (retrya != 8) {
 	    retrya++;
 	    fprintf(stderr, "FTP: Retry %d.\n", retrya);
             continue;
-	  }
+	}
 #ifndef DISABLE_TRACE
         if (www2Trace)
-	  fprintf(stderr, "FTP: Retries failed.  Now return.\n");
+	    fprintf(stderr, "FTP: Retries failed.  Now return.\n");
 #endif
         HTProgress("Connection failed due to SOCKETSHR/NETLIB bug.");
 	loading_length = (-1);
         return HT_NOT_LOADED;
-      }
+    }
     signal(SIGALRM, hung_accept);
     alarm(stimer);
 #endif /* SOCKETSHR, GEC */
+
 #ifdef SOCKS
-    status = Raccept(master_socket,
+    status = Raccept(master_socket, (struct sockaddr *)&soc_address,
 #else
-    status = accept(master_socket,
+    status = accept(master_socket, (struct sockaddr *)&soc_address,
 #endif
-                    (struct sockaddr *)&soc_address,
 #ifndef __GNUC__
                     &soc_addrlen);
 #else
                     (int)&soc_addrlen);
 #endif /* GNU C is picky, GEC */
+
 #ifdef SOCKETSHR
     alarm(0);
 #ifndef DISABLE_TRACE
     if (www2Trace)
-	fprintf (stderr, "FTP: Returned from accept\n");
+	fprintf(stderr, "FTP: Returned from accept\n");
 #endif
 #endif
 
     if (status < 0) {
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
+        close_control();
         /* We can't interrupt out of an accept. */
 	loading_length = -1;
         return HT_NOT_LOADED;
     }
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) {
+    if (www2Trace)
 	fprintf(stderr, "FTP: Accepted new socket %d\n", status);
-    }
 #endif
-
     data_soc = status;
   }
 
-  if (isDirectory) 
-    {
-      int s = read_directory(anchor, name, format_out, sink);
+  if (isDirectory) {
+      int s = read_directory(anchor, name, format_out, sink, !no_Lla);
 
       loading_length = -1;
-      close_master_socket();
       NETCLOSE(data_soc);
       data_soc = -1;
 
+      /* Check for NLST -Lla failure */
+      if ((s == HT_BAD_EOF) && !no_Lla) {
+#ifndef DISABLE_TRACE
+          if (www2Trace)
+              fprintf(stderr, "FTP: Bad EOF.  Retrying read_directory\n");
+#endif
+	  no_Lla = 1;
+          goto retry_dir;
+      }
+
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf(stderr, "FTP: Returning %d after doing read_directory\n", s);
+          fprintf(stderr, "FTP: Returning %d after doing read_directory\n", s);
 #endif
-      /* HT_INTERRUPTED should fall right through. */
+      /* Eventually close up the sockets if not reused */
+      timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000,
+		              (XtTimerCallbackProc)close_it_up, NULL);
+      fTimerStarted = 1;
+
+      /* HT_INTERRUPTED falls through. */
       return s;
-    } 
-  else 
-    {
+  } else {
       /* We reproduce ParseSocket below because of socket/child process
          problem. */
       HTStream *stream;
       HTStreamClass targetClass;    
       int rv;
       
-      stream = HTStreamStack(format,
-                             format_out,
-                             compressed,
-                             sink, anchor);
-      
+      stream = HTStreamStack(format, format_out, compressed, sink, anchor);
+
       if (!stream) {
           char buffer[1024];	/* @@@@@@@@ */
+
           sprintf(buffer, "Sorry, can't convert from %s to %s.",
                   HTAtom_name(format), HTAtom_name(format_out));
           HTProgress(buffer);
 #ifndef DISABLE_TRACE
           if (www2Trace) 
-            fprintf(stderr, "FTP: %s\n", buffer);
+              fprintf(stderr, "FTP: %s\n", buffer);
 #endif
+	  NETCLOSE(data_soc);
+	  data_soc = -1;
+	  close_control();
 	  loading_length = (-1);
           return HT_NOT_LOADED;
       }
@@ -2215,87 +2223,101 @@ skipDir:
           /* Do NOT call *targetClass.free yet -- sockets aren't closed. */
           rv = HT_LOADED;
       }
-
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf(stderr,
-		"FTP: Got back %d from our local equivalent of ParseSocket\n",
-		 rv);
+          fprintf(stderr,
+		  "FTP: Got back %d from our local equivalent of ParseSocket\n",
+		   rv);
 #endif
-
-      /* Reset buffering to control connection -- probably
-         no longer necessary, since we don't use a connection
-         more than once. */
+      /* Reset buffering to control connection -- probably no longer
+       * necessary, since we don't use a connection more than once. */
       HTInitInput(control);
 
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf(stderr, "FTP: Closing data socket %d\n", data_soc);
+          fprintf(stderr, "FTP: Closing data socket %d\n", data_soc);
 #endif
       NETCLOSE(data_soc);
       data_soc = -1;
 
       /* Unfortunately, picking up the final reply sometimes causes
-         serious problems.  It *probably* isn't safe not to do this,
-         as there is the possibility that FTP servers could die if they
-         try to send it and we're not listening.
-
-         Testcase for problems (10/30/93): uxc.cso.uiuc.edu,
-         AnswerGarden COPYRIGHT in X11R5 contrib clients.
-         
-         Of course, we may already be triggering hostile actions
-         by allowing client-side interrupts as follows... */
-      if (rv != HT_INTERRUPTED)
-        {
+       * serious problems.  It *probably* isn't safe not to do this,
+       * as there is the possibility that FTP servers could die if they
+       * try to send it and we're not listening.
+       *
+       * Testcase for problems (10/30/93): uxc.cso.uiuc.edu,
+       * AnswerGarden COPYRIGHT in X11R5 contrib clients.
+       *
+       * Of course, we may already be triggering hostile actions
+       * by allowing client-side interrupts as follows...
+       */
+      if (rv != HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
           if (www2Trace)
-            fprintf(stderr, "FTP: Picking up final reply...\n");
+              fprintf(stderr, "FTP: Picking up final reply...\n");
 #endif
+	  broken_crap_hack = 2;			/* Time it out quick */
 
           status = response(NIL);		/* Pick up final reply */
+
+	  if (!broken_crap_hack) {
+#ifndef DISABLE_TRACE
+              if (www2Trace)
+                  fprintf(stderr, "FTP: Final reply timeout.\n");
+#endif
+	      goto finished;
+	  } else {
+	      broken_crap_hack = 0;
+	  }
+
           if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                fprintf(stderr, "FTP: Interrupted picking up final reply.\n");
+                  fprintf(stderr, "FTP: Interrupted in final reply.\n");
 #endif
               HTProgress("Connection interrupted.");
-
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
+              close_control();
 
               (*targetClass.handle_interrupt)(stream);
 
               return HT_INTERRUPTED;
           }
           if (status != 2) {
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
+              close_control();
               return HT_NOT_LOADED;
           }
-        }
-      
-      close_master_socket();
 
-      if (rv != HT_INTERRUPTED) {
-          /* WAIT until all sockets have been closed. */
+ finished:
 #ifndef DISABLE_TRACE
           if (www2Trace)
-            fprintf(stderr, "FTP: Calling free method, finally.\n");
+              fprintf(stderr, "FTP: Calling free method, finally.\n");
 #endif
+	  /* Wait until all sockets have been closed. */
           (*targetClass.free)(stream);
+      } else {
+          close_control();
+	  return rv;
       }
 
+      /* Eventually close up the sockets if not reused */
       timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000,
-		close_it_up, NULL);
+		              (XtTimerCallbackProc)close_it_up, NULL);
       fTimerStarted = 1;
 
-      return rv == HT_INTERRUPTED ? HT_INTERRUPTED : HT_LOADED;
-    }
+      return rv;
+  }
 #ifdef SOCKETSHR
-  } while (1);
+ } while (1);     /* End of SOCKETSHR do while loop */
 #endif
+
+ interrupted_exit:
+  HTProgress("Connection interrupted.");
+  close_control();
+  if (filename)
+      free(filename);
+  loading_length = -1;
+  return HT_INTERRUPTED;
+
 } /* End HTFTPLoad */
 
 
@@ -2304,16 +2326,16 @@ skipDir:
 **                   the remote directory name.
 ** Returns     0 if successful, nonzero on error
 */
-PUBLIC int HTFTPMkDir ARGS1 ( char *, name )
+PUBLIC int HTFTPMkDir ARGS1 (char *, name )
 {
  char *curpath, *path;
  char command[LINE_LENGTH + 1];
- int status, method = 0;
+ int status;
 
  HTProgress("FTP mkdir in progress");
  if (fTimerStarted) {
-   XtRemoveTimeOut(timer);
-   fTimerStarted = 0;
+     XtRemoveTimeOut(timer);
+     fTimerStarted = 0;
  }
 
  /* Some routines may try to append text into it, so NULL it */
@@ -2321,21 +2343,16 @@ PUBLIC int HTFTPMkDir ARGS1 ( char *, name )
 
  /* Open a connection (or get a cached connection) to the FTP site */
  status = get_connection(name);
- if (status < 0) {
-   CLOSE_CONTROL(control);
-   control = -1;
-   return status;
- }
+ if (status < 0)
+     return status;
 
  /* The remote directory name is in the url, so pull it out 
     i.e. ftp://warez.yomama.com/pub/31337&warez_boy
     means to make the directory warez_boy at ftp://warez.yomama.com/pub/31337
  */
  if ((path = strchr(name, '&')) == NULL) { /* No dirname in this URL */
-   close_master_socket();
-   CLOSE_CONTROL(control);
-   control = -1;
-   return -1;
+     close_control();
+     return HT_FAILED;
  }
  *path = '\0';              /* Make the url normal */
  path++;            /* Move to the dirname */
@@ -2343,9 +2360,9 @@ PUBLIC int HTFTPMkDir ARGS1 ( char *, name )
 
  curpath = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION); 
  if (!curpath || !(*curpath)) 
-   curpath = strdup("/");
- /* curpath is the remote directory in which to create path */
+     curpath = strdup("/");
 
+ /* curpath is the remote directory in which to create path */
 #ifndef DISABLE_TRACE
     if (www2Trace)
 	fprintf(stderr, "FTPmkdir: path is %s\n", curpath);
@@ -2358,85 +2375,79 @@ PUBLIC int HTFTPMkDir ARGS1 ( char *, name )
         /* [dir1]dir2 is not allowed, convert to [dir1.dir2] */
         ptr = curpath + strlen(curpath) - 1;
         if ((*ptr != ']') && strchr(curpath, ']')) {
-           /* Append a ] */
-           ptr++;
-           *ptr = ']';
-           ptr++;
-           *ptr = '\0';
+            /* Append a ] */
+            ptr++;
+            *ptr = ']';
+            ptr++;
+            *ptr = '\0';
 
-           /* Change first ] to a . */
-           ptr = strchr(curpath, ']');
-           *ptr = '.';
+            /* Change first ] to a . */
+            ptr = strchr(curpath, ']');
+            *ptr = '.';
         }
 
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "FTPmkdir: VMS path is %s\n", curpath);
+            fprintf(stderr, "FTPmkdir: VMS path is %s\n", curpath);
 #endif
     }
 
     if (ftp_type[0] != '\0') {
         sprintf(command, "CWD %s%c%c", ftp_root_directory, CR, LF);
         status = response(command);
-        if (status != 2) {
-          close_master_socket();
-          CLOSE_CONTROL(control);
-          control = -1;
-          if (status == HT_INTERRUPTED)
-            HTProgress("Connection interrupted.");
-          return (status == HT_INTERRUPTED) ? -2 : -1;
-        }
+        if (status != 2)
+	    goto error_exit;
     }
 
  /* First change to current directory on the server */
  sprintf(command, "CWD %s%c%c", curpath, CR, LF);
  status = response(command);
- if (status != 2) {
-   close_master_socket();
-   CLOSE_CONTROL(control);
-   control = -1;
-   if (status == HT_INTERRUPTED) 
-     HTProgress("Connection interrupted");
-   return (status == HT_INTERRUPTED) ? -2 : -1;
- }
+ if (status != 2)
+     goto error_exit;
 
  /* Now create the directory on the server */
  sprintf(command, "MKD %s%c%c", path, CR, LF);
  status = response(command);
- if (status != 2) {
-   close_master_socket();
-   CLOSE_CONTROL(control);
-   control = -1;
-   if (status == HT_INTERRUPTED) 
-     HTProgress("Connection interrupted");
-   return (status == HT_INTERRUPTED) ? -2 : -1;
- }
+ if (status != 2)
+     goto error_exit;
 
  /* Clean up */
- close_master_socket();
- timer = XtAppAddTimeOut(app_context, ftp_timeout_val*1000, close_it_up, NULL);
+ timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000,
+			 (XtTimerCallbackProc)close_it_up, NULL);
  fTimerStarted = 1;
  HTProgress("Created remote directory.");
- return 0;
+ return HT_OK;
+
+error_exit:
+
+ close_control();
+ if (status == HT_INTERRUPTED) {
+     HTProgress("Connection interrupted.");
+     return status;
+ } else {
+     return HT_FAILED;
+ }
+
 } /* End HTFTPMkDir */
 
 
 /* HTFTRemove  Request that a file (or directory) be removed from the FTP site
-** Expects:    *name is a pointer to a string that consists of the FTP URL with the remote filename
-**             included.
+** Expects:    *name is a pointer to a string that consists of the FTP URL
+**	       with the remote filename included.
 ** Returns     0 if successful, nonzero on error
 */
-PUBLIC int HTFTPRemove ARGS1 ( char *, name )
+PUBLIC int HTFTPRemove ARGS1 (char *, name )
 {
- char *fname, *path, *name_ptr;
- char filename[LINE_LENGTH+1];
- char command[LINE_LENGTH+1];
- int status, method = 0, didIt = 0;
+ char *fname, *name_ptr;
+ char filename[LINE_LENGTH + 1];
+ char command[LINE_LENGTH + 1];
+ int status, method;
+ int didIt = 0;
 
  HTProgress("FTP remove in progress");
- if(fTimerStarted) {
-   XtRemoveTimeOut(timer);
-   fTimerStarted = 0;
+ if (fTimerStarted) {
+     XtRemoveTimeOut(timer);
+     fTimerStarted = 0;
  }
 
  /* Some routines may try to append text into it, so NULL it */
@@ -2444,167 +2455,135 @@ PUBLIC int HTFTPRemove ARGS1 ( char *, name )
 
  /* Open a connection (or get a cached connection) to the FTP site */
  status = get_connection(name);
- if (status < 0) {
-   CLOSE_CONTROL(control);
-   control = -1;
-   return status;
- }
+ if (status < 0)
+     return status;
 
  /* Pull out the filename (and path) */
  fname = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
  if (!fname || !(*fname)) 
-   StrAllocCopy(fname, "/");
+     StrAllocCopy(fname, "/");
 
 #ifndef DISABLE_TRACE
-    if (www2Trace)
-	fprintf(stderr, "FTPremove: filename is %s\n", fname);
+ if (www2Trace)
+     fprintf(stderr, "FTPremove: filename is %s\n", fname);
 #endif
-    if (ftp_type[0] != '\0') {
-        fname = Convert_VMS_FTP_name(fname);
+ if (ftp_type[0] != '\0') {
+     fname = Convert_VMS_FTP_name(fname);
 #ifndef DISABLE_TRACE
-        if (www2Trace)
-          fprintf(stderr, "FTPremove: VMS filename is %s\n", fname); /* PGE */
+     if (www2Trace)
+         fprintf(stderr, "FTPremove: VMS filename is %s\n", fname); /* PGE */
 #endif
-    }
+ }
 
  /* Pull out just the filename */
- if (ftp_type[0] != '\0')
-    name_ptr = strrchr(fname, ']');
- else
-    name_ptr = strrchr(fname, '/');
- if (name_ptr) {
-    name_ptr++;
-    strcpy(filename, name_ptr);
-    if (ftp_type[0] != '\0')
-       *name_ptr = '\0';
+ if (ftp_type[0] != '\0') {
+     name_ptr = strrchr(fname, ']');
  } else {
-    filename[0] = '\0';
+     name_ptr = strrchr(fname, '/');
+ }
+ if (name_ptr) {
+     name_ptr++;
+     strcpy(filename, name_ptr);
+     if (ftp_type[0] != '\0')
+         *name_ptr = '\0';
+ } else {
+     filename[0] = '\0';
  } 
  if (!(*filename)) {   /* No filename in the URL */
-   close_master_socket();
-   CLOSE_CONTROL(control);
-   control = -1;
-   return -1;
+     close_control();
+     return HT_FAILED;
  }
  
  /* fname is the full path to the file, *filename is just the filename */
- for (method = 0; method < 2; method++ ) {
-
-    if (ftp_type[0] != '\0') {
-        sprintf(command, "CWD %s%c%c", ftp_root_directory, CR, LF);
-        status = response(command);
-        if (status != 2) {
-          close_master_socket();
-          CLOSE_CONTROL (control);
-          control = -1;
-          if (status == HT_INTERRUPTED)
-            HTProgress("Connection interrupted.");
-          return (status == HT_INTERRUPTED) ? -2 : -1;
-        }
-    }
-
-   switch (method) {
-
-     /* First, attempt to CWD to fname, if successful, fname is a directory. 
-      So, CDUP to get to the parent and call RMD on filename  */
-   case 0:
-     if (ftp_type[0] == '\0') {
-       sprintf(command, "CWD %s%c%c", fname, CR, LF);
-       status = response(command);
-     } else {
-       sprintf(command, "CWD %s%c%c", fname, CR, LF);
-       status = response(command);
-       sprintf(command, "CWD %s%c%c", filename, CR, LF);
-       status = response(command);
-     }
-     if (status != 2) {
-       if (status == 5) {  /* Not a directory */
-           continue;
-       }
-       close_master_socket();
-       CLOSE_CONTROL(control);
-       control = -1;
-       if (status == HT_INTERRUPTED) 
-           HTProgress ("Connection interrupted.");
-       return (status == HT_INTERRUPTED) ? -2 : -1;
-     }
-     /* Must be a directory, move up and RMD it*/
+ for (method = 0; method < 2; method++) {
      if (ftp_type[0] != '\0') {
-        sprintf(command, "CDUP%c%c", CR, LF);
-     } else {
-        *(name_ptr-1) = 0; /* Make fname -> just the path of parent directory */
-        sprintf(command, "CWD %s%c%c", fname, CR, LF);
-     }
-     status = response(command);
-     if (status != 2) {
-       close_master_socket();
-       CLOSE_CONTROL(control);
-       control = -1;
-       if (status == HT_INTERRUPTED) 
-           HTProgress("Connection interrupted.");
-       return (status == HT_INTERRUPTED) ? -2 : -1;
+         sprintf(command, "CWD %s%c%c", ftp_root_directory, CR, LF);
+         status = response(command);
+         if (status != 2)
+	     goto error_exit;
      }
 
-     if (ftp_type[0] != '\0')
-        strcat(filename, ".dir;0");
+     switch (method) {
 
-     sprintf(command, "RMD %s%c%c", filename, CR, LF);
-     status = response(command);
-     if (status != 2) {
-       close_master_socket();
-       CLOSE_CONTROL(control);
-       control = -1;
-       if (status == HT_INTERRUPTED)
-       HTProgress("Connection interrupted.");
-       return (status == HT_INTERRUPTED) ? -2 : status;
-     }
-     didIt = 1;
-     break;
+       /* First, attempt to CWD to fname, if successful, fname is a directory. 
+        * So, CDUP to get to the parent and call RMD on filename  */
+       case 0:
+          if (ftp_type[0] == '\0') {
+              sprintf(command, "CWD %s%c%c", fname, CR, LF);
+              status = response(command);
+          } else {
+              sprintf(command, "CWD %s%c%c", fname, CR, LF);
+              status = response(command);
+      	      sprintf(command, "CWD %s%c%c", filename, CR, LF);
+              status = response(command);
+          }
+          if (status != 2) {
+              if (status == 5)  /* Not a directory */
+                  continue;
+              goto error_exit;
+          }
+          /* Must be a directory, move up and RMD it*/
+          if (ftp_type[0] != '\0') {
+              sprintf(command, "CDUP%c%c", CR, LF);
+          } else {
+              *(name_ptr - 1) = 0; /* Make fname -> the path of parent dir */
+              sprintf(command, "CWD %s%c%c", fname, CR, LF);
+          }
+          status = response(command);
+          if (status != 2)
+	      goto error_exit;
 
-     /* If the first attempt failed, CWD to fname and DELE filename */
-   case 1:
-     if (ftp_type[0] == '\0')
-        *(name_ptr-1) = 0;  /* Make fname -> just the path of the file */
-     sprintf(command, "CWD %s%c%c", fname, CR, LF);
-     status = response(command);
-     if (status != 2) {
-       close_master_socket();
-       CLOSE_CONTROL(control);
-       control = -1;
-       if (status == HT_INTERRUPTED) {
-           HTProgress("Connection interrupted.");
-       }
-       return (status == HT_INTERRUPTED) ? HT_INTERRUPTED : status;
-     }
+          if (ftp_type[0] != '\0')
+              strcat(filename, ".dir;0");
 
-     if (ftp_type[0] != '\0') {
-        if (strchr(filename, ';') == 0)
-           strcat(filename, ";*");
-     }
+          sprintf(command, "RMD %s%c%c", filename, CR, LF);
+          status = response(command);
+          if (status != 2)
+	      goto error_exit;
+          didIt = 1;
+          break;
 
-     sprintf(command, "DELE %s%c%c", filename, CR, LF);
-     status = response(command);
-     if (status != 2) {
-       close_master_socket();
-       CLOSE_CONTROL(control);
-       control = -1;
-       if (status == HT_INTERRUPTED) {
-           HTProgress("Connection interrupted.");
-       }
-       return (status == HT_INTERRUPTED) ? -2 : status;
-     }
-     didIt = 1;
-     break;
-   } /* End of switch (method) */
-   if (didIt)
-     break;
- } /* End for(method.. */
+       /* If the first attempt failed, CWD to fname and DELE filename */
+       case 1:
+          if (ftp_type[0] == '\0')
+              *(name_ptr-1) = 0;  /* Make fname -> just the path of the file */
+          sprintf(command, "CWD %s%c%c", fname, CR, LF);
+          status = response(command);
+          if (status != 2)
+	      goto error_exit;
+
+          if (ftp_type[0] != '\0') {
+              if (strchr(filename, ';') == 0)
+                  strcat(filename, ";*");
+          }
+
+          sprintf(command, "DELE %s%c%c", filename, CR, LF);
+          status = response(command);
+          if (status != 2)
+	      goto error_exit;
+          didIt = 1;
+          break;
+     } /* End of switch (method) */
+     if (didIt)
+         break;
+ }
 
  /* Clean up */
- close_master_socket();
- timer = XtAppAddTimeOut(app_context, ftp_timeout_val*1000, close_it_up, NULL);
+ timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000,
+			 (XtTimerCallbackProc)close_it_up, NULL);
  fTimerStarted = 1;
- return 0;
+ return HT_OK;
+
+error_exit:
+
+ close_control();
+ if (status == HT_INTERRUPTED) {
+     HTProgress("Connection interrupted.");
+     return status;
+ } else {
+     return HT_FAILED;
+ }
+
 } /* End HTFTPRemove */
 
 
@@ -2616,15 +2595,17 @@ PUBLIC int HTFTPRemove ARGS1 ( char *, name )
 ** Returns     0 if successful, nonzero on error
 */
 #define OUTBUFSIZE 4096  /* Size of the chunk of the file read */
-PUBLIC int HTFTPSend ARGS1 (char *, name ) {
- int status;
- FILE *f;
- char *fname, *filename, *path;
- char command[LINE_LENGTH+1], outBuf[OUTBUFSIZE+1];
- long bLeft, bDone, bTotal, chunk;
- extern int twirl_increment;
- int next_twirl = twirl_increment, intr = 0;
- struct sockaddr_in soc_address;
+PUBLIC int HTFTPSend ARGS1 (char *, name )
+{
+    int status;
+    FILE *f;
+    char *fname, *filename, *path;
+    char command[LINE_LENGTH + 1], outBuf[OUTBUFSIZE + 1];
+    long bLeft, bDone, bTotal, chunk;
+    extern int twirl_increment;
+    int next_twirl = twirl_increment;
+    int intr = 0;
+    struct sockaddr_in soc_address;
 #if !defined(VMS) || (__DECC_VER < 50230003)
     int soc_addrlen = sizeof(soc_address);
 #else
@@ -2633,152 +2614,102 @@ PUBLIC int HTFTPSend ARGS1 (char *, name ) {
 
 #ifdef VMS
 #if (stat != decc$stat) || !defined(MULTINET)
- struct stat sbuf;
+    struct stat sbuf;
 #else
 #undef stat
- struct stat sbuf;
+    struct stat sbuf;
 #define stat decc$stat
 #endif /* VMS MultiNet work around, GEC, VRH */
 #else
- struct stat sbuf;
+    struct stat sbuf;
 #endif
  
-      HTProgress("FTP send in progress.");
+    HTProgress("FTP send in progress.");
 
-      if (fTimerStarted) {
+    if (fTimerStarted) {
         XtRemoveTimeOut(timer);
         fTimerStarted = 0;
-      }
+    }
       
-      /* Some routines may try to append text into it, so NULL it */
-      HT = NULL;
+    /* Some routines may try to append text into it, so NULL it */
+    HT = NULL;
 
-      /* The local filename is in the url, so pull it out 
-            i.e. ftp://warez.yomama.com/pub/31337&/u/warezboy/Mosaic0.1a.tar.gz
-            means to send /u/warezboy/Mosaic0.1a.tar.gz to warez.yomama.com/pub/31337
-      */
-      if ((fname = strchr(name, '&')) == NULL) {
+    /* The local filename is in the url, so pull it out 
+     * i.e., ftp://warez.yomama.com/pub/31337&/u/warezboy/Mosaic0.1a.tar.gz
+     * means to send /u/warezboy/Mosaic0.1a.tar.gz to warez.yomama.com/pub/31337
+     */
+    if ((fname = strchr(name, '&')) == NULL) {
 	/* No local filename in this URL */
-        close_master_socket();
-        CLOSE_CONTROL(control);
-        control = -1;
-        return -1;
-      }
+        close_control();
+        return HT_NOT_SENT;
+    }
 
-      *fname = '\0';        /* Make the url normal */
-      fname++;              /* Move to the filename */
+    *fname = '\0';        /* Make the url normal */
+    fname++;              /* Move to the filename */
 
 #ifndef VMS   /* PGE, Use VMS file syntax for local file */
-      filename = strrchr(fname, '/');
-      filename++;
-      if (!*filename) {
+    filename = strrchr(fname, '/');
+    filename++;
+    if (!*filename) {
 #else
-      filename = strrchr(fname, ']');
-      if (!filename || !(*filename++) || !*filename) {   /* No filename */
+    filename = strrchr(fname, ']');
+    if (!filename || !(*filename++) || !*filename) {   /* No filename */
 #endif
-        close_master_socket();
-        CLOSE_CONTROL(control);
-        control = -1;
-        return -1;            
-      }
+        close_control();
+        return HT_NOT_SENT;
+    }
 
-      /* *fname is the full path and filename, *filename is filename */ 
-      /* Get size information */
+    /* *fname is the full path and filename, *filename is filename */ 
+    /* Get size information */
 #if defined(MULTINET) && defined(__alpha)
-      if (decc$stat(fname, &sbuf) < 0) {
+    if (decc$stat(fname, &sbuf) < 0) {
 #else
-      if (stat(fname, &sbuf) < 0) {
+    if (stat(fname, &sbuf) < 0) {
 #endif /* Alpha DEC C couldn't find it otherwise ?????, GEC */
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        return -1;
-      }
+        close_control();
+        return HT_NOT_SENT;
+    }
               
-      bTotal = sbuf.st_size;
+    bTotal = sbuf.st_size;
 #ifndef DISABLE_TRACE
-      if (www2Trace)
+    if (www2Trace)
         fprintf(stderr, "HTFTPSend: Attempting to send %s (%s) (%lu)\n",
 		fname, filename, bTotal);
 #endif
 
-      status = get_connection(name);
-      if (status < 0) {
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        return status;
-      }
-
-      status = get_listen_socket();
-      if (status < 0) {
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        return status;
-      }
+    status = setup_connection(name);
+    if (status < 0)
+	goto error_exit;
       
-      status = response(port_command);
-      if (status == HT_INTERRUPTED) {
-        HTProgress("Connection interrupted.");
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        return -2;
-      }
+    /* Logged in, set up the port, now let's send the sucka */
 
-      if (status != 2) {      /* If the port command was not successful */
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();
-        if (status < 0) { /* If we were to try again, we would do it here.... */
-          return -3;
-        }
-        return -3;
-      }
-      
-      /* Logged in, set up the port, now let's send the sucka */
+    if (get_pref_boolean(eFTP_BINARY_MODE)) {
+        sprintf(command, "TYPE %s%c%c", "I", CR, LF);
+    } else {
+        sprintf(command, "TYPE %s%c%c", "A", CR, LF);
+    }
 
-        if (get_pref_boolean(eFTP_BINARY_MODE))
-          sprintf(command, "TYPE %s%c%c", "I", CR, LF);
-        else
-          sprintf(command, "TYPE %s%c%c", "A", CR, LF);
+    status = response(command);    
+    if (status != 2)
+	goto error_exit;
 
-      status = response (command);    
-      if (status != 2) {
-              close_master_socket();
-              CLOSE_CONTROL(control);
-              control = -1;
-              if (status == HT_INTERRUPTED) 
-                      HTProgress("Connection interrupted.");
-              return (status == HT_INTERRUPTED) ? -2 : -1;        
-      }
-      
-    if (ftp_type[0] != '\0')
-      {
+    if (ftp_type[0] != '\0') {
         sprintf(command, "CWD %s%c%c", ftp_root_directory, CR, LF);
         status = response(command);
-        if (status != 2) {
-          close_master_socket();
-          CLOSE_CONTROL(control);
-          control = -1;
-          if (status == HT_INTERRUPTED)
-            HTProgress("Connection interrupted.");
-          return (status == HT_INTERRUPTED) ? -2 : -1;
-        }
-      }
+        if (status != 2)
+	    goto error_exit;
+    }
 
-      /* Move to correct directory */
-      path = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
-      if (!path || !(*path))
-              StrAllocCopy(path, "/");
+    /* Move to correct directory */
+    path = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
+    if (!path || !*path)
+        StrAllocCopy(path, "/");
               
 #ifndef DISABLE_TRACE
     if (www2Trace)
 	fprintf(stderr, "FTPsend: path is %s\n", path);
 #endif
-    if (ftp_type[0] != '\0')
-      {
+    if (ftp_type[0] != '\0') {
         char *ptr;
 
         path = Convert_VMS_FTP_name(path);
@@ -2786,109 +2717,88 @@ PUBLIC int HTFTPSend ARGS1 (char *, name ) {
         /* [dir1]dir2 is not allowed, convert to [dir1.dir2] */
         ptr = path + strlen(path) - 1;
         if ((*ptr != ']') && strchr(path, ']')) {
-           /* append a ] */
-           ptr++;
-           *ptr = ']';
-           ptr++;
-           *ptr = '\0';
+            /* append a ] */
+            ptr++;
+            *ptr = ']';
+            ptr++;
+            *ptr = '\0';
 
-           /* Change first ] to a . */
-           ptr = strchr(path, ']');
-           *ptr = '.';
+            /* Change first ] to a . */
+            ptr = strchr(path, ']');
+            *ptr = '.';
         }
 
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf(stderr, "FTPsend: VMS path is %s\n", path);
+            fprintf(stderr, "FTPsend: VMS path is %s\n", path);
 #endif
-      }
+    }
 
-      sprintf(command, "CWD %s%c%c", path, CR, LF);
-      status = response(command);
+    sprintf(command, "CWD %s%c%c", path, CR, LF);
+    status = response(command);
+    if (status != 2)
+	goto error_exit;
 
-      if (status != 2) {
-              close_master_socket();
-              CLOSE_CONTROL(control);
-              control = -1;
-              if (status == HT_INTERRUPTED) 
-                      HTProgress("Connection interrupted.");
-              return (status == HT_INTERRUPTED) ? -2 : -1;        
-      }
+    if ((f = fopen( fname, "r")) == NULL) {
+        close_control();
+        return HT_NOT_SENT;
+    }
 
-      if ((f = fopen( fname, "r")) == NULL) {
-        CLOSE_CONTROL(control);
-        control = -1;
-        close_master_socket();         
-        return -1;
-      }
-
-      if (ftp_type[0] != '\0') {
+    if (ftp_type[0] != '\0') {
         char *semicolon = strchr(filename, ';');
 
         if (semicolon)
-          *semicolon = '\0';
-      }
+            *semicolon = '\0';
+    }
 
-      /* Send it */
-      sprintf(command, "STOR %s%c%c", filename, CR, LF);
-      status = response(command);
-      if (status == HT_INTERRUPTED) {
-              HTProgress("Connection interrupted.");
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
-              return -2;
-      }
+    /* Send it */
+    sprintf(command, "STOR %s%c%c", filename, CR, LF);
+    status = response(command);
       
-      if (status != 1) { /* Does not seem to understand the STOR command */
-              HTProgress("FTP host does not understand STOR command.");
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
-              return -3;
-      }
+    if (status != 1) { /* Does not seem to understand the STOR command */
+        if (status != HT_INTERRUPTED)
+            HTProgress("FTP host does not understand STOR command.");
+	goto error_exit;
+    }
       
-      /* Ready to send the data now, server is primed and ready... here we go */
+    /* Ready to send the data now, server is primed and ready... here we go */
       
 #ifdef SOCKS
-      status = Raccept(master_socket, (struct sockaddr *)&soc_address,
-		&soc_addrlen);
+    status = Raccept(master_socket, (struct sockaddr *)&soc_address,
+		     &soc_addrlen);
 #else
 #ifndef __GNUC__
-      status = accept(master_socket, (struct sockaddr *)&soc_address,
-		&soc_addrlen);
+    status = accept(master_socket, (struct sockaddr *)&soc_address,
+		    &soc_addrlen);
 #else
-      status = accept(master_socket, (struct sockaddr *)&soc_address,
-		(int)&soc_addrlen);
+    status = accept(master_socket, (struct sockaddr *)&soc_address,
+		    (int)&soc_addrlen);
 #endif /* GNU C is picky, GEC */
 #endif
 
-      if (status < 0) {
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
-              return -2;
-      }
+    if (status < 0) {
+        close_control();
+        return HT_NOT_SENT;
+    }
 
-      data_soc = status;
-      /* Server has contacted us... send them data */
-      /* Send the data! */
+    data_soc = status;
+    /* Server has contacted us... send them data */
+    /* Send the data! */
 
-      HTMeter(0, NULL);
-      bDone = 0;
-      bLeft = bTotal;
-      for (;;) {
-       
+    HTMeter(0, NULL);
+    bDone = 0;
+    bLeft = bTotal;
+    for (;;) {
         if (bDone > next_twirl) {
-          intr = HTCheckActiveIcon(1);
-          next_twirl += twirl_increment;
+            intr = HTCheckActiveIcon(1);
+            next_twirl += twirl_increment;
         } else {
-          intr = HTCheckActiveIcon(0);
+            intr = HTCheckActiveIcon(0);
         }     
         if (intr) {
-          HTProgress("Data transfer interrupted");
-          HTMeter(100, NULL);
-          break;
+            HTProgress("Data transfer interrupted");
+            HTMeter(100, NULL);
+            break;
         }
               
         /*
@@ -2899,76 +2809,66 @@ PUBLIC int HTFTPSend ARGS1 (char *, name ) {
 	** bytes to send) and the test below for bLeft != 0 fails.
         */
         chunk = fread(outBuf, 1, OUTBUFSIZE, f);
-        if (chunk > 0) {
-          NETWRITE(data_soc, outBuf, chunk);
-        }
+        if (chunk > 0)
+            NETWRITE(data_soc, outBuf, chunk);
+
         if (chunk < OUTBUFSIZE) {
-          bDone = bTotal;
-          break;
+            bDone = bTotal;
+            break;
         }
         bDone += chunk;
 
         HTMeter((bDone * 100) / bTotal, NULL);
-      }       
+    }       
       
-      bLeft = bTotal - bDone;
+    bLeft = bTotal - bDone;
 
-      /* Done, now clean up */
-      fclose(f);
-      HTMeter(100, NULL);
-
-      close_master_socket();
+    /* Done, now clean up */
+    fclose(f);
+    HTMeter(100, NULL);
 
 #ifndef DISABLE_TRACE
-      if(www2Trace)
+    if (www2Trace)
         fprintf(stderr, "HTFTPSend: Closing data socket\n");
 #endif
-      NETCLOSE(data_soc);
-      data_soc = -1;
+    NETCLOSE(data_soc);
+    data_soc = -1;
 
-      status = response (0);
-      if (status == HT_INTERRUPTED) {
-              HTProgress("Connection interrupted.");
-              CLOSE_CONTROL(control);
-              control = -1;
-              close_master_socket();
-              return -2;
-      }
+    status = response(0);
+    if (status == HT_INTERRUPTED)
+	goto error_exit;
 
-      if (bLeft != 0)  {
+    if (bLeft != 0)  {
 #ifndef DISABLE_TRACE
-        if(www2Trace)
-          fprintf(stderr, "HTFTPSend: Error sending file %lu bytes left\n",
-		 bLeft);
+        if (www2Trace)
+            fprintf(stderr, "HTFTPSend: Error sending file %lu bytes left\n",
+		    bLeft);
 #endif
-        return intr ? -2 : -1;
-      }
+        return intr ? HT_INTERRUPTED : HT_NOT_SENT;
+    }
       
-      timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000, close_it_up,
-		 NULL);
-      fTimerStarted = 1;
+    timer = XtAppAddTimeOut(app_context, ftp_timeout_val * 1000,
+			    (XtTimerCallbackProc)close_it_up, NULL);
+    fTimerStarted = 1;
       
 #ifndef DISABLE_TRACE
-      if (www2Trace)
+    if (www2Trace)
         fprintf(stderr, "HTFTPSend: File sent, returning OK\n");
 #endif
-      return 0;      
+    return HT_OK;      
+
+ error_exit:
+
+   close_control();
+   if (status == HT_INTERRUPTED) {
+       HTProgress("Connection interrupted.");
+       return status;
+   } else {
+       return HT_NOT_SENT;
+   }
+
 } /* End of HTFTPSend */
 
-static CLOSE_CONTROL(s)
-int s;
-{
-	if (s != -1)
-	    NETCLOSE(s);
-	ftpcache.control = -1;
-}
-
-static void
-close_it_up()
-{
-	NETCLOSE(ftpcache.control);
-	ftpcache.control = -1;
-}
 
 /*
  * This code based off of Rick Vestal's FTP parse code for the NCSA Windows
@@ -2978,102 +2878,86 @@ close_it_up()
  * 9.27.95
  */
 
-int ParseFileSizeAndName(char *szBuffer, char *szFileName, char *szSize) {
+static int ParseFileSizeAndName(char *szBuffer, char *szFileName, char *szSize)
+{
+	char *szPtr, *szName, *szEndPtr, *szLength;
+	static char *tmpbuf = NULL;
 
-char *szPtr, *szName, *szEndPtr, *szLength;
-static char *tmpbuf = NULL;
-
-	if (!szBuffer) {
+	if (!szBuffer)
 		return(0);
-	}
-
-	if (!tmpbuf) {
+	if (!tmpbuf)
 		tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
-	}
-
 	if (usingNLST == 1) {
 		strcpy(tmpbuf, szBuffer);
 
 		/* Filename */
 		szPtr = strrchr(tmpbuf, ' ');
-		while (szPtr && (*szPtr == ' ')) {
+		while (szPtr && (*szPtr == ' '))
 			szPtr--;
-		}
-		*(szPtr+1) = '\0';
+		*(szPtr + 1) = '\0';
 		if (szPtr && *szPtr == '>') { /* Deal with a link */
 			if (szPtr) {
 				szPtr = strrchr(tmpbuf, ' ');
-				while (szPtr && (*szPtr == ' ')) {
+				while (szPtr && (*szPtr == ' '))
 					szPtr--;
-				}
-				*(szPtr+1) = '\0';
+				*(szPtr + 1) = '\0';
 			}
 			if (szPtr) {
 				szPtr = strrchr(tmpbuf, ' ');
-				while (szPtr && (*szPtr == ' ')) {
+				while (szPtr && (*szPtr == ' '))
 					szPtr--;
-				}
-				*(szPtr+1) = '\0';
+				*(szPtr + 1) = '\0';
 			}
 		}
-
 		if (szPtr) {
 			/* year/time */
 			szPtr = strrchr(tmpbuf, ' ');
-			while (szPtr && (*szPtr == ' ')) {
+			while (szPtr && (*szPtr == ' '))
 				szPtr--;
-			}
 		}
-		*(szPtr+1) = '\0';
+		*(szPtr + 1) = '\0';
 
 		if (szPtr) {
 			/* Date */
 			szPtr = strrchr(tmpbuf, ' ');
-			while (szPtr && (*szPtr == ' ')) {
+			while (szPtr && (*szPtr == ' '))
 				szPtr--;
-			}
 		}
-		*(szPtr+1) = '\0';
+		*(szPtr + 1) = '\0';
 
 		if (szPtr) {
 			/* Month */
 			szPtr = strrchr(tmpbuf, ' ');
-			while (szPtr && (*szPtr == ' ')) {
+			while (szPtr && (*szPtr == ' '))
 				szPtr--;
-			}
 		}
-		*(szPtr+1) = '\0';
+		*(szPtr + 1) = '\0';
 
-		if (szPtr) {
+		if (szPtr)
 			/* Filesize */
 			szPtr = strrchr(tmpbuf, ' ');
-		}
 
 		/* Beginning of filesize */
 		szPtr++;
-
 /*
-		szSize = szBuffer+(szPtr-tmpbuf);
+		szSize = szBuffer + (szPtr - tmpbuf);
 */
 		strcpy(szSize, szPtr);
 	} else {
 		szPtr = strrchr(szBuffer, ' ');
 		szName = szPtr + 1;
 
-		if (szPtr) {
+		if (szPtr)
 			strcpy(szFileName, szName);
-		}
 
 		/* go to end of file length */
-		while (szPtr && *szPtr == ' ') {
+		while (szPtr && *szPtr == ' ')
 			szPtr--;
-		}
 
 		szEndPtr = szPtr+1;
 		if (*szPtr != '>') {
-			while (szPtr && *szPtr != ' ') {
+			while (szPtr && *szPtr != ' ')
 				szPtr--;
-			}
 			if (szPtr) {
 				szLength = szPtr+1;
 				strncpy(szSize, szLength, szEndPtr  - szLength);
@@ -3088,16 +2972,17 @@ static char *tmpbuf = NULL;
 }
 
 
-int ParseDate(char *szBuffer, char *szFileInfo, char *szMonth, char *szDay, char *szYear, char *szTime) {
-	
-char *szPtr, *szEndPtr;
-int nCount;
-char *tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
+static int ParseDate(char *szBuffer, char *szFileInfo, char *szMonth,
+		     char *szDay, char *szYear, char *szTime)
+{
+	char *szPtr, *szEndPtr;
+	int nCount;
+	char *tmpbuf;
 
-	if (!szBuffer) {
-		free(tmpbuf);
+	if (!szBuffer)
 		return(0);
-	}
+
+	tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
 
 	if ((*szBuffer != 'd') && (*szBuffer != 'l') && (*szBuffer != '-')) {
 	  	/* Hopefully this is the dos format */
@@ -3117,8 +3002,7 @@ char *tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
 			if (*szPtr == 'D') {
 				*szDay = 'd';
 				szDay[1] = '\0';
-			}
-			else {
+			} else {
 				*szDay = 'f';
 				szDay[1] = '\0';
 			}
@@ -3138,87 +3022,76 @@ char *tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
 					szFileInfo[10] = '\0';
 
 					if (usingNLST == 1) {
-						strcpy(tmpbuf,szBuffer);
-						/*filename*/
-						szPtr=strrchr(tmpbuf,' ');
-						while (szPtr && (*szPtr == ' ')) {
+					    strcpy(tmpbuf, szBuffer);
+					    /* filename */
+					    szPtr = strrchr(tmpbuf, ' ');
+					    while (szPtr && (*szPtr == ' '))
+						szPtr--;
+					    *(szPtr + 1) = '\0';
+					    if (szPtr && *szPtr == '>') {
+						/* deal with a link */
+						if (szPtr) {
+						    szPtr = strrchr(tmpbuf,' ');
+						    while (szPtr && (*szPtr == ' '))
 							szPtr--;
+						    *(szPtr + 1) = '\0';
 						}
-						*(szPtr+1)='\0';
-						if (szPtr && *szPtr=='>') { /*deal with a link*/
-							if (szPtr) {
-								szPtr=strrchr(tmpbuf,' ');
-								while (szPtr && (*szPtr == ' ')) {
-									szPtr--;
-								}
-								*(szPtr+1)='\0';
-							}
-							if (szPtr) {
-								szPtr=strrchr(tmpbuf,' ');
-								while (szPtr && (*szPtr == ' ')) {
-									szPtr--;
-								}
-								*(szPtr+1)='\0';
-							}
-						}
-
 						if (szPtr) {
-							/*year/time*/
-							szPtr=strrchr(tmpbuf,' ');
-							while (szPtr && (*szPtr == ' ')) {
-								szPtr--;
-							}
+						    szPtr = strrchr(tmpbuf,' ');
+						    while (szPtr && (*szPtr == ' '))
+							szPtr--;
+						    *(szPtr + 1) = '\0';
 						}
-						*(szPtr+1)='\0';
+					    }
+					    if (szPtr) {
+						/* year/time */
+						szPtr = strrchr(tmpbuf, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr--;
+					    }
+					    *(szPtr + 1) = '\0';
 
-						if (szPtr) {
-							/* Date */
-							szPtr=strrchr(tmpbuf,' ');
-							while (szPtr && (*szPtr == ' ')) {
-								szPtr--;
-							}
-						}
-						*(szPtr+1)='\0';
+					    if (szPtr) {
+						/* Date */
+						szPtr = strrchr(tmpbuf, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr--;
+					    }
+					    *(szPtr + 1) = '\0';
 
-						if (szPtr) {
-							/* Month */
-							szPtr=strrchr(tmpbuf,' ');
-						}
-						/* Beginning of month */
+					    if (szPtr)
+						/* Month */
+						szPtr = strrchr(tmpbuf, ' ');
+					    /* Beginning of month */
+					    szPtr++;
+
+					    szPtr = szBuffer + (szPtr - tmpbuf);
+					} else {
+					    szPtr = strchr(szBuffer, ' ');
+					    while (szPtr && (*szPtr == ' '))
 						szPtr++;
 
-						szPtr=szBuffer+(szPtr-tmpbuf);
-					} else {
-						szPtr = strchr(szBuffer, ' ');
-						while (szPtr && (*szPtr == ' ')) {
-							szPtr++;
-						}
-
-						if (szPtr) {  
-							szPtr = strchr(szPtr, ' ');
-							while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-							}
-						}
-						if (szPtr) {
-							szPtr = strchr(szPtr, ' ');
-							while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-							}
-						}
-						if (szPtr) {
-							szPtr = strchr(szPtr, ' ');
-							while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-							}
-						}
-						if (szPtr) {
-							szPtr = strchr(szPtr, ' ');
-							while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-							}
-						}
-						/* now we are at the month entry */
+					    if (szPtr) {  
+						szPtr = strchr(szPtr, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr++;
+					    }
+					    if (szPtr) {
+						szPtr = strchr(szPtr, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr++;
+					    }
+					    if (szPtr) {
+						szPtr = strchr(szPtr, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr++;
+					    }
+					    if (szPtr) {
+						szPtr = strchr(szPtr, ' ');
+						while (szPtr && (*szPtr == ' '))
+						    szPtr++;
+					    }
+					    /* now at the month entry */
 					}
 
 					break;
@@ -3226,39 +3099,40 @@ char *tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
 				case 1:
 					szEndPtr = strchr(szPtr, ' ');
 					if (szEndPtr) {
-						strncpy(szMonth, szPtr, szEndPtr - szPtr);
-						szMonth[szEndPtr - szPtr] = '\0';
-						szPtr = szEndPtr+1;  /* go to next entry (day) */
-						while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-						}
+					    strncpy(szMonth, szPtr,
+						    szEndPtr - szPtr);
+					    szMonth[szEndPtr - szPtr] = '\0';
+					    szPtr = szEndPtr + 1;  /* goto next entry (day) */
+					    while (szPtr && (*szPtr == ' '))
+						szPtr++;
 					} else {
-						strcpy(szMonth, " ");
+					    strcpy(szMonth, " ");
 					}
 					break;	
 
 				case 2:
 					szEndPtr = strchr(szPtr, ' ');
 					if (szEndPtr) {
-						strncpy(szDay, szPtr, szEndPtr - szPtr);
-						szDay[szEndPtr - szPtr] = '\0';
-						szPtr = szEndPtr+1;  
-						while (szPtr && (*szPtr == ' '))  {
-								szPtr++;
-						}
+					    strncpy(szDay, szPtr,
+						    szEndPtr - szPtr);
+					    szDay[szEndPtr - szPtr] = '\0';
+					    szPtr = szEndPtr + 1;  
+					    while (szPtr && (*szPtr == ' '))
+						szPtr++;
 					} else {
-						strcpy(szDay, " ");
+					    strcpy(szDay, " ");
 					}
 					break;
 
 				case 3:
 					szEndPtr = strchr(szPtr, ' ');
 					if (szEndPtr) {
-						strncpy(szYear, szPtr, szEndPtr - szPtr);
-						szYear[szEndPtr - szPtr] = '\0';
-						szPtr = szEndPtr+1;  
+					    strncpy(szYear, szPtr,
+						    szEndPtr - szPtr);
+					    szYear[szEndPtr - szPtr] = '\0';
+					    szPtr = szEndPtr + 1;  
 					} else if (szEndPtr) {
-						strcpy(szYear, " ");
+					    strcpy(szYear, " ");
 					}
 					break;
 
@@ -3285,4 +3159,3 @@ char *tmpbuf = (char *)calloc(BUFSIZ, sizeof(char));
 		return(1);  /* ie the info is month, day, time */
 	}
 }
-

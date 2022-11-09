@@ -44,9 +44,14 @@
 #include "../config.h"
 #include <string.h>
 #include "HTUtils.h"
-#include "tcp.h"	/* NETREAD() etc.	*/
+#include "HTTCP.h"
 #include "HTAAUtil.h"	/* Implemented here	*/
 #include "HTAssoc.h"	/* Assoc list		*/
+
+#ifdef HAVE_SSL
+#include <openssl/ssl.h>
+extern SSL *SSL_handle;    /* The SSL Handle from http.c */
+#endif
 
 #ifndef DISABLE_TRACE
 extern int www2Trace;
@@ -62,12 +67,13 @@ extern int www2Trace;
 ** ON EXIT:
 **	returns		the enumerated constant for that scheme.
 */
-PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char*, name)
+PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char *, name)
 {
     static char *upcased = NULL;
     char *cur;
 
-    if (!name) return HTAA_UNKNOWN;
+    if (!name)
+	return HTAA_UNKNOWN;
 
     StrAllocCopy(upcased, name);
     cur = upcased;
@@ -76,20 +82,19 @@ PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char*, name)
 	cur++;
     }
     
-    if (!strncmp(upcased, "NONE", 4))
+    if (!strncmp(upcased, "NONE", 4)) {
 	return HTAA_NONE;
-    else if (!strncmp(upcased, "BASIC", 5))
+    } else if (!strncmp(upcased, "BASIC", 5)) {
 	return HTAA_BASIC;
-    else if (!strncmp(upcased, "PUBKEY", 6))
-	return HTAA_PUBKEY;
-    else if (!strncmp(upcased, "KERBEROSV4", 10))
+    } else if (!strncmp(upcased, "KERBEROSV4", 10)) {
 	return HTAA_KERBEROS_V4;
-    else if (!strncmp(upcased, "KERBEROSV5", 10))
+    } else if (!strncmp(upcased, "KERBEROSV5", 10)) {
 	return HTAA_KERBEROS_V5;
-    else if (!strncmp(upcased, "DIGEST", 6))
+    } else if (!strncmp(upcased, "DIGEST", 6)) {
 	return HTAA_MD5;  /* DXP */
-    else
+    } else {
 	return HTAA_UNKNOWN;
+    }
 }
 
 
@@ -97,23 +102,29 @@ PUBLIC HTAAScheme HTAAScheme_enum ARGS1(WWW_CONST char*, name)
 **			GET THE NAME OF A GIVEN SCHEME
 ** ON ENTRY:
 **	scheme		is one of the scheme enum values:
-**			HTAA_NONE, HTAA_BASIC, HTAA_PUBKEY, ...
+**			HTAA_NONE, HTAA_BASIC, HTAA_MD5, ...
 **
 ** ON EXIT:
 **	returns		the name of the scheme, i.e.
-**			"None", "Basic", "Pubkey", ...
+**			"None", "Basic", "Digest", ...
 */
 PUBLIC char *HTAAScheme_name ARGS1(HTAAScheme, scheme)
 {
     switch (scheme) {
-      case HTAA_NONE:		return "None";          break;
-      case HTAA_BASIC:		return "Basic";         break;
-      case HTAA_PUBKEY:		return "Pubkey";        break;
-      case HTAA_KERBEROS_V4:	return "KerberosV4";	break;
-      case HTAA_KERBEROS_V5:	return "KerberosV5";	break;
-      case HTAA_MD5:            return "Digest";        break;   
-      case HTAA_UNKNOWN:	return "UNKNOWN";       break;
-      default:			return "THIS-IS-A-BUG";
+      case HTAA_NONE:
+	return "None";
+      case HTAA_BASIC:
+	return "Basic";
+      case HTAA_KERBEROS_V4:
+	return "KerberosV4";
+      case HTAA_KERBEROS_V5:
+	return "KerberosV5";
+      case HTAA_MD5:
+        return "Digest";
+      case HTAA_UNKNOWN:
+	return "UNKNOWN";
+      default:
+	return "THIS-IS-A-BUG";
     }
 }
 
@@ -133,7 +144,8 @@ PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
     WWW_CONST char *src = name;
     char *dest = tmp;
 
-    if (!name) return METHOD_UNKNOWN;
+    if (!name)
+	return METHOD_UNKNOWN;
 
     while (*src) {
 	*dest = TOUPPER(*src);
@@ -142,14 +154,15 @@ PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
     }
     *dest = 0;
 
-    if (0==strcmp(tmp, "GET"))
+    if (0 == strcmp(tmp, "GET")) {
 	return METHOD_GET;
-    else if (0==strcmp(tmp, "PUT"))
+    } else if (0 == strcmp(tmp, "PUT")) {
 	return METHOD_PUT;
-    else if (0==strcmp(tmp, "META"))
+    } else if (0 == strcmp(tmp, "META")) {
 	return METHOD_META;
-    else
+    } else {
 	return METHOD_UNKNOWN;
+    }
 }
 
 
@@ -166,11 +179,16 @@ PUBLIC HTAAMethod HTAAMethod_enum ARGS1(WWW_CONST char *, name)
 PUBLIC char *HTAAMethod_name ARGS1(HTAAMethod, method)
 {
     switch (method) {
-      case METHOD_GET:		return "GET";           break;
-      case METHOD_PUT:		return "PUT";           break;
-      case METHOD_META:		return "META";           break;
-      case METHOD_UNKNOWN:	return "UNKNOWN";       break;
-      default:			return "THIS-IS-A-BUG";
+      case METHOD_GET:
+	return "GET";
+      case METHOD_PUT:
+	return "PUT";
+      case METHOD_META:
+	return "META";
+      case METHOD_UNKNOWN:
+	return "UNKNOWN";
+      default:
+	return "THIS-IS-A-BUG";
     }
 }
 
@@ -191,9 +209,10 @@ PUBLIC BOOL HTAAMethod_inList ARGS2(HTAAMethod,	method,
     HTList *cur = list;
     char *item;
 
-    while (NULL != (item = (char*)HTList_nextObject(cur))) {
+    while (NULL != (item = (char *)HTList_nextObject(cur))) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, " %s", item);
+	if (www2Trace)
+	    fprintf(stderr, " %s", item);
 #endif
 	if (method == HTAAMethod_enum(item))
 	    return YES;
@@ -233,20 +252,26 @@ PUBLIC BOOL HTAA_templateMatch ARGS2(WWW_CONST char *, template,
     WWW_CONST char *q = filename;
     int m;
 
-    for( ; *p  &&  *q  &&  *p == *q; p++, q++)	/* Find first mismatch */
+    for (; *p  &&  *q  &&  *p == *q; p++, q++)	/* Find first mismatch */
 	; /* do nothing else */
     
-    if (!*p && !*q)	return YES;	/* Equally long equal strings */
-    else if ('*' == *p) {		/* Wildcard */
+    if (!*p && !*q) {
+	return YES;			/* Equally long equal strings */
+    } else if ('*' == *p) {		/* Wildcard */
 	p++;				/* Skip wildcard character */
 	m = strlen(q) - strlen(p);	/* Amount to match to wildcard */
-	if (m < 0) return NO;		/* No match, filename too short */
-	else {			/* Skip the matched characters and compare */
-	    if (strcmp(p, q+m))	return NO;	/* Tail mismatch */
-	    else                return YES;	/* Tail match */
+	if (m < 0) {
+	    return NO;			/* No match, filename too short */
+	} else {			/* Skip the matched characters and compare */
+	    if (strcmp(p, q + m)) {
+		return NO;		/* Tail mismatch */
+	    } else {
+                return YES;		/* Tail match */
+	    }
 	}
-    }	/* if wildcard */
-    else		return NO;	/* Length or character mismatch */
+    } else {
+	return NO;	/* Length or character mismatch */
+    }
 }
 
 
@@ -277,17 +302,21 @@ PUBLIC char *HTAA_makeProtectionTemplate ARGS1(WWW_CONST char *, docname)
     if (docname) {
 	StrAllocCopy(template, docname);
 	slash = strrchr(template, '/');
-	if (slash) slash++;
-	else slash = template;
+	if (slash) {
+	    slash++;
+	} else {
+	    slash = template;
+	}
 	*slash = (char)0;
 	StrAllocCat(template, "*");
+    } else {
+	StrAllocCopy(template, "*");
     }
-    else StrAllocCopy(template, "*");
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr,
-		       "make_template: made template `%s' for file `%s'\n",
-		       template, docname);
+    if (www2Trace)
+	fprintf(stderr, "make_template: made template `%s' for file `%s'\n",
+		template, docname);
 #endif
 
     return template;
@@ -340,7 +369,8 @@ PUBLIC HTAssocList *HTAA_parseArgList ARGS1(char *, str)
     char *name = NULL;
     int index = 0;
 
-    if (!str) return assoc_list;
+    if (!str)
+	return assoc_list;
 
     while (*str) {
 	SKIPWS(str);				/* Skip leading whitespace */
@@ -359,22 +389,23 @@ PUBLIC HTAssocList *HTAA_parseArgList ARGS1(char *, str)
 	    if (*str == '"') {			/* Quoted value */
 		str++;
 		cur = str;
-		while (*cur  &&  *cur != '"') cur++;
+		while (*cur  &&  *cur != '"')
+		    cur++;
 		if (*cur == '"')
 		    *(cur++) = (char)0;	/* Terminate value */
 		/* else it is lacking terminating quote */
 		SKIPWS(cur);			/* Skip WS leading comma */
-		if (*cur == ',') cur++;		/* Skip separating colon */
-	    }
-	    else {				/* Unquoted value */
-		while (*cur  &&  *cur != ',') cur++;
+		if (*cur == ',')
+		    cur++;			/* Skip separating colon */
+	    } else {				/* Unquoted value */
+		while (*cur  &&  *cur != ',')
+		    cur++;
 		KILLWS(cur);			/* Kill trailing whitespace */
 		if (*cur == ',')
 		    *(cur++) = (char)0;
 		/* else *cur already NULL */
 	    }
-	}
-	else {	/* No name, just a value */
+	} else {	/* No name, just a value */
 	    if (*cur == ',') 
 		*(cur++) = (char)0;		/* Terminate value */
 	    /* else last value on line (already terminated by NULL) */
@@ -387,7 +418,6 @@ PUBLIC HTAssocList *HTAA_parseArgList ARGS1(char *, str)
 
     return assoc_list;
 }
-
 
 
 /************** HEADER LINE READER -- DOES UNFOLDING *************************/
@@ -425,11 +455,10 @@ PUBLIC void HTAA_setupReader ARGS3(char *,	start_of_headers,
     start_pointer = buffer;
     if (start_of_headers) {
 	strncpy(buffer, start_of_headers, length);
-	buffer[length] = (char)0;
+	buffer[length] = '\0';
 	end_pointer = buffer + length;
-    }
-    else {
-	*start_pointer = (char)0;
+    } else {
+	*start_pointer = '\0';
 	end_pointer = start_pointer;
     }
     in_soc = soc;
@@ -471,12 +500,20 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
 	return NULL;
     }
 
-    for(;;) {
-
+    for (;;) {
 	/* Reading from socket */
 
-	if (start_pointer >= end_pointer) {/*Read the next block and continue*/
+	if (start_pointer >= end_pointer) {
+	    /* Read the next block and continue */
+#ifdef HAVE_SSL
+	    if (SSL_handle) {
+		count = SSL_read(SSL_handle, buffer, BUFFER_SIZE);
+	    } else {
+	        count = NETREAD(in_soc, buffer, BUFFER_SIZE);
+	    }
+#else
 	    count = NETREAD(in_soc, buffer, BUFFER_SIZE);
+#endif
 	    if (count <= 0) {
 		in_soc = -1;
 		return line;
@@ -498,10 +535,11 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
 	/* Unfolding */
 	
 	if (peek_for_folding) {
-	    if (*cur != ' '  &&  *cur != '\t')
+	    if (*cur != ' '  &&  *cur != '\t') {
 		return line;	/* Ok, no continuation line */
-	    else		/* So this is a continuation line, continue */
+	    } else {		/* So this is a continuation line, continue */
 		peek_for_folding = NO;
+	    }
 	}
 
 
@@ -523,16 +561,13 @@ PUBLIC char *HTAA_getUnfoldedLine NOARGS
 
 	/* Copying the result */
 
-	if (line)
+	if (line) {
 	    StrAllocCat(line, start_pointer);	/* Append */
-	else
+	} else {
 	    StrAllocCopy(line, start_pointer);	/* A new line */
-
-	start_pointer = cur+1;	/* Skip the read line */
+	}
+	start_pointer = cur + 1;		/* Skip the read line */
 
     } /* forever */
 }
-
-
-
 

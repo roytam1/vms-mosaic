@@ -1,65 +1,32 @@
-/*                                                    Utitlity macros for the W3 code library
+/* Utitlity macros for the W3 code library
                                   MACROS FOR GENERAL USE
                                              
-   Generates: HTUtils.h
-   
    See also: the system dependent file "tcp.h"
    
  */
 
-#ifndef DEBUG
-#define DEBUG   /* Noone ever turns this off as trace is too important */
-#endif          /* Keeep option for really small memory applications tho */
-                
 #ifndef HTUTILS_H
 #define HTUTILS_H
 
-#ifdef SHORT_NAMES
-#define WWW_TraceFlag HTTrFlag
-#endif
-
-/*
-
-Debug message control.
-
- */
 #ifndef STDIO_H
 #include <stdio.h>
 #define STDIO_H
 #endif
 
 /*
- * Tracing now works as a boolean from a resource. No, there are no
+ * Tracing now works as a boolean from a resource.  No, there are no
  *   more if's than before...
  *
  * SWP -- 02/08/96
+ *
+ * Removed all old tracing stuff.
+ *
+ * GEC -- 07/03/05
  */
 
 /*
-#ifdef DEBUG
-#define TRACE (WWW_TraceFlag)
-#define PROGRESS(str) printf(str)
-        extern int WWW_TraceFlag;
-#else
-#define TRACE 0
-#define PROGRESS(str)
-#endif
-
-
-#undef TRACE
-#define TRACE 1
-#ifdef TRACE
-#define HTTP_TRACE 1
-#endif
-
-#define CTRACE if(TRACE)fprintf
-#define tfp stderr
-*/
-
-/*
-
-Standard C library for malloc() etc
-
+ * Standard C library for malloc(), etc.
+ *
  */
 #ifdef vax
 #ifdef unix
@@ -83,7 +50,26 @@ Standard C library for malloc() etc
 
 #else   /* VMS */
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
+#include <lib$routines.h>
+#ifndef __GNUC__
+#include "../libnut/str-tools.h"
+#include "../libnut/ellipsis.h"
+#include "tcp.h"	/* Must come before mosaic.h if it is needed, VAX C */
+#include "../src/mosaic.h"
+#include "../src/mo-www.h"
+#include "../src/gui.h"
+#include "../src/mailto.h"
+#else
+#include "str-tools.h"
+#include "ellipsis.h"
+#include "tcp.h"
+#include "mosaic.h"
+#include "mo-www.h"
+#include "gui.h"
+#include "mailto.h"
+#endif
 #endif
 
 #ifdef __sgi
@@ -92,14 +78,13 @@ Standard C library for malloc() etc
 
 
 /*
-
-Macros for declarations
-
+ * Macros for declarations
+ *
  */
 #define PUBLIC                  /* Accessible outside this module     */
 #define PRIVATE static          /* Accessible only within this module */
 
-#ifdef __STDC__
+#if defined(__STDC__)
 #if 0
 #define WWW_CONST const             /* "const" only exists in STDC */
 #endif
@@ -155,7 +140,6 @@ Macros for declarations
 #define ARGS10(t,a,u,b,v,c,w,d,x,e,y,f,z,g,s,h,r,i,q,j) (a,b,c,d,e,f,g,h,i,j) \
                 t a; u b; v c; w d; x e; y f; z g; s h; r i; q j;
                 
-        
 #endif /* __STDC__ (ANSI) */
 
 #ifndef NULL
@@ -163,12 +147,11 @@ Macros for declarations
 #endif
 
 /*
-
-Booleans
-
+ * Booleans
+ *
  */
 /* Note: GOOD and BAD are already defined (differently) on RS6000 aix */
-/* #define GOOD(status) ((status)38;1)   VMS style status: test bit 0         */
+/* #define GOOD(status) ((status)38;1)   VMS style status: test bit 0       */
 /* #define BAD(status)  (!GOOD(status))  Bit 0 set if OK, otherwise clear   */
 
 #ifndef BOOLEAN_DEFINED
@@ -190,29 +173,26 @@ Booleans
 
 #ifndef min
 #define min(a,b) ((a) <= (b) ? (a) : (b))
-#define max(a,b) ((a) >= (b) ? (a) : (b))
 #endif
 
 #define TCP_PORT 80     /* Allocated to http by Jon Postel/ISI 24-Jan-92 */
 
 /*      Inline Function WHITE: Is character c white space? */
 /*      For speed, include all control characters */
-
 #define WHITE(c) (((unsigned char)(c)) <= 32)
 
-
 /*
-
-Sucess (>=0) and failure (<0) codes
-
+ * Success (>=0) and failure (<0) codes
+ *
  */
-
 #define HT_REDIRECTING 29998
 #define HT_LOADED 29999                 /* Instead of a socket */
-#define HT_INTERRUPTED -29998
 #define HT_NOT_LOADED -29999
-#define HT_OK           0               /* Generic success*/
+#define HT_INTERRUPTED -29998
+#define HT_NOT_SENT -29997
+#define HT_OK           0               /* Generic success */
 
+#define HT_FAILED       -1              /* Generic failure */
 #define HT_NO_ACCESS    -10             /* Access not available */
 #define HT_FORBIDDEN    -11             /* Access forbidden */
 #define HT_INTERNAL     -12             /* Weird -- should never happen. */
@@ -220,34 +200,36 @@ Sucess (>=0) and failure (<0) codes
 
 #include "HTString.h"   /* String utilities */
 
-#ifdef __STDC__
+#if defined(__STDC__) && !defined(sun)
 #include <stdarg.h>
 #else
 #include <varargs.h>
 #endif
 
 /*
-
-Out Of Memory checking for malloc() return:
-
+ * Out Of Memory checking for malloc() return:
+ *
  */
 #ifndef __FILE__
 #define __FILE__ ""
 #define __LINE__ ""
 #endif
 
+#ifndef VMS
 #define outofmem(file, func) \
  { fprintf(stderr, "%s %s: out of memory.\nProgram aborted.\n", file, func); \
   exit(1);}
-
+#else
+extern void outofmem PARAMS((WWW_CONST char *fname, WWW_CONST char *func));
+#endif /* VMS, BSN, GEC */
 
 /*
 
 Upper- and Lowercase macros
 
-   The problem here is that toupper(x) is not defined officially unless isupper(x) is.
-   These macros are CERTAINLY needed on #if defined(pyr) || define(mips) or BDSI
-   platforms. For safefy, we make them mandatory.
+   The problem here is that toupper(x) is not defined officially unless
+   isupper(x) is.  These macros are CERTAINLY needed on #if defined(pyr) ||
+   define(mips) or BDSI platforms.  For safefy, we make them mandatory.
    
  */
 #include <ctype.h>
@@ -256,13 +238,15 @@ Upper- and Lowercase macros
   /* Pyramid and Mips can't uppercase non-alpha */
 #define TOLOWER(c) (isupper(c) ? tolower(c) : (c))
 #define TOUPPER(c) (islower(c) ? toupper(c) : (c))
-#endif /* ndef TOLOWER */
+#endif
 
 #define CR '\015'	/* Must be converted to ^M for transmission */
 #define LF '\012'	/* Must be converted to ^J for transmission */
 
+#if defined(SYSV) || defined(SVR4) || defined(__svr4__) || (defined(VMS) && (!defined(__DECC) && __VMS_VER < 70000000))
+#define bcopy(source, dest, count) memcpy(dest, source, count)
+#define bzero(b, len) memset(b, 0, len)
+#endif
+
+
 #endif /* HTUTILS_H */
-
-/*
-
-   end of utilities  */

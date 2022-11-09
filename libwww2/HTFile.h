@@ -1,8 +1,8 @@
-/*                                                                      File access in libwww
+/*
                                        FILE ACCESS
                                              
    These are routines for local file access used by WWW browsers and
-   servers. Implemented by HTFile.c.
+   servers.  Implemented by HTFile.c.
    
    If the file is not a local file, then we pass it on to HTFTP in
    case it can be reached by FTP.
@@ -15,8 +15,6 @@
 #include "HTAccess.h"
 #include "HTML.h"               /* SCW */
 
-
-
 /*
 
 Controlling globals
@@ -26,7 +24,7 @@ Controlling globals
    line options, etc.
    
  */
-extern int HTDirAccess; /* Directory access level */
+extern int HTDirAccess;   /* Directory access level */
 
 #define HT_DIR_FORBID           0       /* Altogether forbidden */
 #define HT_DIR_SELECTIVE        1       /* If HT_DIR_ENABLE_FILE exists */
@@ -45,58 +43,49 @@ extern int HTDirReadme;         /* Include readme files in listing? */
 extern HTList *HTSuffixes;
 
 /*
-
-Convert filenames between local and WWW formats
-
+ * Convert filenames between local and WWW formats
  */
-extern char * HTLocalName PARAMS((WWW_CONST char * name));
+extern char *HTLocalName PARAMS((WWW_CONST char *name));
 
 
 /*
-
-Make a WWW name from a full local path name
-
+ * Make a WWW name from a full local path name
  */
-extern char * WWW_nameOfFile PARAMS((char * name));
+extern char *WWW_nameOfFile PARAMS((char *name));
 
 
 /*
-
-Generate the name of a cache file
-
+ * Generate the name of a cache file
  */
-extern char * HTCacheFileName PARAMS((WWW_CONST char * name));
+extern char *HTCacheFileName PARAMS((WWW_CONST char *name));
 
 
 /*
-
-Output directory titles
-
-   This is (like the next one) used by HTFTP. It is common code to
-   generate the title and heading 1 and the parent directory link for
-   any anchor.
-   
+ * Output directory titles
+ *
+ * This is (like the next one) used by HTFTP. It is common code to
+ * generate the title and heading 1 and the parent directory link for
+ * any anchor.
  */
 extern void HTDirTitles PARAMS((
-        HTStructured *  target,
-        HTAnchor *      anchor));
+        HTStructured *target,
+        HTAnchor     *anchor));
 
 /*
-
-Output a directory entry
-
-   This is used by HTFTP.c for example -- it is a common routine for
-   generating a linked directory entry.
-   
+ * Output a directory entry
+ *
+ * This is used by HTFTP.c for example -- it is a common routine for
+ * generating a linked directory entry.
  */
 extern void HTDirEntry PARAMS((
-        HTStructured *  target,         /* in which to put the linked text */
-        WWW_CONST char *    tail,           /* last part of directory name */
-        WWW_CONST char *    entry));        /* name of this entry */
+        HTStructured   *target,         /* in which to put the linked text */
+        WWW_CONST char *tail,           /* last part of directory name */
+        WWW_CONST char *entry));        /* name of this entry */
+
 
 /*
 
-HTSetSuffix: Define the representation for a file suffix
+ HTSetSuffix: Define the representation for a file suffix
 
    This defines a mapping between local file suffixes and file content
    types and encodings.
@@ -116,11 +105,10 @@ HTSetSuffix: Define the representation for a file suffix
 /* Example:   HTSetSuffix(".ps", "application/postscript", "8bit", 1.0);
 **
 */
-
 extern void HTSetSuffix PARAMS((
-        WWW_CONST char *    suffix,
-        WWW_CONST char *    representation,
-        WWW_CONST char *    encoding,
+        WWW_CONST char *suffix,
+        WWW_CONST char *representation,
+        WWW_CONST char *encoding,
         float           quality));
         
 
@@ -132,7 +120,7 @@ HTFileFormat: Get Representation and Encoding from file name
   
   return                 The represntation it imagines the file is in
                          
-  *pEncoding             The encoding (binary, 7bit, etc). See HTSetSuffix.
+  *pencoding             The encoding (binary, 7bit, etc).  See HTSetSuffix.
                          
  */
 
@@ -141,46 +129,36 @@ HTFileFormat: Get Representation and Encoding from file name
 #define COMPRESSED_GNUZIP 2
 
 extern HTFormat HTFileFormat PARAMS((
-                char *    filename,
-                HTAtom **       pEncoding,
-                HTAtom *,
-                int *compressed));
-extern char * HTFileMimeType PARAMS((
-                WWW_CONST char *    filename,
-                WWW_CONST char *    default_type));
-extern char *HTDescribeURL (char *);
+                char    *filename,
+                HTAtom **pencoding,
+                HTAtom  *,
+                int     *compressed));
+
+extern char *HTFileMimeType PARAMS((
+                WWW_CONST char *filename,
+                WWW_CONST char *default_type));
+
+extern char *HTDescribeURL(char *);
 
 /*
-
-Determine file value from file name
-
+ * Determine file value from file name
  */
-
-
 extern float HTFileValue PARAMS((
-                WWW_CONST char * filename));
+                WWW_CONST char *filename));
 
 
 /*
-
-Determine write access to a file
-
-  ON EXIT,
-  
-  return value YES if file can be accessed and can be written to.
-                         
+ * Determine write access to a file
+ *
+ * ON EXIT,
+ * 
+ *  return value YES if file can be accessed and can be written to.
+ *
+ * BUGS
+ *
+ *  Isn't there a quicker way?
  */
-
-/*
-
-  BUGS
-  
-   Isn't there a quicker way?
-   
- */
-
-
-extern BOOL HTEditable PARAMS((WWW_CONST char * filename));
+extern BOOL HTEditable PARAMS((WWW_CONST char *filename));
 
 
 /*
@@ -195,17 +173,27 @@ Determine a suitable suffix, given the representation
   
   returns a pointer to a suitable suffix string if one has been found,
                          else NULL.
-                         
  */
-extern WWW_CONST char * HTFileSuffix PARAMS((
-                HTAtom* rep));
+extern WWW_CONST char *HTFileSuffix PARAMS((HTAtom *rep));
 
+
+#ifdef VMS   /* New code for VMS servers, PGE for DL */
+/*
+
+Version stripping for VMS FTP Servers
+
+  On entry,
+	filename	Filename, possibly including version number
+  On exit,
+			filename parameter is modified
+
+*/
+extern void strip_VMS_version PARAMS((char *filename));
+#endif
 
 
 /*
-
-The Protocols
-
+ * The Protocols
  */
 extern HTProtocol HTFTP, HTFile;
 

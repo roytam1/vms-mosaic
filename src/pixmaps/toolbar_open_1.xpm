@@ -4,7 +4,7 @@ static char * toolbar_open_1_xpm[] = {
 " 	c None",
 ".	c #000000000000",
 "X	c #FFFFFFFF0000",
-"o	c #C0C0C0C0C0C0",
+"o	c #BFBFBFBFBFBF",
 "                        ",
 "       ...... ..        ",
 "     ...........        ",

@@ -1,4 +1,3 @@
-/*  */
 
 /*              List object
 **
@@ -8,14 +7,16 @@
 #ifndef HTLIST_H
 #define HTLIST_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"  /* for BOOL type and PARAMS and ARGS*/
+#endif /* HTUTILS_H */
 
 typedef struct _HTList HTList;
 
 struct _HTList {
-  void * object;
-  HTList * next;
-  HTList * last;
+  void   *object;
+  HTList *next;
+  HTList *last;
 };
 
 #ifdef SHORT_NAMES
@@ -23,6 +24,7 @@ struct _HTList {
 #define HTList_delete                   HTLiDele
 #define HTList_addObject                HTLiAdOb
 #define HTList_removeObject             HTLiReOb
+#define HTList_removeObjectAt           HTLiReAt
 #define HTList_removeLastObject         HTLiReLa
 #define HTList_removeFirstObject        HTLiReFi
 #define HTList_count                    HTLiCoun
@@ -30,7 +32,7 @@ struct _HTList {
 #define HTList_objectAt                 HTLiObAt
 #endif
 
-extern HTList * HTList_new NOPARAMS;
+extern HTList  *HTList_new NOPARAMS;
 extern void     HTList_delete PARAMS((HTList *me));
 
 /*      Add object to START of list
@@ -38,16 +40,19 @@ extern void     HTList_delete PARAMS((HTList *me));
 extern void     HTList_addObject PARAMS((HTList *me, void *newObject));
 extern void     HTList_addObjectAtEnd PARAMS((HTList *me, void *newObject));
 
-
 extern BOOL     HTList_removeObject PARAMS((HTList *me, void *oldObject));
-extern void *   HTList_removeLastObject PARAMS((HTList *me));
-extern void *   HTList_removeFirstObject PARAMS((HTList *me));
+extern void    *HTList_removeObjectAt PARAMS((HTList *me, int position));
+
+extern void     HTList_insertObjectAt PARAMS((HTList *me, void *newObject,
+			int pos));
+extern void    *HTList_removeLastObject PARAMS((HTList *me));
+extern void    *HTList_removeFirstObject PARAMS((HTList *me));
 #define         HTList_isEmpty(me) (me ? me->next == NULL : YES)
 extern int      HTList_count PARAMS((HTList *me));
 extern int      HTList_indexOf PARAMS((HTList *me, void *object));
 #define         HTList_lastObject(me) \
   (me && me->next ? me->next->object : NULL)
-extern void *   HTList_objectAt PARAMS((HTList *me, int position));
+extern void    *HTList_objectAt PARAMS((HTList *me, int position));
 
 /* Fast macro to traverse the list. Call it first with copy of list header :
    it returns the first object and increments the passed list pointer.
@@ -56,6 +61,3 @@ extern void *   HTList_objectAt PARAMS((HTList *me, int position));
   (me && (me = me->next) ? me->object : NULL)
 
 #endif /* HTLIST_H */
-/*
-
-    */

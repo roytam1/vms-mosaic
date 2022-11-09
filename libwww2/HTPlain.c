@@ -23,9 +23,8 @@ extern int www2Trace;
 */
 
 struct _HTStream {
-	WWW_CONST HTStreamClass *	isa;
-
-	HText * 		text;
+	WWW_CONST HTStreamClass		*isa;
+	HText 		 		*text;
         int compressed;
 };
 
@@ -49,13 +48,13 @@ PRIVATE void HTPlain_put_character ARGS2(HTStream *, me, char, c)
 **	---------------
 **
 */
-PRIVATE void HTPlain_put_string ARGS2(HTStream *, me, WWW_CONST char*, s)
+PRIVATE void HTPlain_put_string ARGS2(HTStream *, me, WWW_CONST char *, s)
 {
     HText_appendText(me->text, s);
 }
 
 
-PRIVATE void HTPlain_write ARGS3(HTStream *, me, WWW_CONST char*, s, int, l)
+PRIVATE void HTPlain_write ARGS3(HTStream *, me, WWW_CONST char *, s, int, l)
 {
     HText_appendBlock (me->text, s, l);
 }
@@ -70,16 +69,14 @@ PRIVATE void HTPlain_write ARGS3(HTStream *, me, WWW_CONST char*, s, int, l)
 */
 PRIVATE void HTPlain_free ARGS1(HTStream *, me)
 {
-  if (me->compressed != COMPRESSED_NOT)
-    {
+  if (me->compressed != COMPRESSED_NOT) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf 
-          (stderr, 
-           "[HTPlain_free] OK, we're going to decompress HText\n");
+          fprintf(stderr, 
+                  "[HTPlain_free] OK, we're going to decompress HText\n");
 #endif
-      HTCompressedHText (me->text, me->compressed, 1);
-    }
+      HTCompressedHText(me->text, me->compressed, 1);
+  }
 
   free(me);
 }
@@ -98,11 +95,10 @@ PRIVATE void HTPlain_handle_interrupt ARGS1(HTStream *, me)
 }
 
 
-
 /*		Structured Object Class
 **		-----------------------
 */
-PUBLIC WWW_CONST HTStreamClass HTPlain =
+PRIVATE WWW_CONST HTStreamClass HTPlain =
 {		
 	"SocketWriter",
 	HTPlain_free,
@@ -115,19 +111,22 @@ PUBLIC WWW_CONST HTStreamClass HTPlain =
 /*		New object
 **		----------
 */
-PUBLIC HTStream* HTPlainPresent ARGS5(
+PUBLIC HTStream *HTPlainPresent ARGS5(
 	HTPresentation *,	pres,
 	HTParentAnchor *,	anchor,	
 	HTStream *,		sink,
         HTFormat,               format_in,
         int,                    compressed)
 {
-  HTStream* me = (HTStream*)malloc(sizeof(*me));
+  HTStream *me = (HTStream *)malloc(sizeof(*me));
+
   me->isa = &HTPlain;       
   
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf (stderr, "[HTPlainPresent] here we are; format_in is '%s' and compressed is %d\n", HTAtom_name (format_in), compressed);
+    fprintf(stderr,
+      "[HTPlainPresent] here we are; format_in is '%s' and compressed is %d\n",
+      HTAtom_name (format_in), compressed);
 #endif  
   me->text = HText_new();
   me->compressed = compressed;
@@ -136,5 +135,5 @@ PUBLIC HTStream* HTPlainPresent ARGS5(
   if (me->compressed == COMPRESSED_NOT)
     HText_appendText(me->text, "<PLAINTEXT>\n");
 
-  return (HTStream*) me;
+  return (HTStream *)me;
 }

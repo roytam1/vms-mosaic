@@ -52,26 +52,22 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
 #ifndef __ANNOTATE_H__
 #define __ANNOTATE_H__
 
 mo_status mo_post_annotate_win(mo_window *win, int, int,
                                char *, char *, char *, char *);
-char *mo_fetch_annotation_links (char *, int);
-mo_status mo_is_editable_annotation (mo_window *, char *);
-mo_status mo_delete_annotation (mo_window *, int);
-mo_status mo_delete_group_annotation (mo_window *, char *);
-
-
+char *mo_fetch_annotation_links(char *, int);
+mo_status mo_is_editable_annotation(mo_window *, char *);
+mo_status mo_delete_annotation(mo_window *, int);
+mo_status mo_delete_group_annotation(mo_window *, char *);
 
 #endif

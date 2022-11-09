@@ -51,10 +51,21 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "proxy.h"
+#ifdef CCI
+#include "../libnut/str-tools.h"
+#endif
+
+#ifndef DISABLE_TRACE
+extern int srcTrace;
+#endif
 
 #define BUFLEN 256
 #define BLANKS " \t\n"
@@ -63,29 +74,40 @@ struct ProxyDomain *AddProxyDomain();
 
 extern struct Proxy *proxy_list;
 
-struct Proxy *
-ReadProxies(char *filename)
+struct Proxy *ReadProxies(char *filename)
 {
 	FILE *fp;
 	char buf[BUFLEN], *psb;
-	struct Proxy *head, *cur, *next, *p;
-	struct ProxyDomain *pCurList, *pNewDomain;
-	extern void FreeProxy();
+	struct Proxy *head, *cur, *p;
+	struct ProxyDomain *pCurList;
 		
-	if ((fp = fopen(filename,"r")) == NULL)
+	if ((fp = fopen(filename, "r")) == NULL) {
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+			fprintf(stderr, "Failed opening %s\n", filename);
+#endif
 		return NULL;
+	}
 
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "Opened %s\n", filename);
+#endif
 	head = NULL;
 	cur = NULL;
 
 	/*
-	** read entries from the proxy list
+	** Read entries from the proxy list
 	**
 	** These malloc()s should be checked for returning NULL
 	*/
 	while (fgets(buf, BUFLEN, fp) != 0) {
 
-		p = (struct Proxy *)calloc(1,sizeof(struct Proxy));
+#ifndef DISABLE_TRACE
+		if (srcTrace)
+			fprintf(stderr, "Read proxy: %s\n", buf);
+#endif
+		p = (struct Proxy *)calloc(1, sizeof(struct Proxy));
 		
 		p->next = NULL;
 		p->prev = NULL;
@@ -93,29 +115,26 @@ ReadProxies(char *filename)
 		/*
 		** Read the proxy scheme
 		*/
-
 		if ((psb = strtok(buf, BLANKS)) == NULL)
 			return head;
 
-		p->scheme = (char *)malloc(strlen(psb)+1);
+		p->scheme = (char *)malloc(strlen(psb) + 1);
 		strcpy(p->scheme, psb);
 
 		/*
 		** Read the proxy address
 		*/
-
 		if ((psb = strtok(NULL, BLANKS)) == NULL)
 			return head;
-		p->address = (char *)malloc(strlen(psb)+1);
+		p->address = (char *)malloc(strlen(psb) + 1);
 		strcpy(p->address, psb);
 
 		/*
 		** Read the proxy port
 		*/
-
 		if ((psb = strtok(NULL, BLANKS)) == NULL)
 			return head;
-		p->port = (char *)malloc(strlen(psb)+1);
+		p->port = (char *)malloc(strlen(psb) + 1);
 		strcpy(p->port, psb);
 
 		/*
@@ -123,23 +142,21 @@ ReadProxies(char *filename)
 		*/
 		if ((psb = strtok(NULL, BLANKS)) == NULL)
 			return head;
-		p->transport = (char *)malloc(strlen(psb)+1);
+		p->transport = (char *)malloc(strlen(psb) + 1);
 		strcpy(p->transport, psb);
 
 		p->alive = 0;
-
-		if (strcmp(p->transport,"CCI") == 0)
+		p->trans_val = TRANS_HTTP;
+#ifdef CCI
+		if (my_strcasecmp(p->transport, "cci") == 0)
 			p->trans_val = TRANS_CCI;
-		else
-			p->trans_val = TRANS_HTTP;
-
+#endif
 		/*
 		** Read the domain
 		*/
 		p->list = NULL;
 
 		if ((psb = strtok(NULL, BLANKS)) != NULL) {
-
 			p->list = NULL;
 			AddProxyDomain(psb, &p->list);
 
@@ -147,9 +164,8 @@ ReadProxies(char *filename)
 
 			while ((psb = strtok(NULL, BLANKS)) != NULL) {
 				if (psb[0] == '\\') {
-					if (fgets(buf, BUFLEN, fp) == 0) {
+					if (fgets(buf, BUFLEN, fp) == 0)
 						return head;
-					}
 					psb = strtok(buf, BLANKS);
 					if (psb == NULL)
 						return head;
@@ -159,7 +175,7 @@ ReadProxies(char *filename)
 			}
 		}
 
-		if (cur == NULL) {
+		if (!cur) {
 			head = p;
 			cur = p;
 		} else {
@@ -174,27 +190,33 @@ ReadProxies(char *filename)
 	return(head);
 }
 
-struct Proxy *
-ReadNoProxies(char *filename)
+struct Proxy *ReadNoProxies(char *filename)
 {
 	FILE *fp;
 	char buf[BUFLEN], *psb;
-	struct Proxy *head, *cur, *next, *p;
-	extern void FreeProxy();
+	struct Proxy *head, *cur, *p;
 		
-	if ((fp = fopen(filename,"r")) == NULL)
+	if ((fp = fopen(filename, "r")) == NULL)
 		return NULL;
 
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "Opened %s\n", filename);
+#endif
 	head = NULL;
 	cur = NULL;
 
 	/*
-	** read entries from the proxy list
+	** Read entries from the no proxy list
 	**
 	** These malloc()s should be checked for returning NULL
 	*/
 	while (fgets(buf, BUFLEN, fp) != 0) {
 
+#ifndef DISABLE_TRACE
+		if (srcTrace) 
+			fprintf(stderr, "Read no proxy: %s\n", buf);
+#endif
 		p = (struct Proxy *)calloc(1, sizeof(struct Proxy));
 		
 		p->next = NULL;
@@ -211,20 +233,18 @@ ReadNoProxies(char *filename)
 		/*
 		** Read the proxy address
 		*/
-
 		if ((psb = strtok(buf, BLANKS)) == NULL)
 			return head;
-		p->address = (char *)malloc(strlen(psb)+1);
+		p->address = (char *)malloc(strlen(psb) + 1);
 		strcpy(p->address, psb);
 
 		/*
 		** Read the proxy port
 		*/
-
 		if ((psb = strtok(NULL, BLANKS)) == NULL) {
 			p->port = NULL;
 		} else {
-			p->port = (char *)malloc(strlen(psb)+1);
+			p->port = (char *)malloc(strlen(psb) + 1);
 			strcpy(p->port, psb);
 		}
 
@@ -243,17 +263,16 @@ ReadNoProxies(char *filename)
 	return(head);
 }
 
-struct ProxyDomain *
-AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
+struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
 {
 	struct ProxyDomain *pNewDomain;
 
 	pNewDomain = (struct ProxyDomain *)malloc(sizeof(struct ProxyDomain));
 
-	if (pNewDomain == NULL)
+	if (!pNewDomain)
 		return NULL;
 
-	pNewDomain->domain = (char *)malloc(strlen(sbDomain)+1);
+	pNewDomain->domain = (char *)malloc(strlen(sbDomain) + 1);
 	strcpy(pNewDomain->domain, sbDomain);
 	if (*pdList == NULL) {
 		*pdList = pNewDomain;
@@ -264,7 +283,7 @@ AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
 
 		p = *pdList;
 
-		while (p->next != NULL)
+		while (p->next)
 			p = p->next;
 		pNewDomain->prev = p;
 		pNewDomain->next = NULL;
@@ -274,17 +293,19 @@ AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
 	return pNewDomain;
 }
 
-void
-DeleteProxyDomain(struct ProxyDomain *p)
+void DeleteProxyDomain(struct ProxyDomain *p)
 {
 	struct ProxyDomain *cur;
 
 	cur = p;
 
-	if (cur->next !=NULL)
+	if (!cur)
+		return;
+
+	if (cur->next)
 		cur->next->prev =  p->prev;
 
-	if (cur->prev !=NULL)
+	if (cur->prev)
 		cur->prev->next =  p->next;
 
 	if (p->domain) {
@@ -304,24 +325,21 @@ DeleteProxyDomain(struct ProxyDomain *p)
  *
  * --SWP
  */
-int has_fallbacks(char *protocol) {
+int has_fallbacks(char *protocol)
+{
+	int protocol_len;
+	struct Proxy *ptr;
 
-int protocol_len;
-struct Proxy *ptr;
-
-	if (!protocol || !*protocol ||
-	    !proxy_list) {
+	if (!protocol || !*protocol || !proxy_list)
 		return(0);
-	}
 
-	protocol_len=strlen(protocol);
-	ptr=proxy_list;
+	protocol_len = strlen(protocol);
+	ptr = proxy_list;
 
 	while (ptr) {
-		if (ptr->scheme && !strncmp(ptr->scheme,protocol,protocol_len)) {
+		if (ptr->scheme && !strncmp(ptr->scheme, protocol,protocol_len))
 			return(1);
-		}
-		ptr=ptr->next;
+		ptr = ptr->next;
 	}
 
 	return(0);

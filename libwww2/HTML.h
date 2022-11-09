@@ -11,10 +11,10 @@
 
 extern WWW_CONST HTStructuredClass HTMLPresentation;
 
-extern HTStructured* HTML_new PARAMS((
-        HTParentAnchor * anchor,
+extern HTStructured    *HTML_new PARAMS((
+        HTParentAnchor *anchor,
         HTFormat        format_out,
-        HTStream *      target));
+        HTStream       *stream));
 
 /*      Names for selected internal representations:
 */
@@ -43,9 +43,9 @@ Record error message as a hypertext object
 **      a retrun code like HT_LOADED if object exists else 60; 0
 */
 
-PUBLIC int HTLoadError PARAMS((
-        HTStream *      sink,
+extern int HTLoadError PARAMS((
+        HTStream       *sink,
         int             number,
-        WWW_CONST char *    message));
+        WWW_CONST char *message));
 
 #endif

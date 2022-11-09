@@ -19,7 +19,7 @@
 #include "HTUtils.h"
 #include "HTAAUtil.h"	/* Common parts of AA	*/
 #include "HTAAFile.h"	/* File routines	*/
-#include "HTPasswd.h"	/* Implemented here	*/
+#include "HTPasswd.h"
 #include "tcp.h"	/* FROMASCII()		*/
 
 extern char *crypt();
@@ -61,19 +61,19 @@ PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
     extern time_t theTime;
     int random = (int)theTime;	/* This is random enough */
 
-    if (!(result = (char*)malloc(13*((strlen(password)+7)/8) + 1)))
+    if (!(result = (char *)malloc(13 * ((strlen(password) + 7) / 8) + 1)))
 	outofmem(__FILE__, "HTAA_encryptPasswd");
 
     *result = (char)0;
     while (len > 0) {
-	salt[0] = salt_chars[random%64];
-	salt[1] = salt_chars[(random/64)%64];
+	salt[0] = salt_chars[random % 64];
+	salt[1] = salt_chars[(random / 64) % 64];
 	salt[2] = (char)0;
 
 	strncpy(chunk, cur, 8);
 	chunk[8] = (char)0;
 
-	tmp = crypt((char*)password, salt);  /*crypt() doesn't change its args*/
+	tmp = crypt((char *)password, salt);  /* crypt doesn't change args */
 	strcat(result, tmp);
 	free(tmp);
 
@@ -83,7 +83,6 @@ PUBLIC char *HTAA_encryptPasswd ARGS1(WWW_CONST char *, password)
 
     return result;
 }
-
 
 
 /* PUBLIC						HTAA_passwdMatch()
@@ -108,12 +107,12 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
     int status;
 
     if (!password || !encrypted ||
-	13*((strlen(password)+7)/8) != strlen(encrypted))
+	13 * ((strlen(password) + 7) / 8) != strlen(encrypted))
 	return NO;
 
     len = strlen(encrypted);
 
-    if (!(result = (char*)malloc(len + 1)))
+    if (!(result = (char *)malloc(len + 1)))
 	outofmem(__FILE__, "HTAA_encryptPasswd");
 
     *result = (char)0;
@@ -125,13 +124,13 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
 	char *tmp;
 
 	salt[0] = *cur2;
-	salt[1] = *(cur2+1);
+	salt[1] = *(cur2 + 1);
 	salt[2] = (char)0;
 
 	strncpy(chunk, cur1, 8);
 	chunk[8] = (char)0;
 
-	tmp = crypt((char*)password, salt);
+	tmp = crypt((char *)password, salt);
 	strcat(result, tmp);
 	free(tmp);
 
@@ -148,15 +147,16 @@ PUBLIC BOOL HTAA_passwdMatch ARGS2(WWW_CONST char *, password,
 		"%s `%s' (encrypted: `%s') with: `%s' => %s\n",
 		"HTAA_passwdMatch: Matching password:",
 		password, result, encrypted,
-		(status==0 ? "OK" : "INCORRECT"));
+		(status == 0 ? "OK" : "INCORRECT"));
 #endif
 
     free(result);
 
-    if (status==0)
+    if (status == 0) {
 	return YES;
-    else
+    } else {
 	return NO;
+    }
 }
 
 
@@ -192,18 +192,15 @@ PUBLIC int HTAAFile_readPasswdRec ARGS3(FILE *, fp,
 
     if (terminator == EOF) {				/* End of file */
 	return EOF;
-    }
-    else if (terminator == CR  ||  terminator == LF) {	/* End of line */
+    } else if (terminator == CR  ||  terminator == LF) { /* End of line */
 	HTAAFile_nextRec(fp);
 	return 1;
-    }
-    else {
+    } else {
 	HTAAFile_readField(fp, out_password, MAX_PASSWORD_LEN);
 	HTAAFile_nextRec(fp);
 	return 2;
     }
 }
-
 
 
 /* PUBLIC						HTAA_checkPassword()
@@ -226,23 +223,26 @@ PUBLIC BOOL HTAA_checkPassword ARGS3(WWW_CONST char *, username,
 				     WWW_CONST char *, filename)
 {
     FILE *fp = NULL;
-    char user[MAX_USERNAME_LEN+1];
-    char pw[MAX_PASSWORD_LEN+1];
+    char user[MAX_USERNAME_LEN + 1];
+    char pw[MAX_PASSWORD_LEN + 1];
     int status;
     
-    if (filename && *filename)  fp = fopen(filename,"r");
-    else			fp = fopen(PASSWD_FILE,"r");
-
+    if (filename && *filename) {
+        fp = fopen(filename, "r");
+    } else {
+	fp = fopen(PASSWD_FILE, "r");
+    }
     if (!fp) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s `%s'\n",
-			   "HTAA_checkPassword: Unable to open password file",
-			   (filename && *filename ? filename : PASSWD_FILE));
+	if (www2Trace)
+	    fprintf(stderr, "%s `%s'\n",
+	            "HTAA_checkPassword: Unable to open password file",
+		    (filename && *filename ? filename : PASSWD_FILE));
 #endif
 	return NO;
     }
     do {
-	if (2 == (status = HTAAFile_readPasswdRec(fp,user,pw))) {
+	if (2 == (status = HTAAFile_readPasswdRec(fp, user, pw))) {
 #ifndef DISABLE_TRACE
 	    if (www2Trace)
 		fprintf(stderr,
@@ -250,26 +250,28 @@ PUBLIC BOOL HTAA_checkPassword ARGS3(WWW_CONST char *, username,
 			"Matching username:", username,
 			"against passwd record:", user, pw);
 #endif
-	    if (username  &&  user  &&  !strcmp(username,user)) {
-		/* User's record found */
-		if (pw) { /* So password is required for this user */
-		    if (!password ||
-			!HTAA_passwdMatch(password,pw)) /* Check the password */
+	    if (username  &&  user  &&  !strcmp(username, user)) {
+		if (pw) {               /* Password is required for this user */
+		    if (!password || !HTAA_passwdMatch(password, pw))
 			status = EOF;	/* If wrong, indicate it with EOF */
 		}
-		break;  /* exit loop */
-	    }  /* if username found */
-	}  /* if record is ok */
+		break;
+	    }
+	}
     } while (status != EOF);
 
     fclose(fp);
     
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr, "HTAAFile_checkPassword: (%s,%s) %scorrect\n",
-		       username, password, ((status != EOF) ? "" : "in"));
+    if (www2Trace)
+	fprintf(stderr, "HTAAFile_checkPassword: (%s, %s) %scorrect\n",
+		username, password, ((status != EOF) ? "" : "in"));
 #endif
 
-    if (status == EOF)  return NO;  /* We traversed to the end without luck */
-    else                return YES; /* The user was found */
+    if (status == EOF) {
+        return NO;  /* We traversed to the end without luck */
+    } else {
+        return YES; /* The user was found */
+    }
 }
 

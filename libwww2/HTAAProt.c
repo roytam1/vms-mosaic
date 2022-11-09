@@ -33,18 +33,16 @@ extern int www2Trace;
 ** Protection setup caching
 */
 typedef struct {
-    char *	prot_filename;
-    HTAAProt *	prot;
+    char     *prot_filename;
+    HTAAProt *prot;
 } HTAAProtCache;
 
-PRIVATE HTList *  prot_cache	= NULL;	/* Protection setup cache.	*/
+PRIVATE HTList   *prot_cache	= NULL;	/* Protection setup cache.	*/
 PRIVATE HTAAProt *default_prot	= NULL;	/* Default protection.		*/
 PRIVATE HTAAProt *current_prot	= NULL;	/* Current protection mode	*/
                                         /* which is set up by callbacks	*/
                                         /* from the rule system when	*/
                                         /* a "protect" rule is matched.	*/
-
-
 
 /* PRIVATE							isNumber()
 **		DOES A CHARACTER STRING REPRESENT A NUMBER
@@ -53,7 +51,8 @@ PRIVATE BOOL isNumber ARGS1(WWW_CONST char *, s)
 {
     WWW_CONST char *cur = s;
 
-    if (!s || !*s) return NO;
+    if (!s || !*s)
+	return NO;
 
     while (*cur) {
 	if (*cur < '0' || *cur > '9')
@@ -81,24 +80,24 @@ PUBLIC int HTAA_getUid NOARGS
 	if (isNumber(current_prot->uid_name)) {
 	    if (NULL != (pw = getpwuid(atoi(current_prot->uid_name)))) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, 
-				   "%s(%s) returned (%s:%s:%d:%d:...)\n",
-				   "HTAA_getUid: getpwuid",
-				   current_prot->uid_name,
-				   pw->pw_name, pw->pw_passwd,
-				   pw->pw_uid, pw->pw_gid);
+		if (www2Trace)
+		    fprintf(stderr, "%s(%s) returned (%s:%s:%d:%d:...)\n",
+			    "HTAA_getUid: getpwuid",
+			    current_prot->uid_name,
+			    pw->pw_name, pw->pw_passwd,
+			    pw->pw_uid, pw->pw_gid);
 #endif
 		return pw->pw_uid;	
 	    }
-	}
-	else {	/* User name (not a number) */
+	} else {	/* User name (not a number) */
 	    if (NULL != (pw = getpwnam(current_prot->uid_name))) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s(\"%s\") %s (%s:%s:%d:%d:...)\n",
-				   "HTAA_getUid: getpwnam",
-				   current_prot->uid_name, "returned",
-				   pw->pw_name, pw->pw_passwd,
-				   pw->pw_uid, pw->pw_gid);
+		if (www2Trace)
+		    fprintf(stderr, "%s(\"%s\") %s (%s:%s:%d:%d:...)\n",
+			    "HTAA_getUid: getpwnam",
+			    current_prot->uid_name, "returned",
+			    pw->pw_name, pw->pw_passwd,
+			    pw->pw_uid, pw->pw_gid);
 #endif
 		return pw->pw_uid;
 	    }
@@ -125,23 +124,22 @@ PUBLIC int HTAA_getGid NOARGS
 	if (isNumber(current_prot->gid_name)) {
 	    if (NULL != (gr = getgrgid(atoi(current_prot->gid_name)))) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr,
-				   "%s(%s) returned (%s:%s:%d:...)\n",
-				   "HTAA_getGid: getgrgid",
-				   current_prot->gid_name,
-				   gr->gr_name, gr->gr_passwd, gr->gr_gid);
+		if (www2Trace)
+		    fprintf(stderr, "%s(%s) returned (%s:%s:%d:...)\n",
+			    "HTAA_getGid: getgrgid",
+			    current_prot->gid_name,
+			    gr->gr_name, gr->gr_passwd, gr->gr_gid);
 #endif
 		return gr->gr_gid;
 	    }
-	}
-	else {	/* Group name (not number) */
+	} else {	/* Group name (not number) */
 	    if (NULL != (gr = getgrnam(current_prot->gid_name))) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, 
-				   "%s(\"%s\") returned (%s:%s:%d:...)\n",
-				   "HTAA_getGid: getgrnam",
-				   current_prot->gid_name,
-				   gr->gr_name, gr->gr_passwd, gr->gr_gid);
+		if (www2Trace)
+		    fprintf(stderr, "%s(\"%s\") returned (%s:%s:%d:...)\n",
+			    "HTAA_getGid: getgrnam",
+			    current_prot->gid_name,
+			    gr->gr_name, gr->gr_passwd, gr->gr_gid);
 #endif
 		return gr->gr_gid;
 	    }
@@ -149,7 +147,6 @@ PUBLIC int HTAA_getGid NOARGS
     }
     return 65534;	/* nogroup */
 }
-
 
 
 /* PRIVATE							HTAA_setIds()
@@ -163,8 +160,8 @@ PUBLIC int HTAA_getGid NOARGS
 ** ON EXIT:
 **	returns		nothing.
 */
-PRIVATE void HTAA_setIds ARGS2(HTAAProt *,	prot,
-			       WWW_CONST char *,	ids)
+PRIVATE void HTAA_setIds ARGS2(HTAAProt *,	  prot,
+			       WWW_CONST char *,  ids)
 {
     if (ids) {
 	char *local_copy = NULL;
@@ -175,19 +172,16 @@ PRIVATE void HTAA_setIds ARGS2(HTAAProt *,	prot,
 	if (point) {
 	    *(point++) = (char)0;
 	    StrAllocCopy(prot->gid_name, point);
-	}
-	else {
+	} else {
 	    StrAllocCopy(prot->gid_name, "nogroup");
 	}
 	StrAllocCopy(prot->uid_name, local_copy);
 	FREE(local_copy);
-    }
-    else {
+    } else {
 	StrAllocCopy(prot->uid_name, "nobody");
 	StrAllocCopy(prot->gid_name, "nogroup");
     }
 }
-
 
 
 /* PRIVATE						HTAA_parseProtFile()
@@ -216,7 +210,6 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 		break;
 
 	    if (lex_item == LEX_ALPH_STR) {	/* Valid setup record */
-		
 		StrAllocCopy(fieldname, lex_buffer);
 		
 		if (LEX_FIELD_SEP != (lex_item = lex(fp)))
@@ -224,28 +217,30 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 		                        /* after field name it's ok, but */
 		                        /* not required. Here we read it.*/
 
-		if (0==my_strncasecmp(fieldname, "Auth", 4)) {
+		if (0 == my_strncasecmp(fieldname, "Auth", 4)) {
 		    lex_item = lex(fp);
 		    while (lex_item == LEX_ALPH_STR) {
 			HTAAScheme scheme = HTAAScheme_enum(lex_buffer);
+
 			if (scheme != HTAA_UNKNOWN) {
 			    if (!prot->valid_schemes)
 				prot->valid_schemes = HTList_new();
-			    HTList_addObject(prot->valid_schemes,(void*)scheme);
+			    HTList_addObject(prot->valid_schemes,
+					     (void *)scheme);
 #ifndef DISABLE_TRACE
-			    if (www2Trace) fprintf(stderr, "%s %s `%s'\n",
-					       "HTAA_parseProtFile: valid",
-					       "authentication scheme:",
-					       HTAAScheme_name(scheme));
+			    if (www2Trace)
+				fprintf(stderr, "%s %s `%s'\n",
+				        "HTAA_parseProtFile: valid",
+				        "authentication scheme:",
+				        HTAAScheme_name(scheme));
 #endif
 			}
 #ifndef DISABLE_TRACE
-			else if (www2Trace) fprintf(stderr, "%s %s `%s'\n",
-						"HTAA_parseProtFile: unknown",
-						"authentication scheme:",
-						lex_buffer);
+			else if (www2Trace)
+			    fprintf(stderr, "%s %s `%s'\n",
+				    "HTAA_parseProtFile: unknown",
+				    "authentication scheme:", lex_buffer);
 #endif
-			
 			if (LEX_ITEM_SEP != (lex_item = lex(fp)))
 			    break;
 			/*
@@ -259,33 +254,32 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 		    } /* while items in list */
 		} /* if "Authenticate" */
 
-		else if (0==my_strncasecmp(fieldname, "mask", 4)) {
+		else if (0 == my_strncasecmp(fieldname, "mask", 4)) {
 		    prot->mask_group = HTAA_parseGroupDef(fp);
-		    lex_item=LEX_REC_SEP; /*groupdef parser read this already*/
+		    lex_item = LEX_REC_SEP; /*groupdef parser got this already*/
 #ifndef DISABLE_TRACE
 		    if (www2Trace) {
 			if (prot->mask_group) {
-			    fprintf(stderr,
-				    "HTAA_parseProtFile: Mask group:\n");
+			    fprintf(stderr,"HTAA_parseProtFile: Mask group:\n");
 			    HTAA_printGroupDef(prot->mask_group);
-			} else fprintf(stderr, "HTAA_parseProtFile: %s\n",
-				       "Mask group syntax error");
+			} else {
+			    fprintf(stderr, "HTAA_parseProtFile: %s\n",
+				    "Mask group syntax error");
+			}
 		    }
 #endif
 		} /* if "Mask" */
-
 		else {	/* Just a name-value pair, put it to assoclist */
-
 		    if (LEX_ALPH_STR == (lex_item = lex(fp))) {
 			if (!prot->values)
 			    prot->values = HTAssocList_new();
 			HTAssocList_add(prot->values, fieldname, lex_buffer);
 			lex_item = lex(fp);  /* Read record separator */
 #ifndef DISABLE_TRACE
-			if (www2Trace) fprintf(stderr, 
-					   "%s `%s' bound to value `%s'\n",
-					   "HTAA_parseProtFile: Name",
-					   fieldname, lex_buffer);
+			if (www2Trace)
+			    fprintf(stderr, "%s `%s' bound to value `%s'\n",
+				    "HTAA_parseProtFile: Name",
+				    fieldname, lex_buffer);
 #endif
 		    }
 		} /* else name-value pair */
@@ -294,10 +288,11 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 
 	    if (lex_item != LEX_EOF  &&  lex_item != LEX_REC_SEP) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s %s %d (that line ignored)\n",
-				   "HTAA_parseProtFile: Syntax error",
-				   "in protection setup file at line",
-				   lex_line);
+		if (www2Trace)
+		    fprintf(stderr, "%s %s %d (that line ignored)\n",
+			   "HTAA_parseProtFile: Syntax error",
+			   "in protection setup file at line",
+			   lex_line);
 #endif
 		do {
 		    lex_item = lex(fp);
@@ -306,8 +301,6 @@ PRIVATE void HTAA_parseProtFile ARGS2(HTAAProt *, prot,
 	} /* while not end-of-file */
     } /* if valid parameters */
 }
-
-
 
 
 /* PRIVATE						HTAAProt_new()
@@ -341,30 +334,31 @@ PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
 				     WWW_CONST char *,	ids)
 {
     HTList *cur = prot_cache;
-    HTAAProtCache *cache_item = NULL;
+    HTAAProtCache *cache_item;
     HTAAProt *prot;
     FILE *fp;
 
     if (!prot_cache)
 	prot_cache = HTList_new();
     
-    while (NULL != (cache_item = (HTAAProtCache*)HTList_nextObject(cur))) {
+    while (NULL != (cache_item = (HTAAProtCache *)HTList_nextObject(cur))) {
 	if (!strcmp(cache_item->prot_filename, prot_filename))
 	    break;
     }
     if (cache_item) {
 	prot = cache_item->prot;
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s `%s' already in cache\n",
-			   "HTAAProt_new: Protection file", prot_filename);
+	if (www2Trace)
+	    fprintf(stderr, "%s `%s' already in cache\n",
+		    "HTAAProt_new: Protection file", prot_filename);
 #endif
     } else {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr,
-			   "HTAAProt_new: Loading protection file `%s'\n",
-			   prot_filename);
+	if (www2Trace)
+	    fprintf(stderr, "HTAAProt_new: Loading protection file `%s'\n",
+		    prot_filename);
 #endif
-	if (!(prot = (HTAAProt*)malloc(sizeof(HTAAProt))))
+	if (!(prot = (HTAAProt *)malloc(sizeof(HTAAProt))))
 	    outofmem(__FILE__, "HTAAProt_new");
 
 	prot->template	= NULL;
@@ -378,17 +372,18 @@ PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
 	if (prot_filename && NULL != (fp = fopen(prot_filename, "r"))) {
 	    HTAA_parseProtFile(prot, fp);
 	    fclose(fp);
-	    if (!(cache_item = (HTAAProtCache*)malloc(sizeof(HTAAProtCache))))
+	    if (!(cache_item = (HTAAProtCache *)malloc(sizeof(HTAAProtCache))))
 		outofmem(__FILE__, "HTAAProt_new");
 	    cache_item->prot = prot;
 	    cache_item->prot_filename = NULL;
 	    StrAllocCopy(cache_item->prot_filename, prot_filename);
-	    HTList_addObject(prot_cache, (void*)cache_item);
+	    HTList_addObject(prot_cache, (void *)cache_item);
 	}
 #ifndef DISABLE_TRACE
-	else if (www2Trace) fprintf(stderr, "HTAAProt_new: %s `%s'\n",
-				"Unable to open protection setup file",
-				(prot_filename ? prot_filename : "(null)"));
+	else if (www2Trace)
+	    fprintf(stderr, "HTAAProt_new: %s `%s'\n",
+		    "Unable to open protection setup file",
+		    (prot_filename ? prot_filename : "(null)"));
 #endif
     }
 
@@ -398,7 +393,6 @@ PRIVATE HTAAProt *HTAAProt_new ARGS3(WWW_CONST char *,	cur_docname,
 
     return prot;
 }
-
 
 
 /* PUBLIC					HTAA_setDefaultProtection()
@@ -430,12 +424,12 @@ PUBLIC void HTAA_setDefaultProtection ARGS3(WWW_CONST char *,	cur_docname,
 	default_prot = HTAAProt_new(cur_docname, prot_filename, ids);
     }
 #ifndef DISABLE_TRACE
-    else if (www2Trace) fprintf(stderr, "%s %s\n",
-				  "HTAA_setDefaultProtection: ERROR: Protection file",
-				  "not specified (obligatory for DefProt rule)!!\n");
+    else if (www2Trace)
+	fprintf(stderr, "%s %s\n",
+		"HTAA_setDefaultProtection: ERROR: Protection file",
+		"not specified (obligatory for DefProt rule)!!\n");
 #endif
 }
-
 
 
 /* PUBLIC					HTAA_setCurrentProtection()
@@ -470,21 +464,22 @@ PUBLIC void HTAA_setCurrentProtection ARGS3(WWW_CONST char *,	cur_docname,
 	    current_prot = default_prot;
 	    HTAA_setIds(current_prot, ids);
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "%s %s %s\n",
-			       "HTAA_setCurrentProtection: Protection file",
-			       "not specified for Protect rule",
-			       "-- using default protection");
+	    if (www2Trace)
+		fprintf(stderr, "%s %s %s\n",
+		       "HTAA_setCurrentProtection: Protection file",
+		       "not specified for Protect rule",
+		       "-- using default protection");
 #endif
 	}
 #ifndef DISABLE_TRACE
-	else if (www2Trace) fprintf(stderr, "%s %s %s\n",
-			       "HTAA_setCurrentProtection: ERROR: Protection",
-			       "file not specified for Protect rule, and",
-			       "default protection is not set!!");
+	else if (www2Trace)
+	    fprintf(stderr, "%s %s %s\n",
+		    "HTAA_setCurrentProtection: ERROR: Protection",
+		    "file not specified for Protect rule, and",
+	            "default protection is not set!!");
 #endif
     }
 }
-
 
 
 /* PUBLIC					HTAA_getCurrentProtection()
@@ -505,7 +500,6 @@ PUBLIC HTAAProt *HTAA_getCurrentProtection NOARGS
 {
     return current_prot;
 }
-
 
 
 /* PUBLIC					HTAA_getDefaultProtection()
@@ -541,7 +535,6 @@ PUBLIC HTAAProt *HTAA_getDefaultProtection NOARGS
 }
 
 
-
 /* SERVER INTERNAL					HTAA_clearProtections()
 **		CLEAR DOCUMENT PROTECTION MODE
 **		(ALSO DEFAULT PROTECTION)
@@ -558,5 +551,4 @@ PUBLIC void HTAA_clearProtections NOARGS
     current_prot = NULL;	/* These are not freed because	*/
     default_prot = NULL;	/* they are actually in cache.	*/
 }
-
 

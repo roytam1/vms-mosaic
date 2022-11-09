@@ -52,15 +52,28 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
+struct EditInfo {
+	int fProxy; /* Is this a Proxy List Dialog? */
+	int type;  /* Is this an Edit or an Add ? */
+	int domaintype;  /* Is this an Edit or an Add ? */
+	char *help_file;
+	Widget scrolled; 
+	Widget translation; 
+	struct Proxy *editing;
+	struct InfoFields *IF;
+	struct ProxyDomain  *editingDomain;
+	struct Proxy *proxy_list;
+};
 
-
+void AppendProxy(struct EditInfo *, struct Proxy *);
+void ShowNoProxyDialog(mo_window *);
+void ShowProxyDialog(mo_window *);
 

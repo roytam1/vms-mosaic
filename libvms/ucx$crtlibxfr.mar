@@ -1,0 +1,61 @@
+        .title UCX$CRTLIBXFR
+        .ident /V1.1/
+
+;	There really must be a better way!!!!
+;
+;	There is, in VAXC compiled progs should use "#define x vaxc$x"
+;	for each socket routine before the first reference.
+;	Then we dont need this bit of code.
+
+        .MACRO  procedure NAME
+        .ENTRY	NAME, ^M<>
+        .EXTRN  VAXC$'NAME
+	CALLG	(AP),G^VAXC$'NAME
+	RET
+        .ENDM
+
+        .DISABLE        GLOBAL
+
+        .PSECT UCX$CRTLXFR PIC,QUAD,NOWRT,SHR
+
+	procedure	SOCKET
+	procedure	ACCEPT
+	procedure	BIND
+	procedure	LISTEN
+	procedure	CONNECT
+	procedure	SEND
+	procedure	RECVMSG
+	procedure	SENDMSG
+	procedure	INET_ADDR
+	procedure	INET_NETWORK
+	procedure	INET_NTOA
+	procedure	INET_MAKEADDR
+	procedure	INET_LNAOF
+	procedure	INET_NETOF
+	procedure	SENDTO
+	procedure	RECV
+	procedure	RECVFROM
+	procedure	SHUTDOWN
+	procedure	SELECT
+	procedure	GETHOSTNAME
+	procedure	GETHOSTADDR
+	procedure	GETHOSTBYADDR
+	procedure	GETHOSTBYNAME
+	procedure	GETNETBYADDR
+	procedure	GETNETBYNAME
+	procedure	GETPEERNAME
+	procedure	GETSERVBYNAME
+	procedure	GETSOCKNAME
+	procedure	GETSOCKOPT
+	procedure	SETSOCKOPT
+	procedure	GETNETENT
+	procedure	GETSERVBYPORT
+	procedure	GETPROTOBYNAME
+	procedure	GETPROTOBYNUMBER
+	procedure	GETPROTOENT
+	procedure	NTOHL
+	procedure	HTONL
+	procedure	NTOHS
+	procedure	HTONS
+
+	.end

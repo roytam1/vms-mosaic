@@ -52,6 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
@@ -61,44 +63,28 @@
 #ifndef __GUI_H__
 #define __GUI_H__
 
-#ifdef VMS
-/* VMS does not permit long names, so to avoid compilation warnings ... */
-#define mo_gui_check_security_icon_in_win       mo_gui_check_security_icon_in_w
-#endif /* VMS, BSN */
+void mo_process_external_directive(char *directive, char *url);
 
+mo_window *mo_next_window(mo_window *);
+mo_window *mo_fetch_window_by_id(int);
+char *mo_assemble_help_url(char *);
+mo_status mo_redisplay_window(mo_window *);
+mo_status mo_set_current_cached_win(mo_window *);
+mo_status mo_delete_window(mo_window *);
+mo_window *mo_duplicate_window(mo_window *);
+mo_window *mo_open_another_window(mo_window *, char *, char *, char *);
+mo_status mo_open_initial_window(void);
+void mo_gui_notify_progress(char *);
+int mo_gui_check_icon(int);
+void mo_gui_clear_icon(void);
+void mo_gui_done_with_icon(void);
+void mo_gui_update_meter(int level, char *text);
+int anchor_visited_predicate(Widget, char *);
+void mo_stop_it(mo_window *);
+void mo_stop_animations(mo_window *win, int check_drawing);
 
-void mo_process_external_directive (char *directive, char *url);
-
-mo_window *mo_next_window (mo_window *);
-mo_window *mo_fetch_window_by_id (int);
-mo_status mo_add_window_to_list (mo_window *);
-char *mo_assemble_help_url (char *);
-char *mo_assemble_help_url_vms (char *);
-mo_status mo_redisplay_window (mo_window *);
-mo_status mo_set_current_cached_win (mo_window *);
-mo_status mo_delete_window (mo_window *);
-mo_window *mo_open_window (Widget, char *, mo_window *);
-mo_window *mo_duplicate_window (mo_window *);
-mo_window *mo_open_another_window (mo_window *, char *, char *, char *);
-mo_status mo_open_initial_window (void);
-void mo_gui_notify_progress (char *);
-int mo_gui_check_icon (int);
-void mo_gui_clear_icon (void);
-void mo_gui_done_with_icon (void);
-void kill_splash();
-void MoCCINewConnection();
-void mo_gui_update_meter(int level,char *text);
-char *MakeFilename();
-long GetCardCount(char *fname);
-int anchor_visited_predicate (Widget, char *);
-char *HTDescribeURL (char *);
-XmxCallbackPrototype (menubar_cb);
-void mo_make_popup();
-
-void mo_gui_check_security_icon_in_win(int type, mo_window *win);
+void mo_gui_check_win_security_icon(int type, mo_window *win);
 void mo_gui_check_security_icon(int type);
-
-void mo_assemble_controls(mo_window *win, int detach);
 
 void mo_do_gui(int, char **);
 void mo_switch_mode(mo_window *);
@@ -107,4 +93,4 @@ void pub_anchor_ltd(char *);
 void mo_gui_apply_default_icon(void);
 void mo_delete_frames(mo_window *);
 
-#endif /* not __GUI_H__ */
+#endif

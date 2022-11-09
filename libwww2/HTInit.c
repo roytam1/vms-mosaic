@@ -46,11 +46,14 @@ PUBLIC void HTFormatInit NOARGS
 
   /* Wonder what HTML will end up as? */
   HTSetConversion("text/html", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
+  HTSetConversion("text/plain", "www/present", HTPlainPresent,	1.0, 0.0, 0.0);
   HTSetConversion("text/x-html", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
+  HTSetConversion("text/xml", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
   HTSetConversion("application/html", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
   HTSetConversion("application/x-html", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
+  HTSetConversion("application/xhtml+xml", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
+  HTSetConversion("application/xml", "www/present", HTMosaicHTMLPresent, 1.0, 0.0, 0.0);
 
-  HTSetConversion("text/plain", "www/present", HTPlainPresent,	1.0, 0.0, 0.0);
   HTSetConversion("application/x-wais-source", "*", HTWSRCConvert, 1.0, 0.0, 0.0);
 
   /* These should override everything else. */
@@ -79,6 +82,8 @@ PUBLIC void HTFormatInit NOARGS
 #endif /* not __sgi */
 
       HTSetPresentation("image/bmp", "xv %s", 1.0, 3.0, 0.0);
+      HTSetPresentation("image/x-bmp", "xv %s", 1.0, 3.0, 0.0);
+      HTSetPresentation("image/x-ms-bmp", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/gif", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/jpeg", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/pjpeg", "xv %s", 1.0, 3.0, 0.0);
@@ -174,8 +179,9 @@ static char *GetCommand(char *s, char **t)
 {
     char *s2;
     int quoted = 0;
+
     /* marca -- added + 1 for error case -- oct 24, 1993. */
-    s2 = malloc(strlen(s)*2 + 1); /* Absolute max, if all % signs */
+    s2 = malloc(strlen(s) * 2 + 1); /* Absolute max, if all % signs */
     *t = s2;
     while (s && *s) {
 	if (quoted) {
@@ -210,16 +216,16 @@ static char *Cleanse(char *s) /* No leading or trailing space, all lower case */
 	++s;
     news = s;
     /* Put in lower case */
-    for (tmp = s; *tmp; ++tmp) {
-      *tmp = TOLOWER ((unsigned char)*tmp);
-    }
+    for (tmp = s; *tmp; ++tmp)
+        *tmp = TOLOWER((unsigned char)*tmp);
+
     /* Strip trailing white space */
     while (*--tmp && isspace((unsigned char) *tmp))
 	*tmp = 0;
     return(news);
 }
 
-static ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
+static int ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
 {
     int rawentryalloc = 2000, len;
     char *rawentry, *s, *t, *LineBuf;
@@ -231,13 +237,13 @@ static ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
 	if (LineBuf[0] == '#')
 	    continue;
 	len = strlen(LineBuf);
-        if (LineBuf[len-1] == '\n')
+        if (LineBuf[len - 1] == '\n')
 	    LineBuf[--len] = 0;
 	if ((len + strlen(rawentry)) > rawentryalloc) {
 	    rawentryalloc += 2000;
-	    rawentry = realloc(rawentry, rawentryalloc+1);
+	    rawentry = realloc(rawentry, rawentryalloc + 1);
 	}
-	if (len > 0 && LineBuf[len-1] == '\\') {
+	if (len > 0 && LineBuf[len - 1] == '\\') {
             LineBuf[len-1] = 0;
 	    strcat(rawentry, LineBuf);
 	} else {
@@ -246,7 +252,8 @@ static ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
 	}
     }
     free(LineBuf);
-    for (s = rawentry; *s && isspace((unsigned char) *s); ++s) ;
+    for (s = rawentry; *s && isspace((unsigned char) *s); ++s)
+	;
     if (!*s) {
 	/* Totally blank entry -- quietly ignore */
 	free(rawentry);
@@ -255,13 +262,25 @@ static ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
     s = strchr(rawentry, ';');
     if (!s) {
 #ifndef DISABLE_TRACE
-      if (www2Trace)
-	fprintf(stderr, "Ignoring invalid mailcap entry: %s\n", rawentry);
+        if (www2Trace)
+	    fprintf(stderr, "Ignoring invalid mailcap entry: %s\n", rawentry);
 #endif
-      free(rawentry);
-      return(0);
+        free(rawentry);
+        return(0);
     }
     *s++ = 0;
+
+    /* Remove blanks and make lower case */
+    {
+	int i, j;
+
+        for (i = j = 0; rawentry[i]; i++) {
+            if (!isspace((unsigned char)(rawentry[i])))
+		rawentry[j++] = TOLOWER(rawentry[i]);
+	}
+        rawentry[j] = 0;
+    }
+
     mc->needsterminal = 0;
     mc->contenttype = malloc(1 + strlen(rawentry));
     strcpy(mc->contenttype, rawentry);
@@ -279,47 +298,41 @@ static ProcessMailcapEntry(FILE *fp, struct MailcapEntry *mc)
 
         t = GetCommand(s, &arg);
         eq = strchr(arg, '=');
-        if (eq) *eq++ = 0;
+        if (eq)
+	    *eq++ = 0;
         /* Error check added by marca, oct 24 1993. */
         if (arg && *arg)
-          arg = Cleanse(arg);
-	if (!strcmp(arg, "needsterminal")) {
+            arg = Cleanse(arg);
+	if (!strcmp(arg, "needsterminal"))
 	    mc->needsterminal = 1;
-	}
 	s = t;
     }
 
     free(rawentry);
-  do_presentation:
+ do_presentation:
     HTSetPresentation(mc->contenttype, mc->command, 1.0, 3.0, 0.0);
     return(1);
 }
 
 
-static ProcessMailcapFile(char *file)
+int HTLoadTypesConfigFile (char *fn)
 {
     struct MailcapEntry mc;
     FILE *fp;
 
 #ifndef DISABLE_TRACE
     if (www2Trace)
-        fprintf(stderr, "Loading types config file '%s'\n", file);
+        fprintf(stderr, "Loading types config file '%s'\n", fn);
 #endif
 
-    fp = fopen(file, "r");
+    fp = fopen(fn, "r");
 
-    while (fp && !feof(fp)) {
+    while (fp && !feof(fp))
         ProcessMailcapEntry(fp, &mc);
-    }
+
     if (fp)
 	fclose(fp);
     return(-1);
-}
-
-
-int HTLoadTypesConfigFile (char *fn)
-{
-  return ProcessMailcapFile(fn);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -346,143 +359,143 @@ PUBLIC void HTFileInit NOARGS
   if (use_default_extension_map) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr, "Using default extension map\n");
+          fprintf(stderr, "Using default extension map\n");
 #endif
 
-      HTSetSuffix(".saveme",	"application/octet-stream", "binary", 1.0); /* xtra */
-      HTSetSuffix(".dump",	"application/octet-stream", "binary", 1.0); /* xtra */
-      HTSetSuffix(".hqx",       "application/octet-stream", "binary", 1.0);
-      HTSetSuffix(".arc",       "application/octet-stream", "binary", 1.0);
-      HTSetSuffix(".o",         "application/octet-stream", "binary", 1.0);
-      HTSetSuffix(".a",         "application/octet-stream", "binary", 1.0);
-      HTSetSuffix(".bin",	"application/octet-stream", "binary", 1.0);
+      HTSetSuffix(".saveme", "application/octet-stream", "binary", 1.0); /* xtra */
+      HTSetSuffix(".dump",   "application/octet-stream", "binary", 1.0); /* xtra */
+      HTSetSuffix(".hqx",    "application/octet-stream", "binary", 1.0);
+      HTSetSuffix(".arc",    "application/octet-stream", "binary", 1.0);
+      HTSetSuffix(".o",      "application/octet-stream", "binary", 1.0);
+      HTSetSuffix(".a",      "application/octet-stream", "binary", 1.0);
+      HTSetSuffix(".bin",    "application/octet-stream", "binary", 1.0);
 
       HTSetSuffix(".alpha_exe", "application/x-Executable", "binary", 1.0);
-      HTSetSuffix(".exe",	"application/x-Executable", "binary", 1.0);
+      HTSetSuffix(".exe",    "application/x-Executable", "binary", 1.0);
 
-      HTSetSuffix(".Z",	        "application/UNIX Compressed", "binary", 1.0);
-      HTSetSuffix(".gz",	"application/GNU Compressed", "binary", 1.0);
+      HTSetSuffix(".Z",	     "application/UNIX Compressed", "binary", 1.0);
+      HTSetSuffix(".gz",     "application/GNU Compressed", "binary", 1.0);
 
-      HTSetSuffix(".oda",       "application/oda", "binary", 1.0);
+      HTSetSuffix(".oda",    "application/oda", "binary", 1.0);
 
-      HTSetSuffix(".pdf",	"application/pdf", "binary", 1.0);
+      HTSetSuffix(".pdf",    "application/pdf", "binary", 1.0);
 
-      HTSetSuffix(".eps",	"application/postscript", "binary", 1.0);
-      HTSetSuffix(".ai",	"application/postscript", "binary", 1.0);
-      HTSetSuffix(".ps",	"application/postscript", "binary", 1.0);
+      HTSetSuffix(".eps",    "application/postscript", "binary", 1.0);
+      HTSetSuffix(".ai",     "application/postscript", "binary", 1.0);
+      HTSetSuffix(".ps",     "application/postscript", "binary", 1.0);
       
-      HTSetSuffix(".rtf",	"application/rtf", "binary", 1.0);
+      HTSetSuffix(".rtf",    "application/rtf", "binary", 1.0);
 
-      HTSetSuffix(".dvi",	"application/x-DVI", "binary", 1.0);
+      HTSetSuffix(".dvi",    "application/x-DVI", "binary", 1.0);
 
-      HTSetSuffix(".hdf",	"application/x-hdf", "binary", 1.0);
+      HTSetSuffix(".hdf",    "application/x-hdf", "binary", 1.0);
       
-      HTSetSuffix(".latex",	"application/x-Latex", "binary", 1.0);
+      HTSetSuffix(".latex",  "application/x-Latex", "binary", 1.0);
 
-      HTSetSuffix(".cdf",	"application/x-netcdf", "binary", 1.0);
-      HTSetSuffix(".nc",	"application/x-netcdf", "binary", 1.0);
+      HTSetSuffix(".cdf",    "application/x-netcdf", "binary", 1.0);
+      HTSetSuffix(".nc",     "application/x-netcdf", "binary", 1.0);
 
-      HTSetSuffix(".tex",	"application/x-Tex", "binary", 1.0);
-      
-      HTSetSuffix(".texinfo",	"application/x-Texinfo",    "binary", 1.0);
-      HTSetSuffix(".texi",	"application/x-Texinfo",    "binary", 1.0);
+      HTSetSuffix(".tex",    "application/x-Tex", "binary", 1.0);
+      HTSetSuffix(".texinfo", "application/x-Texinfo", "binary", 1.0);
+      HTSetSuffix(".texi",   "application/x-Texinfo", "binary", 1.0);
 
-      HTSetSuffix(".t",    "application/x-Troff", "binary", 1.0);
-      HTSetSuffix(".tr",   "application/x-Troff", "binary", 1.0);
-      HTSetSuffix(".roff", "application/x-Troff", "binary", 1.0);
-      HTSetSuffix(".man",  "application/x-Troff-man", "binary", 1.0);
-      HTSetSuffix(".me",   "application/x-Troff-me", "binary", 1.0);
-      HTSetSuffix(".ms",   "application/x-Troff-ms", "binary", 1.0);
+      HTSetSuffix(".t",      "application/x-Troff", "binary", 1.0);
+      HTSetSuffix(".tr",     "application/x-Troff", "binary", 1.0);
+      HTSetSuffix(".roff",   "application/x-Troff", "binary", 1.0);
+      HTSetSuffix(".man",    "application/x-Troff-man", "binary", 1.0);
+      HTSetSuffix(".me",     "application/x-Troff-me", "binary", 1.0);
+      HTSetSuffix(".ms",     "application/x-Troff-ms", "binary", 1.0);
 
-      HTSetSuffix(".src",	"application/x-wais-source", "binary", 1.0);
-      HTSetSuffix(".wsrc",	"application/x-wais-source", "binary", 1.0); /* xtra */
+      HTSetSuffix(".src",    "application/x-wais-source", "binary", 1.0);
+      HTSetSuffix(".wsrc",   "application/x-wais-source", "binary", 1.0); /* xtra */
 
-      HTSetSuffix(".zip",	"application/x-Zip File", "binary", 1.0);
-      HTSetSuffix(".zoo",	"application/x-Zoo File", "binary", 1.0);
-      HTSetSuffix(".uu",	"application/x-UUencoded", "binary", 1.0);
+      HTSetSuffix(".zip",    "application/x-Zip File", "binary", 1.0);
+      HTSetSuffix(".zoo",    "application/x-Zoo File", "binary", 1.0);
+      HTSetSuffix(".uu",     "application/x-UUencoded", "binary", 1.0);
 
-      HTSetSuffix(".bck",     "application/x-VMS BAK File", "binary", 1.0);
-      HTSetSuffix(".hlb",     "application/x-VMS Help Libr.", "binary", 1.0);
-      HTSetSuffix(".olb",     "application/x-VMS Obj. Libr.", "binary", 1.0);
-      HTSetSuffix(".tlb",     "application/x-VMS Text Libr.", "binary", 1.0);
-      HTSetSuffix(".obj",     "application/x-VMS Prog. Obj.", "binary", 1.0);
+      HTSetSuffix(".bck",    "application/x-VMS BAK File", "binary", 1.0);
+      HTSetSuffix(".hlb",    "application/x-VMS Help Libr.", "binary", 1.0);
+      HTSetSuffix(".olb",    "application/x-VMS Obj. Libr.", "binary", 1.0);
+      HTSetSuffix(".tlb",    "application/x-VMS Text Libr.", "binary", 1.0);
+      HTSetSuffix(".obj",    "application/x-VMS Prog. Obj.", "binary", 1.0);
       HTSetSuffix(".decw$book", "application/x-DEC BookReader", "binary", 1.0);
-      HTSetSuffix(".mem",     "application/x-RUNOFF-MANUAL", "binary", 1.0);
+      HTSetSuffix(".mem",    "application/x-RUNOFF-MANUAL", "binary", 1.0);
 
-      HTSetSuffix(".bcpio",   "application/x-bcpio", "binary", 1.0);
-      HTSetSuffix(".cpio",    "application/x-cpio", "binary", 1.0);
-      HTSetSuffix(".gtar",    "application/x-gtar", "binary", 1.0);
-      HTSetSuffix(".shar",    "application/x-shar", "binary", 1.0);
-      HTSetSuffix(".sh",      "application/x-shar", "binary", 1.0); /* xtra */
+      HTSetSuffix(".bcpio",  "application/x-bcpio", "binary", 1.0);
+      HTSetSuffix(".cpio",   "application/x-cpio", "binary", 1.0);
+      HTSetSuffix(".gtar",   "application/x-gtar", "binary", 1.0);
+      HTSetSuffix(".shar",   "application/x-shar", "binary", 1.0);
+      HTSetSuffix(".sh",     "application/x-shar", "binary", 1.0); /* xtra */
       HTSetSuffix(".sv4cpio", "application/x-sv4cpio", "binary", 1.0);
-      HTSetSuffix(".sv4crc",  "application/x-sv4crc", "binary", 1.0);
-      HTSetSuffix(".tar",     "application/x-tar", "binary", 1.0);
-      HTSetSuffix(".ustar",   "application/x-ustar", "binary", 1.0);
+      HTSetSuffix(".sv4crc", "application/x-sv4crc", "binary", 1.0);
+      HTSetSuffix(".tar",    "application/x-tar", "binary", 1.0);
+      HTSetSuffix(".ustar",  "application/x-ustar", "binary", 1.0);
 
-      HTSetSuffix(".snd",  "audio/basic", "binary", 1.0);
-      HTSetSuffix(".au",   "audio/basic", "binary", 1.0);
-      HTSetSuffix(".aud",  "audio/basic", "binary", 1.0);
-      HTSetSuffix(".aifc", "audio/x-aiff", "binary", 1.0);
-      HTSetSuffix(".aif",  "audio/x-aiff", "binary", 1.0);
-      HTSetSuffix(".aiff", "audio/x-aiff", "binary", 1.0);
-      HTSetSuffix(".wav",  "audio/x-wav", "binary", 1.0);
+      HTSetSuffix(".snd",   "audio/basic", "binary", 1.0);
+      HTSetSuffix(".au",    "audio/basic", "binary", 1.0);
+      HTSetSuffix(".aud",   "audio/basic", "binary", 1.0);
+      HTSetSuffix(".aifc",  "audio/x-aiff", "binary", 1.0);
+      HTSetSuffix(".aif",   "audio/x-aiff", "binary", 1.0);
+      HTSetSuffix(".aiff",  "audio/x-aiff", "binary", 1.0);
+      HTSetSuffix(".wav",   "audio/x-wav", "binary", 1.0);
+      HTSetSuffix(".midi",  "audio/midi", "binary", 1.0);
       
-      HTSetSuffix(".bmp", "image/bmp", "binary", 1.0);
+      HTSetSuffix(".bmp",   "image/bmp", "binary", 1.0);
+      HTSetSuffix(".gif",   "image/gif", "binary", 1.0);
+      HTSetSuffix(".png",   "image/png", "binary", 1.0);
+      HTSetSuffix(".ief",   "image/ief", "binary", 1.0);
+      HTSetSuffix(".jfif",  "image/jpeg", "binary", 1.0); /* xtra */
+      HTSetSuffix(".jfif-tbnl", "image/jpeg", "binary", 1.0); /* xtra */
+      HTSetSuffix(".jpe",   "image/jpeg", "binary", 1.0);
+      HTSetSuffix(".jpg",   "image/jpeg", "binary", 1.0);
+      HTSetSuffix(".jpeg",  "image/jpeg", "binary", 1.0);
+      HTSetSuffix(".tif",   "image/tiff", "binary", 1.0);
+      HTSetSuffix(".tiff",  "image/tiff", "binary", 1.0);
+      HTSetSuffix(".ham",   "image/ham", "binary", 1.0);
+      HTSetSuffix(".ras",   "image/x-cmu-rast", "binary", 1.0);
+      HTSetSuffix(".pnm",   "image/x-portable-anymap", "binary", 1.0);
+      HTSetSuffix(".pbm",   "image/x-portable-bitmap", "binary", 1.0);
+      HTSetSuffix(".pgm",   "image/x-portable-graymap", "binary", 1.0);
+      HTSetSuffix(".ppm",   "image/x-portable-pixmap", "binary", 1.0);
+      HTSetSuffix(".rgb",   "image/x-rgb", "binary", 1.0);
+      HTSetSuffix(".xbm",   "image/x-xbitmap", "binary", 1.0);
+      HTSetSuffix(".xpm",   "image/x-xpixmap", "binary", 1.0);
+      HTSetSuffix(".xwd",   "image/x-xwindowdump", "binary", 1.0);
 
-      HTSetSuffix(".gif", "image/gif", "binary", 1.0);
-
-      HTSetSuffix(".png", "image/png", "binary", 1.0);
-
-      HTSetSuffix(".ief", "image/ief", "binary", 1.0);
-
-      HTSetSuffix(".jfif","image/jpeg", "binary", 1.0); /* xtra */
-      HTSetSuffix(".jfif-tbnl","image/jpeg", "binary", 1.0); /* xtra */
-      HTSetSuffix(".jpe", "image/jpeg", "binary", 1.0);
-      HTSetSuffix(".jpg", "image/jpeg", "binary", 1.0);
-      HTSetSuffix(".jpeg","image/jpeg", "binary", 1.0);
-      
-      HTSetSuffix(".tif", "image/tiff", "binary", 1.0);
-      HTSetSuffix(".tiff","image/tiff", "binary", 1.0);
-            
-      HTSetSuffix(".ras", "image/x-cmu-rast", "binary", 1.0);
-      HTSetSuffix(".pnm", "image/x-portable-anymap", "binary", 1.0);
-      HTSetSuffix(".pbm", "image/x-portable-bitmap", "binary", 1.0);
-      HTSetSuffix(".pgm", "image/x-portable-graymap", "binary", 1.0);
-      HTSetSuffix(".ppm", "image/x-portable-pixmap", "binary", 1.0);
-      HTSetSuffix(".rgb", "image/x-rgb", "binary", 1.0);
-      HTSetSuffix(".xbm", "image/x-xbitmap", "binary", 1.0);
-      HTSetSuffix(".xpm", "image/x-xpixmap", "binary", 1.0);
-      HTSetSuffix(".xwd", "image/x-xwindowdump", "binary", 1.0);
-
+      HTSetSuffix(".php",   "text/html", "binary", 1.0);
+      HTSetSuffix(".php3",  "text/html", "binary", 1.0);
+      HTSetSuffix(".phtml", "text/html", "binary", 1.0);
+      HTSetSuffix(".shtml", "text/html", "binary", 1.0);
+      HTSetSuffix(".sht",   "text/html", "binary", 1.0);
       HTSetSuffix(".htm",   "text/html", "binary", 1.0);
       HTSetSuffix(".html",  "text/html", "binary", 1.0);
       HTSetSuffix(".htmlx", "text/html", "binary", 1.0);
 
-      HTSetSuffix(".text",     "text/plain", "binary", 1.0);
-      HTSetSuffix(".c",	       "text/plain", "binary", 1.0);
-      HTSetSuffix(".cc",       "text/plain", "binary", 1.0);
-      HTSetSuffix(".c++",      "text/plain", "binary", 1.0);
-      HTSetSuffix(".h",	       "text/plain", "binary", 1.0);
-      HTSetSuffix(".pl",       "text/plain", "binary", 1.0);
-      HTSetSuffix(".txt",      "text/plain", "binary", 1.0);
+      HTSetSuffix(".c",	    "text/plain", "binary", 1.0);
+      HTSetSuffix(".cc",    "text/plain", "binary", 1.0);
+      HTSetSuffix(".c++",   "text/plain", "binary", 1.0);
+      HTSetSuffix(".h",	    "text/plain", "binary", 1.0);
+      HTSetSuffix(".pl",    "text/plain", "binary", 1.0);
+      HTSetSuffix(".text",  "text/plain", "binary", 1.0);
+      HTSetSuffix(".txt",   "text/plain", "binary", 1.0);
             
-      HTSetSuffix(".rtx", "text/richtext", "binary", 1.0); /* MIME richtext */
-      HTSetSuffix(".tsv", "text/tab-separated-values", "binary", 1.0);
-      HTSetSuffix(".etx", "text/x-setext", "binary", 1.0);
+      HTSetSuffix(".rtx",   "text/richtext", "binary", 1.0); /* MIME richtext */
+      HTSetSuffix(".tsv",   "text/tab-separated-values", "binary", 1.0);
+      HTSetSuffix(".etx",   "text/x-setext", "binary", 1.0);
 
-      HTSetSuffix(".mpg",  "video/mpeg", "binary", 1.0);
-      HTSetSuffix(".mpe",  "video/mpeg", "binary", 1.0);
-      HTSetSuffix(".mpeg", "video/mpeg", "binary", 1.0);
+      HTSetSuffix(".mpg",   "video/mpeg", "binary", 1.0);
+      HTSetSuffix(".mpe",   "video/mpeg", "binary", 1.0);
+      HTSetSuffix(".mpeg",  "video/mpeg", "binary", 1.0);
 
-      HTSetSuffix(".mov", "video/quicktime", "binary", 1.0);
-      HTSetSuffix(".qt",  "video/quicktime", "binary", 1.0);
+      HTSetSuffix(".mov",   "video/quicktime", "binary", 1.0);
+      HTSetSuffix(".qt",    "video/quicktime", "binary", 1.0);
 
-      HTSetSuffix(".avi", "video/x-msvideo", "binary", 1.0);
+      HTSetSuffix(".avi",   "video/x-msvideo", "binary", 1.0);
 
       HTSetSuffix(".movie", "video/x-sgi-movie", "binary", 1.0);
       HTSetSuffix(".mv",    "video/x-sgi-movie", "binary", 1.0);
 
-      HTSetSuffix(".mime", "message/rfc822", "binary", 1.0);
+      HTSetSuffix(".mime",  "message/rfc822", "binary", 1.0);
   }
 
   /* These should override the default extensions as necessary. */
@@ -491,7 +504,6 @@ PUBLIC void HTFileInit NOARGS
   /* These should override everything else. */
   HTLoadExtensionsConfigFile(personal_extension_map);
 }
-
 
 
 /* -------------------- Extension config file reading --------------------- */
@@ -509,9 +521,9 @@ static int getline(char *s, int n, FILE *f)
       s[i] = (char)fgetc(f);
       
       if (s[i] == CR)
-        s[i] = fgetc(f);
+          s[i] = fgetc(f);
     
-      if ((s[i] == EOF) || (s[i] == LF) || (i == (n-1))) {
+      if ((s[i] == EOF) || (s[i] == LF) || (i == (n - 1))) {
           s[i] = '\0';
           return (feof(f) ? 1 : 0);
       }
@@ -523,24 +535,23 @@ static int getline(char *s, int n, FILE *f)
 
 static void getword(char *word, char *line, char stop, char stop2) 
 {
-  int x = 0, y;
+  int x, y;
 
-  for (x = 0; line[x] && (line[x] != stop) && (line[x] != stop2); x++) {
+  for (x = 0; line[x] && (line[x] != stop) && (line[x] != stop2); x++)
       word[x] = line[x];
-  }
   
   word[x] = '\0';
   if (line[x]) 
-    ++x;
+      ++x;
   y = 0;
 
   while (line[y++] = line[x++])
-    ;
+      ;
 
   return;
 }
 
-int HTLoadExtensionsConfigFile (char *fn)
+int HTLoadExtensionsConfigFile(char *fn)
 {
   char l[MAX_STRING_LEN], w[MAX_STRING_LEN], *ct, *ptr;
   FILE *f;
@@ -548,13 +559,13 @@ int HTLoadExtensionsConfigFile (char *fn)
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf(stderr, "Loading extensions config file '%s'\n", fn);
+      fprintf(stderr, "Loading extensions config file '%s'\n", fn);
 #endif
   
   if (!(f = fopen(fn, "r"))) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf(stderr, "Could not open extensions config file '%s'\n", fn);
+          fprintf(stderr, "Could not open extensions config file '%s'\n", fn);
 #endif
 
       return -1;
@@ -562,27 +573,28 @@ int HTLoadExtensionsConfigFile (char *fn)
 
   while (!(getline(l, MAX_STRING_LEN, f))) {
       /* Always get rid of leading white space for "line" */
-      for (ptr = l; *ptr && isspace(*ptr); ptr++);
+      for (ptr = l; *ptr && isspace(*ptr); ptr++)
+	  ;
 
       getword(w, ptr, ' ', '\t');
       if (ptr[0] == '\0' || w[0] == '#')
-        continue;
+          continue;
       ct = (char *)malloc(sizeof(char) * (strlen(w) + 1));
       strcpy(ct, w);
       
       while (ptr[0]) {
           getword(w, ptr, ' ', '\t');
           if (w[0] && (w[0] != ' ')) {
-              char *ext = (char *)malloc(sizeof(char) * (strlen(w)+1+1));
+              char *ext = (char *)malloc(sizeof(char) * (strlen(w) + 1 + 1));
 
-              for (x=0; w[x]; x++)
-                ext[x+1] = TOLOWER(w[x]);
+              for (x = 0; w[x]; x++)
+                  ext[x + 1] = TOLOWER(w[x]);
               ext[0] = '.';
-              ext[strlen(w)+1] = 0;
+              ext[strlen(w) + 1] = 0;
 
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                fprintf(stderr, "Setting suffix '%s' to '%s'\n", ext, ct);
+                  fprintf(stderr, "Setting suffix '%s' to '%s'\n", ext, ct);
 #endif
               HTSetSuffix(ext, ct, "binary", 1.0);
               count++;

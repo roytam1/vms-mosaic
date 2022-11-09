@@ -52,24 +52,20 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
-
 #ifndef __AUDAN_H__
 #define __AUDAN_H__
 
 #ifdef HAVE_AUDIO_ANNOTATIONS
-mo_status mo_audio_capable (void);
-mo_status mo_post_audio_annotate_win (mo_window *);
+mo_status mo_audio_capable(void);
+mo_status mo_post_audio_annotate_win(mo_window *);
 #endif
 
 #endif

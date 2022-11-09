@@ -52,15 +52,23 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
+#ifndef __MAILTO_H__
+#define __MAILTO_H__
 
+extern mo_status mo_post_mailto_win(char *, char *);
 
+extern FILE *mo_start_sending_mail_message(char *to, char *subj, 
+                                           char *content_type, char *url);
+extern mo_status mo_finish_sending_mail_message(void);
+extern mo_status mo_send_mailto_message(char *text, char *to, char *subj, 
+                                        char *content_type, char *url);
 
+#endif

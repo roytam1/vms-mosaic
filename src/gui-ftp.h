@@ -52,17 +52,13 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
-
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
 
 #ifndef __GUIFTP_H__
 #define __GUIFTP_H__
@@ -73,6 +69,6 @@ mo_status mo_post_ftpput_window(mo_window *);
 mo_status mo_post_ftpremove_window(mo_window *); 
 mo_status mo_post_ftpmkdir_window(mo_window *); 
 mo_status mo_post_ftpbar_window(mo_window *); 
-
+XmxCallback(ftp_rmbm_cb);
 
 #endif

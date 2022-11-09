@@ -1,4 +1,4 @@
-/*                                                      The Stream class definition -- libwww
+/*
                                  STREAM OBJECT DEFINITION
                                              
    A Stream object is something which accepts a stream of text.
@@ -21,36 +21,36 @@ typedef struct _HTStream HTStream;
    before free.  It should be merged with free in fact: it should be
    dummy for new streams.
    
-   The put_block method was write, but this upset systems whiuch had
+   The put_block method was write, but this upset systems which had
    macros for write().
    
  */
 typedef struct _HTStreamClass {
 
-        char*  name;                            /* Just for diagnostics */
+        char  *name;                            /* Just for diagnostics */
                 
         void (*free) PARAMS((
-                HTStream*       me));
+                HTStream       *me));
 
         void (*end_document) PARAMS((
-                HTStream*       me));
+                HTStream       *me));
                 
         void (*put_character) PARAMS((
-                HTStream*       me,
+                HTStream       *me,
                 char            ch));
                                 
         void (*put_string) PARAMS((
-                HTStream*       me,
-                char *    str));
+                HTStream       *me,
+                char           *str));
                 
         void (*put_block) PARAMS((
-                HTStream*       me,
-                char *    str,
+                HTStream       *me,
+                char           *str,
                 int             len));
                 
         void (*handle_interrupt) PARAMS((
-                HTStream*       me));
+                HTStream       *me));
                 
-}HTStreamClass;
+} HTStreamClass;
 
 #endif /* HTSTREAM_H */

@@ -24,51 +24,53 @@
 #define DEFAULT_WAIS_GATEWAY "http://www.ncsa.uiuc.edu:8001/"
 #endif
 
-/* Implements:
-*/
 #include "HTAccess.h"
-
-/* Uses:
-*/
 
 #include "HTParse.h"
 #include "HTUtils.h"
-#include "HTML.h"		/* SCW */
+#include "HTML.h"
 
 #include <stdio.h>
 
 #include "HTList.h"
 #include "HText.h"	/* See bugs above */
 #include "HTAlert.h"
+#include "HTMime.h"
 
+#include "../libnut/str-tools.h"
 #include "../src/proxy.h"
 
 #ifndef DISABLE_TRACE
 extern int www2Trace;
 #endif
 
-extern char *mo_check_for_proxy (char *);
-int has_fallbacks(char *protocol);
+/* In gui.c */
+extern char *mo_check_for_proxy(char *);
+/* In mo-www.c */
+extern char *mo_url_canonicalize_keep_anchor(char *, char *);
+/* Also used in HTTP.C */
+char *redirecting_url = NULL;
 
+char *currentURL = NULL;
 
-char *currentURL=NULL;
-
+/* In htmime.c */
+extern MIMEInfo MIME_http;
 
 /*	These flags may be set to modify the operation of this module
 */
-PUBLIC char * HTClientHost = 0;	/* Name of remote login host if any */
+PUBLIC char *HTClientHost = 0;	/* Name of remote login host if any */
 
 /*	To generate other things, play with these:
 */
 
 PUBLIC HTFormat HTOutputFormat = NULL;
-PUBLIC HTStream* HTOutputStream = NULL;	/* For non-interactive, set this */ 
+PUBLIC HTStream *HTOutputStream = NULL;	/* For non-interactive, set this */ 
 
-PUBLIC BOOL using_gateway = NO; /* are we using a gateway? */
-PUBLIC BOOL using_proxy = NO; /* are we using a proxy gateway? */
-PUBLIC char *proxy_host_fix=NULL; /* Host: header fix */
+PUBLIC BOOL using_gateway = NO; /* Are we using a gateway? */
+PUBLIC BOOL using_proxy = NO; /* Are we using a proxy gateway? */
+PUBLIC char *proxy_host_fix = NULL; /* Host: header fix */
 
-PRIVATE HTList * protocols = NULL;   /* List of registered protocol descriptors */
+PRIVATE HTList *protocols = NULL; /* List of registered protocol descriptors */
 
 
 /*	Register a Protocol				HTRegisterProtocol
@@ -76,12 +78,34 @@ PRIVATE HTList * protocols = NULL;   /* List of registered protocol descriptors 
 */
 
 PUBLIC BOOL HTRegisterProtocol(protocol)
-	HTProtocol * protocol;
+	HTProtocol *protocol;
 {
-    if (!protocols) protocols = HTList_new();
+    if (!protocols)
+	protocols = HTList_new();
     HTList_addObject(protocols, protocol);
     return YES;
 }
+
+#if defined(VAXC) || defined(__GNUC__)
+PUBLIC void SILLY_VAXC()
+{
+/*
+ * Dummy routine for VMS with VAXC. Call routines so that the modules
+ * containing the various HTProtocol definitions are loaded. An extern
+ * declaration seems not to be enough do to this with VAXC.
+ */
+    HTLoadHTTP();
+    HTLoadFile();
+    HTLoadTelnet();
+    HTLoadFinger();
+    HTGetNewsHost();
+    HTLoadGopher();
+#ifdef HAVE_WAIS
+    HTLoadWAIS();
+#endif /* WAIS */
+    HTSendMailTo();
+}
+#endif /* VAXC, BSN */
 
 
 /*	Register all known protocols
@@ -89,30 +113,35 @@ PUBLIC BOOL HTRegisterProtocol(protocol)
 **
 **	Add to or subtract from this list if you add or remove protocol modules.
 **	This routine is called the first time the protocol list is needed,
-**	unless any protocols are already registered, in which case it is not called.
-**	Therefore the application can override this list.
+**	unless any protocols are already registered, in which case it is not
+**	called.  Therefore the application can override this list.
 */
 PRIVATE void HTAccessInit NOARGS			/* Call me once */
 {
-extern HTProtocol HTTP, HTFile, HTTelnet, HTTn3270, HTRlogin;
-extern HTProtocol HTFTP, HTNews, HTGopher, HTMailto, HTNNTP;
-#ifdef DIRECT_WAIS
-extern HTProtocol HTWAIS;
-#endif
-    HTRegisterProtocol(&HTFTP);
-    HTRegisterProtocol(&HTNews);
-    HTRegisterProtocol(&HTGopher);
-#ifdef DIRECT_WAIS
-    HTRegisterProtocol(&HTWAIS);
+    extern HTProtocol HTTP, HTFile, HTFinger, HTTelnet, HTTn3270, HTRlogin;
+    extern HTProtocol HTFTP, HTNews, HTGopher, HTMailto, HTNNTP;
+    extern HTProtocol HTMosaicCookies, HTTPS;
+#ifdef HAVE_WAIS
+    extern HTProtocol HTWAIS;
 #endif
 
+    /* Most popular first so search is faster in most cases */
     HTRegisterProtocol(&HTTP);
+    HTRegisterProtocol(&HTTPS);
+    HTRegisterProtocol(&HTFTP);
+    HTRegisterProtocol(&HTNews);
+    HTRegisterProtocol(&HTMosaicCookies);
     HTRegisterProtocol(&HTFile);
+    HTRegisterProtocol(&HTGopher);
+    HTRegisterProtocol(&HTFinger);
     HTRegisterProtocol(&HTTelnet);
     HTRegisterProtocol(&HTTn3270);
     HTRegisterProtocol(&HTRlogin);
     HTRegisterProtocol(&HTMailto);
     HTRegisterProtocol(&HTNNTP);
+#ifdef HAVE_WAIS
+    HTRegisterProtocol(&HTWAIS);
+#endif
 }
 
 
@@ -122,7 +151,7 @@ extern HTProtocol HTWAIS;
 **
 ** On entry,
 **	addr		must point to the fully qualified hypertext reference.
-**	anchor		a pareent anchor with whose address is addr
+**	anchor		a parent anchor with whose address is addr
 **
 ** On exit,
 **	returns		HT_NO_ACCESS		Error has occured.
@@ -130,67 +159,68 @@ extern HTProtocol HTWAIS;
 **
 */
 PRIVATE int get_physical ARGS3(
-	char *,		addr,
+	char *,			addr,
 	HTParentAnchor *,	anchor,
-	int,		bong)
+	int,			bong)
 {
-    char * access=NULL;	/* Name of access method */
-    char * physical = NULL;
-    char * host = NULL;
+    char *access = NULL;	/* Name of access method */
+    char *physical = NULL;
+    char *host = NULL;
     struct Proxy *GetNoProxy();
     extern int useKeepAlive;
     
     HTAnchor_setPhysical(anchor, addr);
 
-    access =  HTParse(HTAnchor_physical(anchor),
-    		"file:", PARSE_ACCESS);
+    access = HTParse(HTAnchor_physical(anchor), "file:", PARSE_ACCESS);
 
     host = HTParse(HTAnchor_physical(anchor), "", PARSE_HOST);
 
+#ifndef DISABLE_TRACE
+    if (www2Trace)
+	fprintf(stderr, "get_physical: addr = %s, host = %s, access = %s\n",
+		addr, host, access);
+#endif
     /*
-    ** set useKeepAlive to the default here because the last pass might
+    ** Set useKeepAlive to the default here because the last pass might
     ** have turned this off, and the default might have been on.
     */
+    useKeepAlive = 1;
 
-/*
-    Init_useKeepAlive();
-*/
-    useKeepAlive=1;
+    /*Check whether gateway access has been set up for this */
 
-/*	Check whether gateway access has been set up for this
-*/
-#define USE_GATEWAYS
-#ifdef USE_GATEWAYS
-    /* make sure the using_proxy variable is false */
+    /* Make sure the using_proxy variable is false */
     using_proxy = NO;
     if (proxy_host_fix) {
 	free(proxy_host_fix);
-	proxy_host_fix=NULL;
+	proxy_host_fix = NULL;
     }
 
     {
-	char *tmp_access,*tmp_host,*ptr;
+	char *tmp_access, *tmp_host, *ptr;
 
-	for (ptr=tmp_access=strdup(access); ptr && *ptr; ptr++) *ptr=tolower(*ptr);
-	for (ptr=tmp_host=strdup(host); ptr && *ptr; ptr++) *ptr=tolower(*ptr);
+	for (ptr = tmp_access = strdup(access); ptr && *ptr; ptr++)
+	    *ptr = tolower(*ptr);
+	for (ptr = tmp_host = strdup(host); ptr && *ptr; ptr++)
+	    *ptr = tolower(*ptr);
 
 	if (!GetNoProxy(tmp_access, tmp_host)) {
 		char *gateway_parameter, *gateway, *proxy;
-		struct Proxy *proxent = NULL, *GetProxy();
+		struct Proxy *proxent = NULL;
 		extern struct Proxy *proxy_list;
 		char *proxyentry = NULL;
 
-		proxy_host_fix=strdup(tmp_host);
+		proxy_host_fix = strdup(tmp_host);
 
-		/* search for gateways */
-		gateway_parameter = (char *)malloc(strlen(tmp_access)+20);
-		if (gateway_parameter == NULL) outofmem(__FILE__, "HTLoad");
+		/* Search for gateways */
+		gateway_parameter = (char *)malloc(strlen(tmp_access) + 20);
+		if (!gateway_parameter)
+		        outofmem(__FILE__, "HTLoad");
 		strcpy(gateway_parameter, "WWW_");
 		strcat(gateway_parameter, tmp_access);
 		strcat(gateway_parameter, "_GATEWAY");
-		gateway = (char *)getenv(gateway_parameter); /* coerce for decstation */
+		gateway = (char *)getenv(gateway_parameter);
 
-		/* search for proxy servers */
+		/* Search for proxy servers */
 		strcpy(gateway_parameter, tmp_access);
 		strcat(gateway_parameter, "_proxy");
 		proxy = (char *)getenv(gateway_parameter);
@@ -199,25 +229,34 @@ PRIVATE int get_physical ARGS3(
 		/*
 		 * Check the proxies list
 		 */
-		if ((proxy == NULL)||(proxy[0] == '\0')) {
+		if (!proxy || (proxy[0] == '\0')) {
 			int fMatchEnd;
 			char *scheme_info;
 
-			scheme_info =HTParse(HTAnchor_physical(anchor), "", PARSE_HOST);
-			fMatchEnd = 1; /* match hosts from the end */
-
-			if ((scheme_info != NULL) && (*scheme_info == '\0')) {
-				scheme_info = HTParse(HTAnchor_physical(anchor), "", PARSE_PATH);
-				fMatchEnd = 0; /* match other scheme_info at beginning*/
+			scheme_info = HTParse(HTAnchor_physical(anchor), "",
+				              PARSE_HOST);
+			fMatchEnd = 1; /* Match hosts from the end */
+			if (scheme_info && !*scheme_info) {
+				scheme_info = HTParse(HTAnchor_physical(anchor),
+					              "", PARSE_PATH);
+				/* Match other scheme_info at beginning */
+				fMatchEnd = 0;
 			}
 			
-			if (bong) { /* this one is bad - disable! */
-			  proxent = 
-				GetProxy(tmp_access, scheme_info, fMatchEnd);
-			  if (proxent != NULL) proxent->alive = bong;
+			if (bong) { /* This one is bad - disable! */
+#ifndef DISABLE_TRACE
+				if (www2Trace)
+		 			fprintf(stderr, 
+						"Disabling proxy, bong = %d\n",
+						bong);
+#endif
+				proxent = GetProxy(tmp_access, scheme_info,
+					           fMatchEnd);
+				if (proxent)
+					proxent->alive = bong;
 			}
 			proxent = GetProxy(tmp_access, scheme_info, fMatchEnd);
-			if (proxent != NULL) {
+			if (proxent) {
 				useKeepAlive = 0; /* proxies don't keepalive */
 				StrAllocCopy(proxyentry, proxent->transport);
 				StrAllocCat(proxyentry, "://");
@@ -227,22 +266,23 @@ PRIVATE int get_physical ARGS3(
 				StrAllocCat(proxyentry, "/");
 				proxy = proxyentry;
 			}
-
 		}
 
-#ifndef DIRECT_WAIS
-		if (!gateway && 0==strcmp(tmp_access, "wais")) {
-			gateway = DEFAULT_WAIS_GATEWAY;
-		}
+#ifndef DISABLE_TRACE
+		if (www2Trace && proxy)
+ 			fprintf(stderr,	"Got proxy %s\n", proxy);
 #endif
-
-		/* proxy servers have precedence over gateway servers */
+#ifndef HAVE_WAIS
+		if (!gateway && !strcmp(tmp_access, "wais"))
+			gateway = DEFAULT_WAIS_GATEWAY;
+#endif
+		/* Proxy servers have precedence over gateway servers */
 		if (proxy) {
-			char * gatewayed;
+			char *gatewayed;
 
 			gatewayed = NULL;
-			StrAllocCopy(gatewayed,proxy);
-			StrAllocCat(gatewayed,addr);
+			StrAllocCopy(gatewayed, proxy);
+			StrAllocCat(gatewayed, addr);
 			using_proxy = YES;
 			HTAnchor_setPhysical(anchor, gatewayed);
 			free(gatewayed);
@@ -252,11 +292,11 @@ PRIVATE int get_physical ARGS3(
 			access =  HTParse(HTAnchor_physical(anchor),
 					  "http:", PARSE_ACCESS);
 		} else if (gateway) {
-			char * gatewayed;
+			char *gatewayed;
 
 			gatewayed = NULL;
-			StrAllocCopy(gatewayed,gateway);
-			StrAllocCat(gatewayed,addr);
+			StrAllocCopy(gatewayed, gateway);
+			StrAllocCat(gatewayed, addr);
 			using_gateway = YES;
 			HTAnchor_setPhysical(anchor, gatewayed);
 			free(gatewayed);
@@ -264,10 +304,9 @@ PRIVATE int get_physical ARGS3(
 			access =  HTParse(HTAnchor_physical(anchor),
 					  "http:", PARSE_ACCESS);
 		} else {
-			if (proxy_host_fix) {
+			if (proxy_host_fix)
 				free(proxy_host_fix);
-			}
-			proxy_host_fix=NULL;
+			proxy_host_fix = NULL;
 			using_proxy = NO;
 			using_gateway = NO;
 			ClearTempBongedProxies();
@@ -276,20 +315,20 @@ PRIVATE int get_physical ARGS3(
 	free(tmp_access);
 	free(tmp_host);
     }
-#endif
 
-	
-
-
-/*	Search registered protocols to find suitable one
-*/
+    /*	Search registered protocols to find suitable one */
     {
 	int i, n;
-        if (!protocols) HTAccessInit();
+
+        if (!protocols)
+	    HTAccessInit();
 	n = HTList_count(protocols);
-	for (i=0; i<n; i++) {
+	for (i = 0; i < n; i++) {
 	    HTProtocol *p = HTList_objectAt(protocols, i);
-	    if (strcmp(p->name, access)==0) {
+
+	    if (p->name == NULL)
+		continue;
+            if (!my_strcasecmp(p->name, access)) {
 		HTAnchor_setProtocol(anchor, p);
 		free(access);
 		return (HT_OK);
@@ -320,17 +359,17 @@ PRIVATE int get_physical ARGS3(
 **
 */
 PRIVATE int HTLoad ARGS4(
-	WWW_CONST char *,		addr,
+	WWW_CONST char *,	addr,
 	HTParentAnchor *,	anchor,
 	HTFormat,		format_out,
 	HTStream *,		sink)
 {
-    HTProtocol* p;
+    HTProtocol *p;
     int ret, status = get_physical(addr, anchor, 0);
-    int retry=5;
-    static char *buf1="Do you want to disable the proxy server:\n\n";
-    static char *buf2="\n\nAlready attempted 5 contacts.";
-    char *finbuf,*host;
+    int retry = 5;
+    static char *buf1 = "Do you want to disable the proxy server:\n\n";
+    static char *buf2 = "\n\nAlready attempted 5 contacts.";
+    char *finbuf, *host;
     int fallbacks;
 
     /*
@@ -339,82 +378,74 @@ PRIVATE int HTLoad ARGS4(
      *   --SWP
      */
     p = HTAnchor_protocol(anchor);
-    if (!p) {
+    if (!p)
 	return(HT_NOT_LOADED);
-    }
-    fallbacks=has_fallbacks(p->name);
+
+    fallbacks = has_fallbacks(p->name);
 
     while (1) {
-    	if (status < 0) return status;	/* Can't resolve or forbidden */
+    	if (status < 0)
+	    return status;	/* Can't resolve or forbidden */
    	 
-	retry=5;
+	retry = 5;
 
 retry_proxy:
     	p = HTAnchor_protocol(anchor);
     	ret = (*(p->load))(HTAnchor_physical(anchor),
-    				anchor, format_out, sink);
+    			   anchor, format_out, sink);
 
-	if (ret==HT_INTERRUPTED || HTCheckActiveIcon(0)==HT_INTERRUPTED) {
-		if (using_proxy) {
-			ClearTempBongedProxies();
-		}
-
-		return(HT_INTERRUPTED);
+	if ((ret == HT_INTERRUPTED) || HTCheckActiveIcon(0)) {
+	    if (using_proxy)
+		ClearTempBongedProxies();
+	    return(HT_INTERRUPTED);
 	}
 
-/*
- * HT_REDIRECTING supplied by Dan Riley -- dsr@lns598.lns.cornell.edu
- */
-	if (!using_proxy || !fallbacks
-	    || ret == HT_LOADED || ret == HT_REDIRECTING
-	    || (ret == HT_NO_DATA && strncmp((char *)anchor, "telnet", 6) == 0)) {
-		if (using_proxy) {
-			ClearTempBongedProxies();
-		}
-
-		return(ret);
+	/*
+	 * HT_REDIRECTING supplied by Dan Riley -- dsr@lns598.lns.cornell.edu
+	 */
+	if (!using_proxy || !fallbacks || (ret == HT_LOADED) ||
+	    (ret == HT_REDIRECTING) ||
+	    (ret == HT_NO_DATA &&
+	     !my_strncasecmp((char *)anchor, "telnet", 6))) {
+	    if (using_proxy)
+		ClearTempBongedProxies();
+	    return(ret);
 	}
 
-	if (retry>0) {
-		retry--;
-		HTProgress("Retrying proxy server...");
-		goto retry_proxy;
+	if (retry > 0) {
+	    retry--;
+	    HTProgress("Retrying proxy server...");
+	    goto retry_proxy;
 	}
 
-	/* must be using proxy and have a problem to get here! */
+	/* Must be using proxy and have a problem to get here! */
 
-	host=HTParse(HTAnchor_physical(anchor), "", PARSE_HOST);
+	host = HTParse(HTAnchor_physical(anchor), "", PARSE_HOST);
 
-	finbuf=(char *)calloc((strlen(host)+
-			       strlen(buf1)+
-			       strlen(buf2)+
-			       5),
-			      sizeof(char));
-	sprintf(finbuf,"%s%s?%s",buf1,host,buf2);
+	finbuf = (char *)calloc((strlen(host) + strlen(buf1) + strlen(buf2) +
+			         5), sizeof(char));
+	sprintf(finbuf, "%s%s?%s", buf1, host, buf2);
 	if (HTConfirm(finbuf)) {
-		free(finbuf);
-		finbuf=(char *)calloc((strlen(host)+
-				       strlen("Disabling proxy server ")+
-				       strlen(" and trying again.")+
-				       5),
-				      sizeof(char));
-		sprintf(finbuf,"Disabling proxy server %s and trying again.",
-			host);
-		HTProgress(finbuf);
-		application_user_feedback(finbuf);
-		free(finbuf);
-		finbuf=NULL;
+	    free(finbuf);
+	    finbuf = (char *)calloc((strlen(host) +
+				     strlen("Disabling proxy server ") +
+				     strlen(" and trying again.") + 5),
+				    sizeof(char));
+	    sprintf(finbuf, "Disabling proxy server %s and trying again.",host);
+	    HTProgress(finbuf);
+	    application_user_feedback(finbuf);
+	    free(finbuf);
+	    finbuf = NULL;
 
-		status = get_physical(addr, anchor, 1); /* Perm disable */
-	}
-	else if (HTConfirm("Try next fallback proxy server?")) {
-		status = get_physical(addr, anchor, 2); /* Temp disable */
+	    status = get_physical(addr, anchor, 1); /* Perm disable */
+
+	} else if (HTConfirm("Try next fallback proxy server?")) {
+	    status = get_physical(addr, anchor, 2); /* Temp disable */
 	}
 	/* else -- Try the same one again */
 
-	if (finbuf) {
-		free(finbuf);
-	}
+	if (finbuf)
+	    free(finbuf);
     }
 }
 
@@ -424,8 +455,10 @@ retry_proxy:
 */
 PUBLIC HTStream *HTSaveStream ARGS1(HTParentAnchor *, anchor)
 {
-    HTProtocol * p = HTAnchor_protocol(anchor);
-    if (!p) return NULL;
+    HTProtocol *p = HTAnchor_protocol(anchor);
+
+    if (!p)
+	return NULL;
     
     return (*p->saveStream)(anchor);
     
@@ -457,12 +490,12 @@ PUBLIC HTStream *HTSaveStream ARGS1(HTParentAnchor *, anchor)
 char *use_this_url_instead;
 
 PRIVATE int HTLoadDocument ARGS4(
-	WWW_CONST char *,		full_address,
+	WWW_CONST char *,	full_address,
 	HTParentAnchor *,	anchor,
 	HTFormat,		format_out,
-	HTStream*,		sink)
+	HTStream *,		sink)
 {
-    int	        status;
+    int	status;
 
     use_this_url_instead = NULL;
 
@@ -473,65 +506,61 @@ PRIVATE int HTLoadDocument ARGS4(
      */
   try_again:
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf (stderr,
-      "HTAccess: loading document %s\n", full_address);
+    if (www2Trace)
+	fprintf(stderr, "HTAccess: loading document %s\n", full_address);
+#ifndef VMS
+    if (www2Trace)
+	fflush(stderr);
+#endif /* BSN, or, rather, MG */
 #endif
 
     status = HTLoad(full_address, anchor, format_out, sink);
     
     if (status == HT_LOADED) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) {
-	    fprintf(stderr, "HTAccess: `%s' has been accessed.\n",
-	    full_address);
-	}
+	if (www2Trace)
+	   fprintf(stderr, "HTAccess: `%s' has been accessed.\n", full_address);
 #endif
 	return 1;
     }
 
-    if (status == HT_REDIRECTING)
-      {
-        /* Exported from HTMIME.c, of all places. */
-        extern char *redirecting_url;
+    if ((status == HT_REDIRECTING) && redirecting_url) {
 #ifndef DISABLE_TRACE
-        if (www2Trace)
-          {
-            fprintf (stderr, "HTAccess: '%s' is a redirection URL.\n", 
-                     full_address);
-            fprintf (stderr, "HTAccess: Redirecting to '%s'\n", 
-                     redirecting_url);
-          }
+        if (www2Trace) {
+            fprintf(stderr, "HTAccess: '%s' is a redirection URL.\n", 
+                    full_address);
+            fprintf(stderr, "HTAccess: Redirecting to '%s'\n", 
+                    redirecting_url);
+        }
 #endif
-        full_address = redirecting_url;
-        use_this_url_instead = full_address;
+	use_this_url_instead = full_address = mo_url_canonicalize_keep_anchor(
+		redirecting_url, full_address);
+	free(redirecting_url);
+	redirecting_url = NULL;
         goto try_again;
-      }
+    }
 
-    if (status == HT_INTERRUPTED)
-      {
+    if (status == HT_INTERRUPTED) {
 #ifndef DISABLE_TRACE
         if (www2Trace)
-          fprintf (stderr,
-                   "HTAccess: We were interrupted.\n");
+            fprintf(stderr, "HTAccess: We were interrupted.\n");
 #endif
         return -1;
-      }
+    }
     
     if (status == HT_NO_DATA) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) {
-	    fprintf(stderr, 
-	    "HTAccess: `%s' has been accessed, No data left.\n",
-	    full_address);
-	}
+	if (www2Trace)
+	    fprintf(stderr, "HTAccess: `%s' has been accessed, No data left.\n",
+		    full_address);
 #endif
-	return 0;
+	return 0;    
     }
     
-    if (status<0) {		      /* Failure in accessing a document */
+    if (status < 0) {		      /* Failure in accessing a document */
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, 
-                           "HTAccess: Can't access `%s'\n", full_address);
+	if (www2Trace)
+	    fprintf(stderr, "HTAccess: Can't access `%s'\n", full_address);
 #endif
 	return 0;
     }
@@ -541,8 +570,9 @@ PRIVATE int HTLoadDocument ARGS4(
 
 #ifndef DISABLE_TRACE
     if (www2Trace)
-      fprintf(stderr,
-              "**** HTAccess: socket or file number %d returned by obsolete load routine!\n", status);
+        fprintf(stderr,
+         "HTAccess: socket or file num %d returned by obsolete load routine!\n",
+	 status);
 #endif
     return 0;
 
@@ -564,19 +594,33 @@ PRIVATE int HTLoadDocument ARGS4(
 **
 **
 */
-
-PUBLIC int HTLoadAbsolute ARGS1(WWW_CONST char *,addr)
+PUBLIC int HTLoadAbsolute ARGS1(WWW_CONST char *, addr)
 {
 
-   if (currentURL) {
+    if (currentURL)
 	free(currentURL);
-   }
-   currentURL=strdup(addr);
+    currentURL = strdup(addr);
 
-   return HTLoadDocument( addr,
-       		HTAnchor_parent(HTAnchor_findAddress(addr)),
-       			HTOutputFormat ? HTOutputFormat : WWW_PRESENT,
-			HTOutputStream);
+    if (MIME_http.last_modified) {
+	free(MIME_http.last_modified);
+	MIME_http.last_modified = NULL;
+    }
+    if (MIME_http.expires) {
+	free(MIME_http.expires);
+	MIME_http.expires = NULL;
+    }
+    if (MIME_http.refresh) {
+	free(MIME_http.refresh);
+	MIME_http.refresh = NULL;
+    }
+    if (MIME_http.charset) {
+	free(MIME_http.charset);
+	MIME_http.charset = NULL;
+    }
+    return HTLoadDocument(addr,
+     		          HTAnchor_parent(HTAnchor_findAddress(addr)),
+       			  HTOutputFormat ? HTOutputFormat : WWW_PRESENT,
+			  HTOutputStream);
 }
 
 
@@ -593,19 +637,16 @@ PUBLIC int HTLoadAbsolute ARGS1(WWW_CONST char *,addr)
 **
 **
 */
-
 PUBLIC BOOL HTLoadToStream ARGS3(
 		WWW_CONST char *,	addr,
-		BOOL, 		filter,
-		HTStream *, 	sink)
+		BOOL, 			filter,
+		HTStream *, 		sink)
 {
    return HTLoadDocument(addr,
-       		HTAnchor_parent(HTAnchor_findAddress(addr)),
-       			HTOutputFormat ? HTOutputFormat : WWW_PRESENT,
-			sink);
+       			 HTAnchor_parent(HTAnchor_findAddress(addr)),
+       			 HTOutputFormat ? HTOutputFormat : WWW_PRESENT,
+			 sink);
 }
-
-
 
 
 /*		Load a document from relative name
@@ -618,27 +659,22 @@ PUBLIC BOOL HTLoadToStream ARGS3(
 **    On Exit,
 **        returns    YES     Success in opening document
 **                   NO      Failure 
-**
-**
 */
-
 PUBLIC BOOL HTLoadRelative ARGS2(
-		WWW_CONST char *,		relative_name,
+		WWW_CONST char *,	relative_name,
 		HTParentAnchor *,	here)
 {
-    char * 		full_address = 0;
-    BOOL       		result;
-    char * 		mycopy = 0;
-    char * 		stripped = 0;
-    char *		current_address =
-    				HTAnchor_address((HTAnchor*)here);
+    char *full_address = 0;
+    BOOL  result;
+    char *mycopy = 0;
+    char *stripped = 0;
+    char *current_address = HTAnchor_address((HTAnchor *) here);
 
     StrAllocCopy(mycopy, relative_name);
 
     stripped = HTStrip(mycopy);
-    full_address = HTParse(stripped,
-	           current_address,
-		   PARSE_ACCESS|PARSE_HOST|PARSE_PATH|PARSE_PUNCTUATION);
+    full_address = HTParse(stripped, current_address,
+		   PARSE_ACCESS | PARSE_HOST | PARSE_PATH | PARSE_PUNCTUATION);
     result = HTLoadAbsolute(full_address);
     free(full_address);
     free(current_address);

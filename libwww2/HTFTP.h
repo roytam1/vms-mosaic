@@ -1,11 +1,10 @@
-/*                                                               FTP access module for libwww
+/* FTP access module for libwww
                                    FTP ACCESS FUNCTIONS
                                              
    This isn't really a valid protocol module -- it is lumped together
    with HTFile . That could be changed easily.
    
-   Author: Tim Berners-Lee. Public Domain. Please mail changes to
-   timbl@info.cern.ch
+   Author: Tim Berners-Lee.  Public Domain.
    
  */
 #ifndef HTFTP_H
@@ -17,43 +16,28 @@
 #include "HTAlert.h"
 
 /*
-
-Retrieve File from Server
-
-  ON EXIT,
-  
-  returns                 Socket number for file if good.<0 if bad.
-                         
+ * Retrieve File from Server
+ *
+ *  returns                 Socket number for file if good.  <0 if bad.
  */
 extern int HTFTPLoad PARAMS
 ((
-  char *          name,
-  HTParentAnchor *      anchor,
-  HTFormat              format_out,
-  HTStream*             sink
+  char           *name,
+  HTParentAnchor *anchor,
+  HTFormat        format_out,
+  HTStream       *sink
 ));
 
-
 /*
-
-Return Host Name
-
- */
-extern WWW_CONST char * HTHostName NOPARAMS;
-
-
-/*
- * NLST parameters -- SWP
+ * NLST parameters
  */
 #define NLST_PARAMS "-Lla"
 
-
-
 /* Send file to server */
-extern int HTFTPSend PARAMS (( char * name ));
+extern int  HTFTPSend(char *);
+
+extern void HTFTPClearCache(void);
+extern int  HTFTPMkDir(char *);
+extern int  HTFTPRemove(char *);
 
 #endif
-
-/*
-
-   end  */

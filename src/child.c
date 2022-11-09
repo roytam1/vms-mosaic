@@ -52,17 +52,26 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* this module intended to handle child process clean up through callbacks*/
-/* written for version 2.5 */
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
+/* This module intended to handle child process clean up through callbacks */
 #include "../config.h"
 #include "child.h"
-#include "list.h"
+#include "../libhtmlw/list.h"
 #include <stdio.h>
+#include <stdlib.h>
 
+#if defined(MULTINET) && defined(__DECC)
+#define kill    decc$kill
+#endif /* Some non-ANSI routines need a prefix, GEC */
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
 #endif
+
+#ifdef VMS
+int child_count = 0;
+#endif /* VMS, GEC */
 
 List childProcessList;
 
@@ -70,11 +79,10 @@ typedef struct {
 	pid_t pid;
 	void (*callback)();
 	void *callBackData;
-	} ProcessHandle;
-
-
-static ProcessHandle *SearchForChildRecordByPID(pid_t pid);
-
+#ifdef VMS
+	int child_num;
+#endif /* VMS, GEC */
+} ProcessHandle;
 
 
 void InitChildProcessor(void)
@@ -84,95 +92,117 @@ void InitChildProcessor(void)
 
 
 /* Add a child process handler.  Callback is made when child dies */
-/* callback is of the form callback(callBackData,pid); */
-void AddChildProcessHandler(pid_t pid,void (*callback)(), void *callBackData)
+/* callback is of the form callback(callBackData, pid); */
+void AddChildProcessHandler(pid_t pid, void (*callback)(), void *callBackData)
 {
-ProcessHandle *p;
+	ProcessHandle *p;
 
 	if (!(p = (ProcessHandle *) malloc(sizeof(ProcessHandle)))) {
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"Out of Memory\n");
-		}
+		if (srcTrace)
+			fprintf(stderr, "AddChild out of memory\n");
 #endif
-
 		return;
-		}
+	}
 	p->pid = pid;
 	p->callback = callback;
 	p->callBackData = callBackData;
+#ifdef VMS
+	p->child_num = child_count;
+#endif /* VMS, GEC */
 
-	ListAddEntry(childProcessList,p);
+	ListAddEntry(childProcessList, p);
 }
 
-
-
+#ifndef VMS
 static ProcessHandle *SearchForChildRecordByPID(pid_t pid)
 {
-ProcessHandle *p;
+	ProcessHandle *p;
 
 	p = (ProcessHandle *) ListHead(childProcessList);
-	while(p) {
-		if (p->pid == pid) {
+	while (p) {
+		if (p->pid == pid)
 			return(p);
-			}
 		p = (ProcessHandle *) ListNext(childProcessList);
-		}
+	}
 
 	return(NULL);
-
 }
 
-/* terminate the children... 
-   you may want to remove SIGCHLD signal handler before calling this routine
-*/
+#else
+static ProcessHandle *SearchForChildRecordByNum(int num)
+{
+	ProcessHandle *p;
+
+	p = (ProcessHandle *) ListHead(childProcessList);
+	while (p) {
+		if (p->child_num == num)
+			return(p);
+		p = (ProcessHandle *) ListNext(childProcessList);
+	}
+
+	return(NULL);
+}
+#endif /* VMS, GEC */
+
+/* Terminate the children... 
+ * You may want to remove SIGCHLD signal handler before calling this routine
+ */
 void KillAllChildren(void)
 {
-ProcessHandle *p;
+	ProcessHandle *p;
 
-	/* first, be nice and send SIGHUP */
+	/* First, be nice and send SIGHUP */
 	p = (ProcessHandle *) ListHead(childProcessList);
-	while(p) {
-		kill(p->pid,SIGHUP);
+	while (p) {
+		kill(p->pid, SIGHUP);
 		p = (ProcessHandle *) ListNext(childProcessList);
-		}
+	}
 
-	/* hack and slash */
+	/* Hack and slash */
 	p = (ProcessHandle *) ListHead(childProcessList);
-	while(p) {
-		kill(p->pid,SIGKILL);
+	while (p) {
+		kill(p->pid, SIGKILL);
 		p = (ProcessHandle *) ListNext(childProcessList);
-		}
+	}
 }
 
 
-/* callback routine for SIGCHLD signal handler */
+/* Callback routine for SIGCHLD signal handler */
+#ifndef VMS
 void ChildTerminated(void)
 {
-pid_t pid;
-ProcessHandle *p;
+	pid_t pid;
+	ProcessHandle *p;
 #ifdef __sgi
-union wait stat_loc;
+	union wait stat_loc;
 #else
-int stat_loc;
+	int stat_loc;
 #endif
 
 #ifdef SVR4
-	pid = waitpid((pid_t)(-1),NULL,WNOHANG);
-	signal(SIGCHLD, (void (*)())ChildTerminated); /*Solaris resets the signal on a catch*/
+	pid = waitpid((pid_t)(-1), NULL, WNOHANG);
+	/* Solaris resets the signal on a catch */
+	signal(SIGCHLD, (void (*)())ChildTerminated);
 #else
-	pid = wait3(&stat_loc,WNOHANG,NULL);
+	pid = wait3(&stat_loc, WNOHANG, NULL);
 #endif
 
 	p = SearchForChildRecordByPID(pid);
-	if (!p) {
-		/* un registered child process */
+#else
+void ChildTerminated(int num)
+{
+	ProcessHandle *p;
+
+	p = SearchForChildRecordByNum(num);
+#endif /* VMS, GEC */
+	if (!p)
+		/* Unregistered child process */
 		return;
-		}
 
-	(p->callback)(p->callBackData,p->pid);
+	(p->callback)(p->callBackData, p->pid);
 
-	ListDeleteEntry(childProcessList,p);
+	ListDeleteEntry(childProcessList, p);
 	free(p);
 
 	return;

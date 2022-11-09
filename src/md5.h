@@ -52,6 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2006 - The VMS Mosaic Project */
+
 /* Author: DXP */
 
 /* most of this stuff was taken from the original code from RSA Data Security, Inc. 
@@ -128,18 +130,12 @@ typedef struct {
   unsigned char buffer[64];                         /* input buffer */
 } MD5_CTX;
 
-void MD5Init PROTO_LIST ((MD5_CTX *));
-void MD5Update PROTO_LIST
-  ((MD5_CTX *, unsigned char *, unsigned int));
-void MD5Final PROTO_LIST ((unsigned char [16], MD5_CTX *));
-
 /**************************************************/
 /**************************************************/
 
 /* My functions ... DXP */
 
-void MD5File PROTO_LIST ((char *, unsigned char *));
-void MD5Mem PROTO_LIST ((unsigned char *, long, unsigned char *));
-void MD5Convert_to_Hex PROTO_LIST ((unsigned char *, unsigned char *));
-
+void MD5File PROTO_LIST ((char *, char *));
+void MD5Mem PROTO_LIST ((char *, long, char *));
+void MD5Convert_to_Hex PROTO_LIST ((char *, char *));
 

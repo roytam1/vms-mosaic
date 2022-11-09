@@ -1,12 +1,12 @@
-/*                                  Network News Transfer protocol module for the WWW library
-                                          HTNEWS
+/*           Network News Transfer protocol module for the WWW library
+                                     HTNEWS
                                              
  */
 /* History:
 **      26 Sep 90       Written TBL in Objective-C
 **      29 Nov 91       Downgraded to C, for portable implementation.
-**         Mar 96       Moved NewsArt here.  Upgraded back to C from Objectionable-C
-**
+**         Mar 96       Moved NewsArt here.  Upgraded back to C from
+**		        Objectionable-C
 */
 
 #ifndef HTNEWS_H
@@ -15,12 +15,13 @@
 #include "HTAccess.h"
 #include "HTAnchor.h"
 #include "../src/newsrc.h"
+
 extern HTProtocol HTNews;
 
 extern void HTSetNewsHost PARAMS((WWW_CONST char *value));
-extern WWW_CONST char * HTGetNewsHost NOPARAMS;
+extern WWW_CONST char *HTGetNewsHost NOPARAMS;
 
-extern char * HTNewsHost;
+extern char *HTNewsHost;
 extern int newsShowAllGroups;
 extern int newsShowReadGroups;
 extern int ConfigView;
@@ -29,9 +30,19 @@ extern char *NewsGroup;
 extern newsgroup_t *NewsGroupS;
 extern int newsShowAllArticles;
 
-#define NO_CHANGE -1
-
 void HTSetNewsConfig (int, int, int, int, int, int, int, int );
+void news_index(char *);
+void news_next(char *);
+void news_nextt(char *);
+void news_prev(char *);
+void news_prevt(char *);
+void news_status(char *, int *, int *, int *, int *, int *);
+extern int NNTPpost(char *from, char *subj, char *ref, char *groups, char *msg);
+extern int NNTPgetarthdrs(char *art, char **ref, char **grp, char **subj,
+			  char **from);
+extern char *NNTPgetquoteline(char *art);
+
+#define NO_CHANGE -1
 
 /* Thread Chain Structure */
 typedef struct NEWSART {
@@ -45,7 +56,4 @@ typedef struct NEWSART {
 
 extern NewsArt *CurrentArt;
 
-
 #endif /* HTNEWS_H */
-
-

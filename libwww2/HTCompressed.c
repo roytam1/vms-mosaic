@@ -1,8 +1,9 @@
 #include "../config.h"
+#ifndef VMS   /* PGE */
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
+#endif
 
 #include "HTFormat.h"
 #include "HTFile.h"
@@ -18,6 +19,7 @@
 #include "HTPlain.h"
 #include "SGML.h"
 #include "HTMLGen.h"
+#include "HTCompressed.h"
 
 #include "../libnut/system.h"
 
@@ -27,17 +29,13 @@ extern int www2Trace;
 
 struct _HTStream 
 {
-  WWW_CONST HTStreamClass*	isa;
+  WWW_CONST HTStreamClass *isa;
   /* ... */
 };
 
-int is_uncompressed=0;
+int is_uncompressed = 0;
 
-extern char *mo_tmpnam (char *);
-extern void application_user_feedback (char *);
 extern char *uncompress_program, *gunzip_program;
-
-extern void HTFileCopyToText (FILE *fp, HText *text);
 
 /* Given a filename of a local compressed file, compress it in place.
 
@@ -47,125 +45,177 @@ void HTCompressedFileToFile (char *fnam, int compressed)
 {
   char *znam;
   char *cmd;
-  int len;
+#ifdef VMS
+  char *cund, *cp, *cnam;
+  int  nund;
+#endif /* VMS, BSN */
 
-  cmd=NULL;
+  cmd = NULL;
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf 
-      (stderr, "[HTCompressedFileToFile] Entered; fnam '%s', compressed %d\n",
-       fnam, compressed);
+      fprintf(stderr,
+	      "[HTCompressedFileToFile] Entered; fnam '%s', compressed %d\n",
+              fnam, compressed);
 #endif
 
   /* Punt if we can't handle it. */
   if (compressed != COMPRESSED_BIGZ && compressed != COMPRESSED_GNUZIP)
-    return;
+      return;
 
-  HTProgress ("Preparing to uncompress data.");
+  HTProgress("Preparing to uncompress data.");
   
-  znam = (char *)malloc (sizeof (char) * (strlen (fnam) + 8));
+  znam = (char *)malloc((strlen(fnam) + 8) * sizeof(char));
 
   /* Either compressed or gzipped. */
-  if (compressed == COMPRESSED_BIGZ)
-    sprintf (znam, "%s.Z", fnam);
-  else
-    sprintf (znam, "%s.gz", fnam);
+#ifndef VMS   /* PGE, VMS filenames don't allow multiple '.'s */
+  if (compressed == COMPRESSED_BIGZ) {
+    sprintf(znam, "%s.Z", fnam);
+  } else {
+    sprintf(znam, "%s.gz", fnam);
+  }
+#else
+  /*
+   * Check if the original file already had an extension and add gz or Z
+   * extension in appropriate fashion.
+   */
+  cnam = fnam;  
+  cp = strchr(fnam, ']');
+  if (cnam < cp)
+      cnam = cp;
+  cp = strchr(fnam, ':');
+  if (cnam < cp)
+      cnam = cp;
+  if ((cund = strchr(cnam, '.')) != NULL) {
+      nund = -1;
+      if (compressed == COMPRESSED_BIGZ) {
+        sprintf(znam, "%s_Z", fnam);
+      } else {
+        sprintf(znam, "%s-gz", fnam);
+      }
+  } else {
+      nund = -1;
+      if (compressed == COMPRESSED_BIGZ) {
+        sprintf(znam, "%s._Z", fnam);
+      } else {
+        sprintf(znam, "%s.-gz", fnam);
+      }
+  }
+#endif /* VMS, BSN */
 
-/*SWP -- New "mv" fucntion to take care of these /bin/mv things*/
+  /* New "mv" function to take care of these /bin/mv things */
   {
-  char retBuf[BUFSIZ];
-  int status;
+     char retBuf[BUFSIZ];
+     int status;
 
-     if ((status=my_move(fnam,znam,retBuf,BUFSIZ,1))!=SYS_SUCCESS) {
-	sprintf(retBuf,"Unable to uncompress compressed data;\nresults may be in error.\n%s",retBuf);
+     if ((status = my_move(fnam, znam, retBuf, BUFSIZ, 1)) != SYS_SUCCESS) {
+	sprintf(retBuf,
+	  "Unable to uncompress compressed data;\nresults may be in error.\n%s",
+	  retBuf);
 	application_user_info_wait(retBuf);
-	free (znam);
+	free(znam);
 	return;
      }
   }
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf (stderr, "[HTCompressedFileToFile] Moved '%s' to '%s'\n",
-             fnam, znam);
+      fprintf(stderr, "[HTCompressedFileToFile] Moved '%s' to '%s'\n",
+              fnam, znam);
 #endif
 
-  if (compressed == COMPRESSED_BIGZ)
-    {
-      cmd = (char *)malloc(strlen(uncompress_program)+strlen(znam)+8);
-      sprintf (cmd, "%s %s", uncompress_program, znam);
-    }
-  else
-    {
-      cmd = (char *)malloc (strlen (gunzip_program) + strlen (znam) + 8);
-      sprintf (cmd, "%s %s", gunzip_program, znam);
-    }
+  if (compressed == COMPRESSED_BIGZ) {
+      cmd = (char *)malloc(strlen(uncompress_program) + strlen(znam) + 8);
+      sprintf(cmd, "%s %s", uncompress_program, znam);
+  } else {
+      cmd = (char *)malloc(strlen(gunzip_program) + strlen(znam) + 8);
+      sprintf(cmd, "%s %s", gunzip_program, znam);
+  }
 
-  HTProgress ("Uncompressing data.");
+  HTProgress("Uncompressing data.");
 
   {
-  int status,skip_output=0;
-  char retBuf[BUFSIZ];
-  char final[BUFSIZ];
+  	int status, skip_output = 0;
+  	char retBuf[BUFSIZ];
+  	char final[BUFSIZ];
 
-	*retBuf='\0';
-	*final='\0';
+	*retBuf = '\0';
+	*final = '\0';
 
-	if ((status=my_system(cmd,retBuf,BUFSIZ))!=SYS_SUCCESS) {
+	if ((status = my_system(cmd, retBuf, BUFSIZ)) != SYS_SUCCESS) {
 		switch(status) {
-			case SYS_NO_COMMAND:
-				sprintf(final,"%sThere was no command to execute.\n",final);
-				break;
-			case SYS_FORK_FAIL:
-				sprintf(final,"%sThe fork call failed.\n",final);
-				break;
-			case SYS_PROGRAM_FAILED:
-				sprintf(final,"%sThe program specified was not able to exec.\n",final);
-				break;
-			case SYS_NO_RETBUF:
-				sprintf(final,"%sThere was no return buffer.\n",final);
-				break;
-			case SYS_FCNTL_FAILED:
-				sprintf(final,"%sFcntl failed to set non-block on the pipe.\n",final);
-				break;
+		    case SYS_NO_COMMAND:
+			sprintf(final,
+				"%sThere was no command to execute.\n",
+				final);
+			break;
+		    case SYS_FORK_FAIL:
+			sprintf(final, "%sThe fork call failed.\n",
+				final);
+			break;
+		    case SYS_PROGRAM_FAILED:
+			sprintf(final,
+			      "%sThe program specified was not able to exec.\n",
+			      final);
+			break;
+		   case SYS_NO_RETBUF:
+			sprintf(final,
+				"%sThere was no return buffer.\n",
+				final);
+			break;
+		   case SYS_FCNTL_FAILED:
+			sprintf(final,
+			       "%sFcntl failed to set non-block on the pipe.\n",
+			       final);
+			break;
 		}
-		/*give them the output*/
-		if (*retBuf) {
-			sprintf(final,"%s%s",final,retBuf);
-		}
-	}
-	else if (*retBuf) {
-		/*give them the output*/
-		sprintf(final,"%s%s",final,retBuf);
-	}
-	else {
-		/*a-okay*/
-		skip_output=1;
+		/* Give them the output */
+		if (*retBuf)
+			sprintf(final, "%s%s", final, retBuf);
+	} else if (*retBuf) {
+		/* Give them the output */
+		sprintf(final, "%s%s", final, retBuf);
+	} else {
+		/* Okay */
+		skip_output = 1;
 	}
 
 	if (!skip_output) {
 		application_user_info_wait(final);
-		free (cmd);
-		free (znam);
-		HTProgress ("Uncompress failed.");
+		free(cmd);
+		free(znam);
+		HTProgress("Uncompress failed.");
 		return;
 	}
   }
 
-  HTProgress ("Data uncompressed.");
+  HTProgress("Data uncompressed.");
 
-  is_uncompressed=1;
+  is_uncompressed = 1;
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf 
-      (stderr, "[HTCompressedFileToFile] Uncompressed '%s' with command '%s'\n",
-       znam, cmd);
+      fprintf(stderr,
+	      "[HTCompressedFileToFile] Uncompressed '%s' with command '%s'\n",
+              znam, cmd);
 #endif
   
-  free (cmd);
-  free (znam);
+#ifdef VMS
+  if (nund != -1) {
+      char retBuf[BUFSIZ];
+      int status;
+
+      znam[strlen(fnam)] = '\0';
+      if ((status = my_move(znam, fnam, retBuf, BUFSIZ, 1)) != SYS_SUCCESS) {
+	  sprintf(retBuf,
+	     "Unable to rename uncompressed data file;\nresults may be in error.\n%s",
+	     retBuf);
+	  application_user_feedback(retBuf);
+      }
+  }
+#endif /* BSN, modified by PGE */
+  free(cmd);
+  free(znam);
 
   return;
 }
@@ -174,109 +224,108 @@ void HTCompressedFileToFile (char *fnam, int compressed)
 void HTCompressedHText (HText *text, int compressed, int plain)
 {
   char *fnam;
-  char *znam;
-  char *cmd;
   FILE *fp;
   int rv, size_of_data;
   
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf 
-      (stderr, "[HTCompressedHText] Entered; compressed %d\n",
-       compressed);
+      fprintf(stderr, "[HTCompressedHText] Entered; compressed %d\n",
+              compressed);
 #endif
 
   /* Punt if we can't handle it. */
   if (compressed != COMPRESSED_BIGZ && compressed != COMPRESSED_GNUZIP)
-    return;
+      return;
 
   /* Hmmmmmmmmm, I'm not sure why we subtract 1 here, but it is
      indeed working... */
-  size_of_data = HText_getTextLength (text) - 1;
+  size_of_data = HText_getTextLength(text) - 1;
 
-  if (size_of_data == 0)
-    {
-      fprintf (stderr, "[HTCompressedHText] size_of_data 0; punting\n");
-      return;
-    }
-  
-  fnam = mo_tmpnam ((char *) 0);
-  fp = fopen (fnam, "w");
-  if (!fp)
-    {
+  if (size_of_data == 0) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr, "COULD NOT OPEN TMP FILE '%s'\n", fnam);
+          fprintf(stderr, "[HTCompressedHText] size_of_data 0; punting\n");
+#endif
+      return;
+  }
+  
+  fnam = mo_tmpnam(NULL);
+#ifdef VMS
+  /* Open file for efficient writes, VaxC RMS defaults are pitiful. PGE */
+  fp = fopen(fnam, "w", "shr = nil", "rop = WBH", "mbf = 4",
+             "mbc = 32", "deq = 16", "alq = 32", "fop = tef");
+#else
+  fp = fopen(fnam, "w");
+#endif /* VMS, GEC for PGE */
+  if (!fp) {
+#ifndef DISABLE_TRACE
+      if (www2Trace)
+          fprintf(stderr, "Could not open temp file '%s'\n", fnam);
 #endif
       application_user_feedback
-        ("Unable to uncompress compressed data;\nresults may be in error.");
-      free (fnam);
+          ("Unable to uncompress compressed data;\nresults may be in error.");
+      free(fnam);
       return;
-    }
+  }
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf (stderr, "[HTCmopressedHText] Going to write %d bytes.\n",
-             size_of_data);
+      fprintf(stderr, "[HTCompressedHText] Going to write %d bytes.\n",
+              size_of_data);
 #endif
-  rv = fwrite (HText_getText (text), sizeof (char), size_of_data, fp);
-  if (rv != size_of_data)
-    {
+  rv = fwrite(HText_getText(text), sizeof(char), size_of_data, fp);
+  if (rv != size_of_data) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr, "ONLY WROTE %d bytes\n", rv);
+          fprintf(stderr, "Only wrote %d bytes\n", rv);
 #endif
       application_user_feedback
         ("Unable to write compressed data to local disk;\nresults may be in error.");
-    }
-  fclose (fp);
+  }
+  fclose(fp);
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf (stderr, "HTCompressedHText: Calling CompressedFileToFile\n");
+      fprintf(stderr, "HTCompressedHText: Calling CompressedFileToFile\n");
 #endif
-  HTCompressedFileToFile (fnam, compressed);
+  HTCompressedFileToFile(fnam, compressed);
 
-  HText_clearOutForNewContents (text);
+  HText_clearOutForNewContents(text);
 
-  HText_beginAppend (text);
+  HText_beginAppend(text);
   
-  if (plain)
-    {
+  if (plain) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr, "[HTCompressedHText] Throwing in PLAINTEXT token...\n");
+          fprintf(stderr,
+	          "[HTCompressedHText] Throwing in PLAINTEXT token...\n");
 #endif
       HText_appendText(text, "<PLAINTEXT>\n");
-    }
+  }
 
-  fp = fopen (fnam, "r");
-  if (!fp)
-    {
+  fp = fopen(fnam, "r");
+  if (!fp) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-        fprintf (stderr, "COULD NOT OPEN TMP FILE FOR READING '%s'\n", fnam);
+          fprintf(stderr, "Could not open temp file for reading '%s'\n", fnam);
 #endif
       /* We already get error dialog up above. */
-      free (fnam);
+      free(fnam);
       return;
-    }
+  }
 
-  HTFileCopyToText (fp, text);
+  HTFileCopyToText(fp, text);
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-    fprintf (stderr, "[HTCompressedHText] I think we're done...\n");
+      fprintf(stderr, "[HTCompressedHText] I think we're done...\n");
 #endif
 
-/*SWP*/
-/*
-  cmd = (char *)malloc (sizeof (char) * (strlen (fnam) + 32));
-  sprintf (cmd, "/bin/rm -f %s", fnam);
-  system (cmd);
-  free (cmd);
-*/
+#ifndef VMS
   unlink(fnam);
+#else
+  remove(fnam);
+#endif /* VMS, BSN */
   
   return;
 }

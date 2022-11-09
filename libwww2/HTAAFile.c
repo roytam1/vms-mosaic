@@ -21,10 +21,8 @@
 #include "HTAAUtil.h"		/* Common utilities used in AA */
 #include "HTAAFile.h"		/* Implemented here */
 
-
 #define SPACE			' '
 #define TAB			'\t'
-
 
 
 /* PUBLIC						HTAAFile_nextRec()
@@ -45,7 +43,7 @@ PUBLIC void HTAAFile_nextRec ARGS1(FILE *, fp)
 	ch = getc(fp);			/* Skip until end-of-line */
 
     while (ch != EOF &&
-	   (ch == CR  ||  ch == LF))	/*Skip carriage returns and linefeeds*/
+	   (ch == CR || ch == LF))	/* Skip carriage returns and linefeeds*/
 	ch = getc(fp);
 
     if (ch != EOF)
@@ -84,8 +82,8 @@ PRIVATE int read_item ARGS4(FILE *,	fp,
 			    BOOL,	reading_list,
 			    int,	max_len)
 {
-    char * dest = contents;
-    char * end = contents;
+    char *dest = contents;
+    char *end = contents;
     int cnt = 0;
     int ch = getc(fp);
 
@@ -124,7 +122,6 @@ PRIVATE int read_item ARGS4(FILE *,	fp,
 }
 
 
-
 /* PUBLIC						HTAAFile_readField()
 **		READ A FIELD FROM A PASSWORD, GROUP
 **		OR ACCESS CONTROL LIST FILE
@@ -155,8 +152,6 @@ PUBLIC int HTAAFile_readField ARGS3(FILE *, fp,
 {
     return read_item(fp, contents, NO, max_len);
 }
-
-
 
 
 /* PUBLIC						HTAAFile_readList()
@@ -193,7 +188,8 @@ PUBLIC int HTAAFile_readList ARGS3(FILE *,	fp,
 	     terminator != CR  &&  terminator != LF  &&
 	     terminator != EOF);
 
-    if (item) free(item);	/* This was not needed */
+    if (item)
+	free(item);	/* This was not needed */
     return cnt;
 }
 

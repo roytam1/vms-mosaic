@@ -1,5 +1,3 @@
-/*  */
-
 /*              MIME Parser                     HTMIME.h
 **              -----------
 **
@@ -14,12 +12,19 @@
 #include "HTStream.h"
 #include "HTAnchor.h"
 
-int HTMIME_get_header_length(HTStream *me);
+typedef struct mime_rec {
+	char *last_modified;
+	char *expires;
+	char *refresh;
+	char *charset;
+} MIMEInfo;
 
-extern HTStream * HTMIMEConvert PARAMS((HTPresentation * pres,
-                                        HTParentAnchor * anchor,
-                                        HTStream *              sink,
-                                        HTFormat                format_in,
-                                        int                     compressed));
+extern int HTMIME_get_header_length(HTStream *me);
+
+extern HTStream *HTMIMEConvert PARAMS((HTPresentation *pres,
+                                       HTParentAnchor *anchor,
+                                       HTStream       *sink,
+                                       HTFormat        format_in,
+                                       int             compressed));
 
 #endif

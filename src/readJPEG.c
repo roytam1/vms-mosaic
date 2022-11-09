@@ -1,7 +1,8 @@
-#include "config.h"
+/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+
+#include "../config.h"
 #ifdef HAVE_JPEG
 #include <stdio.h>
-#include <X11/Intrinsic.h>
 
 #include "mosaic.h"
 #include "jpeglib.h"
@@ -12,21 +13,44 @@
 extern int srcTrace;
 #endif
 
+/* Browser safe color map filled in by colors.c */
+JSAMPARRAY jcolormap;
+
+extern int Vclass;
+/* From LIBWWW2 htfwriter.c */
+extern char *image_file_fnam;
+
+extern int browserSafeColors;
+extern int BSCnum;
+
 struct my_error_mgr {
   struct jpeg_error_mgr pub;	/* "public" fields */
   jmp_buf setjmp_buffer;	/* for return to caller */
 };
 
-typedef struct my_error_mgr * my_error_ptr;
+typedef struct my_error_mgr *my_error_ptr;
 
 
-static void
-my_error_exit (j_common_ptr cinfo)
+static void my_read_error_exit(j_common_ptr cinfo)
 {
 	my_error_ptr myerr = (my_error_ptr) cinfo->err;
+
 #ifndef DISABLE_TRACE
 	if (srcTrace) {
-		fprintf(stderr,"Error reading JPEG image: ");
+		fprintf(stderr, "Error reading JPEG image: ");
+		(*cinfo->err->output_message) (cinfo);
+	}
+#endif
+	longjmp(myerr->setjmp_buffer, 1);
+}
+
+static void my_write_error_exit(j_common_ptr cinfo)
+{
+	my_error_ptr myerr = (my_error_ptr) cinfo->err;
+
+#ifndef DISABLE_TRACE
+	if (srcTrace) {
+		fprintf(stderr, "Error writing JPEG image: ");
 		(*cinfo->err->output_message) (cinfo);
 	}
 #endif
@@ -34,41 +58,35 @@ my_error_exit (j_common_ptr cinfo)
 }
 
 
-
-unsigned char *
-ReadJPEG(FILE *infile,int *width, int *height, XColor *colrs)
+unsigned char *ReadJPEG(FILE *infile, int *width, int *height, XColor *colrs)
 {
-struct jpeg_decompress_struct cinfo;
-struct my_error_mgr jerr;
-unsigned char *retBuffer=0;	/* Output image buffer */
-unsigned char *r;
-JSAMPROW buffer[1];		/* row pointer array for read_scanlines */
-int row_stride;		/* physical row width in output buffer */
-int i;
+	struct jpeg_decompress_struct cinfo;
+	struct my_error_mgr jerr;
+	unsigned char *retBuffer = 0;	/* Output image buffer */
+	unsigned char *r;
+	JSAMPROW buffer[1];	/* Row pointer array for read_scanlines */
+	int row_stride;		/* Physical row width in output buffer */
+	int i;
 
 #ifndef DISABLE_TRACE
-	if (srcTrace) {
-		fprintf(stderr,"ReadJPEG(): I've been called\n");
-	}
+	if (srcTrace)
+		fprintf(stderr, "ReadJPEG: starting\n");
 #endif
-
 	/* We set up the normal JPEG error routines, 
-		then override error_exit. */
+	 * then override error_exit. */
 	cinfo.err = jpeg_std_error(&jerr.pub);
-	jerr.pub.error_exit = my_error_exit;
+	jerr.pub.error_exit = my_read_error_exit;
 
-	/* Establish the setjmp return context for my_error_exit to use. */
-
+	/* Establish the setjmp return context for my_read_error_exit to use. */
 	if (setjmp(jerr.setjmp_buffer)) {
 		/* If we get here, the JPEG code has signaled an error. */
     		jpeg_destroy_decompress(&cinfo);
 		fclose(infile);
 
-		if (retBuffer) {
+		if (retBuffer)
 			free(retBuffer);
-			}
 		return 0;
-		}
+	}
 
 	jpeg_create_decompress(&cinfo);
 
@@ -77,35 +95,59 @@ int i;
 	(void) jpeg_read_header(&cinfo, TRUE);
 
 	/* We can ignore the return value from jpeg_read_header since
-	*   (a) suspension is not possible with the stdio data source, and
-	*   (b) we passed TRUE to reject a tables-only JPEG file as an error.
-	* See libjpeg.doc for more info.
-	*/
+	 *   (a) suspension is not possible with the stdio data source, and
+	 *   (b) we passed TRUE to reject a tables-only JPEG file as an error.
+	 * See libjpeg.doc for more info.
+	 */
 
   	cinfo.quantize_colors = TRUE; 
-	/*cinfo.desired_number_of_colors = 50;*/
-	cinfo.desired_number_of_colors = get_pref_int(eCOLORS_PER_INLINED_IMAGE);
 	cinfo.two_pass_quantize = TRUE;
+
+	if (browserSafeColors) {
+		cinfo.desired_number_of_colors = BSCnum;
+		/* Only use our map if it is color */
+		if (cinfo.out_color_components == 3) {
+			cinfo.actual_number_of_colors = BSCnum;
+			cinfo.colormap = jcolormap;
+		}
+	} else {
+		if ((Vclass == TrueColor) || (Vclass == DirectColor)) {
+			cinfo.desired_number_of_colors = 256;
+		} else {
+			/* 8 bit display */
+			static int init = 0;
+			static int ncolors;
+
+			if (!init) {
+			      ncolors = get_pref_int(eCOLORS_PER_INLINED_IMAGE);
+			      init = 1;
+			}
+			/* Use more colors if internal image viewer */
+			if (image_file_fnam && (ncolors < 144)) {
+			      cinfo.desired_number_of_colors = 144;
+			} else {
+			      cinfo.desired_number_of_colors = ncolors;
+			}
+		}
+	}
 
 	jpeg_start_decompress(&cinfo);
 
-	if (!(retBuffer = (unsigned char *) malloc(cinfo.output_width 
-			* cinfo.output_height * cinfo.output_components))) {
+	if (!(retBuffer = (unsigned char *) malloc(cinfo.output_width *
+			  cinfo.output_height * cinfo.output_components))) {
 		jpeg_destroy_decompress(&cinfo);
 #ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"Couldn't create space for JPEG read\n");
-		}
+		if (srcTrace)
+		       fprintf(stderr, "Couldn't create space for JPEG read\n");
 #endif
-
 		return(0);
-		}
-#ifndef DISABLE_TRACE
-	if (srcTrace) {
-		fprintf(stderr,"buffer size is width=%d x height=%d x depth=%d\n",
-		       cinfo.output_width , cinfo.output_height , 
-		       cinfo.output_components);
 	}
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr,
+		        "buffer size is width=%d x height=%d x depth=%d\n",
+		        cinfo.output_width, cinfo.output_height, 
+		        cinfo.output_components);
 #endif
 
 	r = retBuffer;
@@ -114,45 +156,99 @@ int i;
 		buffer[0] = r;
 		(void) jpeg_read_scanlines(&cinfo, buffer, 1);
 		r += row_stride;
-  		}
+	}
 
-	*width =  cinfo.output_width;
-	*height =  cinfo.output_height;
+	*width = cinfo.output_width;
+	*height = cinfo.output_height;
 
-	/* set up X colormap */
-	if (cinfo.out_color_components  == 3) {
-
-#ifndef DISABLE_TRACE
-		if (srcTrace) {
-			fprintf(stderr,"cinfo.actual_number_of_colors=%d\n",cinfo.actual_number_of_colors);
-			fprintf(stderr,"colrs[0].red=%d colrs[99].red=%d\n",colrs[0].red,colrs[99].red);
-			fprintf(stderr,"cinfo.colormap[0][0]=%d\n",cinfo.colormap[0][0]);
-			{char dummy[80]; fprintf(stderr,"RETURN\n"); gets(dummy);}
-		}
-#endif
-
-		for (i=0; i < cinfo.actual_number_of_colors; i++) {
+	/* Set up X colormap */
+	if (cinfo.out_color_components == 3) {
+		for (i = 0; i < cinfo.actual_number_of_colors; i++) {
 			colrs[i].red = cinfo.colormap[0][i] << 8;
 			colrs[i].green = cinfo.colormap[1][i] << 8;
 			colrs[i].blue = cinfo.colormap[2][i] << 8;
 			colrs[i].pixel = i;
 			colrs[i].flags = DoRed|DoGreen|DoBlue;
-			}
 		}
-	else {
-		for (i=0; i < cinfo.actual_number_of_colors; i++) {
+	} else {
+		for (i = 0; i < cinfo.actual_number_of_colors; i++) {
 			colrs[i].red = colrs[i].green = 
 				colrs[i].blue = cinfo.colormap[0][i] << 8;
 			colrs[i].pixel = i;
 			colrs[i].flags = DoRed|DoGreen|DoBlue;
-			}
 		}
+	}
+#ifndef DISABLE_TRACE
+	if (srcTrace) {
+		fprintf(stderr, "cinfo.actual_number_of_colors = %d\n",
+			cinfo.actual_number_of_colors);
+		fprintf(stderr, "cinfo.out_color_components = %d\n",
+			cinfo.out_color_components);
+	}
+#endif
+	(void) jpeg_finish_decompress(&cinfo);
+	jpeg_destroy_decompress(&cinfo);
 
-
-  (void) jpeg_finish_decompress(&cinfo);
-  jpeg_destroy_decompress(&cinfo);
-
-  return retBuffer;
+ 	return retBuffer;
 }
 
+
+int WriteJPEG(FILE *outfile, unsigned char *image, int width, int height)
+{
+	struct jpeg_compress_struct cinfo;
+	struct my_error_mgr jerr;
+	JSAMPROW row_pointer[1];     /* Row pointer array for write_scanlines */
+	int row_stride;		     /* Physical row width in output buffer */
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "WriteJPEG: starting\n");
+#endif
+
+	/* We set up the normal JPEG error routines, 
+	 * then override error_exit. */
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = my_write_error_exit;
+
+	/* Establish the setjmp return context for my_error_exit to use. */
+	if (setjmp(jerr.setjmp_buffer)) {
+		/* If we get here, the JPEG code has signaled an error. */
+    		jpeg_destroy_compress(&cinfo);
+		return 0;
+	}
+
+	jpeg_create_compress(&cinfo);
+
+	jpeg_stdio_dest(&cinfo, outfile);
+
+	cinfo.image_width = width;      /* image width and height, in pixels */
+	cinfo.image_height = height;
+	cinfo.input_components = 3;     /* # of color components per pixel */
+	cinfo.in_color_space = JCS_RGB; /* colorspace of input image */
+
+	jpeg_set_defaults(&cinfo);
+	jpeg_set_quality(&cinfo, 85, TRUE);   /* Default is 75; 95 is "best" */
+	cinfo.comp_info[0].h_samp_factor = 1; /* Turn off downsampling */
+	cinfo.comp_info[0].v_samp_factor = 1;
+
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr,
+		        "buffer size is width=%d x height=%d x depth=%d\n",
+		        cinfo.image_width, cinfo.image_height, 
+		        cinfo.input_components);
+#endif
+	jpeg_start_compress(&cinfo, TRUE);
+
+	row_stride = cinfo.image_width * cinfo.input_components;
+	while (cinfo.next_scanline < cinfo.image_height) {
+	        row_pointer[0] = &image[cinfo.next_scanline * row_stride];
+                jpeg_write_scanlines(&cinfo, row_pointer, 1);
+        }
+
+	(void) jpeg_finish_compress(&cinfo);
+	jpeg_destroy_compress(&cinfo);
+
+	return 1;
+}
 #endif

@@ -51,9 +51,13 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
-#include <X11/Intrinsic.h>
-#include <stdio.h>
+#include "mosaic.h"
+#include "medcut.h"
+#include "main.h"
 
 #define RED     0
 #define GREEN   1
@@ -61,34 +65,28 @@
 
 #ifndef DISABLE_TRACE
 extern int srcTrace;
+extern int reportBugs;
 #endif
 
-#if 0
 #define FindHash(red, green, blue, h_ptr) \
-	h_ptr = Hash[((red * 299) + (green * 587) + (blue * 114)) / 1000 * NCells / 65536]; \
-	while(h_ptr != NULL) \
-	{ \
-		if ((h_ptr->pixel[RED] == red)&& \
-		    (h_ptr->pixel[GREEN] == green)&& \
-		    (h_ptr->pixel[BLUE] == blue)) \
-		{ \
-			break; \
-		} \
-		h_ptr = h_ptr->hash_next; \
-	}
-#endif
-#define FindHash(red, green, blue, h_ptr) \
-	h_ptr = Hash[((((red * 306) + (green * 601) + (blue * 117)) >> 10) * NCells) >> 16]; \
-	while(h_ptr != NULL) \
-	{ \
-		if ((h_ptr->pixel[RED] == red)&& \
-		    (h_ptr->pixel[GREEN] == green)&& \
-		    (h_ptr->pixel[BLUE] == blue)) \
-		{ \
-			break; \
-		} \
-		h_ptr = h_ptr->hash_next; \
-	}
+  if (hash_scale) { \
+      h_ptr = Hash[((((red * 306) + (green * 601) + (blue * 117)) >> 10) * \
+	            NCells) >> 16]; \
+  } else { \
+      h_ptr = Hash[(((red * 306) + (green * 601) + (blue * 117)) >> 10) * \
+	            NCells >> 8]; \
+  } \
+  while(h_ptr) { \
+      if ((h_ptr->pixel[RED] == red) && \
+	  (h_ptr->pixel[GREEN] == green) && \
+	  (h_ptr->pixel[BLUE] == blue)) { \
+	  break; \
+      } \
+      h_ptr = h_ptr->hash_next; \
+  }
+
+/* 0 = hash 8 bit values, 1 = hash 16 bit values */
+static int hash_scale;
 
 static struct color_rec {
 	int pixel[3];
@@ -96,6 +94,7 @@ static struct color_rec {
 	struct color_rec *hash_next;
 	struct color_rec *next;
 } *Hash[256];
+
 static struct c_box_rec {
 	int min_pix[3];
 	int max_pix[3];
@@ -112,8 +111,7 @@ static int ColorCnt;
 static int NCells;
 
 
-void InitMinMax(boxnum)
-int boxnum;
+static void InitMinMax(int boxnum)
 {
 	C_boxes[boxnum].min_pix[RED] = 65536;
 	C_boxes[boxnum].max_pix[RED] = 0;
@@ -124,30 +122,43 @@ int boxnum;
 }
 
 
-struct color_rec *AddHash(red, green, blue)
-int red, green, blue;
+static void FreeHash()
+{
+	int i;
+
+	for (i = 0; i < 256; i++) {
+		hash_ptr = Hash[i];
+		while (hash_ptr) {
+			tptr = hash_ptr;
+			hash_ptr = hash_ptr->hash_next;
+			tptr->hash_next = free_hash;
+			free_hash = tptr;
+		}
+	}
+}
+
+
+static struct color_rec *AddHash(int red, int green, int blue)
 {
 	int lum;
 
-#if 0
-	lum = ((red * 299) + (green * 587) + (blue * 114)) / 1000 * NCells / 65536;;
-#endif
-	lum = ((((red * 306) + (green * 601) + (blue * 117)) >> 10) * NCells) >> 16;;
-
-	if (free_hash != NULL)
-	{
+	if (hash_scale) {
+		lum = ((((red * 306) + (green * 601) + (blue * 117)) >> 10) *
+			NCells) >> 16;
+	} else {
+		lum = ((((red * 306) + (green * 601) + (blue * 117)) >> 10) *
+			NCells) >> 8;
+	}
+	if (free_hash) {
 		hash_ptr = free_hash;
 		free_hash = free_hash->hash_next;
-	}
-	else
-	{
+	} else {
 		hash_ptr = (struct color_rec *)
 			XtMalloc(sizeof(struct color_rec));
 	}
-	if (hash_ptr == NULL)
-	{
-		fprintf(stderr, "Cannot malloc %dth color\n", ColorCnt);
-		exit(1);
+	if (hash_ptr == NULL) {
+		fprintf(stderr, "MedianCut: Cannot malloc color\n");
+		mo_exit();
 	}
 	hash_ptr->pixel[RED] = red;
 	hash_ptr->pixel[GREEN] = green;
@@ -160,14 +171,11 @@ int red, green, blue;
 }
 
 
-void AddColor(cptr, boxnum)
-struct color_rec *cptr;
-int boxnum;
+static void AddColor(struct color_rec *cptr, int boxnum)
 {
 	struct color_rec *ptr;
 
-	while (cptr != NULL)
-	{
+	while (cptr) {
 		ptr = cptr;
 		cptr = cptr->next;
 		ptr->box_num = boxnum;
@@ -189,10 +197,7 @@ int boxnum;
 }
 
 
-void CountColors(data, colrs, color_used)
-unsigned char *data;
-XColor *colrs;
-int *color_used;
+static void CountColors(unsigned char *data, XColor *colrs, int *color_used)
 {
 	unsigned char *dptr;
 	register int i;
@@ -204,30 +209,22 @@ int *color_used;
 	tptr = C_boxes[0].c_data;
 	ColorCnt = 0;
 
-	for (i=0; i<256; i++)
-	{
-		color_used[i] = 0;
-	}
+	memset(color_used, 0, 256 * sizeof(int *));
 
 	dptr = data;
-	for (i=(Width * Height); i>0; i--)
-	{
+	for (i = (Width * Height); i > 0; i--) {
 		color_used[(int)(*dptr)] = 1;
 		dptr++;
 	}
 
-	for (i=0; i<256; i++)
-	{
+	for (i = 0; i < 256; i++) {
 		if (!color_used[i])
-		{
 			continue;
-		}
 		red = colrs[i].red;
 		green = colrs[i].green;
 		blue = colrs[i].blue;
 		FindHash(red, green, blue, tptr);
-		if (tptr == NULL)
-		{
+		if (tptr == NULL) {
 			tptr = AddHash(red, green, blue);
 			tptr->next = NULL;
 			AddColor(tptr, 0);
@@ -237,33 +234,88 @@ int *color_used;
 }
 
 
-int FindTarget(tptr)
-int *tptr;
+static void CountColors32x32x32(unsigned char *data, int MaxColors)
+{
+	unsigned char *dptr;
+	register int i;
+	unsigned int idx, x;
+	int red, green, blue;
+	register struct color_rec *tptr;
+	char color_used[32768];
+
+	InitMinMax(0);
+	C_boxes[0].c_data = NULL;
+	tptr = C_boxes[0].c_data;
+	ColorCnt = 0;
+
+	memset(color_used, 0, 32768);
+
+	dptr = data;
+	for (i = (Width * Height); i > 0; i--) {
+		/* Reduce 24 bit color to 15 bit (32x32x32 cube) */
+		idx = (unsigned int)(*dptr & 0xF8) << 7;
+		/* Round it up if needed */
+		if ((idx < 31744) && ((*dptr & 0x07) > 3))
+			idx += 1024;
+		dptr++;
+		idx += x = (unsigned int)(*dptr & 0xF8) << 2;
+		if ((x < 992) && ((*dptr & 0x07) > 3))
+			idx += 32;
+		dptr++;
+		idx += x =(*dptr & 0xF8) >> 3;
+		if ((x < 31) && ((*dptr & 0x07) > 3))
+			idx++;
+		dptr++;
+		if (!color_used[idx]) {
+			ColorCnt++;
+			if (ColorCnt > MaxColors)
+				return;
+			color_used[idx] = 1;
+		}
+	}
+
+	for (i = 0; i < 32768; i++) {
+		if (!color_used[i])
+			continue;
+		red = (i & 0x7C00) >> 7;
+		green = (i & 0x03E0) >> 2;
+		blue = (i & 0x001F) << 3;
+		FindHash(red, green, blue, tptr);
+		if (tptr == NULL) {
+			tptr = AddHash(red, green, blue);
+			tptr->next = NULL;
+			AddColor(tptr, 0);
+		}
+	}
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "Found %d colors in 32x32x32 cube\n", ColorCnt);
+#endif
+}
+
+
+static int FindTarget(int *tptr)
 {
 	int range, i, indx;
 
 	range = 0;
-	for (i=0; i<BoxCount; i++)
-	{
+	for (i = 0; i < BoxCount; i++) {
 		int rr, gr, br;
 
 		rr = C_boxes[i].max_pix[RED] - C_boxes[i].min_pix[RED];
 		gr = C_boxes[i].max_pix[GREEN] - C_boxes[i].min_pix[GREEN];
 		br = C_boxes[i].max_pix[BLUE] - C_boxes[i].min_pix[BLUE];
-		if (rr > range)
-		{
+		if (rr > range) {
 			range = rr;
 			*tptr = i;
 			indx = RED;
 		}
-		if (gr > range)
-		{
+		if (gr > range)	{
 			range = gr;
 			*tptr = i;
 			indx = GREEN;
 		}
-		if (br > range)
-		{
+		if (br > range)	{
 			range = br;
 			*tptr = i;
 			indx = BLUE;
@@ -273,8 +325,7 @@ int *tptr;
 }
 
 
-void SplitBox(boxnum, color_indx)
-int boxnum, color_indx;
+static void SplitBox(int boxnum, int color_indx)
 {
 	struct color_rec *low, *high;
 	struct color_rec *data;
@@ -293,16 +344,12 @@ int boxnum, color_indx;
 	C_boxes[Greater].c_data = NULL;
 	Low_cnt = 0;
 	High_cnt = 0;
-	while(med_cnt > 0)
-	{
-		if (data->pixel[color_indx] < data->next->pixel[color_indx])
-		{
+	while (med_cnt > 0) {
+		if (data->pixel[color_indx] < data->next->pixel[color_indx]) {
 			low = data;
 			high = data->next;
 			data = high->next;
-		}
-		else
-		{
+		} else {
 			high = data;
 			low = data->next;
 			data = low->next;
@@ -312,58 +359,46 @@ int boxnum, color_indx;
 		low_cnt = 1;
 		high_cnt = 1;
 		split_val = low->pixel[color_indx];
-		while(data != NULL)
-		{
+		while (data) {
 			tptr = data;
 			data = data->next;
-			if (tptr->pixel[color_indx] > split_val)
-			{
+			if (tptr->pixel[color_indx] > split_val) {
 				tptr->next = high;
 				high = tptr;
 				high_cnt++;
-			}
-			else
-			{
+			} else {
 				tptr->next = low;
 				low = tptr;
 				low_cnt++;
 			}
-		} /* end while data->next != NULL */
-		if (low_cnt <= med_cnt)
-		{
+		}
+		if (low_cnt <= med_cnt) {
 			AddColor(low, Lesser);
 			Low_cnt += low_cnt;
 			med_cnt -= low_cnt;
-			if (med_cnt == 0)
-			{
+			if (med_cnt == 0) {
 				AddColor(high, Greater);
 				High_cnt += high_cnt;
 			}
 			data = high;
-		}
-		else
-		{
+		} else {
 			AddColor(high, Greater);
 			High_cnt += high_cnt;
 			data = low;
 		}
-	} /* end while med_cnt */
+	}
 	C_boxes[Lesser].count = Low_cnt;
 	C_boxes[Greater].count = High_cnt;
-		
 }
 
 
-void SplitColors(e_cnt)
-int e_cnt;
+static void SplitColors(int e_cnt)
 {
-	if (ColorCnt < e_cnt)
-	{
+	if (ColorCnt < e_cnt) {
 		int i;
 
 		tptr = C_boxes[0].c_data;
-		for (i=0; i<ColorCnt; i++)
-		{
+		for (i = 0; i < ColorCnt; i++) {
 			hash_ptr = tptr;
 			tptr = tptr->next;
 			C_boxes[i].c_data = hash_ptr;
@@ -372,12 +407,9 @@ int e_cnt;
 			hash_ptr->next = NULL;
 		}
 		BoxCount = ColorCnt;
-	}
-	else
-	{
+	} else {
 		BoxCount = 1;
-		while (BoxCount < e_cnt)
-		{
+		while (BoxCount < e_cnt) {
 			int target, color_indx;
 	
 			target = 0;
@@ -389,13 +421,10 @@ int e_cnt;
 }
 
 
-void ConvertData(data, colrs, colors_used)
-unsigned char *data;
-XColor *colrs;
-int *colors_used;
+static void ConvertData(unsigned char *data, XColor *colrs, int *colors_used)
 {
 	unsigned char *dptr;
-	register int i/*, j*/;
+	register int i;
 	int red, green, blue;
 	register struct color_rec *hash_ptr;
 	int pixel_map[256];
@@ -403,23 +432,18 @@ int *colors_used;
 	/*
 	 * Generate translation map.
 	 */
-	for (i=0; i<256; i++)
-	{
+	for (i = 0; i < 256; i++) {
 		if (!colors_used[i])
-		{
 			continue;
-		}
 		red = colrs[i].red;
 		green = colrs[i].green;
 		blue = colrs[i].blue;
 		FindHash(red, green, blue, hash_ptr);
-		if (hash_ptr == NULL)
-		{
+		if (hash_ptr == NULL) {
 #ifndef DISABLE_TRACE
-			if (srcTrace) {
+			if (reportBugs)
 				fprintf(stderr, "Unknown color (%d,%d,%d)\n",
 					red, green, blue);
-			}
 #endif
 			hash_ptr = Hash[0];
 		}
@@ -427,65 +451,110 @@ int *colors_used;
 	}
 
 	dptr = data;
-	for (i=(Width*Height); i>0; i--)
-	{
+	for (i = (Width * Height); i > 0; i--) {
 		*dptr = (unsigned char)pixel_map[(int)*dptr];
 		dptr++;
 	}
 }
 
 
-void PrintColormap(e_cnt, colrs)
-int e_cnt;
-XColor *colrs;
+static unsigned char *Convert24BitData(unsigned char *data)
+{
+	unsigned char *dptr, *iptr, *newdata;
+	register int i;
+	int red, green, blue;
+	register struct color_rec *hash_ptr;
+
+	newdata = iptr = malloc(Width * Height);
+	dptr = data;
+	for (i = (Width * Height); i > 0; i--) {
+		red = *dptr & 0xF8;
+		if ((red < 248) && ((*dptr & 0x07) > 3))
+		    red += 8;
+		dptr++;
+		green = *dptr & 0xF8;
+		if ((green < 248) && ((*dptr & 0x07) > 3))
+		    green += 8;
+		dptr++;
+		blue = *dptr & 0xF8;
+		if ((blue < 248) && ((*dptr & 0x07) > 3))
+		    blue += 8;
+		dptr++;
+		FindHash(red, green, blue, hash_ptr);
+		if (hash_ptr == NULL) {
+#ifndef DISABLE_TRACE
+			if (reportBugs)
+				fprintf(stderr, "Unknown color (%d,%d,%d)\n",
+					red, green, blue);
+#endif
+			hash_ptr = Hash[0];
+		}
+		*iptr++ = hash_ptr->box_num;
+	}
+	return newdata;
+}
+
+
+static void PrintColormap(int e_cnt, XColor *colrs)
 {
 	int i;
 
-	for(i=0; i<BoxCount; i++)
-	{
-		int Tred, Tgreen, Tblue;
+	for (i = 0; i < BoxCount; i++) {
+		unsigned int Tred, Tgreen, Tblue;
+		unsigned short x;
 		int c_cnt;
 
 		c_cnt = 0;
 		Tred = Tgreen = Tblue = 0;
 		tptr = C_boxes[i].c_data;
-		while (tptr != NULL)
-		{
+		while (tptr) {
 			Tred += tptr->pixel[RED];
 			Tgreen += tptr->pixel[GREEN];
 			Tblue += tptr->pixel[BLUE];
 			c_cnt++;
 			tptr = tptr->next;
 		}
-		colrs[i].red = Tred / c_cnt;
-		colrs[i].green = Tgreen / c_cnt;
-		colrs[i].blue = Tblue / c_cnt;
+	        if (hash_scale) {
+			colrs[i].red = Tred / c_cnt;
+			colrs[i].green = Tgreen / c_cnt;
+			colrs[i].blue = Tblue / c_cnt;
+		} else {
+			/* Colors must be 16 bits instead of 8 */
+			x = Tred / c_cnt;
+			colrs[i].red = (x << 8) | x;
+			x = Tgreen / c_cnt;
+			colrs[i].green = (x << 8) | x;
+			x = Tblue / c_cnt;
+			colrs[i].blue = (x << 8) | x;
+		}
 	}
-	for(i=BoxCount; i<e_cnt; i++)
-	{
+	for (i = BoxCount; i < e_cnt; i++) {
 		colrs[i].red = 0;
 		colrs[i].green = 0;
 		colrs[i].blue = 0;
 	}
+#ifndef DISABLE_TRACE
+	if (srcTrace)
+		fprintf(stderr, "Using %d colors\n", BoxCount);
+#endif
 }
 
 
-void MedianCut(data, w, h, colrs, start_cnt, end_cnt)
-unsigned char *data;
-int *w, *h;
-XColor *colrs;
-int start_cnt, end_cnt;
+void MedianCut(unsigned char *data, int w, int h, XColor *colrs,
+	       int start_cnt, int end_cnt)
 {
 	int i;
 	int colors_used[256];
 
-	Width = *w;
-	Height = *h;
+	hash_scale = 1;
+
+	Height = h; /* These two are globals */
+	Width = w;
+
 	NCells = start_cnt;
 	BoxCount = 0;
 	ColorCnt = 0;
-	for (i=0; i<256; i++)
-	{
+	for (i = 0; i < 256; i++) {
 		Hash[i] = NULL;
 		C_boxes[i].c_data = NULL;
 		C_boxes[i].count = 0;
@@ -495,16 +564,39 @@ int start_cnt, end_cnt;
 	SplitColors(end_cnt);
 	ConvertData(data, colrs, colors_used);
 	PrintColormap(end_cnt, colrs);
-	for (i=0; i<256; i++)
-	{
-		hash_ptr = Hash[i];
-		while (hash_ptr != NULL)
-		{
-			tptr = hash_ptr;
-			hash_ptr = hash_ptr->hash_next;
-			tptr->hash_next = free_hash;
-			free_hash = tptr;
-		}
-	}
+	FreeHash();
 }
 
+
+unsigned char *MedianCut24BitTo8(unsigned char *data, int w, int h,
+				 XColor *colrs, int end_cnt, int max_cnt)
+{
+	int i;
+	unsigned char *idata;
+
+	Height = h; /* These are globals */
+	Width = w;
+	NCells = 256;
+	BoxCount = 0;
+	ColorCnt = 0;
+	hash_scale = 0;
+
+	for (i = 0; i < 256; i++) {
+		Hash[i] = NULL;
+		C_boxes[i].c_data = NULL;
+		C_boxes[i].count = 0;
+	}
+
+	CountColors32x32x32(data, max_cnt);
+	if (ColorCnt > max_cnt) {	/* Too many colors? */
+		FreeHash();
+		return NULL;
+	}
+	C_boxes[0].count = ColorCnt;
+	SplitColors(end_cnt);
+	idata = Convert24BitData(data);
+	PrintColormap(end_cnt, colrs);
+	FreeHash();
+
+	return idata;
+}

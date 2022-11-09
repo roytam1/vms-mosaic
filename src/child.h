@@ -52,21 +52,31 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
 #include <signal.h>
+#ifndef VMS
 #include <sys/wait.h>
+#endif /* VMS port doesn't use, plus VAX C doesn't have, GEC */
 #include <sys/types.h>
+
+#if defined(VMS) && !defined(__PID_T) && !defined(__DECC_VER)
+#define __PID_T 1
+    typedef int pid_t;
+#endif /* VAX C and pre-V5.0 DEC C don't have a header file to define it, GEC */
 
 void InitChildProcessor(void);
 void AddChildProcessHandler(pid_t pid, void (*callback)(), void *callBackData);
 void KillAllChildren(void);
+
+#ifndef VMS
 void ChildTerminated(void);
+#else
+void ChildTerminated(int num);
+#endif /* VMS, GEC */

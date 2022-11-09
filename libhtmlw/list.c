@@ -13,7 +13,7 @@
 
 
 /*
- * list.c:  This module contains list manipulation routines that cunstruct
+ * list.c:  This module contains list manipulation routines that construct
  * and maintain a linked list of data items.  The record at the head of each
  * list contains pointers to the head, tail, and current list position.
  * the list itsself is doubly linked with both next and previous pointers.
@@ -39,7 +39,7 @@ char *s;
 {
 #ifndef DISABLE_TRACE
 	if (htmlwTrace) {
-		fprintf(stderr,"%s",s);
+		fprintf(stderr, "%s", s);
 	}
 #endif
 }
@@ -55,10 +55,11 @@ List theList;
 	if (!theList)
 		return(NIL);
 	theList->current = theList->head;
-	if (theList->head)
+	if (theList->head) {
 		return(theList->head->value);
-	else
+	} else {
 		return(NIL);
+	}
 }
 
 /*
@@ -72,10 +73,11 @@ List theList;
 	if (!theList)
 		return(NIL);
 	theList->current = theList->tail;
-	if (theList->tail)
+	if (theList->tail) {
 		return(theList->tail->value);
-	else
+	} else {
 		return(NIL);
+	}
 }
 
 /*
@@ -87,10 +89,11 @@ List theList;
 {
 	if (!theList)
 		return(NIL);
-	if (theList->current)
+	if (theList->current) {
 		return(theList->current->value);
-	else
+	} else {
 		return(NIL);
+	}
 }
 
 /*
@@ -107,9 +110,9 @@ List theList;
 	if (theList->current) {
 		theList->current = theList->current->next;
 		return(ListCurrent(theList));
-		}
-	else
+	} else {
 		return(NIL);
+	}
 }
 
 /*
@@ -125,9 +128,9 @@ List theList;
 	if (theList->current) {
 		theList->current = theList->current->prev;
 		return(ListCurrent(theList));
-		}
-	else
+	} else {
 		return(NIL);
+	}
 }
 
 /*
@@ -135,12 +138,12 @@ List theList;
  */
 List ListCreate()
 {
-List retVal;
+	List retVal;
 
 	if (!(retVal = (List) MALLOC(sizeof(struct LISTSTRUCT)))) {
 		ListPrintErr("Out of Memory\n");
 		return((List) 0);
-		}
+	}
 	retVal->head = NIL;
 	retVal->tail = NIL;
 	retVal->current = NIL;
@@ -154,8 +157,8 @@ List retVal;
 void ListDestroy(theList)
 List theList;
 {
-struct LISTINSTANCE *l;
-struct LISTINSTANCE *m;
+	struct LISTINSTANCE *l;
+	struct LISTINSTANCE *m;
 
 	if (!theList)
 		return;
@@ -164,7 +167,7 @@ struct LISTINSTANCE *m;
 		m = l;
 		l = l->next;
 		FREE(m);
-		}
+	}
 	FREE(theList);
 		
 }
@@ -174,31 +177,30 @@ struct LISTINSTANCE *m;
  * Add an entry to the end of the linked list.  Current is changed to point to
  * the added element.
  */
-int ListAddEntry(theList,v)
+int ListAddEntry(theList, v)
 /* return 0 on failure */
 List theList;
 char *v; /* data to be added */
 {
-struct LISTINSTANCE *l;
+	struct LISTINSTANCE *l;
 
-	if (!(l =(struct LISTINSTANCE *) MALLOC(sizeof(struct LISTINSTANCE)))){
+	if (!(l =(struct LISTINSTANCE *) MALLOC(sizeof(struct LISTINSTANCE)))) {
 		ListPrintErr("Out of Memory\n");
 		return(0);
-		}
+	}
 
 	l->value = v;
 
 	l->next = NIL;
 	l->prev = NIL;
 
-	if (theList->head == NIL)
+	if (theList->head == NIL) {
 		theList->tail = theList->head = l;
-	else {
+	} else {
 		theList->tail->next = l;
 		l->prev = theList->tail;
 		theList->tail = l;
-		}
-
+	}
 	theList->current = l;
 
 	theList->listCount++;
@@ -211,26 +213,24 @@ struct LISTINSTANCE *l;
  * a pointer to that list element.  Current is changed to point to the
  * element returned.
  */
-static struct LISTINSTANCE *SearchListByValue(theList,v)
+static struct LISTINSTANCE *SearchListByValue(theList, v)
 List theList;
 char *v;
 {
-struct LISTINSTANCE *l;
+	struct LISTINSTANCE *l;
 
 	l = theList->head;
 	while (l != NIL) {
 		if (l->value == v) {
 			theList->current = l;
 			return(l);
-			}
-		else {
+		} else {
 			l = l->next;
-			}
 		}
+	}
 	theList->current = l;
 
 	return(NIL);
-	
 }
 
 /*
@@ -238,31 +238,29 @@ struct LISTINSTANCE *l;
  * from the list.  Set current to point to the element after the deleted
  * element in the list.
  */
-int ListDeleteEntry(theList,v)
+int ListDeleteEntry(theList, v)
 /* removes the first occurance of v from the list */
 /* return 0 if value not in list else 1 */
 List theList;
 char *v;
 {
-struct LISTINSTANCE *l;
-char *retV;
+	struct LISTINSTANCE *l;
 
-	if (!(l = SearchListByValue(theList,v)))
+	if (!(l = SearchListByValue(theList, v)))
 		return(0);
 
-	if (l->prev)
+	if (l->prev) {
 		l->prev->next = l->next;
-	else
+	} else {
 		theList->head = l->next;
-
-	if (l->next)
+	}
+	if (l->next) {
 		l->next->prev = l->prev;
-	else
+	} else {
 		theList->tail = l->prev;
-
+	}
 	theList->current = l->next;
 
-	retV = l->value;
 	FREE(l);
 
 	theList->listCount--;
@@ -271,21 +269,20 @@ char *retV;
 }
 
 
-int ListMakeEntryCurrent(theList,entry)
+int ListMakeEntryCurrent(theList, entry)
 /* return 0 on failure  */
 List theList;
 char *entry;
 {
-struct LISTINSTANCE *l;
+	struct LISTINSTANCE *l;
 
 	if (theList) {
-		if (!(l = SearchListByValue(theList,entry)))
+		if (!(l = SearchListByValue(theList, entry)))
 			return(0);
 		theList->current = l;
 		return(1);
-		}
+	}
 	return(0);
-
 }
 
 int ListCount(theList)
@@ -293,39 +290,33 @@ int ListCount(theList)
 /* current position pointer is not affected */
 List theList;
 {
-/*
-char *entry;
-int count;
-struct LISTINSTANCE *saveCurrent;
-*/	
 	if (theList) {
 		return(theList->listCount);
-		}
-	else {
+	} else {
 		return(0);
-		}
+	}
 }
 
 
 /* return indexed entry. Index starts at 0 */
 /* the current list pointer will be set to this entry */
 /* return 0 on failure */
-char *ListGetIndexedEntry(theList,number)
+char *ListGetIndexedEntry(theList, number)
 List theList;
 int number;
 {
-char *entry;
-register int x;
+	char *entry;
+	register int x;
 
 	if (!theList) {
 		return(0);
-		}
+	}
 	entry = ListHead(theList);
 	for (x = 0; x < number; x++) {
 		if (!entry) {
 			return(0);
-			}
-		entry = ListNext(theList);
 		}
+		entry = ListNext(theList);
+	}
 	return(entry);
 }

@@ -9,16 +9,18 @@
 #define HEX_ESCAPE '%'
 
 struct struct_parts {
-	char * access;
-	char * host;
-	char * absolute;
-	char * relative;
-	char * anchor;
+	char *access;
+	char *host;
+	char *absolute;
+	char *relative;
+	char *anchor;
 };
 
 #ifndef DISABLE_TRACE
 extern int www2Trace;
 #endif
+
+#define SPACE(c) ((c == ' ') || (c == '\t') || (c == '\n')) 
 
 /*	Strip white space off a string
 **	------------------------------
@@ -27,28 +29,27 @@ extern int www2Trace;
 **	Return value points to first non-white character, or to 0 if none.
 **	All trailing white space is OVERWRITTEN with zero.
 */
-
-#ifdef __STDC__
-char * HTStrip(char * s)
-#else
-char * HTStrip(s)
-	char *s;
-#endif
+char *HTStrip(char *s)
 {
-#define SPACE(c) ((c==' ')||(c=='\t')||(c=='\n')) 
-    char * p=s;
-    for(p=s;*p;p++);		        /* Find end of string */
-    for(p--;p>=s;p--) {
-    	if(SPACE(*p)) *p=0;	/* Zap trailing blanks */
-	else break;
+    char *p;
+
+    for (p = s; *p; p++)
+        ;		        /* Find end of string */
+    for (p--; p >= s; p--) {
+    	if (SPACE(*p)) {
+	    *p = 0;		/* Zap trailing blanks */
+	} else {
+	    break;
+	}
     }
-    while(SPACE(*s))s++;	/* Strip leading blanks */
+    while (SPACE(*s))
+	s++;			/* Strip leading blanks */
     return s;
 }
 
 
-/*	Scan a filename for its consituents
-**	-----------------------------------
+/*	Scan a filename for its parts
+**	-----------------------------
 **
 ** On entry,
 **	name	points to a document name which may be incomplete.
@@ -57,75 +58,97 @@ char * HTStrip(s)
 **	host, anchor and access may be nonzero if they were specified.
 **	Any which are nonzero point to zero terminated strings.
 */
-#ifdef __STDC__
-PRIVATE void scan(char * name, struct struct_parts *parts)
-#else
-PRIVATE void scan(name, parts)
-    char * name;
-    struct struct_parts *parts;
-#endif
+PRIVATE void scan(char *name, struct struct_parts *parts)
 {
-    char * after_access;
-    char * p;
-    int length;
+    char *after_access;
+    char *p;
+    char *mp; /* For case in-sensitizing scheme (access) */
 
-    if (name && *name)
-      length = strlen(name);
-    else
-      length = 0;
-    
-    parts->access = 0;
-    parts->host = 0;
-    parts->absolute = 0;
-    parts->relative = 0;
-    parts->anchor = 0;
+    parts->access = NULL;
+    parts->host = NULL;
+    parts->absolute = NULL;
+    parts->relative = NULL;
+    parts->anchor = NULL;
 
-    /* Argh. */
-    if (!length)
-      return;
-    
+    /*
+    **  Scan left-to-right for a scheme (access).
+    */
     after_access = name;
-    for(p=name; *p; p++) {
-	if (*p==':') {
-		*p = 0;
-		parts->access = name;	/* Access name has been specified */
-		after_access = p+1;
+    for (p = name; *p; p++) {
+	if (*p == ':') {
+	    *p = '\0';
+	    parts->access = name;	/* Access name has been specified */
+	    after_access = p + 1;
+	    /* Makes HTTP ==> http */
+	    if (parts->access && *(parts->access)) {
+		mp = parts->access;
+		while (*mp) {
+		    *mp = tolower(*mp);
+		    mp++;
+		}
+	    }
+	    break;
 	}
-	if (*p=='/') break;
-	if (*p=='#') break;
+	if ((*p == '/') || (*p == '#') || (*p == ';') || (*p == '?'))
+	    break;
     }
     
-    for(p=name+length-1; p>=name; p--) {
-	if (*p =='#') {
-	    parts->anchor=p+1;
-	    *p=0;				/* terminate the rest */
+    /*
+    **  Scan left-to-right for a fragment (anchor).
+    */
+    for (p = after_access; *p; p++) {
+	if (*p == '#') {
+	    parts->anchor = p + 1;
+	    *p = '\0';			/* Terminate the rest */
+	    break;        		/* Leave things after first # alone */
 	}
     }
+
+    /*
+    **  Scan left-to-right for a host or absolute path.
+    */
     p = after_access;
-    if (*p=='/'){
-	if (p[1]=='/') {
-	    parts->host = p+2;		/* host has been specified 	*/
-	    *p=0;			/* Terminate access 		*/
-	    p=strchr(parts->host,'/');	/* look for end of host name if any */
-	    if(p) {
-	        *p=0;			/* Terminate host */
-	        parts->absolute = p+1;		/* Root has been found */
+    if (*p == '/') {
+	if (p[1] == '/') {
+	    parts->host = p + 2;	/* Host has been specified */
+	    *p = '\0';			/* Terminate access */
+	    p = strchr(parts->host, '/'); /* Look for end of host name if any */
+	    if (p) {
+	        *p = '\0';			/* Terminate host */
+	        parts->absolute = p + 1;	/* Root has been found */
 	    }
 	} else {
-	    parts->absolute = p+1;		/* Root found but no host */
+	    parts->absolute = p + 1;		/* Root found but no host */
 	}	    
     } else {
-        parts->relative = (*after_access) ? after_access : 0;	/* zero for "" */
+        parts->relative = (*after_access) ?
+				after_access : NULL; /* NULL for "" */
     }
 
-    /* Access specified but no host: the anchor was not really one
-       e.g. news:j462#36487@foo.bar -- JFG 10/7/92, from bug report */
-    if (parts->access && ! parts->host && parts->anchor) {
-      *(parts->anchor - 1) = '#';  /* Restore the '#' in the address */
-      parts->anchor = 0;
+    /*
+    **  Check schemes that commonly have unescaped hashes.
+    */
+    if (parts->access && parts->anchor) {
+        if (!parts->host ||
+            !strcmp(parts->access, "nntp") ||
+            !strcmp(parts->access, "snews") ||
+            !strcmp(parts->access, "news")) {
+            /*
+             *  Access specified but no host, so the
+             *  anchor may not really be one, e.g., news:j462#36487@foo.bar,
+             *  or it's an nntp or snews URL, or news URL with a host.
+             *  Restore the '#' in the address.
+             */
+            /* But only if we have found a path component of which this will
+             * become part. - kw  */
+            if (parts->relative || parts->absolute) {
+                *(parts->anchor - 1) = '#';
+                parts->anchor = NULL;
+            }
+        }
     }
 
-} /*scan */    
+}
 
 
 /*	Parse a Name relative to another name
@@ -142,185 +165,234 @@ PRIVATE void scan(name, parts)
 ** On exit,
 **	returns		A pointer to a malloc'd string which MUST BE FREED
 */
-#ifdef __STDC__
-char * HTParse(char * aName, char * relatedName, int wanted)
-#else
-char * HTParse(aName, relatedName, wanted)
-    char * aName;
-    char * relatedName;
-    int wanted;
-#endif
-
+char *HTParse(char *aName, char *relatedName, int wanted)
 {
-    char * result = 0;
-    char * return_value = 0;
-    int len;
-    char * name = 0;
-    char * rel = 0;
-    char * p;
+    char *result;
+    char *return_value = 0;
+    int len, i, count;
+    char *name = 0;
+    char *rel = 0;
+    char *p;
     char *access;
     struct struct_parts given, related;
     
     if (!aName)
-      aName = strdup ("\0");
+        aName = strdup("\0");
     if (!relatedName)
-      relatedName = strdup ("\0");
+        relatedName = strdup("\0");
     
     /* Make working copies of input strings to cut up:
     */
-    len = strlen(aName)+strlen(relatedName)+10;
-    result=(char *)malloc(len);		/* Lots of space: more than enough */
+    len = strlen(aName) + strlen(relatedName) + 10;
+    result = (char *)malloc(len);	/* Lots of space: more than enough */
     
     StrAllocCopy(name, aName);
     StrAllocCopy(rel, relatedName);
     
     scan(name, &given);
-    scan(rel,  &related); 
-    result[0]=0;		/* Clear string  */
+    scan(rel, &related); 
+    result[0] = 0;		/* Clear string  */
+
+    /*
+    **	Handle the scheme (access) field.
+    */
+    if (given.access && given.host && !given.relative && !given.absolute) {
+	if (!strcmp(given.access, "http") ||
+	    !strcmp(given.access, "https") ||
+	    !strcmp(given.access, "ftp"))
+	    /*
+	    **	Assume root.
+	    */
+	    given.absolute = "";
+    }
     access = given.access ? given.access : related.access;
-    if (wanted & PARSE_ACCESS)
+    if (wanted & PARSE_ACCESS) {
         if (access) {
 	    strcat(result, access);
-	    if(wanted & PARSE_PUNCTUATION) strcat(result, ":");
+	    if (wanted & PARSE_PUNCTUATION)
+		strcat(result, ":");
 	}
-	
-    if (given.access && related.access)	/* If different, inherit nothing. */
-        if (strcmp(given.access, related.access)!=0) {
-	    related.host=0;
-	    related.absolute=0;
-	    related.relative=0;
-	    related.anchor=0;
-	}
-	
-    if (wanted & PARSE_HOST)
-        if(given.host || related.host) {
-          char * tail = result + strlen(result);   
-	    if(wanted & PARSE_PUNCTUATION) strcat(result, "//");
+    }
+    /* If different access methods, inherit nothing. */
+    if (given.access && related.access &&
+	strcmp(given.access, related.access)) {
+	related.host = NULL;
+	related.absolute = NULL;
+	related.relative = NULL;
+	related.anchor = NULL;
+    }
+
+    if (wanted & PARSE_HOST) {
+        if (given.host || related.host) {
+            char *tail = result + strlen(result);
+            char *tmp;
+
+	    if (wanted & PARSE_PUNCTUATION)
+		strcat(result, "//");
 	    strcat(result, given.host ? given.host : related.host);
-#define CLEAN_URLS
-#ifdef CLEAN_URLS
+
 	    /* Ignore default port numbers, and trailing dots on FQDNs
-	       which will only cause identical adreesses to look different */
-          {
-            char * p;
+	       which will only cause identical addresses to look different */
             p = strchr(tail, ':');
-            if (p && access) 
-              {		/* Port specified */
-                if ((strcmp(access, "http") == 0 && strcmp(p, ":80") == 0) ||
-                    (strcmp(access, "gopher") == 0 && 
-                     (strcmp(p, ":70") == 0 ||
-                      strcmp(p, ":70+") == 0)))
-                  *p = (char)0;	/* It is the default: ignore it */
-                else if (p && *p && p[strlen(p)-1] == '+')
-                  p[strlen(p)-1] = 0;
-              }
+            if (p && access) {		/* Port specified */
+                if ((!strcmp(access, "http") && !strcmp(p, ":80")) ||
+		    (!strcmp(access, "https") && !strcmp(p, ":443")) ||
+		    (!strcmp(access, "ftp") && !strcmp(p, ":21")) ||
+                    (!strcmp(access, "gopher") &&
+		     (!strcmp(p, ":70") || !strcmp(p, ":70+")))) {
+                    *p = '\0';	/* It is the default: ignore it */
+                } else if (*p && (p[strlen(p) - 1] == '+')) {
+                    p[strlen(p) - 1] = '\0';
+		}
+            }
             if (!p) 
-              p = tail + strlen(tail); /* After hostname */
+                p = tail + strlen(tail);	/* After hostname */
             p--;				/* End of hostname */
-            if (strlen (tail) > 3 && (*p == '.')) 
-              {
+            if (strlen(tail) > 3 && (*p == '.')) {
 #ifndef DISABLE_TRACE
                 if (www2Trace)
-                  fprintf (stderr, "[Parse] tail '%s' p '%s'\n", tail, p);
+                    fprintf(stderr, "[Parse] tail '%s' p '%s'\n", tail, p);
 #endif
-                *p = (char)0; /* chop final . */
+                *p = '\0'; /* Chop final . */
                 
-                /* OK, at this point we know that *(p+1) exists,
+                /* OK, at this point we know that *(p + 1) exists,
                    else we would not be here.
 
                    If it's 0, then we're done.
 
-                   If it's not 0, then we move *(p+2) to *(p+1),
+                   If it's not 0, then we move *(p + 2) to *(p + 1),
                    etc.
-
-                   Let's try to use a bcopy... */
-                if (*(p+1) != '\0')
-                  {
+		 */
+                if (*(p + 1) != '\0') {
 #ifndef DISABLE_TRACE
                     if (www2Trace)
-                      fprintf (stderr, "[Parse] Copying '%s' to '%s', %d bytes\n", 
-                               p+1, p, strlen (p+1));
+                        fprintf(stderr,
+			        "[Parse] Copying '%s' to '%s', %d bytes\n", 
+                                p + 1, p, strlen(p + 1));
 #endif
-/*
-                    bcopy (p+1, p, strlen(p+1));
-*/
-                    memcpy (p, p+1, strlen(p+1));
+                    memcpy(p, p + 1, strlen(p + 1));
 #ifndef DISABLE_TRACE
                     if (www2Trace)
-                      fprintf (stderr, "[Parse] Setting '%c' to 0...\n",
-                               *(p + strlen (p+1)));
+                        fprintf(stderr, "[Parse] Setting '%c' to 0...\n",
+                                *(p + strlen(p + 1)));
 #endif
-                    *(p + strlen (p+1)) = '\0';
-                  }
+                    *(p + strlen(p + 1)) = '\0';
+                }
 #ifndef DISABLE_TRACE
                 if (www2Trace)
-                  fprintf (stderr, "[Parse] tail '%s' p '%s'\n", tail, p);
+                    fprintf(stderr, "[Parse] tail '%s' p '%s'\n", tail, p);
 #endif
-              }
-            {
-              char *tmp;
-              tmp = strchr (tail, '@');
-              if (!tmp)
-                tmp = tail;
-              for (; *tmp; tmp++)
-                *tmp = TOLOWER (*tmp);
             }
-          }
-#endif
-	}
-	
-    if (given.host && related.host)  /* If different hosts, inherit no path. */
-        if (strcmp(given.host, related.host)!=0) {
-	    related.absolute=0;
-	    related.relative=0;
-	    related.anchor=0;
-	}
-	
+            tmp = strchr(tail, '@');
+            if (!tmp)
+                tmp = tail;
+            for (; *tmp; tmp++)
+                *tmp = TOLOWER(*tmp);
+        }
+    }	
+    /* If different hosts, inherit no path. */
+    if (given.host && related.host && strcmp(given.host, related.host)) {
+	related.absolute = NULL;
+	related.relative = NULL;
+	related.anchor = NULL;
+    }
+
+    /*
+    **  Handle the path.
+    */
     if (wanted & PARSE_PATH) {
-        if(given.absolute) {				/* All is given */
-	    if(wanted & PARSE_PUNCTUATION) strcat(result, "/");
+	if (access && !given.absolute && given.relative) {
+	    if (!strcmp(access, "nntp") ||
+		!strcmp(access, "snews") ||
+		(!strcmp(access, "news") &&
+		 !strncmp(result, "news://", 7))) {
+		/*
+		 *  Treat all given nntp or snews paths,
+		 *  or given paths for news URLs with a host,
+		 *  as absolute.
+		 */
+		given.absolute = given.relative;
+		given.relative = NULL;
+	    }
+	}
+        if (given.absolute) {			/* All is given */
+	    if (wanted & PARSE_PUNCTUATION)
+		strcat(result, "/");
 	    strcat(result, given.absolute);
-	} else if(related.absolute) {	/* Adopt path not name */
+	} else if (related.absolute) {		/* Adopt path not name */
 	    strcat(result, "/");
 	    strcat(result, related.absolute);
 	    if (given.relative) {
 		p = strchr(result, '?');	/* Search part? */
-		if (!p) p=result+strlen(result)-1;
-		for (; *p!='/'; p--);	/* last / */
-		p[1]=0;					/* Remove filename */
-		strcat(result, given.relative);		/* Add given one */
-		HTSimplify (result);
+		if (!p)
+		    p = result + strlen(result) - 1;
+		for (; *p != '/'; p--)		/* Last / */
+		    ;
+		p[1] = '\0';			/* Remove filename */
+		strcat(result, given.relative);	/* Add given one */
+		HTSimplify(result);
 	    }
-	} else if(given.relative) {
-	    strcat(result, given.relative);		/* what we've got */
-	} else if(related.relative) {
+	} else if (given.relative) {
+	    strcat(result, given.relative);	/* What we've got */
+	} else if (related.relative) {
 	    strcat(result, related.relative);
 	} else {  /* No inheritance */
 	    strcat(result, "/");
 	}
     }
 		
-    if (wanted & PARSE_ANCHOR)
-        if(given.anchor || related.anchor) {
-	    if(wanted & PARSE_PUNCTUATION) strcat(result, "#");
+    if (wanted & PARSE_ANCHOR) {
+        if (given.anchor || related.anchor) {
+	    if (wanted & PARSE_PUNCTUATION)
+		strcat(result, "#");
 	    strcat(result, given.anchor ? given.anchor : related.anchor);
 	}
+    }
     if (rel)
-      free(rel);
+        free(rel);
     if (name)
-      free(name);
+        free(name);
+
+    /* Now we are almost done but there is still a problem with 	*/
+    /* things like ../ syntax at root URL i.e. http://url/../blabla 	*/
+    /* not understood because there are not enough necessary sub-dir in */
+    /* this path.  The solution is to strip it out and hope it 		*/
+    /* works.  See for example http://www.cern.ch where this happens.	*/
+    /* J.L. 26-Apr-1999							*/
+    StrAllocCopy(rel, result);
+    len	= strlen(result);
+
+    /* Purpose of this variable is to restrain the fix to one Level */
+    count = 0;
+    *rel = 0;
+    for (i = 0; (i < len) && (count < 4); i++) {
+	if ((result[i] == '.') && (result[i + 1] == '.') &&
+	    (result[i + 2] == '/') && (count == 3)) {
+
+	    strncpy(rel, result, i);
+	    *(rel + i) = '\0';
+	    strcat(rel, result+i+3);
+	    /* Copy it back	*/
+	    strcpy(result, rel);
+	    count++;
+	} else if (result[i] == '/') {
+	    count++;
+	}
+    }
+    if (rel)
+	free(rel);
     
     StrAllocCopy(return_value, result);
     free(result);
-    return return_value;		/* exactly the right length */
+    return return_value;		/* Exactly the right length */
 }
 
 
 /*	        Simplify a filename
 //		-------------------
 //
-// A unix-style file is allowed to contain the seqeunce xxx/../ which may be
-// replaced by "" , and the seqeunce "/./" which may be replaced by "/".
+// A unix-style file is allowed to contain the sequence xxx/../ which may be
+// replaced by "" , and the sequence "/./" which may be replaced by "/".
 // Simplification helps us recognize duplicate filenames.
 //
 //	Thus, 	/etc/junk/../fred 	becomes	/etc/fred
@@ -331,43 +403,32 @@ char * HTParse(aName, relatedName, wanted)
 //
 //	or	../../albert.html
 */
-#ifdef __STDC__
-void HTSimplify(char * filename)
-#else
-void HTSimplify(filename)
-    char * filename;
-#endif
-
+void HTSimplify(char *filename)
 {
-  char * p;
-  char * q;
-  if (filename[0] && filename[1])
-    {
-      for(p=filename+2; *p; p++) 
-        {
-          if (*p=='/') 
-            {
-              if ((p[1]=='.') && (p[2]=='.') && (p[3]=='/' || !p[3] )) 
-                {
+  char *p;
+  char *q;
+
+  if (filename[0] && filename[1]) {
+      for (p = filename + 2; *p; p++) {
+          if (*p == '/') {
+              if ((p[1] == '.') && (p[2] == '.') && (p[3] == '/' || !p[3] )) {
                   /* Changed clause below to (q>filename) due to attempted
                      read to q = filename-1 below. */
-                  for (q = p-1; (q>filename) && (*q!='/'); q--)
-                    ; /* prev slash */
-                  if (q[0]=='/' && 0!=strncmp(q, "/../", 4)
-                      && !(q-1>filename && q[-1]=='/')) 
-                    {
+                  for (q = p - 1; (q>filename) && (*q != '/'); q--)
+                      ; /* prev slash */
+                  if ((q[0] == '/') && strncmp(q, "/../", 4)
+                      && !(q - 1 > filename && q[-1] == '/')) {
                       strcpy(q, p+3);	/* Remove  /xxx/..	*/
-                      if (!*filename) strcpy(filename, "/");
-                      p = q-1;		/* Start again with prev slash 	*/
-                    } 
-                } 
-              else if ((p[1]=='.') && (p[2]=='/' || !p[2])) 
-                {
-                  strcpy(p, p+2);			/* Remove a slash and a dot */
-                }
-            }
-        }
-    }
+                      if (!*filename)
+			  strcpy(filename, "/");
+                      p = q - 1;	/* Start again with prev slash 	*/
+                  } 
+              } else if ((p[1] == '.') && (p[2] == '/' || !p[2])) {
+                  strcpy(p, p + 2);		/* Remove a slash and a dot */
+              }
+          }
+      }
+  }
 }
   
 
@@ -375,7 +436,7 @@ void HTSimplify(filename)
 **		------------------
 **
 ** This function creates and returns a string which gives an expression of
-** one address as related to another. Where there is no relation, an absolute
+** one address as related to another.  Where there is no relation, an absolute
 ** address is retured.
 **
 **  On entry,
@@ -388,29 +449,26 @@ void HTSimplify(filename)
 **	The caller is responsible for freeing the resulting name later.
 **
 */
-#ifdef __STDC__
-char * HTRelative(char * aName, char *relatedName)
-#else
-char * HTRelative(aName, relatedName)
-   char * aName;
-   char * relatedName;
-#endif
+char *HTRelative(char *aName, char *relatedName)
 {
-    char * result = 0;
+    char *result = 0;
     WWW_CONST char *p = aName;
     WWW_CONST char *q = relatedName;
-    WWW_CONST char * after_access = 0;
-    WWW_CONST char * path = 0;
-    WWW_CONST char * last_slash = 0;
+    WWW_CONST char *after_access = 0;
+    WWW_CONST char *path = 0;
+    WWW_CONST char *last_slash = 0;
     int slashes = 0;
     
-    for(;*p; p++, q++) {	/* Find extent of match */
-    	if (*p!=*q) break;
-	if (*p==':') after_access = p+1;
-	if (*p=='/') {
+    for (; *p; p++, q++) {	/* Find extent of match */
+    	if (*p != *q)
+	    break;
+	if (*p == ':')
+	    after_access = p+1;
+	if (*p == '/') {
 	    last_slash = p;
 	    slashes++;
-	    if (slashes==3) path=p;
+	    if (slashes == 3)
+		path = p;
 	}
     }
     
@@ -418,22 +476,27 @@ char * HTRelative(aName, relatedName)
     
     if (!after_access) {			/* Different access */
         StrAllocCopy(result, aName);
-    } else if (slashes<3){			/* Different nodes */
+    } else if (slashes < 3) {			/* Different nodes */
     	StrAllocCopy(result, after_access);
-    } else if (slashes==3){			/* Same node, different path */
+    } else if (slashes == 3) {			/* Same node, different path */
         StrAllocCopy(result, path);
     } else {					/* Some path in common */
-        int levels= 0;
-        for(; *q && (*q!='#'); q++)  if (*q=='/') levels++;
-	result = (char *)malloc(3*levels + strlen(last_slash) + 1);
-	result[0]=0;
-	for(;levels; levels--)strcat(result, "../");
-	strcat(result, last_slash+1);
+        int levels = 0;
+
+        for (; *q && (*q != '#'); q++) {
+	    if (*q == '/')
+		levels++;
+	}
+	result = (char *)malloc(3 * levels + strlen(last_slash) + 1);
+	result[0] = 0;
+	for (; levels; levels--)
+	    strcat(result, "../");
+	strcat(result, last_slash + 1);
     }
 #ifndef DISABLE_TRACE
     if (www2Trace) 
-      fprintf(stderr, "HT: `%s' expressed relative to\n    `%s' is\n   `%s'.",
-              aName, relatedName, result);
+        fprintf(stderr, "HT: `%s' expressed relative to\n    `%s' is\n   `%s'.",
+                aName, relatedName, result);
 #endif
     return result;
 }
@@ -451,38 +514,33 @@ static unsigned char isAcceptable[96] =
 #define HT_HEX(i) (i < 10 ? '0'+i : 'A'+ i - 10)
 
 /* The string returned from here, if any, can be free'd by caller. */
-char *HTEscape (char *part)
+char *HTEscape(char *str)
 {
   char *q;
   char *p;		/* Pointers into keywords */
   char *escaped;
 
-  if (!part)
-    return NULL;
+  if (!str)
+      return NULL;
 
-  escaped = (char *)malloc (strlen (part) * 3 + 1);
+  escaped = (char *)malloc(strlen(str) * 3 + 1);
   
-  for (q = escaped, p = part; *p != '\0'; p++)
-    {
+  for (q = escaped, p = str; *p != '\0'; p++) {
       int c = (int)((unsigned char)(*p));
-      if (c >= 32 && c <= 127 && isAcceptable[c-32])
-        {
+
+      if (c >= 32 && c <= 127 && isAcceptable[c - 32]) {
           *q++ = *p;
-        }
-      else
-        {
+      } else {
           *q++ = '%';
           *q++ = HT_HEX(c / 16);
           *q++ = HT_HEX(c % 16);
-        }
-    }
+      }
+  }
   
-  *q=0;
+  *q = 0;
   
   return escaped;
 }
-
-
 
 
 /*		Decode %xx escaped characters			HTUnEscape()
@@ -494,25 +552,28 @@ char *HTEscape (char *part)
 **	The string is converted in place, as it will never grow.
 */
 
-PRIVATE char from_hex ARGS1(char, c)
+PUBLIC char from_hex ARGS1(char, c)
 {
-    return  c >= '0' && c <= '9' ?  c - '0' 
-    	    : c >= 'A' && c <= 'F'? c - 'A' + 10
-    	    : c - 'a' + 10;	/* accept small letters just in case */
+    return  (c >= '0') && (c <= '9') ? (c - '0') :
+    	    (c >= 'A') && (c <= 'F') ? (c - 'A' + 10) :
+    	    (c >= 'a') && (c <= 'f') ? (c - 'a' + 10) :  /* Accept lowercase */
+	    0;
 }
 
-PUBLIC char * HTUnEscape ARGS1( char *, str)
+PUBLIC char *HTUnEscape ARGS1(char *, str)
 {
-    char * p = str;
-    char * q = str;
+    char *p = str;
+    char *q = str;
+
     while(*p) {
         if (*p == HEX_ESCAPE) {
 	    p++;
-	    if (*p) *q = from_hex(*p++) * 16;
-	    if (*p) *q = (*q + from_hex(*p++));
+	    if (*p)
+		*q = from_hex(*p++) * 16;
+	    if (*p)
+		*q = (*q + from_hex(*p++));
 	    q++;
-        } else if (*p == '+')
-          {
+        } else if (*p == '+') {
             p++;
             *q++ = ' ';
 	} else {
@@ -523,4 +584,4 @@ PUBLIC char * HTUnEscape ARGS1( char *, str)
     *q++ = 0;
     return str;
     
-} /* HTUnEscape */
+}

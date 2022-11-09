@@ -53,10 +53,10 @@
 #include "HTAssoc.h"		/* Assoc list			*/
 #include "HTAABrow.h"		/* Implemented here		*/
 #include "HTUU.h"		/* Uuencoding and uudecoding	*/
-#include "../libnut/str-tools.h"
-#include "../src/md5.h"         /* MD5 code  -- DXP */
+#include "../src/md5.h"         /* MD5 code */
+#include "../libnut/str-tools.h" /* Need my_strcasecmp */
 
-/* defined in HTTP.c -- DXP */
+/* Defined in HTTP.c */
 extern int do_post;
 
 #ifndef DISABLE_TRACE
@@ -64,8 +64,11 @@ extern int httpTrace;
 extern int www2Trace;
 #endif
 
-int securityType=HTAA_NONE;
-int securityDone=0;
+int securityType = HTAA_NONE;
+int securityDone = 0;
+
+int retried_with_new_nonce = 0; /* this is to prevent loops in which
+			 	   server keeps returning 401 with stale=true */
 
 /*
 ** Local datatype definitions
@@ -73,16 +76,16 @@ int securityDone=0;
 ** HTAAServer contains all the information about one server.
 */
 typedef struct {
-
-    char *	hostname;	/* Host's name			*/
+    char 	*hostname;	/* Host's name			*/
     int		portnumber;	/* Port number			*/
-    HTList *	setups;		/* List of protection setups	*/
+    BOOL        IsProxy;        /* Is it a proxy?               */
+    HTList 	*setups;	/* List of protection setups	*/
                                 /* on this server; i.e. valid	*/
                                 /* authentication schemes and	*/
                                 /* templates when to use them.	*/
                                 /* This is actually a list of	*/
                                 /* HTAASetup objects.		*/
-    HTList *	realms;		/* Information about passwords	*/
+    HTList 	*realms;	/* Information about passwords	*/
 } HTAAServer;
 
 
@@ -91,24 +94,23 @@ typedef struct {
 ** protected tree of documents.
 */
 typedef struct {
-    HTAAServer *server;		/* Which server serves this tree	     */
-    char *	template;	/* Template for this tree		     */
-    HTList *	valid_schemes;	/* Valid authentic.schemes   		     */
-    HTAssocList**scheme_specifics;/* Scheme specific params		     */
+    HTAAServer  *server;	/* Which server serves this tree	     */
+    char 	*template;	/* Template for this tree		     */
+    HTList 	*valid_schemes;	/* Valid authentic.schemes   		     */
+    HTAssocList **scheme_specifics;/* Scheme specific params		     */
     BOOL	retry;		/* Failed last time -- reprompt (or whatever)*/
 } HTAASetup;
 
 
 /*
 ** Information about usernames and passwords in
-** Basic and Pubkey authentication schemes;
+** Basic and Digest authentication schemes;
 */
 typedef struct {
-    char *	realmname;	/* Password domain name		*/
-    char *	username;	/* Username in that domain	*/
-    char *	password;	/* Corresponding password	*/
+    char 	*realmname;	/* Password domain name		*/
+    char 	*username;	/* Username in that domain	*/
+    char 	*password;	/* Corresponding password	*/
 } HTAARealm;
-
 
 
 /*
@@ -116,7 +118,6 @@ typedef struct {
 */
 
 PRIVATE HTList *server_table	= NULL;	/* Browser's info about servers	     */
-PRIVATE char *secret_key	= NULL;	/* Browser's latest secret key       */
 PRIVATE HTAASetup *current_setup= NULL;	/* The server setup we are currently */
                                         /* talking to			     */
 PRIVATE char *current_hostname	= NULL;	/* The server's name and portnumber  */
@@ -124,15 +125,17 @@ PRIVATE int current_portnumber	= 80;	/* where we are currently trying to  */
                                         /* connect.			     */
 PRIVATE char *current_docname	= NULL;	/* The document's name we are        */
                                         /* trying to access.		     */
+PRIVATE HTAASetup *proxy_setup  = NULL; /* Same as above, but for Proxy -AJL */
+PRIVATE char *proxy_hostname    = NULL;
+PRIVATE char *proxy_docname     = NULL;
+PRIVATE int proxy_portnumber    = 80;
 
 
-PUBLIC void HTAARealm_clearall (HTList *realm_table);
-PUBLIC void HTAASetup_clearall (HTList *s);
+PRIVATE void HTAARealm_clearall (HTList *realm_table);
 
-PUBLIC void HTAASetup_clearall (HTList *s)
+PRIVATE void HTAASetup_clearall (HTList *s)
 {
   HTList *n, *nn, *sn, *snn;
-  /*  HTAssocList **ss; */
   HTAASetup *o;
 
   /* Walk the list of setups */
@@ -143,17 +146,17 @@ PUBLIC void HTAASetup_clearall (HTList *s)
     o = (HTAASetup *)n->object;
     if (o) {
       if (o->template)
-	free (o->template);
+	free(o->template);
       sn = o->valid_schemes;
       while (sn) {
 	snn = sn->next;
-	free (sn);
+	free(sn);
 	sn = snn;
       }
     }
     /* Should free the scheme_specifics stuff too */
     /* Free the list structure and move on */
-    free (n);
+    free(n);
     n = nn;
   }
 }
@@ -181,23 +184,22 @@ PUBLIC void HTAAServer_clear ()
     if (s) {
 #ifndef DISABLE_TRACE
       if (www2Trace) 
-	fprintf(stderr, "Clearing passwd info for %s\n", s->hostname?s->hostname:"NULL");
+	fprintf(stderr, "Clearing passwd info for %s\n",
+		s->hostname ? s->hostname : "NULL");
 #endif
-      HTAARealm_clearall (s->realms);
-      HTAASetup_clearall (s->setups);
+      HTAARealm_clearall(s->realms);
+      HTAASetup_clearall(s->setups);
       if (s->hostname)
-	free (s->hostname);
+	free(s->hostname);
     }
-    free (n);
+    free(n);
     n = nn;
   }
   server_table = NULL;
-  secret_key = NULL;	
   current_setup = NULL;	
   current_hostname = NULL;	
   current_docname = NULL;
 }
-
 
 
 /* PRIVATE						HTAAServer_new()
@@ -215,8 +217,9 @@ PUBLIC void HTAAServer_clear ()
 **			the function HTAAServer_delete(), which also
 **			frees the node itself.
 */
-PRIVATE HTAAServer *HTAAServer_new ARGS2(WWW_CONST char*,	hostname,
-					 int,		portnumber)
+PRIVATE HTAAServer *HTAAServer_new ARGS3(WWW_CONST char *, hostname,
+					 int,		   portnumber,
+					 BOOL,             IsProxy)
 {
     HTAAServer *server;
 
@@ -225,14 +228,17 @@ PRIVATE HTAAServer *HTAAServer_new ARGS2(WWW_CONST char*,	hostname,
 
     server->hostname	= NULL;
     server->portnumber	= (portnumber > 0 ? portnumber : 80);
+    server->IsProxy     = IsProxy;
     server->setups	= HTList_new();
     server->realms	= HTList_new();
 
-    if (hostname) StrAllocCopy(server->hostname, hostname);
+    if (hostname)
+	StrAllocCopy(server->hostname, hostname);
 
-    if (!server_table) server_table = HTList_new();
+    if (!server_table)
+	server_table = HTList_new();
     
-    HTList_addObject(server_table, (void*)server);
+    HTList_addObject(server_table, (void *)server);
 
     return server;
 }
@@ -263,18 +269,21 @@ PRIVATE HTAAServer *HTAAServer_new ARGS2(WWW_CONST char*,	hostname,
 **			representing the looked-up server.
 **			NULL, if not found.
 */
-PRIVATE HTAAServer *HTAAServer_lookup ARGS2(WWW_CONST char *, hostname,
-					    int,	  portnumber)
+PRIVATE HTAAServer *HTAAServer_lookup ARGS3(WWW_CONST char *, hostname,
+					    int,	      portnumber,
+					    BOOL,             IsProxy)
 {
     if (hostname) {
 	HTList *cur = server_table;
 	HTAAServer *server;
 
-	if (portnumber <= 0) portnumber = 80;
+	if (portnumber <= 0)
+	    portnumber = 80;
 
-	while (NULL != (server = (HTAAServer*)HTList_nextObject(cur))) {
-	    if (server->portnumber == portnumber  &&
-		0==strcmp(server->hostname, hostname))
+	while (NULL != (server = (HTAAServer *)HTList_nextObject(cur))) {
+	    if (server->portnumber == portnumber &&
+		!strcmp(server->hostname, hostname) && 
+		server->IsProxy == IsProxy)
 		return server;
 	}
     }
@@ -296,6 +305,7 @@ PRIVATE HTAAServer *HTAAServer_lookup ARGS2(WWW_CONST char *, hostname,
 **	portnumber	is the port that the server is running in.
 **	docname		is the (URL-)pathname of the document we
 **			are trying to access.
+**      IsProxy         should be TRUE if this is a proxy.
 **
 ** 	This function goes through the information known about
 **	all the setups of the server, and finds out if the given
@@ -308,54 +318,59 @@ PRIVATE HTAAServer *HTAAServer_lookup ARGS2(WWW_CONST char *, hostname,
 **			document tree.
 **			
 */
-PRIVATE HTAASetup *HTAASetup_lookup ARGS3(WWW_CONST char *, hostname,
-					  int,		portnumber,
-					  WWW_CONST char *, docname)
+PRIVATE HTAASetup *HTAASetup_lookup ARGS4(WWW_CONST char *, hostname,
+					  int,		    portnumber,
+					  WWW_CONST char *, docname,
+					  BOOL,             IsProxy)
 {
     HTAAServer *server;
     HTAASetup *setup;
 
-    if (portnumber <= 0) portnumber = 80;
+    if (portnumber <= 0)
+	portnumber = 80;
 
     if (hostname && docname && *hostname && *docname &&
-	NULL != (server = HTAAServer_lookup(hostname, portnumber))) {
+	NULL != (server = HTAAServer_lookup(hostname, portnumber, IsProxy))) {
 
 	HTList *cur = server->setups;
 
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s (%s:%d:%s)\n",
-			   "HTAASetup_lookup: resolving setup for",
-			   hostname, portnumber, docname);
+	if (www2Trace)
+	    fprintf(stderr, "%s %s (%s:%d:%s)\n",
+		    "HTAASetup_lookup: resolving setup for",
+		    (IsProxy ? "proxy" : "server"),
+		    hostname, portnumber, docname);
 #endif
-
-	while (NULL != (setup = (HTAASetup*)HTList_nextObject(cur))) {
+	while (NULL != (setup = (HTAASetup *)HTList_nextObject(cur))) {
 	    if (HTAA_templateMatch(setup->template, docname)) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s `%s' %s `%s'\n",
-				   "HTAASetup_lookup:", docname,
-				   "matched template", setup->template);
+		if (www2Trace)
+		    fprintf(stderr, "%s `%s' %s `%s'\n",
+			    "HTAASetup_lookup:", docname,
+			    "matched template", setup->template);
 #endif
 		return setup;
 	    }
 #ifndef DISABLE_TRACE
-	    else if (www2Trace) fprintf(stderr, "%s `%s' %s `%s'\n",
-				    "HTAASetup_lookup:", docname,
-				    "did NOT match template", setup->template);
+	    else if (www2Trace) {
+		     fprintf(stderr, "%s `%s' %s `%s'\n",
+			     "HTAASetup_lookup:", docname,
+			     "did NOT match template", setup->template);
+	    }
 #endif
 	} /* while setups remain */
     } /* if valid parameters and server found */
 
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr, "%s `%s' %s\n",
-		       "HTAASetup_lookup: No template matched",
-		       (docname ? docname : "(null)"),
-		       "(so probably not protected)");
+    if (www2Trace)
+	fprintf(stderr, "%s `%s' %s\n",
+		"HTAASetup_lookup: No template matched",
+		(docname ? docname : "(null)"),
+		"(so probably not protected)");
 #endif
 
     return NULL;	/* NULL in parameters, or not found */
 }
-
-
 
 
 /* PRIVATE						HTAASetup_new()
@@ -384,15 +399,17 @@ PRIVATE HTAASetup *HTAASetup_new ARGS4(HTAAServer *,	server,
 {
     HTAASetup *setup;
 
-    if (!server || !template || !*template) return NULL;
+    if (!server || !template || !*template)
+	return NULL;
 
-    if (!(setup = (HTAASetup*)malloc(sizeof(HTAASetup))))
+    if (!(setup = (HTAASetup *)malloc(sizeof(HTAASetup))))
 	outofmem(__FILE__, "HTAASetup_new");
 
     setup->retry = NO;
     setup->server = server;
     setup->template = NULL;
-    if (template) StrAllocCopy(setup->template, template);
+    if (template)
+	StrAllocCopy(setup->template, template);
     setup->valid_schemes = valid_schemes;
     setup->scheme_specifics = scheme_specifics;
 
@@ -400,7 +417,6 @@ PRIVATE HTAASetup *HTAASetup_new ARGS4(HTAAServer *,	server,
 
     return setup;
 }
-
 
 
 /* PRIVATE						HTAASetup_delete()
@@ -433,7 +449,7 @@ PRIVATE void HTAASetup_updateSpecifics ARGS2(HTAASetup *,	setup,
 
     if (setup) {
 	if (setup->scheme_specifics) {
-	    for (scheme=0; scheme < HTAA_MAX_SCHEMES; scheme++) {
+	    for (scheme = 0; scheme < HTAA_MAX_SCHEMES; scheme++) {
 		if (setup->scheme_specifics[scheme])
 		    HTAssocList_delete(setup->scheme_specifics[scheme]);
 	    }
@@ -444,11 +460,9 @@ PRIVATE void HTAASetup_updateSpecifics ARGS2(HTAASetup *,	setup,
 }
 
 
-
-
 /*************************** HTAARealm **********************************/
 
-/* PUBLIC                                               HTAARealm_clearall()
+/* PRIVATE                                               HTAARealm_clearall()
 **              Clears all realm information.
 ** On Entry:
 **      realm_table     a list of realm objects
@@ -456,7 +470,7 @@ PRIVATE void HTAASetup_updateSpecifics ARGS2(HTAASetup *,	setup,
 ** On Exit: 
 **      returns: Nothing. realm_table is no longer valid.
 */
-PUBLIC void HTAARealm_clearall ARGS1(HTList *, realm_table)
+PRIVATE void HTAARealm_clearall ARGS1(HTList *, realm_table)
 {
   HTList *n, *nn;
   HTAARealm *r;
@@ -466,24 +480,15 @@ PUBLIC void HTAARealm_clearall ARGS1(HTList *, realm_table)
     nn = n->next;
     r = (HTAARealm *)n->object;
     if (r) {
-
-#ifdef PAUL_IS_A_GIMP
-      if (www2Trace) 
-	fprintf(stderr, "Clearing %s %s:%s\n",
-		r->realmname?r->realmname:"NULL", 
-		r->realmname?r->username:"NULL", 
-		r->realmname?r->password:"NULL");
-
-#endif
       if (r->realmname)
-	free (r->realmname);
+	free(r->realmname);
       if (r->username)
-	free (r->username);
+	free(r->username);
       if (r->password)
-	free (r->password);
+	free(r->password);
     }
-    free (n->object);
-    free (n);
+    free(n->object);
+    free(n);
     n = nn;
   }
 }
@@ -505,14 +510,13 @@ PRIVATE HTAARealm *HTAARealm_lookup ARGS2(HTList *,	realm_table,
 	HTList *cur = realm_table;
 	HTAARealm *realm;
 	
-	while (NULL != (realm = (HTAARealm*)HTList_nextObject(cur))) {
-	    if (0==strcmp(realm->realmname, realmname))
+	while (NULL != (realm = (HTAARealm *)HTList_nextObject(cur))) {
+	    if (!strcmp(realm->realmname, realmname))
 		return realm;
 	}
     }
     return NULL;	/* No table, NULL param, or not found */
 }
-
 
 
 /* PRIVATE						HTAARealm_new()
@@ -540,16 +544,19 @@ PRIVATE HTAARealm *HTAARealm_new ARGS4(HTList *,	realm_table,
     realm = HTAARealm_lookup(realm_table, realmname);
 
     if (!realm) {
-	if (!(realm = (HTAARealm*)malloc(sizeof(HTAARealm))))
+	if (!(realm = (HTAARealm *)malloc(sizeof(HTAARealm))))
 	    outofmem(__FILE__, "HTAARealm_new");
 	realm->realmname = NULL;
 	realm->username = NULL;
 	realm->password = NULL;
 	StrAllocCopy(realm->realmname, realmname);
-	if (realm_table) HTList_addObject(realm_table, (void*)realm);
+	if (realm_table)
+	    HTList_addObject(realm_table, (void *)realm);
     }
-    if (username) StrAllocCopy(realm->username, username);
-    if (password) StrAllocCopy(realm->password, password);
+    if (username)
+	StrAllocCopy(realm->username, username);
+    if (password)
+	StrAllocCopy(realm->password, password);
 
     return realm;
 }
@@ -578,161 +585,122 @@ PRIVATE HTAAScheme HTAA_selectScheme ARGS1(HTAASetup *, setup)
     HTAAScheme scheme;
 
     if (setup && setup->valid_schemes) {
-	for (scheme=HTAA_BASIC; scheme < HTAA_MAX_SCHEMES; scheme++)
-	    if (-1 < HTList_indexOf(setup->valid_schemes, (void*)scheme))
+	for (scheme = HTAA_BASIC; scheme < HTAA_MAX_SCHEMES; scheme++) {
+	    if (-1 < HTList_indexOf(setup->valid_schemes, (void *)scheme))
 		return scheme;
+	}
     }
     return HTAA_BASIC;
 }
 
 
-/***************** Basic and Pubkey Authentication ************************/
+/***************** Basic and Digest Authentication ************************/
 
 /* PRIVATE						compose_auth_string()
 **
-**		COMPOSE Basic OR Pubkey AUTHENTICATION STRING;
+**		COMPOSE Basic OR Digest AUTHENTICATION STRING;
 **		PROMPTS FOR USERNAME AND PASSWORD IF NEEDED
 **
 ** ON ENTRY:
-**	scheme		is either HTAA_BASIC or HTAA_PUBKEY.
+**	scheme		is either HTAA_BASIC or HTAA_MD5.
 **	realmname	is the password domain name.
+**      IsProxy         should be TRUE if this is a proxy.
 **
 ** ON EXIT:
 **	returns		a newly composed authorization string,
-**			(with, of course, a newly generated secret
-**			key and fresh timestamp, if Pubkey-scheme
-**			is being used).
+**
 ** NOTE:
 **	Like throughout the entire AA package, no string or structure
 **	returned by AA package needs to (or should) be freed.
 **
 */
-PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
-					HTAASetup *,	setup)
+PRIVATE char *compose_auth_string ARGS3(HTAAScheme,	scheme,
+					HTAASetup *,	setup,
+					BOOL,           IsProxy)
 {
     static char *result = NULL;	/* Uuencoded presentation, the result */
     char *cleartext = NULL;	/* Cleartext presentation */
-    char *ciphertext = NULL;	/* Encrypted presentation */
+    char *ciphertext = NULL;	/* Hashed presentation (not encrypted, per se) */
     int len;
     char *username;
     char *password;
     char *realmname;
     HTAARealm *realm;
-    char *inet_addr = "0.0.0.0";	/* Change... @@@@ */
-    char *timestamp = "42";		/* ... these @@@@ */
 
-   /* for MD5 -- DXP */
-    char *      nonce;          /* Server specified integer value */
-    char *      opaque;         /* more random MD5 junk... */
-    BOOL        stale;          /* flag indicating the previous request 
-                                            from the client was rejected because 
-                                            the nonce value was stale */
- 
+    /* for MD5 -- DXP */
+    char *nonce;          /* Server specified integer value */
+    char *opaque;         /* optional string to be returned to server */
+    char *stale;          /* flag indicating the previous request 
+                           * from the client was rejected because
+                           * the nonce value was stale */
+    int	new_nonce = 0;	  /* whether or not to automatically retry
+			   * request with new nonce */ 
 
     FREE(result);	/* From previous call */
 
-    if ((scheme != HTAA_BASIC && scheme != HTAA_PUBKEY && scheme != HTAA_MD5) 
+    if ((scheme != HTAA_BASIC && scheme != HTAA_MD5) 
 	|| !setup ||
 	!setup->scheme_specifics || !setup->scheme_specifics[scheme] ||
-	!setup->server  ||  !setup->server->realms)
+	!setup->server || !setup->server->realms)
 	return "";
 
     realmname = HTAssocList_lookup(setup->scheme_specifics[scheme], "realm");
-    if (!realmname) return "";
+    if (!realmname)
+	return "";
 
     realm = HTAARealm_lookup(setup->server->realms, realmname);
-    if (!realm || setup->retry) {
+
+    if (scheme == HTAA_MD5) {
+	stale = HTAssocList_lookup(setup->scheme_specifics[scheme], "stale");
+	if (stale) {
+	    if ((!my_strcasecmp(stale, "true")) && (realm->username) &&
+		(realm->password))
+	        new_nonce = 1;
+	}
+    }
+
+    if (!new_nonce && (!realm || setup->retry)) {
 	char msg[2048];
 
 	if (!realm) {
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "%s `%s' %s\n",
-			       "compose_auth_string: realm:", realmname,
-			       "not found -- creating");
+	    if (www2Trace)
+		fprintf(stderr, "%s `%s' %s\n",
+		        "compose_auth_string: realm:", realmname,
+		        "not found -- creating");
 #endif
-	    realm = HTAARealm_new(setup->server->realms, realmname, NULL,NULL);
-	    sprintf(msg,
-		    "Document is protected.\nEnter username for %s at %s: ",
+	    realm = HTAARealm_new(setup->server->realms, realmname, NULL, NULL);
+	    sprintf(msg, "%s is protected.\nEnter username for %s at %s: ",
+		    (IsProxy ? "Server" : "Document"),
 		    realm->realmname,
 		    setup->server->hostname ? setup->server->hostname : "??");
-	    realm->username =
-		HTPrompt(msg, realm->username);
-            /* Added by marca. */
-            if (!realm->username)
-              return "";
-	}
-	else {
-	    sprintf(msg,"Enter username for %s at %s: ", realm->realmname,
+	    realm->username = HTPrompt(msg, realm->username);
+	} else {
+	    sprintf(msg, "Enter username for %s at %s: ", realm->realmname,
 		    setup->server->hostname ? setup->server->hostname : "??");
 	    username = HTPrompt(msg, realm->username);
 	    FREE(realm->username);
 	    realm->username = username;
-            /* Added by marca. */
-            if (!realm->username)
-              return "";
 	}
-	password = HTPromptPassword("Enter password to authenticate yourself: ");
+        if (!realm->username)
+            return "";
+
+	password = HTPromptPassword(
+		"Enter password to authenticate yourself: ");
 	FREE(realm->password);
 	realm->password = password;
-        /* Added by marca. */
         if (!realm->password)
-          return "";
+            return "";
     }
     
-    len = strlen(realm->username ? realm->username : "") +
-	  strlen(realm->password ? realm->password : "") + 3;
+    if (scheme == HTAA_MD5) {
+	char *md5_cleartext;    /* Cleartext presentation */
+	char *md5_ciphertext;   /* Hashed presentation */
+	char *A1, *A2;
+	char *digest1, *digest2;
+	char *hex1, *hex2;
 
-    if (scheme == HTAA_PUBKEY) {
-#ifdef PUBKEY
-	/* Generate new secret key */
-	StrAllocCopy(secret_key, HTAA_generateRandomKey());
-#endif
-	/* Room for secret key, timestamp and inet address */
-	len += strlen(secret_key ? secret_key : "") + 30;
-    }
-    else
-	FREE(secret_key);
-
-    if (!(cleartext  = (char*)calloc(len, 1)))
-	outofmem(__FILE__, "compose_auth_string");
-
-    if (realm->username) strcpy(cleartext, realm->username);
-    else *cleartext = (char)0;
-
-    strcat(cleartext, ":");
-
-    if (realm->password) strcat(cleartext, realm->password);
-
-    if (scheme == HTAA_PUBKEY) {
-	strcat(cleartext, ":");
-	strcat(cleartext, inet_addr);
-	strcat(cleartext, ":");
-	strcat(cleartext, timestamp);
-	strcat(cleartext, ":");
-	if (secret_key) strcat(cleartext, secret_key);
-
-	if (!((ciphertext = (char*)malloc(2*len)) &&
-	      (result     = (char*)malloc(3*len))))
-	    outofmem(__FILE__, "compose_auth_string");
-#ifdef PUBKEY
-	HTPK_encrypt(cleartext, ciphertext, server->public_key);
-        /* marca added unsigned char * cast for HP. */
-	HTUU_encode((unsigned char *)ciphertext, strlen(ciphertext), result);
-#endif
-	free(cleartext);
-	free(ciphertext);
-    }
-
-        /* the following added by DXP */
-    else if(scheme == HTAA_MD5) {
-
-	unsigned char *md5_cleartext = NULL;	/* Cleartext presentation */
-	unsigned char *md5_ciphertext = NULL;	/* Encrypted presentation */
-	unsigned char *A1, *A2;
-	unsigned char *digest1, *digest2;
-	unsigned char *hex1, *hex2;
-
-	if (!(result = (char*)malloc(300)))
+	if (!(result = (char *)malloc(300)))
 	    outofmem(__FILE__, "compose_auth_string");
 	
 	nonce = HTAssocList_lookup(setup->scheme_specifics[scheme], "nonce");
@@ -740,19 +708,17 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 	    return "";
 	
 	opaque = HTAssocList_lookup(setup->scheme_specifics[scheme], "opaque");
-	if (!opaque) 
-	    return "";
 
-	if (!(A1 = (unsigned char*)malloc(strlen(realm->username) + 
-				 strlen(realm->realmname) + 
-				 strlen(realm->password) + 3 + 1)))
+	if (!(A1 = (char *)malloc(strlen(realm->username) + 
+				  strlen(realm->realmname) + 
+				  strlen(realm->password) + 3 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");
 
-	if (!(A2 = (unsigned char*)malloc(4 + strlen(current_docname) + 1 + 1 )))
+	if (!(A2 = (char *)malloc(4 + strlen(current_docname) + 1 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");	
 
 	    /* make A1 */
-	*A1 = (unsigned char)0;
+	*A1 = (char)0;
 	strcat(A1, realm->username);
 	strcat(A1, ":");
 	strcat(A1, realm->realmname);
@@ -761,26 +727,27 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 	strcat(A1, "\0");
 
 	    /* make A2 */
-	*A2 = (unsigned char)0;
-	if (do_post)
+	*A2 = (char)0;
+	if (do_post) {
 	    strcat(A2, "POST");
-	else
+	} else {
 	    strcat(A2, "GET");
+	}
 	strcat(A2, ":");
 	strcat(A2, current_docname);
 	strcat(A2, "\0");
 
-	if (!(md5_cleartext = (unsigned char*)malloc(100 + 1)))
+	if (!(md5_cleartext = (char *)malloc(100 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");	
-	if (!(md5_ciphertext = (unsigned char*)malloc(100 + 1)))
+	if (!(md5_ciphertext = (char *)malloc(100 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");	
-	if (!(hex1 = (unsigned char*)malloc(32 + 1)))
+	if (!(hex1 = (char *)malloc(32 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");	
-	if (!(hex2 = (unsigned char*)malloc(32 + 1)))
+	if (!(hex2 = (char *)malloc(32 + 1)))
 	    outofmem(__FILE__, "compose_auth_string");	
-	if (!(digest1 = (unsigned char*)malloc(16)))
+	if (!(digest1 = (char *)malloc(16)))
 	    outofmem(__FILE__, "compose_auth_string");	
-	if (!(digest2 = (unsigned char*)malloc(16)))
+	if (!(digest2 = (char *)malloc(16)))
 	    outofmem(__FILE__, "compose_auth_string");	
 	
 	MD5Mem(A1, strlen(A1), digest1);
@@ -790,7 +757,6 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 	MD5Convert_to_Hex(digest2, hex2);
 
 	    /* make md5_cleartext */
-
 	*md5_cleartext = (unsigned char)0;
 	strcat(md5_cleartext, hex1);
 	strcat(md5_cleartext, ":");
@@ -812,9 +778,12 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 	strcat(result, current_docname);
 	strcat(result, "\", response=\"");
 	strcat(result, md5_ciphertext);
-	strcat(result, "\", opaque=\"");
-	strcat(result, opaque);
 	strcat(result, "\"");
+	if (opaque) {
+	    strcat(result,", opaque=\"");
+	    strcat(result, opaque);
+	    strcat(result, "\"");
+	}
 
 	/* since all we need from here on out is the result, 
 	     get rid of all the rest */
@@ -826,32 +795,40 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 	free(hex2);
 	free(md5_cleartext);
 	free(md5_ciphertext);
+    } else { 	/* scheme == HTAA_BASIC */
 
-    }
+	len = strlen(realm->username ? realm->username : "") +
+	      strlen(realm->password ? realm->password : "") + 3;
 
-
-    else { /* scheme == HTAA_BASIC */
-      /* Added "+ 1" marca. */
-#ifdef OLD
-	if (!(result = (char*)malloc(len + len/2 + 1)))
-#else
-        /* Ari fix. */
-	if (!(result = (char*)malloc(4 * ((len+2)/3) + 1)))
-#endif
+	if (!(cleartext  = (char *)calloc(len, 1)))
 	    outofmem(__FILE__, "compose_auth_string");
+
+	if (realm->username) {
+	    strcpy(cleartext, realm->username);
+	} else {
+	    *cleartext = (char)0;
+	}
+	strcat(cleartext, ":");
+
+	if (realm->password)
+	    strcat(cleartext, realm->password);
+
+	if (!(result = (char *)malloc(4 * ((len + 2) / 3) + 1)))
+	    outofmem(__FILE__, "compose_auth_string");
+
         /* Added cast to unsigned char * on advice of
            erik@sockdev.uni-c.dk (Erik Bertelsen). */
+
 	HTUU_encode((unsigned char *)cleartext, strlen(cleartext), result);
 	free(cleartext);
     }
-#ifndef DISABLE_TRACE
-    if(www2Trace) fprintf(stderr,"sending auth line: %s\n",result);
-#endif
 
+#ifndef DISABLE_TRACE
+    if (www2Trace)
+	fprintf(stderr, "sending auth line: %s\n", result);
+#endif
     return result;
 }
-
-
 
 
 /* BROWSER PUBLIC					HTAA_composeAuth()
@@ -864,6 +841,7 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 **	hostname	is the hostname of the server.
 **	portnumber	is the portnumber in which the server runs.
 **	docname		is the pathname of the document (as in URL)
+**      IsProxy         should be TRUE if this is a proxy.
 **
 ** ON EXIT:
 **	returns	NULL, if no authorization seems to be needed, or
@@ -873,9 +851,10 @@ PRIVATE char *compose_auth_string ARGS2(HTAAScheme,	scheme,
 **
 **		As usual, this string is automatically freed.
 */
-PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
-				    WWW_CONST int,		portnumber,
-				    WWW_CONST char *,	docname)
+PUBLIC char *HTAA_composeAuth ARGS4(WWW_CONST char *,	hostname,
+				    WWW_CONST int,	portnumber,
+				    WWW_CONST char *,	docname,
+				    BOOL,           	IsProxy)
 {
     static char *result = NULL;
     char *auth_string;
@@ -884,46 +863,136 @@ PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
 #endif
     BOOL retry;
     HTAAScheme scheme;
+    int len;
 
     FREE(result);			/* From previous call */
 
 #ifndef DISABLE_TRACE
     if (www2Trace)
-	fprintf(stderr, 
-		"Composing Authorization for %s:%d/%s\n",
+	fprintf(stderr, "Composing Authorization for %s:%d/%s\n",
 		hostname, portnumber, docname);
 #endif
 
-    if (current_portnumber != portnumber ||
+  if (IsProxy) {
+        /*
+	**  Proxy Authorization required. - AJL
+	*/
+	if ((proxy_portnumber != portnumber) || !proxy_hostname ||
+	    !proxy_docname || !hostname || !docname ||
+	    strcmp(proxy_hostname, hostname) ||
+	    strcmp(proxy_docname, docname)) {
+
+	    retry = NO;
+
+	    proxy_portnumber = portnumber;
+
+	    if (hostname) {
+		StrAllocCopy(proxy_hostname, hostname);
+	    } else {
+		FREE(proxy_hostname);
+	    }
+	    if (docname) {
+		StrAllocCopy(proxy_docname, docname);
+	    } else {
+		FREE(proxy_docname);
+	    }
+	} else {
+	    retry = YES;
+	}
+
+	if (!proxy_setup || !retry)
+	    proxy_setup = HTAASetup_lookup(hostname, portnumber,
+					   docname, IsProxy);
+	if (!proxy_setup)
+	    return NULL;
+
+    	switch (scheme = HTAA_selectScheme(proxy_setup)) {
+	  case HTAA_BASIC:
+	  case HTAA_MD5:
+	    auth_string = compose_auth_string(scheme, proxy_setup, IsProxy);
+	    break;
+#ifdef KRB4
+	  case HTAA_KERBEROS_V4:
+	    auth_string = compose_kerberos_auth_string(scheme, hostname);
+	    break;
+#endif
+#ifdef KRB5
+	  case HTAA_KERBEROS_V5:
+	    auth_string = compose_kerberos_auth_string(scheme, hostname);
+	    break;
+#endif
+	    /* OTHER AUTHENTICATION ROUTINES ARE CALLED HERE */
+	  default:
+	    {
+		char msg[128];
+
+		sprintf(msg, "%s %s `%.28s'",
+			     "This client doesn't know how to compose proxy",
+			     "authorization information for scheme",
+			     HTAAScheme_name(scheme));
+		HTAlert(msg);
+		auth_string = NULL;
+	    }
+	} /* switch scheme */
+
+        if (!securityDone) {
+	    if (!auth_string || !*auth_string) {
+		securityType = HTAA_NONE;
+	    } else {
+		securityType = scheme;
+	    }
+        } else {
+	    securityDone = 0;
+        }
+
+	proxy_setup->retry = NO;
+
+	if (!auth_string) 
+	    return NULL;
+
+	len = strlen(auth_string) + strlen((char *)HTAAScheme_name(scheme))+ 26;
+	if (!(result = (char *)calloc(1, sizeof(char) * len)))
+	    outofmem(__FILE__, "HTAA_composeAuth");
+	strcpy(result, "Proxy-Authorization: ");
+
+  } else {
+	/*
+	**  Normal WWW authorization.
+	*/
+    if ((current_portnumber != portnumber) ||
 	!current_hostname || !current_docname ||
 	!hostname         || !docname         ||
-	0 != strcmp(current_hostname, hostname) ||
-	0 != strcmp(current_docname, docname)) {
+	strcmp(current_hostname, hostname) ||
+	strcmp(current_docname, docname)) {
 
 	retry = NO;
 
 	current_portnumber = portnumber;
 	
-	if (hostname) StrAllocCopy(current_hostname, hostname);
-	else FREE(current_hostname);
-
-	if (docname) StrAllocCopy(current_docname, docname);
-	else FREE(current_docname);
+	if (hostname) {
+	    StrAllocCopy(current_hostname, hostname);
+	} else {
+	    FREE(current_hostname);
+	}
+	if (docname) {
+	    StrAllocCopy(current_docname, docname);
+	} else {
+	     FREE(current_docname);
+	}
+    } else {
+	retry = YES;
     }
-    else retry = YES;
     
     if (!current_setup || !retry)
-	current_setup = HTAASetup_lookup(hostname, portnumber, docname);
-
+	current_setup = HTAASetup_lookup(hostname, portnumber,
+					 docname, IsProxy);
     if (!current_setup)
 	return NULL;
 
-
     switch (scheme = HTAA_selectScheme(current_setup)) {
       case HTAA_BASIC:
-      case HTAA_PUBKEY:
-      case HTAA_MD5: /* DXP */
-	auth_string = compose_auth_string(scheme, current_setup);
+      case HTAA_MD5:
+	auth_string = compose_auth_string(scheme, current_setup, IsProxy);
 	break;
 #ifdef KRB4
       case HTAA_KERBEROS_V4:
@@ -938,9 +1007,9 @@ PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
       /* OTHER AUTHENTICATION ROUTINES ARE CALLED HERE */
       default:
 	{
-	    char msg[2048];
+	    char msg[128];
 
-	    sprintf(msg, "%s %s `%s'",
+	    sprintf(msg, "%s %s `%.28s'",
 		    "This client doesn't know how to compose authentication",
 		    "information for scheme", HTAAScheme_name(scheme));
 	    HTAlert(msg);
@@ -950,32 +1019,28 @@ PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
 
     if (!securityDone) {
 	if (!auth_string || !*auth_string) {
-		securityType=HTAA_NONE;
+	    securityType = HTAA_NONE;
+	} else {
+	    securityType = scheme;
 	}
-	else {
-		securityType=scheme;
-	}
-    }
-    else {
-	securityDone=0;
+    } else {
+	securityDone = 0;
     }
 
     current_setup->retry = NO;
 
-    /* Added by marca. */
     if (!auth_string)
-      return NULL;
+        return NULL;
 
-    if (!(result = (char*)malloc(sizeof(char) * (strlen(auth_string)+40))))
+    if (!(result = (char *)malloc(sizeof(char) * (strlen(auth_string) + 40))))
 	outofmem(__FILE__, "HTAA_composeAuth");
     strcpy(result, "Authorization: ");
-    strcat(result, HTAAScheme_name(scheme));
-    strcat(result, " ");
-    strcat(result, auth_string);
-    return result;
+  }
+  strcat(result, HTAAScheme_name(scheme));
+  strcat(result, " ");
+  strcat(result, auth_string);
+  return result;
 }
-
-
 
 	    
 /* BROWSER PUBLIC				HTAA_shouldRetryWithAuth()
@@ -990,9 +1055,10 @@ PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
 **			start of the header section.
 **	length		is the remaining length of the first block.
 **	soc		is the socket to read the rest of server reply.
+**      IsProxy         should be TRUE if this is a proxy.
 **
 **			This function should only be called when
-**			server has replied with a 401 (Unauthorized)
+**			server has replied with a 401 or 407
 **			status code.
 ** ON EXIT:
 **	returns		YES, if connection should be retried.
@@ -1005,9 +1071,10 @@ PUBLIC char *HTAA_composeAuth ARGS3(WWW_CONST char *,	hostname,
 **				  field (in function HTAA_composeAuth()).
 **			NO, otherwise.
 */
-PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
+PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS4(char *, start_of_headers,
 					   int,	   length,
-					   int,	   soc)
+					   int,	   soc,
+					   BOOL,   IsProxy)
 {
     HTAAScheme scheme;
     char *line;
@@ -1015,8 +1082,7 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
     HTList *valid_schemes = HTList_new();
     HTAssocList **scheme_specifics = NULL;
     char *template = NULL;
-
-
+    char *stale;
     /* Read server reply header lines */
 
 #ifndef DISABLE_TRACE
@@ -1026,28 +1092,29 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
 
     HTAA_setupReader(start_of_headers, length, soc);
     while (NULL != (line = HTAA_getUnfoldedLine())  &&  *line != (char)0) {
-
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s\n", line);
+	if (www2Trace)
+	    fprintf(stderr, "%s\n", line);
 #endif
-
 	if (strchr(line, ':')) {	/* Valid header line */
-
 	    char *p = line;
 	    char *fieldname = HTNextField(&p);
 	    char *arg1 = HTNextField(&p);
 	    char *args = p;
 	    
-	    if (0==my_strcasecmp(fieldname, "WWW-Authenticate:")) {
+	    if ((IsProxy &&
+		 !my_strcasecmp(fieldname, "Proxy-Authenticate:")) ||
+		(!IsProxy && !my_strcasecmp(fieldname, "WWW-Authenticate:"))) {
 		if (HTAA_UNKNOWN != (scheme = HTAAScheme_enum(arg1))) {
-		    HTList_addObject(valid_schemes, (void*)scheme);
+		    HTList_addObject(valid_schemes, (void *)scheme);
 		    if (!scheme_specifics) {
 			int i;
-			scheme_specifics = (HTAssocList**)
-			    malloc(HTAA_MAX_SCHEMES * sizeof(HTAssocList*));
+
+			scheme_specifics = (HTAssocList **)
+			    malloc(HTAA_MAX_SCHEMES * sizeof(HTAssocList *));
 			if (!scheme_specifics)
 			    outofmem(__FILE__, "HTAA_shouldRetryWithAuth");
-			for (i=0; i < HTAA_MAX_SCHEMES; i++)
+			for (i = 0; i < HTAA_MAX_SCHEMES; i++)
 			    scheme_specifics[i] = NULL;
 		    }
 		    scheme_specifics[scheme] = HTAA_parseArgList(args);
@@ -1057,12 +1124,13 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
 		else if (www2Trace) {
 		    fprintf(stderr, "Unknown scheme `%s' %s\n",
 			    (arg1 ? arg1 : "(null)"),
-			    "in WWW-Authenticate: field");
+			    (IsProxy ?
+			     "in Proxy-Authenticate: field" :
+			     "in WWW-Authenticate: field"));
 		}
 #endif
-	    }
-
-	    else if (0==my_strcasecmp(fieldname, "WWW-Protection-Template:")) {
+	    } else if (!IsProxy &&
+		       !my_strcasecmp(fieldname, "WWW-Protection-Template:")) {
 #ifndef DISABLE_TRACE
 		if (www2Trace)
 		    fprintf(stderr, "Protection template set to `%s'\n", arg1);
@@ -1070,7 +1138,7 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
 		StrAllocCopy(template, arg1);
 	    }
 
-	} /* if a valid header line */
+	} /* If a valid header line */
 #ifndef DISABLE_TRACE
 	else if (www2Trace) {
 	    fprintf(stderr, "Invalid header line `%s' ignored\n", line);
@@ -1079,7 +1147,82 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
     } /* while header lines remain */
 
 
-    /* So should we retry with authorization */
+    /* So should we retry with authorization? */
+    if (IsProxy) {
+	if (num_schemes == 0) {
+	    /*
+	    **  No proxy authorization valid
+	    */
+	    proxy_setup = NULL;
+	    return NO;
+	}
+        /*
+	**  Doing it for proxy.
+	*/
+	if (proxy_setup && proxy_setup->server) {
+	    /* 
+	    **  We have already tried with proxy authorization.
+	    **  Either we don't have access or username or
+	    **  password was misspelled.
+	    **
+	    **  Update scheme-specific parameters
+	    **  (in case they have expired by chance).
+	    */
+	    HTAASetup_updateSpecifics(proxy_setup, scheme_specifics);
+
+	    if (scheme == HTAA_MD5) {
+	       stale = HTAssocList_lookup(scheme_specifics[scheme], "stale");
+	       if (stale) {
+	          if (!my_strcasecmp(stale, "true")) {
+		     if (retried_with_new_nonce) {
+		        /* Already tried this, ask user */
+		        retried_with_new_nonce = 0;
+		     } else {
+		        retried_with_new_nonce = 1;
+		        current_setup->retry = YES;
+		        return YES;
+		     }
+	          }
+	       }
+	    }
+
+	    if (NO == HTConfirm("Authorization failed.  Retry?")) {
+		proxy_setup = NULL;
+		return NO;
+	    } else {
+	        /*
+		**  Re-ask username+password (if misspelled).
+		*/
+		proxy_setup->retry = YES;
+		return YES;
+	    }
+	} else {
+	    /*
+	    **  proxy_setup == NULL, i.e. we have a
+	    **  first connection to a protected server or
+	    **  the server serves a wider set of documents
+	    **  than we expected so far.
+	    */
+	    HTAAServer *server = HTAAServer_lookup(proxy_hostname,
+						   proxy_portnumber,
+						   IsProxy);
+
+	    if (!server)
+		server = HTAAServer_new(proxy_hostname,
+					proxy_portnumber,
+					IsProxy);
+	    if (!template)	/* Proxy matches everything  -AJL */
+		StrAllocCopy(template, "*");
+	    proxy_setup = HTAASetup_new(server, template, valid_schemes,
+				        scheme_specifics);
+	    free(template);
+	    HTAlert("Proxy authorization required -- retrying");
+	    return YES;
+	}
+	/* Never reached */
+    }
+
+    /* Normal WWW authorization */
 
     if (num_schemes == 0) {		/* No authentication valid */
 	current_setup = NULL;
@@ -1087,45 +1230,61 @@ PUBLIC BOOL HTAA_shouldRetryWithAuth ARGS3(char *, start_of_headers,
     }
 
     if (current_setup && current_setup->server) {
-	/* So we have already tried with authorization.	*/
-	/* Either we don't have access or username or	*/
-	/* password was misspelled.			*/
-	    
-	/* Update scheme-specific parameters	*/
-	/* (in case they have expired by chance).	*/
+	/* So we have already tried with authorization.
+	 * Either we don't have access or username or
+	 * password was misspelled.
+	 *   
+	 * Update scheme-specific parameters
+	 * (in case they have expired by chance).
+	 */
 	HTAASetup_updateSpecifics(current_setup, scheme_specifics);
+
+ 	if (scheme == HTAA_MD5) {
+	   stale = HTAssocList_lookup(scheme_specifics[scheme], "stale");
+	   if (stale) {
+	      if (!my_strcasecmp(stale, "true")) {
+		 if (retried_with_new_nonce) {
+		    /* Already tried this, ask user */
+		    retried_with_new_nonce = 0;
+		 } else {
+		    retried_with_new_nonce = 1;
+		    current_setup->retry = YES;
+		    return YES;
+		 }
+	      }
+	   }
+	}
 
 	if (NO == HTConfirm("Authorization failed.  Retry?")) {
 	    current_setup = NULL;
 	    return NO;
-	} /* HTConfirm(...) == NO */
-	else { /* re-ask username+password (if misspelled) */
+	} else {
+	    /* Re-ask username+password (if misspelled) */
 	    current_setup->retry = YES;
 	    return YES;
-	} /* HTConfirm(...) == YES */
-    } /* if current_setup != NULL */
-
-    else { /* current_setup == NULL, i.e. we have a	 */
+	}
+    } else {
+	   /* current_setup == NULL, i.e. we have a	 */
 	   /* first connection to a protected server or  */
 	   /* the server serves a wider set of documents */
 	   /* than we expected so far.                   */
 
 	HTAAServer *server = HTAAServer_lookup(current_hostname,
-					       current_portnumber);
-	if (!server) {
+					       current_portnumber,
+					       IsProxy);
+
+	if (!server)
 	    server = HTAAServer_new(current_hostname,
-				    current_portnumber);
-	}
+				    current_portnumber,
+				    IsProxy);
 	if (!template)
 	    template = HTAA_makeProtectionTemplate(current_docname);
-	current_setup = HTAASetup_new(server, 
-				      template,
-				      valid_schemes,
+	current_setup = HTAASetup_new(server, template, valid_schemes,
 				      scheme_specifics);
-
+	free(template);
         HTAlert("Access without authorization denied -- retrying");
 	return YES;
-    } /* else current_setup == NULL */
+    }
 
     /* Never reached */
 }

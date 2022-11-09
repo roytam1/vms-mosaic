@@ -52,6 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2004 - The VMS Mosaic Project */
 
 typedef struct memory_struct {
 	int memoryType; /*type of chunk to use*/
@@ -75,7 +76,7 @@ int memSize[] = {
 #define MEM_ALIGN_2 2
 #define MEM_ALIGN_4 4
 
-#if defined(VMS) && defined(__DECC) && defined(__alpha)   /* PGE */
+#if defined(VMS) && defined(__DECC) && (defined(__alpha) || defined(__ia64))
 #define MEM_ALIGN_8 8
 #define MEM_ALIGN MEM_ALIGN_8
 #else

@@ -12,6 +12,7 @@
 #include "../config.h"
 #include "HTFile.h"
 #include "HTAtom.h"
+#include "HTIcon.h"
 
 struct typemap
 {
@@ -19,7 +20,7 @@ struct typemap
   char *image;
 };
 
-struct typemap type_map[] =
+static struct typemap type_map[] =
 {
   {"image",       "internal-gopher-image"},
   {"text",        "internal-gopher-text"},
@@ -38,33 +39,29 @@ char *HTgeticonname(HTFormat format, char *defaultformat)
   char *ptr;
   char subtype[128];
   
-  if(format != NULL)
-    {
+  if (format != NULL) {
       strcpy(subtype, format->name);
       
-      ptr=strchr(subtype,'/');
+      ptr = strchr(subtype, '/');
       
-      if(ptr != NULL) 
-        *ptr = '\0';
-    }
-  else
-    {
+      if (ptr != NULL) 
+          *ptr = '\0';
+   } else {
       subtype[0] = '\0';
-    }
+  }
   
   ptr = NULL;
   
-  for(count = 0;strcmp(type_map[count].image,"EOFEOF") != 0; count++)
-    {
-      if(strcmp(type_map[count].format, subtype) == 0)
-        return type_map[count].image;
+  for (count = 0; strcmp(type_map[count].image, "EOFEOF") != 0; count++) {
+      if (strcmp(type_map[count].format, subtype) == 0)
+          return type_map[count].image;
       
-      if(strcmp(type_map[count].format, defaultformat) == 0)
-        ptr = type_map[count].image;
-    }
+      if (strcmp(type_map[count].format, defaultformat) == 0)
+          ptr = type_map[count].image;
+  }
   
-  if(ptr != NULL) 
-    return ptr;
+  if (ptr != NULL) 
+      return ptr;
   
   return "internal-gopher-unknown";
 }

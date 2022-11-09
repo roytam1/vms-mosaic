@@ -4,12 +4,10 @@
 ! Motif 1.2 support added on 3-Jun-1994
 ! Mosaic 2.4 20-Aug-1994
 !
-! Usage:
-!       $ MMS                           for DEC/UCX
-!       $ MMS/MACRO=(MULTINET=1)        for MultiNet
-! Add a DEBUG=1     MACRO when debugging.
-! Add a DECC=1      MACRO when compiling with DEC C.
-! Add a MOTIF1_2=1  MACRO when compiling with Motif 1.2
+! Copyright (C) 2006 - The VMS Mosaic Project
+!
+! This description file is intended to be invoked by the top level
+! description file.  It should not be invoked directly.
 !
 ! You may have to use the /IGNORE=WARNING qualifier to make MMS run all
 ! the way through if you get (acceptable) compilation warnings.
@@ -18,6 +16,12 @@
 WDIR = [.$(WORK)]
 
 LIBTARGET = $(WDIR)libxmx.olb
+
+.IFDEF GNUC
+CC = GCC
+.ELSE
+CC = CC
+.ENDIF
 
 .IFDEF DECC
 .IFDEF PATHWAY
@@ -38,26 +42,10 @@ CQUALC=
 .ENDIF
 .ENDIF
 
-.IFDEF MOTIF1_2
-MOTIF = MOTIF1_2
-.ELSE
-MOTIF = MOTIF1_1
-.ENDIF
-
-.IFDEF MULTINET
-TCPIP = ,MULTINET
-.ELSE
-.IFDEF PATHWAY
-TCPIP = ,WIN_TCP
-.ELSE
-TCPIP =
-.ENDIF
-.ENDIF
-
 .IFDEF DEBUG
-CFLAGS = $(CQUALC)/Define=($(MOTIF)$(TCPIP))/NoOpt/Debug
+CFLAGS = $(CQUALC)/NoOpt/Debug
 .ELSE
-CFLAGS = $(CQUALC)/Define=($(MOTIF)$(TCPIP))
+CFLAGS = $(CQUALC)
 .ENDIF
 
 OBJECTS = Odir:xmx.obj Odir:xmx2.obj
@@ -65,6 +53,7 @@ OBJECTS = Odir:xmx.obj Odir:xmx2.obj
 .FIRST
         @ If F$Search("$(LIBTARGET)") .EQS. "" Then Library/Create $(LIBTARGET)
 	@ Define/NoLog Odir $(WDIR)
+	@ GCC = "GCC" + F$Trnlnm("GCC_DEFINES")
 .IFDEF PATHWAY
 	@ @[-.TWG]def
 .ENDIF
@@ -72,8 +61,9 @@ OBJECTS = Odir:xmx.obj Odir:xmx2.obj
 $(LIBTARGET) : $(LIBTARGET)($(OBJECTS))
 	@ Write SYS$Output "Library libXmx.olb built."
 
-Odir:xmx.obj : xmx.c
-Odir:xmx2.obj : xmx2.c
+Odir:xmx.obj  : xmx.c [-]config.h [-]config_$(WORK).h xmx.h xmxp.h\
+		[-.libliteclue]liteclue.h
+Odir:xmx2.obj : xmx2.c [-]config.h [-]config_$(WORK).h xmx.h xmxp.h
 
 .c.obj :
 	$(CC)$(CFLAGS)/OBJECT=$@ $<

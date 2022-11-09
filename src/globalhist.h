@@ -52,31 +52,45 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
  * Author: Dan Pape
  *
  */
 
-/* this file contains stuff from the old "mosaic.h" file. I am breaking
-   that file up because it was too big, and required a re-compile of all
-   the source whenever something changed. */
-
-
 #ifndef __GLOBALHIST_H__
 #define __GLOBALHIST_H__
 
+typedef enum _mo_cache_type
+{
+    mo_cache_image, mo_cache_frame
+} mo_cache_type;
+
+typedef struct _cached_frame_data
+{
+    char *text;
+    char *last_modified;
+    char *expires;
+    char *charset;
+} cached_frame_data;
+
 mo_status mo_been_here_before_huh_dad (char *);
 mo_status mo_here_we_are_son (char *);
+mo_status mo_track_url_anchors_visited (char *);
 mo_status mo_init_global_history (void);
 mo_status mo_wipe_global_history (mo_window *);
 mo_status mo_setup_global_history (void);
 mo_status mo_write_global_history (void);
 void *mo_fetch_cached_image_data (char *);
-void *mo_fetch_cached_local_name (char *);
-mo_status mo_cache_data (char *, void *, int);
+cached_frame_data *mo_fetch_cached_frame_data (char *);
+mo_status mo_cache_data (char *, void *, mo_cache_type);
 mo_status mo_zap_cached_images_here (mo_window *);
-mo_status mo_flush_image_cache (mo_window *);
-mo_status mo_set_image_cache_nuke_threshold (void);
+mo_status mo_flush_image_cache (void);
+mo_status mo_set_image_cache_nuke_point (void);
+mo_status mo_deaccess_cached_frame_data (char *);
+mo_frame *mo_cache_frames (mo_window *win, int level);
+mo_status mo_replace_cached_frame_data (mo_window *win);
 
 #endif

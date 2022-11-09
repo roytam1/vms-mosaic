@@ -51,6 +51,9 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
 /*
  * The following XPM hashing code if from the libXpm code, which I
@@ -89,12 +92,12 @@
 \*****************************************************************************/
 
 #include "xpm.h"
+#include <stdlib.h>
+#ifdef VMS
+#include <string.h>
+#endif
 
-LFUNC(AtomMake, xpmHashAtom, (char *name, void *data));
-LFUNC(HashTableGrows, int, (xpmHashTable * table));
-
-static xpmHashAtom
-AtomMake(name, data)			/* makes an atom */
+static xpmHashAtom AtomMake(name, data)	/* makes an atom */
     char *name;				/* WARNING: is just pointed to */
     void *data;
 {
@@ -127,10 +130,10 @@ AtomMake(name, data)			/* makes an atom */
 #define INITIAL_HASH_SIZE 256		/* should be enough for colors */
 #define HASH_TABLE_GROWS  size = size * 2;
 
-/* aho-sethi-ullman's HPJ (sizes should be primes)*/
+/* aho-sethi-ullman's HPJ (sizes should be primes) */
 #ifdef notdef
 #define HASH_FUNCTION	hash <<= 4; hash += *hp++; \
-    if(hash2 = hash & 0xf0000000) hash ^= (hash2 >> 24) ^ hash2;
+    if (hash2 = hash & 0xf0000000) hash ^= (hash2 >> 24) ^ hash2;
 #define INITIAL_HASH_SIZE 4095		/* should be 2^n - 1 */
 #define HASH_TABLE_GROWS  size = size << 1 + 1;
 #endif
@@ -157,9 +160,7 @@ AtomMake(name, data)			/* makes an atom */
  * (slot points to NULL if it is not defined)
  *
  */
-
-xpmHashAtom *
-xpmHashSlot(table, s)
+xpmHashAtom *xpmHashSlot(table, s)
     xpmHashTable *table;
     char *s;
 {
@@ -170,7 +171,7 @@ xpmHashSlot(table, s)
     char *ns;
 
     hash = 0;
-    while (*hp) {			/* computes hash function */
+    while (*hp) {			/* Computes hash function */
 	HASH_FUNCTION
     }
     p = atomTable + hash % table->size;
@@ -185,8 +186,7 @@ xpmHashSlot(table, s)
     return p;
 }
 
-static int
-HashTableGrows(table)
+static int HashTableGrows(table)
     xpmHashTable *table;
 {
     xpmHashAtom *atomTable = table->atomTable;
@@ -197,31 +197,30 @@ HashTableGrows(table)
 
     t = atomTable;
     HASH_TABLE_GROWS
-	table->size = size;
+    table->size = size;
     table->limit = size / 3;
     atomTable = (xpmHashAtom *) XpmMalloc(size * sizeof(*atomTable));
     if (!atomTable)
-	return (XpmNoMemory);
+	return(XpmNoMemory);
     table->atomTable = atomTable;
-    for (p = atomTable + size; p > atomTable;)
+    for (p = atomTable + size; p > atomTable; )
 	*--p = NULL;
-    for (i = 0, p = t; i < oldSize; i++, p++)
+    for (i = 0, p = t; i < oldSize; i++, p++) {
 	if (*p) {
 	    xpmHashAtom *ps = xpmHashSlot(table, (*p)->name);
 
 	    *ps = *p;
 	}
+    }
     XpmFree(t);
-    return (XpmSuccess);
+    return(XpmSuccess);
 }
 
 /*
  * xpmHashIntern(table, name, data)
  * an xpmHashAtom is created if name doesn't exist, with the given data.
  */
-
-int
-xpmHashIntern(table, tag, data)
+int xpmHashIntern(table, tag, data)
     xpmHashTable *table;
     char *tag;
     void *data;
@@ -231,26 +230,24 @@ xpmHashIntern(table, tag, data)
     if (!*(slot = xpmHashSlot(table, tag))) {
 	/* undefined, make a new atom with the given data */
 	if (!(*slot = AtomMake(tag, data)))
-	    return (XpmNoMemory);
+	    return(XpmNoMemory);
 	if (table->used >= table->limit) {
 	    int ErrorStatus;
 
 	    if ((ErrorStatus = HashTableGrows(table)) != XpmSuccess)
-		return (ErrorStatus);
+		return(ErrorStatus);
 	    table->used++;
-	    return (XpmSuccess);
+	    return(XpmSuccess);
 	}
 	table->used++;
     }
-    return (XpmSuccess);
+    return(XpmSuccess);
 }
 
 /*
- *  must be called before allocating any atom
+ *  Must be called before allocating any atom
  */
-
-int
-xpmHashTableInit(table)
+int xpmHashTableInit(table)
     xpmHashTable *table;
 {
     xpmHashAtom *p;
@@ -261,27 +258,28 @@ xpmHashTableInit(table)
     table->used = 0;
     atomTable = (xpmHashAtom *) XpmMalloc(table->size * sizeof(*atomTable));
     if (!atomTable)
-	return (XpmNoMemory);
-    for (p = atomTable + table->size; p > atomTable;)
+	return(XpmNoMemory);
+    for (p = atomTable + table->size; p > atomTable; )
 	*--p = NULL;
     table->atomTable = atomTable;
-    return (XpmSuccess);
+    return(XpmSuccess);
 }
 
 /*
- *   frees a hashtable and all the stored atoms
+ *   Frees a hashtable and all the stored atoms
  */
-
-void
-xpmHashTableFree(table)
+void xpmHashTableFree(table)
     xpmHashTable *table;
 {
     xpmHashAtom *p;
     xpmHashAtom *atomTable = table->atomTable;
 
-    for (p = atomTable + table->size; p > atomTable;)
+    if (!atomTable)
+	return;
+    for (p = atomTable + table->size; p > atomTable; ) {
 	if (*--p)
 	    XpmFree(*p);
+    }
     XpmFree(atomTable);
     table->atomTable = NULL;
 }

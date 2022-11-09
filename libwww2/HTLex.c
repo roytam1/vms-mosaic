@@ -57,7 +57,7 @@ PUBLIC LexItem lex ARGS1(FILE *, fp)
     lex_cnt = 0;
     lex_template = NO;
 
-    for(;;) {
+    for (;;) {
 	switch (ch = getc(fp)) {
 	  case EOF:
 	  case ' ':
@@ -70,26 +70,44 @@ PUBLIC LexItem lex ARGS1(FILE *, fp)
 	  case ')':
 	  case '@':
 	    if (lex_cnt > 0) {
-		if (ch != EOF) ungetc(ch,fp);
-		if (lex_template) return LEX_TMPL_STR;
-		else		  return LEX_ALPH_STR;
-	    }
-	    else switch(ch) {
-	      case EOF:		return LEX_EOF;		break;
+		if (ch != EOF)
+		    ungetc(ch,fp);
+		if (lex_template) {
+		    return LEX_TMPL_STR;
+		} else {
+		    return LEX_ALPH_STR;
+		}
+	    } else switch(ch) {
+	      case EOF:
+		return LEX_EOF;
+		break;
 	      case '\n':
-		lex_line++;	return LEX_REC_SEP;	break;
-	      case ':':		return LEX_FIELD_SEP;	break;
-	      case ',':		return LEX_ITEM_SEP;	break;
-	      case '(':		return LEX_OPEN_PAREN;	break;
-	      case ')':		return LEX_CLOSE_PAREN;	break;
-	      case '@':		return LEX_AT_SIGN;	break;
+		lex_line++;
+		return LEX_REC_SEP;
+		break;
+	      case ':':
+		return LEX_FIELD_SEP;
+		break;
+	      case ',':
+		return LEX_ITEM_SEP;
+		break;
+	      case '(':
+		return LEX_OPEN_PAREN;
+		break;
+	      case ')':
+		return LEX_CLOSE_PAREN;
+		break;
+	      case '@':
+		return LEX_AT_SIGN;
+		break;
 	      default:	;	/* Leading white space ignored (SP,TAB,CR) */
 	    }
 	    break;
 	  default:
 	    lex_buffer[lex_cnt++] = ch;
 	    lex_buffer[lex_cnt] = (char)0;
-	    if ('*' == ch) lex_template = YES;
+	    if ('*' == ch)
+		lex_template = YES;
 	} /* switch ch */
     } /* forever */
 }

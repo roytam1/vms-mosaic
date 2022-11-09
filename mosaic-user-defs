@@ -1,9 +1,9 @@
 # This file is part of Mosaic and is only useful if it is in
 #
-#                $HOME/.mosaic-user-defs 
+#                sys$login:mosaic-user-defs.
 # 
 # If you want to use the functionality herein described move this file
-# to that location. -- TPR
+# to that location.
 #
 ####################################################################
 #
@@ -47,25 +47,16 @@
 # How you use it:
 #
 # 1) Copy this file to your home directory.
-# 2) Start up Mosaic (2.7b3 or greater).
+# 2) Start up Mosaic.
 # 3) Select some text. (First or second button drag in Mosaic)
 # 4) Click on third button, go down to "User" sub menu and select one.
-# 5) Watch the results come flying over the net and send a message to
-#    mosaic-x@ncsa.uiuc.edu saying how awesome this feature is.
-#    We thank you for your support.
+# 5) Watch the results come flying over the net.
 #
 # One thing that might be useful to know if you have problems with this
 # feature is that it you need to add quotes to a selection of more than 
 # one word but you can't have quotes in a url so add %22's around __string__
 # in the spec line if the button is meant to accept selections of more than 
 # one word (see provided functions).
-#
-# Note: With Mosaic 2.8b1 you will be able to do construct these
-# user defined actions within Mosaic via a preferences dialog. 
-# This will mean you don't have to rerun Mosaic if you add a new action.
-# This file is a temporary thing and will be obsolete with 2.8b1 
-# (all though if you have this file 2.8b1 will read it and 
-# put it in preferences and then erase it).
 #
 
 Yahoo Search

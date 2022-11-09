@@ -7,7 +7,8 @@
 
 #include "HTAccess.h"
 
-
 extern HTProtocol HTTP;
+extern HTProtocol HTTPS;
+extern void HT_SetExtraHeaders(char **headers);
 
 #endif /* HTTP_H */

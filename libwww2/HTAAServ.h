@@ -1,30 +1,31 @@
 /*                          SERVER SIDE ACCESS AUTHORIZATION MODULE
                                              
-   This module is the server side interface to Access Authorization (AA) package. It
-   contains code only for server.
+   This module is the server side interface to Access Authorization (AA)
+   package. It contains code only for server.
    
    Important to know about memory allocation:
    
-   Routines in this module use dynamic allocation, but free automatically all the memory
-   reserved by them.
+   Routines in this module use dynamic allocation, but free automatically
+   all the memory reserved by them.
    
-   Therefore the caller never has to (and never should) free() any object returned by
-   these functions.
+   Therefore the caller never has to (and never should) free() any object
+   returned by these functions.
    
-   Therefore also all the strings returned by this package are only valid until the next
-   call to the same function is made. This approach is selected, because of the nature of
-   access authorization: no string returned by the package needs to be valid longer than
-   until the next call.
+   Therefore also all the strings returned by this package are only valid
+   until the next call to the same function is made.  This approach is
+   selected, because of the nature of access authorization: no string
+   returned by the package needs to be valid longer than until the next call.
    
-   This also makes it easy to plug the AA package in: you don't have to ponder whether to
-   free()something here or is it done somewhere else (because it is always done somewhere
-   else).
+   This also makes it easy to plug the AA package in: you don't have to
+   ponder whether to free() something here or is it done somewhere else
+   (because it is always done somewhere else).
    
-   The strings that the package needs to store are copied so the original strings given as
-   parameters to AA functions may be freed or modified with no side effects.
+   The strings that the package needs to store are copied so the original
+   strings given as parameters to AA functions may be freed or modified
+   with no side effects.
    
-   Also note:The AA package does not free() anything else than what it has itself
-   allocated.
+   Also note:The AA package does not free() anything else than what it
+   has itself allocated.
    
  */
 
@@ -43,7 +44,7 @@
 #define HTAAchAu        HTAA_checkAuthorization
 #define HTAAcoAH        HTAA_composeAuthHeaders
 #define HTAAsLog        HTAA_startLogging
-#endif /*SHORT_NAMES*/
+#endif
 
 /*
 
@@ -79,10 +80,10 @@ Check Access Authorization
 **      file twice).
 **
 */
-PUBLIC int HTAA_checkAuthorization PARAMS((WWW_CONST char * url,
-                                           WWW_CONST char * method_name,
-                                           WWW_CONST char * scheme_name,
-                                           char *       scheme_specifics));
+PUBLIC int HTAA_checkAuthorization PARAMS((WWW_CONST char *url,
+                                           WWW_CONST char *method_name,
+                                           WWW_CONST char *scheme_name,
+                                           char           *scheme_specifics));
 /*
 
 Compose Status Line Message
@@ -133,12 +134,7 @@ Start Access Authorization Logging
 **      fp      is the open log file.
 **
 */
-PUBLIC void HTAA_startLogging PARAMS((FILE * fp));
-/*
+PUBLIC void HTAA_startLogging PARAMS((FILE *fp));
 
- */
 
 #endif  /* NOT HTAASERV_H */
-/*
-
-   End of file HTAAServ.h.  */

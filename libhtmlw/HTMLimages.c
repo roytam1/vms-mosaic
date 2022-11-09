@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -60,7 +60,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "HTMLmiscdefs.h"
 #include "HTMLparse.h"
 #include "HTMLP.h"
 #include "HTMLPutil.h"
@@ -69,6 +68,7 @@
 #include "../src/mosaic.h"
 #include "../src/img.h"
 #include "../src/fsdither.h"
+#include "../src/mo-www.h"
 
 #include <X11/Intrinsic.h>
 #ifndef MOTIF1_2
@@ -89,6 +89,11 @@
 #include "../src/bitmaps/gopher_binary.xbm"
 #include "../src/bitmaps/gopher_unknown.xbm"
 
+#ifndef DISABLE_TRACE
+extern int htmlwTrace;
+extern int reportBugs;
+#endif
+
 static ImageInfo *gopher_image = NULL;
 static ImageInfo *gopher_movie = NULL;
 static ImageInfo *gopher_menu = NULL;
@@ -105,11 +110,7 @@ static ImageInfo *anchored_image = NULL;
 
 extern Pixmap internalCookie;
 
-static GC maskGC;   /* PGE, transparent on solid background speedup */
-
-/* Speed up the Pixmap inquiry */
-static int MaxPixmapWidth = -1;
-static int MaxPixmapHeight = -1;
+extern GC maskGC;   /* PGE, transparent on solid background speedup */
 
 /* For selective image loading */
 extern Boolean currently_delaying_images;
@@ -118,8 +119,6 @@ extern Boolean currently_delaying_images;
 extern int Vclass;
 extern Visual *theVisual;
 
-/* X context from GUI.C */
-XtAppContext app_context;
 /* Display dimension limit stuff from GUI.C */
 extern int LimDim;
 extern int LimDimX;
@@ -132,7 +131,10 @@ extern int BSCnum;
 extern int installed_colormap;
 extern Colormap installed_cmap;
 
-void ImageAnimate(XtPointer cld, XtIntervalId *id);
+static void ImageAnimate(XtPointer cld, XtIntervalId *id);
+
+/* Static as long as we only support one display at a time */
+static XtAppContext app_con = NULL;
 
 int progressiveDisplayEnabled;
 
@@ -143,27 +145,20 @@ int progressiveDisplayEnabled;
 		x = (ImageInfo *)malloc(sizeof(ImageInfo)); \
 		x->image = XCreatePixmapFromBitmapData(XtDisplay(hw), \
 			XtWindow(hw), \
-			(char*) x##_bits,  \
+			(char *) x##_bits,  \
 			x##_width, x##_height, \
 			fg_pixel, bg_pixel, \
 			DefaultDepthOfScreen(XtScreen(hw))); \
 	} \
-	picd->ismap = 0; \
-	picd->usemap = NULL; \
 	picd->width = x##_width; \
 	picd->height = x##_height; \
 	picd->req_width = -1;\
 	picd->req_height = -1;\
-	picd->image_data = (unsigned char*) x##_bits; \
+	picd->image_data = (unsigned char *) x##_bits; \
 	picd->internal = 1; \
 	picd->delayed = 0; \
-	picd->fetched = 0; \
-	picd->cached = 0; \
 	picd->num_colors = 2; \
-	picd->transparent = 0; \
 	picd->image = x->image; \
-	picd->is_bg_image = 0; \
-	picd->aligned = 0; \
 }
 #else
 #define IMGINFO_FROM_BITMAP(x) \
@@ -172,29 +167,20 @@ int progressiveDisplayEnabled;
 		x = (ImageInfo *)malloc(sizeof(ImageInfo)); \
 		x->image = XCreatePixmapFromBitmapData(XtDisplay(hw), \
 			XtWindow(hw), \
-			(char*) x/**/_bits,  \
+			(char *) x/**/_bits,  \
 			x/**/_width, x/**/_height, \
 			fg_pixel, bg_pixel, \
 			DefaultDepthOfScreen(XtScreen(hw))); \
 	} \
-	picd->ismap = 0; \
-	picd->usemap = NULL; \
-	picd->alt_text = NULL; \
-	picd->text = NULL; \
 	picd->width = x/**/_width; \
 	picd->height = x/**/_height; \
 	picd->req_width = -1;\
 	picd->req_height = -1;\
-	picd->image_data = (unsigned char*) x/**/_bits; \
+	picd->image_data = (unsigned char *) x/**/_bits; \
 	picd->internal = 1; \
 	picd->delayed = 0; \
-	picd->fetched = 0; \
-	picd->cached = 0; \
 	picd->num_colors = 2; \
-	picd->transparent = 0; \
 	picd->image = x->image; \
-	picd->is_bg_image = 0; \
-	picd->aligned = 0; \
 }
 #endif
 
@@ -208,13 +194,13 @@ void FreeColors(HTMLWidget hw, Colormap colormap)
 	unsigned long pix;
 	Display *d = XtDisplay(hw);
 
-	for (i=0; i < 256; i++) {
+	for (i = 0; i < 256; i++) {
 		if (hw->html.allocation_index[i]) {
 			pix = (unsigned long)i;
 			/* Because X is stupid, we have to Free the color
 			 * once for each time we've allocated it.
 			 */
-			for (j=0; j < hw->html.allocation_index[i]; j++)
+			for (j = 0; j < hw->html.allocation_index[i]; j++)
 				XFreeColors(d, colormap, &pix, 1, 0L);
 		}
 		hw->html.allocation_index[i] = 0;
@@ -249,17 +235,17 @@ int FindColor(HTMLWidget hw, Colormap colormap, XColor *colr)
 
 		NumCells = DisplayCells(d, DefaultScreen(d));
 		if (!have_colors) {
-			for (i=0; i < NumCells; i++)
+			for (i = 0; i < NumCells; i++)
 				def_colrs[i].pixel = i;
 			XQueryColors(d, colormap, def_colrs, NumCells);
 			have_colors = 1;
 		}
 		mindist = 196608;		/* 256 * 256 * 3 */
 		cindx = -1;
-		for (i=0; i < NumCells; i++) {
+		for (i = 0; i < NumCells; i++) {
 			rd = (int)(def_colrs[i].red >> 8) -
 			     (int)(colr->red >> 8);
-			gd = (int)(def_colrs[i].green>> 8) -
+			gd = (int)(def_colrs[i].green >> 8) -
 			     (int)(colr->green >> 8);
 			bd = (int)(def_colrs[i].blue >> 8) -
 			     (int)(colr->blue >> 8);
@@ -301,7 +287,8 @@ static int highbit( unsigned long ul)
 {
 	int i;
 
-	for (i=31; ((ul&0x80000000) == 0) && i>=0; i--, ul<<=1);
+	for (i = 31; ((ul & 0x80000000) == 0) && i >= 0; i--, ul<<=1)
+	    ;
 	return i;
 }
 
@@ -310,20 +297,29 @@ static int highbit( unsigned long ul)
  * Rescale an image GD 24 Apr 97
  * From the XV Software 3.10a.  See the copyright notice of xv-3.10a 
  */
-static void RescalePic(HTMLWidget hw, ImageInfo *picd, int nw, int nh)
+static void RescalePic(ImageInfo *picd, int nw, int nh)
 { 
 	int cy, ex, ey, *cxarr, *cxarrp;
 	unsigned char *clptr, *elptr, *epptr, *epic;
+	unsigned char *aptr, *alptr, *apptr, *alpha;
 
 	/* Change image_data width and height in picd */
 
-	clptr = NULL; cxarrp = NULL; cy = 0;  /* Shut up compiler */
+	cy = 0;  /* Shut up compiler */
+	clptr = NULL;
+	cxarrp = NULL;
 
 	/* Create a new pic of the appropriate size */
 	epic = (unsigned char *) malloc((size_t) (nw * nh));
 	cxarr = (int *) malloc(nw * sizeof(int));
+
+	if (picd->alpha) {
+		alpha = (unsigned char *) malloc((size_t) (nw * nh));
+	} else {
+		alpha = NULL;
+	}
 	if (!epic || !cxarr) {
-		fprintf(stderr, "RescalePic memory overflow\n");
+		fprintf(stderr, "Rescale image memory overflow\n");
 		return;
 	}
 
@@ -333,17 +329,30 @@ static void RescalePic(HTMLWidget hw, ImageInfo *picd, int nw, int nh)
 	/* a mul and a div for every point in picture */
 	for (ex = 0; ex < nw; ex++)        
 		cxarr[ex] = (picd->width * ex) / nw;
-	elptr = epptr = epic;             
+
+	elptr = epic;             
+	alptr = alpha;
+
 	for (ey = 0; ey < nh; ey++, elptr += nw) {
 		cy = (picd->height * ey) / nh;      
 		epptr = elptr;
 		clptr = picd->image_data + (cy * picd->width);
-		for (ex = 0, cxarrp = cxarr; ex < nw; ex++, epptr++)
-			*epptr = clptr[*cxarrp++];  
+		if (alpha) {
+			apptr = alptr;
+			alptr += nw;
+			aptr = picd->alpha + (cy * picd->width); 
+		}
+		for (ex = 0, cxarrp = cxarr; ex < nw; ex++, epptr++) {
+			*epptr = clptr[*cxarrp];
+			if (alpha)
+				*apptr++ = aptr[*cxarrp];
+			cxarrp++;
+		}
 	}                                 
 	free(cxarr);
 
 	picd->image_data = epic;
+	picd->alpha = alpha;
 	picd->width = nw;
 	picd->height = nh;
 }
@@ -355,13 +364,8 @@ static void RescalePic(HTMLWidget hw, ImageInfo *picd, int nw, int nh)
  * nonzero.  The 2.7b5 code ignored "clip" in most code paths, so I'm
  * just going to ignore it in all paths.
  */
-static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
-	Display *dsp;
-	unsigned char *data;
-	int depth;
-	ImageInfo *img_info;
-	XColor *cmap;
-	int clip;
+static XImage *MakeImage(Display *dsp, unsigned char *data, int depth,
+		         ImageInfo *img_info, XColor *cmap, int clip)
 {
 	int shiftnum, shiftstart, shiftstop, shiftinc;
         int bpp;
@@ -383,18 +387,21 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	newimage = XCreateImage(dsp, theVisual,
 				depth, ZPixmap, 0, (char *) NULL,
 				width, height, 32, 0);
-	if (!newimage)
+	if (!newimage) {
+	  application_user_feedback("Image too large:  XCreateImage failure");
 	  return NULL;
+	} 
 	/* Allocate data space using scanline width from XCreateImage. */
 	bit_data = (unsigned char *) malloc(newimage->bytes_per_line * height);
 	newimage->data = (char *) bit_data;
 	if (!bit_data) {
 	  XDestroyImage(newimage);
+	  application_user_feedback("Image too large:  Not enough memory");
 	  return NULL;
 	}
 
 	/* Fill in the image data. */
-	bpp = newimage->bits_per_pixel;	/* Not always the same as depth! */
+	bpp = newimage->bits_per_pixel;  /* Not always the same as depth! */
 
 	switch (bpp) {
 	case 1:
@@ -412,12 +419,12 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	  }
 	  datap = data;
 	  bitp = bit_data;
-	  for (h=0; h < height; h++) {
+	  for (h = 0; h < height; h++) {
 	    endofline = bitp + newimage->bytes_per_line;
 	    temp = 0;
 	    shiftnum = shiftstart;
-	    for (w=0; w < width; w++) {
-	      temp |= (*datap++)<<shiftnum;
+	    for (w = 0; w < width; w++) {
+	      temp |= (*datap++) << shiftnum;
 	      shiftnum += shiftinc;
 	      if (shiftnum == shiftstop) {
 		*bitp++ = (unsigned char) temp;
@@ -443,7 +450,7 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	    /* Copy a scanline at a time; don't bother to fill pad bytes */
 	    datap = data;
 	    bitp = bit_data;
-	    for (h=0; h < height; h++) {
+	    for (h = 0; h < height; h++) {
 	      memcpy(bitp, datap, width);
 	      datap += width;
 	      bitp += newimage->bytes_per_line;
@@ -458,35 +465,35 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	  rmask = theVisual->red_mask;
 	  gmask = theVisual->green_mask;
 	  bmask = theVisual->blue_mask;
-	  rshift = 15-highbit(rmask);
-	  gshift = 15-highbit(gmask);
-	  bshift = 15-highbit(bmask);
+	  rshift = 15 - highbit(rmask);
+	  gshift = 15 - highbit(gmask);
+	  bshift = 15 - highbit(bmask);
 
 	  datap = data;
 	  bitp = bit_data;
 	  if (newimage->byte_order == MSBFirst) {
-	    for (h=0; h < height; h++) {
+	    for (h = 0; h < height; h++) {
 	      endofline = bitp + newimage->bytes_per_line;
 	      for (w = width; w > 0; w--) {
 		temp = (int) *datap++;
-		temp = ((cmap[temp].red>>rshift)&rmask)|
-		  ((cmap[temp].green>>gshift)&gmask)|
-		  ((cmap[temp].blue>>bshift)&bmask);
-		*bitp++ = (temp>>8)&0xff;
-		*bitp++ = temp&0xff;
+		temp = ((cmap[temp].red >> rshift) & rmask) |
+		       ((cmap[temp].green >> gshift) & gmask) |
+		       ((cmap[temp].blue >> bshift) & bmask);
+		*bitp++ = (temp >> 8) & 0xff;
+		*bitp++ = temp & 0xff;
 	      }
 	      bitp = endofline;
 	    }
 	  } else {
-	    for (h=0; h < height; h++) {
+	    for (h = 0; h < height; h++) {
 	      endofline = bitp + newimage->bytes_per_line;
 	      for (w = width; w > 0; w--) {
 		temp = (int) *datap++;
-		temp = ((cmap[temp].red>>rshift)&rmask)|
-		  ((cmap[temp].green>>gshift)&gmask)|
-		  ((cmap[temp].blue>>bshift)&bmask);
-		*bitp++ = temp&0xff;
-		*bitp++ = (temp>>8)&0xff;
+		temp = ((cmap[temp].red >> rshift) & rmask) |
+		       ((cmap[temp].green >> gshift) & gmask) |
+		       ((cmap[temp].blue >> bshift) & bmask);
+		*bitp++ = temp & 0xff;
+		*bitp++ = (temp >> 8) & 0xff;
 	      }
 	      bitp = endofline;
 	    }
@@ -495,30 +502,30 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 
 	case 32:
 	  /* Bletcherous code ... assumes masks are 8 bits wide. */
-	  rshift = highbit(theVisual->red_mask)-7;
-	  gshift = highbit(theVisual->green_mask)-7;
-	  bshift = highbit(theVisual->blue_mask)-7;
+	  rshift = highbit(theVisual->red_mask) - 7;
+	  gshift = highbit(theVisual->green_mask) - 7;
+	  bshift = highbit(theVisual->blue_mask) - 7;
 
 	  datap = data;
 	  bitp = bit_data;
-	  for (h=0; h < height; h++) {
+	  for (h = 0; h < height; h++) {
 	    endofline = bitp + newimage->bytes_per_line;
 	    for (w = width; w > 0; w--) {
 	      temp = (int) *datap++;
-	      c = (((cmap[temp].red>>8)&0xff)<<rshift)|
-		(((cmap[temp].green>>8)&0xff)<<gshift)|
-		(((cmap[temp].blue>>8)&0xff)<<bshift);
+	      c = (((cmap[temp].red >> 8) & 0xff) << rshift) |
+		  (((cmap[temp].green >> 8) & 0xff) << gshift) |
+		  (((cmap[temp].blue >> 8) & 0xff) << bshift);
 
 	      if (newimage->byte_order == MSBFirst) {
-		*bitp++ = (unsigned char)((c>>24)&0xff);
-		*bitp++ = (unsigned char)((c>>16)&0xff);
-		*bitp++ = (unsigned char)((c>>8)&0xff);
-		*bitp++ = (unsigned char)(c&0xff);
+		*bitp++ = (unsigned char)((c >> 24) & 0xff);
+		*bitp++ = (unsigned char)((c >> 16) & 0xff);
+		*bitp++ = (unsigned char)((c >> 8) & 0xff);
+		*bitp++ = (unsigned char)(c & 0xff);
 	      } else {
-		*bitp++ = (unsigned char)(c&0xff);
-		*bitp++ = (unsigned char)((c>>8)&0xff);
-		*bitp++ = (unsigned char)((c>>16)&0xff);
-		*bitp++ = (unsigned char)((c>>24)&0xff);
+		*bitp++ = (unsigned char)(c & 0xff);
+		*bitp++ = (unsigned char)((c >> 8) & 0xff);
+		*bitp++ = (unsigned char)((c >> 16) & 0xff);
+		*bitp++ = (unsigned char)((c >> 24) & 0xff);
 	      }
 	    }
 	    bitp = endofline;
@@ -527,10 +534,9 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 
 	default:
 #ifndef DISABLE_TRACE
-	  if (htmlwTrace || reportBugs) {
+	  if (reportBugs)
 	    fprintf(stderr, "Don't know how to format pixmap of depth %d\n",
 		    bpp);
-	  }
 #endif
 	  XDestroyImage(newimage);
 	  return(NULL);
@@ -539,40 +545,26 @@ static XImage *MakeImage(dsp, data, depth, img_info, cmap, clip)
 	return(newimage);
 }
 
-static ImageInfo *DelayedImageData( HTMLWidget hw)
+static ImageInfo *DelayedImageData(HTMLWidget hw)
 {
 	static Pixel fg_pixel, bg_pixel;
 
         if (delayed_image == NULL) {
-		delayed_image = (ImageInfo *)malloc(sizeof(ImageInfo));
-		delayed_image->usemap = NULL;
-		delayed_image->map = NULL;
-		delayed_image->ismap = 0;
-		delayed_image->fptr = NULL;
+		delayed_image = (ImageInfo *)calloc(1, sizeof(ImageInfo));
                                  
 		delayed_image->internal = 2;
 		delayed_image->delayed = 1;
-		delayed_image->fetched = 0;
-		delayed_image->cached = 0;
 		delayed_image->width = DelayedImage_width;
 		delayed_image->height = DelayedImage_height;
 		delayed_image->num_colors = 2;
-		delayed_image->bg_index = 0;
-		delayed_image->image_data = (unsigned char*)DelayedImage_bits;
-		delayed_image->clip_data = NULL;
-		delayed_image->transparent = 0;
+		delayed_image->image_data = (unsigned char *)DelayedImage_bits;
 		delayed_image->image = None;
 		delayed_image->clip = None;
-		delayed_image->alt_text = NULL;
-		delayed_image->text = NULL;
-		delayed_image->src = NULL;
-		delayed_image->is_bg_image = 0;
-		delayed_image->aligned = 0;
 		fg_pixel = hw->manager.foreground;
 		bg_pixel = hw->core.background_pixel;
                 delayed_image->image = XCreatePixmapFromBitmapData(
 			XtDisplay(hw),
-                        XtWindow(hw), (char*) DelayedImage_bits,
+                        XtWindow(hw), (char *) DelayedImage_bits,
                         DelayedImage_width, DelayedImage_height,
                         fg_pixel,
                         bg_pixel,
@@ -584,7 +576,7 @@ static ImageInfo *DelayedImageData( HTMLWidget hw)
 		bg_pixel = hw->core.background_pixel;
                 delayed_image->image = XCreatePixmapFromBitmapData(
 			XtDisplay(hw),
-                        XtWindow(hw), (char*) DelayedImage_bits,
+                        XtWindow(hw), (char *) DelayedImage_bits,
                         DelayedImage_width, DelayedImage_height,
                         fg_pixel,
                         bg_pixel,
@@ -594,35 +586,21 @@ static ImageInfo *DelayedImageData( HTMLWidget hw)
 	return(delayed_image);
 }
 
-static ImageInfo *AnchoredImageData( HTMLWidget hw)
+static ImageInfo *AnchoredImageData(HTMLWidget hw)
 {
 	static Pixel fg_pixel, bg_pixel;
 
         if (anchored_image == NULL) {
-		anchored_image = (ImageInfo *)malloc(sizeof(ImageInfo));
-		anchored_image->usemap = NULL;
-		anchored_image->map = NULL;
-		anchored_image->ismap = 0;
-		anchored_image->fptr = NULL;
+		anchored_image = (ImageInfo *)calloc(1, sizeof(ImageInfo));
 
 		anchored_image->internal = 2;
 		anchored_image->delayed = 1;
-		anchored_image->fetched = 0;
-		anchored_image->cached = 0;
 		anchored_image->width = AnchoredImage_width;
 		anchored_image->height = AnchoredImage_height;
 		anchored_image->num_colors = 2;
-		anchored_image->bg_index = 0;
 		anchored_image->image_data = (unsigned char*)AnchoredImage_bits;
-		anchored_image->clip_data = NULL;
-		anchored_image->transparent = 0;
 		anchored_image->image = None;
 		anchored_image->clip = None;
-		anchored_image->alt_text = NULL;
-		anchored_image->text = NULL;
-		anchored_image->src = NULL;
-		anchored_image->is_bg_image = 0;
-		anchored_image->aligned = 0;
 		fg_pixel = hw->manager.foreground;
 		bg_pixel = hw->core.background_pixel;
                 anchored_image->image = XCreatePixmapFromBitmapData(
@@ -647,39 +625,25 @@ static ImageInfo *AnchoredImageData( HTMLWidget hw)
 	return(anchored_image);
 }
 
-static ImageInfo *NoImageData( HTMLWidget hw)
+static ImageInfo *NoImageData(HTMLWidget hw)
 {
 	static Pixel fg_pixel, bg_pixel;
 
 	if (no_image == NULL) {
-		no_image = (ImageInfo *)malloc(sizeof(ImageInfo));
-		no_image->usemap = NULL;
-		no_image->map = NULL;
-		no_image->ismap = 0;
-		no_image->fptr = NULL;
+		no_image = (ImageInfo *)calloc(1, sizeof(ImageInfo));
 
 		no_image->internal = 2;
 		no_image->delayed = 0;
-		no_image->fetched = 0;
-		no_image->cached = 0;
 		no_image->width = NoImage_width;
 		no_image->height = NoImage_height;
 		no_image->num_colors = 2;
-		no_image->bg_index = 0;
-		no_image->image_data = (unsigned char*)NoImage_bits;
-		no_image->clip_data = NULL;
-		no_image->transparent = 0;
+		no_image->image_data = (unsigned char *)NoImage_bits;
 		no_image->image = None;
 		no_image->clip = None;
-		no_image->alt_text = NULL;
-		no_image->text = NULL;
-		no_image->src = NULL;
-		no_image->is_bg_image = 0;
-		no_image->aligned = 0;
 		fg_pixel = hw->manager.foreground;
 		bg_pixel = hw->core.background_pixel;
 		no_image->image = XCreatePixmapFromBitmapData(XtDisplay(hw),
-			XtWindow(hw), (char*) NoImage_bits,
+			XtWindow(hw), (char *) NoImage_bits,
 			NoImage_width, NoImage_height,
                         fg_pixel,
                         bg_pixel,
@@ -690,7 +654,7 @@ static ImageInfo *NoImageData( HTMLWidget hw)
 		fg_pixel = hw->manager.foreground;
 		bg_pixel = hw->core.background_pixel;
                 no_image->image = XCreatePixmapFromBitmapData(XtDisplay(hw),
-                        XtWindow(hw), (char*) NoImage_bits,
+                        XtWindow(hw), (char *) NoImage_bits,
                         NoImage_width, NoImage_height,
                         fg_pixel,
                         bg_pixel,
@@ -700,53 +664,210 @@ static ImageInfo *NoImageData( HTMLWidget hw)
 	return(no_image);
 }
 
+
+/* Apply alpha channel to image data */ 
+static unsigned char *ProcessImageAlpha(HTMLWidget hw, ImageInfo *pic,
+					ElemInfo *eptr)
+{
+	XColor *cmap = pic->colrs;
+	XColor bg;
+	unsigned char *alpha;
+	unsigned char *p1, *p2;
+	unsigned char cnum = pic->num_colors;
+	unsigned char A;
+	int i, j;
+	int R, G, B, RB, GB, BB;
+	int h = pic->height;
+	int w = pic->width;
+
+	if (!pic->alpha)
+		return(NULL);
+
+	alpha = pic->alpha;
+	p1 = pic->image_data;
+	p2 = (unsigned char *)malloc(h * w * 3);
+	if (!p2) {
+		application_user_feedback(
+					 "Image too large:  Not enough memory");
+		return(NULL);
+	}
+	pic->rgb = p2;
+
+	if (hw->html.bgmap_SAVE && eptr) {
+		unsigned char *p3;
+		unsigned char *bg_line_end;
+		unsigned char *bg_data = hw->html.bg_pic_data->image_data;
+		XColor *bg_cmap = hw->html.bg_pic_data->colrs;
+		int x, y, extra;
+		int w_start, h_start, bg_cur_h;
+		int w_bg = hw->html.bg_pic_data->width;
+		int h_bg = hw->html.bg_pic_data->height;
+
+		/* Fixup transparent background image */
+		if (hw->html.bg_pic_data->transparent) {
+			bg.pixel = hw->core.background_pixel;
+			XQueryColor(XtDisplay(hw), hw->core.colormap, &bg);
+			bg_cmap[hw->html.bg_pic_data->bg_index].red = bg.red;
+			bg_cmap[hw->html.bg_pic_data->bg_index].green =bg.green;
+			bg_cmap[hw->html.bg_pic_data->bg_index].blue = bg.blue;
+			bg_cmap[hw->html.bg_pic_data->bg_index].pixel =bg.pixel;
+		} else if (hw->html.bg_pic_data->alpha) {
+			bg_data = hw->html.bg_pic_data->alpha_image_data;
+		}
+		if ((eptr->anchor_tag_ptr->anc_href || pic->has_border) &&
+		    (!pic->internal || (pic->internal == 2))) {
+			extra = eptr->bwidth;
+		} else {
+			extra = 0;
+		}
+		x = eptr->x - hw->html.scroll_x + extra;
+		y = eptr->y - hw->html.scroll_y + extra;
+		w_start = (x + hw->html.scroll_x) % w_bg;
+		h_start = (y + hw->html.scroll_y) % h_bg;
+
+		bg_cur_h = h_start;
+		for (i = 0; i < h; i++) {
+			p3 = bg_data + (bg_cur_h * w_bg) + w_start;
+			bg_line_end = p3 + (w_bg - w_start);
+
+			for (j = 0; j < w; j++) {
+				/* Get unsigned shorts in signed ints */ 
+				R = cmap[*p1].red;
+				G = cmap[*p1].green;
+				B = cmap[*p1++].blue;
+				RB = bg_cmap[*p3].red;
+				GB = bg_cmap[*p3].green;
+				BB = bg_cmap[*p3++].blue;
+				A = *alpha++;
+
+				if (A == 0) {
+				    /* Fully transparent, return background */
+				    *p2++ = RB >> 8;
+				    *p2++ = GB >> 8;
+				    *p2++ = BB >> 8;
+				} else if (A == 255) {
+				    /* Fully opaque, return image pixel */ 
+				    *p2++ = R >> 8;
+				    *p2++ = G >> 8;
+				    *p2++ = B >> 8;
+				} else {
+				    *p2++ = ((((R - RB) * A) >> 8) + RB) >> 8;
+				    *p2++ = ((((G - GB) * A) >> 8) + GB) >> 8;
+				    *p2++ = ((((B - BB) * A) >> 8) + BB) >> 8;
+				}
+
+				if (p3 == bg_line_end) {
+				    p3 = bg_data + (bg_cur_h * w_bg);
+				    bg_line_end = p3 + w_bg;
+				}
+			}
+			if (++bg_cur_h == h_bg)
+				bg_cur_h = 0;
+		}
+		/* Keep in case the element moves due to alignment */
+		pic->saved_x = eptr->x;
+		pic->saved_y = eptr->y;
+		if (pic->ori_colrs)
+			free(pic->ori_colrs);
+		pic->ori_colrs = malloc(256 * sizeof(XColor));
+		for (i = 0; i < 256; i++)
+			pic->ori_colrs[i] = pic->colrs[i];
+	} else {
+		/* Get background color */
+		bg.pixel = hw->core.background_pixel;
+		XQueryColor(XtDisplay(hw), hw->core.colormap, &bg);
+		RB = bg.red;
+		GB = bg.green;
+		BB = bg.blue;
+
+		for (i = 0; i < h; i++) {
+			for (j = 0; j < w; j++) {
+				/* Get unsigned shorts in signed ints */ 
+				R = cmap[*p1].red;
+				G = cmap[*p1].green;
+				B = cmap[*p1++].blue;
+				A = *alpha++;
+
+				if (A == 0) {
+				    /* Fully transparent, return background */
+				    *p2++ = RB >> 8;
+				    *p2++ = GB >> 8;
+				    *p2++ = BB >> 8;
+				} else if (A == 255) {
+				    /* Fully opaque, return image pixel */ 
+				    *p2++ = R >> 8;
+				    *p2++ = G >> 8;
+				    *p2++ = B >> 8;
+				} else {
+				    *p2++ = ((((R - RB) * A) >> 8) + RB) >> 8;
+				    *p2++ = ((((G - GB) * A) >> 8) + GB) >> 8;
+				    *p2++ = ((((B - BB) * A) >> 8) + BB) >> 8;
+				}
+			}
+		}
+	}
+
+	/* Go reduce it to 8 bit */
+	XtCallCallbackList((Widget)hw, hw->html.quantize_callback,
+			   (XtPointer)pic);
+#ifndef DISABLE_TRACE
+	if (htmlwTrace)
+	       fprintf(stderr, "Quantized alpha image on background\n");
+#endif
+	return(pic->rgb);
+}
+
 /* Currently never called with clip non-zero */
-Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
+Pixmap InfoToImage(HTMLWidget hw, ImageInfo *img_info, int clip, ElemInfo *eptr)
 {
 	int i, size;
 	int delta, not_right_col, not_last_row;
-	Pixmap Img;
-	XImage *tmpimage;
+	Pixmap Img = (Pixmap)NULL;
+	XImage *tmpimage = NULL;
 	XColor tmpcolr;
 	XColor *cmap = img_info->colrs;
 	int *Mapping;
 	unsigned char *tmpdata;
+	unsigned char *alpha_data = NULL;
 	unsigned char *ptr;
 	unsigned char *ptr2;
-	Boolean need_to_dither;
+	Boolean need_to_dither_BW;
 	unsigned long black_pixel;
 	unsigned long white_pixel;
 	int depth;
 	int need_dither_color = 0;
+	Display *dsp = XtDisplay(hw);
+	static int init = 0;
+	static int MaxPixmapWidth;
+	static int MaxPixmapHeight;
 
 	depth = DefaultDepthOfScreen(XtScreen(hw));
 
-	if (clip) {
-		need_to_dither = False;
+	if (!clip && img_info->alpha)
+		alpha_data = ProcessImageAlpha(hw, img_info, eptr);
+
+	if (!clip && (depth == 1)) {
+		need_to_dither_BW = True;
+		black_pixel = BlackPixel(dsp, DefaultScreen(dsp));
+		white_pixel = WhitePixel(dsp, DefaultScreen(dsp));
 	} else {
-		if (depth == 1) {
-			need_to_dither = True;
-			black_pixel = BlackPixel(XtDisplay(hw),
-					DefaultScreen(XtDisplay(hw)));
-			white_pixel = WhitePixel(XtDisplay(hw),
-					DefaultScreen(XtDisplay(hw)));
-		} else {
-			need_to_dither = False;
-		}
+		need_to_dither_BW = False;
 	}
 	Mapping = (int *)malloc(img_info->num_colors * sizeof(int));
+
 	if (!clip) {
-		for (i=0; i < img_info->num_colors; i++) {
+		for (i = 0; i < img_info->num_colors; i++) {
 			tmpcolr.red = cmap[i].red;
 			tmpcolr.green = cmap[i].green;
 			tmpcolr.blue = cmap[i].blue;
 			tmpcolr.flags = DoRed|DoGreen|DoBlue;
 			if ((Vclass == TrueColor) || (Vclass == DirectColor)) {
 				Mapping[i] = i;
-			} else if (need_to_dither) {
-       				Mapping[i] = ((tmpcolr.red>>5)*11 +
-					      (tmpcolr.green>>5)*16 +
-					      (tmpcolr.blue>>5)*5) / (65504/64);
+			} else if (need_to_dither_BW) {
+       				Mapping[i] = ((tmpcolr.red >> 5) * 11 +
+					      (tmpcolr.green >> 5) * 16 +
+					      (tmpcolr.blue >>5 ) * 5) /
+					      (65504 / 64);
 			} else {
 				if (!FindColor(hw, hw->core.colormap, &tmpcolr))
 					/* Didn't get actual color */
@@ -760,7 +881,7 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 	 * of 2 dither patterns, we will always drop them to be
 	 * black on white.
 	 */
-	if (need_to_dither && (img_info->num_colors == 2)) {
+	if (need_to_dither_BW && (img_info->num_colors == 2)) {
 		if (Mapping[0] < Mapping[1]) {
 			Mapping[0] = 0;
 			Mapping[1] = 64;
@@ -769,39 +890,49 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 			Mapping[1] = 0;
 		}
 	}
+
 	size = img_info->width * img_info->height;
 	tmpdata = (unsigned char *)malloc(size);
-	CHECK_OUT_OF_MEM(tmpdata);
+	if (!tmpdata) {
+		LimDim = 2;
+		application_user_feedback(
+					 "Image too large:  Not enough memory");
+		if (alpha_data)
+			free(alpha_data);
+		goto abort;
+	}
+
 	if (clip) {
 		ptr = img_info->clip_data;
 	} else {
-		ptr = img_info->image_data;
+		if (img_info->alpha) {
+			ptr = alpha_data;
+		} else {
+			ptr = img_info->image_data;
+		}
 	}
 	ptr2 = tmpdata;
-	if (need_to_dither) {
+	if (need_to_dither_BW) {
 		int cx, cy;
 
 		if (clip) {
-			for (ptr2 = tmpdata, ptr = img_info->clip_data;
-			     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
+			for (; ptr2 < (tmpdata + (size - 1)); ptr2++, ptr++)
 				*ptr2 = Mapping[(int)*ptr];
-			}
 		} else {
-			for (ptr2 = tmpdata, ptr = img_info->image_data;
-			     ptr2 < tmpdata+(size-1); ptr2++, ptr++) {
+			for (; ptr2 < (tmpdata + (size - 1)); ptr2++, ptr++)
 				*ptr2 = Mapping[(int)*ptr];
-			}
 		}
 		ptr2 = tmpdata;
-		for (cy=0; cy < img_info->height; cy++) {
-			for (cx=0; cx < img_info->width; cx++) {
+		for (cy = 0; cy < img_info->height; cy++) {
+			for (cx = 0; cx < img_info->width; cx++) {
 				/*
 				 * Assume high numbers are really negative
 				 */
-				if (*ptr2 > 128)
+				if (*ptr2 > 128) {
 					*ptr2 = 0;
-				if (*ptr2 > 64)
+				} else if (*ptr2 > 64) {
 					*ptr2 = 64;
+				}
 				/*
 				 * Traditional Floyd-Steinberg
 				 */
@@ -812,34 +943,29 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 					delta = *ptr2 - 64;
 					*ptr2 = white_pixel;
 				}
-				if (not_right_col = (cx < (img_info->width-1))){
-					*(ptr2+1) += delta*7 >> 4;
-				}
-				if (not_last_row = (cy < (img_info->height-1))){
+				if (not_right_col = (cx < (img_info->width -1)))
+					*(ptr2 + 1) += delta * 7 >> 4;
+				if (not_last_row = (cy < (img_info->height -1)))
 					(*(ptr2 + img_info->width)) +=
-						delta*5 >> 4;
-				}
-				if (not_right_col && not_last_row) {
-					(*(ptr2 + img_info->width+1)) +=
+						delta * 5 >> 4;
+				if (not_right_col && not_last_row)
+					(*(ptr2 + img_info->width + 1)) +=
 						delta >> 4;
-				}
-				if (cx && not_last_row) {
-					(*(ptr2 + img_info->width-1)) +=
-						delta*3 >> 4;
-				}
+				if (cx && not_last_row)
+					(*(ptr2 + img_info->width - 1)) +=
+						delta * 3 >> 4;
 				ptr2++;
 			}
 		}
 	} else if (need_dither_color && BSCnum) {
 #ifndef DISABLE_TRACE
-		if (htmlwTrace) {
+		if (htmlwTrace)
 			fprintf(stderr, "Dithering color or grayscale image\n");
-		}
 #endif
-		FS_Dither(img_info, tmpdata, BSColors, BSCnum);
+		FS_Dither(img_info, tmpdata, BSColors, BSCnum, ptr);
 		cmap = BSColors;
 	} else {
-		for (i=0; i < size; i++) {
+		for (i = 0; i < size; i++) {
 			if (clip) { 
 				*ptr2++ = *ptr;
 			} else {
@@ -848,9 +974,15 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 			ptr++;
 		}
 	}
-	tmpimage = MakeImage(XtDisplay(hw), tmpdata, depth,
-		img_info, cmap, clip);
+	tmpimage = MakeImage(dsp, tmpdata, depth, img_info, cmap, clip);
         free(tmpdata);
+	if (alpha_data) {
+		if (img_info->is_bg_image) {
+			img_info->alpha_image_data = alpha_data;
+		} else {
+			free(alpha_data);
+		}
+	}
 
 	/* Check if over dimension limits */
 	if ((img_info->width > LimDimX) || (img_info->height > LimDimY)) {
@@ -860,32 +992,44 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 	}
 	/* Instead of calling the get_pref_int() function all the time,
 	   store values in static variables */
-	if (MaxPixmapHeight < 0) {
+	if (!init) {
 		MaxPixmapHeight = get_pref_int(eMAXPIXMAPHEIGHT);
 		MaxPixmapWidth  = get_pref_int(eMAXPIXMAPWIDTH);
+		init = 1;
 	}
 	if ((MaxPixmapWidth && (img_info->width > MaxPixmapWidth)) ||
 	    (MaxPixmapHeight && (img_info->height > MaxPixmapHeight))) {
 		Img = (Pixmap)NULL;
+		LimDim = 2;	/* So error message prints */
+		application_user_feedback(
+			       "Image too large:  Exceeds preference settings");
 	} else {
-		Img = XCreatePixmap(XtDisplay(hw), XtWindow(hw->html.view),
-			img_info->width, img_info->height, depth);
-
-		if (LimDim == -1) {
-			/* Wait for completion */
-			XSync(XtDisplay(hw), False);
-		}
+		Img = XCreatePixmap(dsp, XtWindow(hw->html.view),
+				    img_info->width, img_info->height, depth);
+		if (LimDim == -1)
+			/* Wait for completion, so LimDim can get set by trap */
+			XSync(dsp, False);
+		if (LimDim == 1)
+			application_user_feedback(
+				 "Image too large:  Pixmap allocation failure");
 	}
+ abort:
+	if (LimDim > 0)
+		fprintf(stderr, "Image too large (%d x %d)\n",
+			img_info->width, img_info->height);
 	if (!tmpimage || (Img == (Pixmap)NULL) || (LimDim == 1)) {
 		if (tmpimage)
 			XDestroyImage(tmpimage);
 		if (Img != (Pixmap)NULL)
-			XFreePixmap(XtDisplay(hw), Img);
+			/* Causes error if LimDim = 1 which we trap */
+			XFreePixmap(dsp, Img);
 		if (img_info->fetched && !img_info->cached) {
 			free(img_info->image_data);
 			if (img_info->clip_data)
 				free(img_info->clip_data);
 		}
+		if (img_info->fetched && img_info->ori_colrs)
+			free(img_info->ori_colrs);
 		img_info->width = NoImage_width;
 		img_info->height = NoImage_height;
 		img_info->internal = 2;
@@ -893,8 +1037,8 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 		img_info->transparent = 0;
 		Img = (NoImageData(hw))->image;
 	} else {
-		XPutImage(XtDisplay(hw), Img, hw->html.drawGC, tmpimage, 0, 0,
-			0, 0, img_info->width, img_info->height);
+		XPutImage(dsp, Img, hw->html.drawGC, tmpimage, 0, 0, 0, 0,
+			  img_info->width, img_info->height);
 		XDestroyImage(tmpimage);
 	}
         free((char *)Mapping);
@@ -903,15 +1047,22 @@ Pixmap InfoToImage( HTMLWidget hw, ImageInfo *img_info, int clip)
 
 
 void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
-	int force_load)
+		  int force_load)
 {
 	ImageInfo icbs;
-	ImageInfo *dlim;
 	ImageInfo *noim;
 	XColor colrs[256];
 	int i;
 	int width, height;
+	static int init = 0;
+	static int MaxPixmapWidth;
+	static int MaxPixmapHeight;
 
+	if (!init) {
+		MaxPixmapHeight = get_pref_int(eMAXPIXMAPHEIGHT);
+		MaxPixmapWidth  = get_pref_int(eMAXPIXMAPWIDTH);
+		init = 1;
+	}
 	if (!strncmp(picd->src, "internal-", 9)) {   /* Internal images */
 		Pixel fg_pixel, bg_pixel;
 
@@ -926,17 +1077,8 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 			picd->req_height = -1;
 			picd->image_data = NULL;
 			picd->internal = 1;
-			picd->fetched = 0;
 			picd->delayed = 0;
-			picd->cached = 0;
 			picd->num_colors = 8;
-			picd->ismap = 0;
-			picd->usemap = NULL;
-			picd->alt_text = NULL;
-			picd->text = NULL;
-			picd->transparent = 0;
-			picd->is_bg_image = 0;
-			picd->aligned = 0;
 		} else if (!strcmp(picd->src, "internal-gopher-image")) {
 			IMGINFO_FROM_BITMAP(gopher_image)
 		} else if (!strcmp(picd->src, "internal-gopher-movie")) {
@@ -964,12 +1106,14 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 	icbs = *picd;
 	/* Not internal, maybe delayed or in cache? */
 	if ((hw->html.delay_image_loads || (currently_delaying_images == 1) ||
-			icbs.urldelayed) && !force_load) {
+	     icbs.urldelayed) && !force_load) {
 		/* Only looks in cache */
 		XtCallCallbackList((Widget)hw, hw->html.image_callback,
-			(XtPointer) &icbs);
+				   (XtPointer) &icbs);
 		/* The image is not cached or blanked out. */
 		if (!icbs.fetched && (icbs.internal != 3)) {
+			ImageInfo *dlim;
+
 			/* Update picd from the correct delayed image */
 			if (!pcc->anchor_tag_ptr->anc_href) {
 				dlim = DelayedImageData(hw);
@@ -993,7 +1137,7 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 		}
 	} else {	/* Load image from the cache or net */
 		XtCallCallbackList((Widget)hw, hw->html.image_callback,
-                                (XtPointer) &icbs);
+                                   (XtPointer) &icbs);
 		/* Can't find image.  Put NoImage in picd unless blanked out */
 		if (!icbs.fetched && (icbs.internal != 3)) {
 			noim = NoImageData(hw);
@@ -1015,38 +1159,38 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 	}
 	/* A sanity check */
 	if (!(icbs.width * icbs.height) || !icbs.image_data) {
-			noim = NoImageData(hw);
-			picd->height = noim->height;
-			picd->width = noim->width;
-			picd->internal = 2;
-			picd->delayed = 0;
-			picd->fetched = 0;
-			picd->image_data = noim->image_data;
-			picd->image = noim->image; 
-                	return;
+		noim = NoImageData(hw);
+		picd->height = noim->height;
+		picd->width = noim->width;
+		picd->internal = 2;
+		picd->delayed = 0;
+		picd->fetched = 0;
+		picd->image_data = noim->image_data;
+		picd->image = noim->image; 
+                return;
 	}
 
-/* Here we have an image from the cache or the net */
-/* data is in icbs */
+        /* Here we have an image from the cache or the net */
+        /* data is in icbs */
 
-/* Fields set to const. are untouched  */
-/*	src alt_text align req_height req_width border hspace vspace	*/
-/*	usemap map ismap fptr						*/
-/*	internal = 0							*/
-/*	delayed = 0 							*/
-/*	cw_only	 							*/
-
-/* After the callback here is the modified field 			*/
-/*   	height = original height of image				*/
-/*	width = original width of image					*/
-/*	fetched = 1	if we are here					*/
-/*	cached = 1							*/
-/*	colrs (no more than 256 colors)					*/
-/*	bg_index							*/
-/*	image_data							*/
-/*	num_colors							*/
-/*	clip_data							*/
-/*	transparent							*/
+        /* Fields set to const. are untouched 				*/
+        /*   src alt_text align req_height req_width border hspace	*/
+        /*   vspace usemap map ismap fptr				*/
+        /*   internal = 0						*/
+        /*   delayed = 0 						*/
+        /*   cw_only	 						*/
+        /*								*/
+        /* After the callback here is the modified field 		*/
+        /*   height = original height of image				*/
+        /*   width = original width of image				*/
+        /*   fetched = 1	if we are here				*/
+        /*   cached = 1							*/
+        /*   colrs (no more than 256 colors)				*/
+        /*   bg_index							*/
+        /*   image_data							*/
+        /*   num_colors							*/
+        /*   clip_data							*/
+        /*   transparent						*/
 
 	/* Rescale image here */
 	if (icbs.anim_info) {
@@ -1060,7 +1204,7 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 	    (icbs.req_width != width)) {
 		int change = (icbs.req_width * 100) / width;
 
-		icbs.req_height = (icbs.height * change) / 100;
+		icbs.req_height = (height * change) / 100;
 	}
 	if (icbs.req_width < 1)
 		icbs.req_width = width;
@@ -1071,6 +1215,19 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 		icbs.req_width =
 			(icbs.percent_width * pcc->cur_line_width) / 100;
 	}
+	/* Rescale if too large for display card */
+	if (MaxPixmapWidth && (icbs.req_width > MaxPixmapWidth)) {
+		int change = (MaxPixmapWidth * 100) / icbs.req_width;
+
+		icbs.req_width = MaxPixmapWidth;
+		icbs.req_height = (icbs.req_height * change) / 100;
+	}
+	if (MaxPixmapHeight && (icbs.req_height > MaxPixmapHeight)) {
+		int change = (MaxPixmapHeight * 100) / icbs.req_height;
+
+		icbs.req_height = MaxPixmapHeight;
+		icbs.req_width = (icbs.req_width * change) / 100;
+	}
 	if (!icbs.cw_only &&
 	    ((icbs.req_width != width ) ||
 	     (icbs.req_height != height))) { /* Rescale */
@@ -1079,11 +1236,11 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 		int new_width = (icbs.width * wchange) / 100;
 		int new_height = (icbs.height * hchange) / 100;
 
-		RescalePic(hw, &icbs, (new_width ? new_width : 1),
-			(new_height ? new_height : 1));
-		for (i=0; i < icbs.num_colors; i++)
+		RescalePic(&icbs, (new_width ? new_width : 1),
+			   (new_height ? new_height : 1));
+		for (i = 0; i < icbs.num_colors; i++)
 			colrs[i] = icbs.colrs[i];
-		ProcessImageData(hw, &icbs, colrs);
+		ProcessImageData((Widget)hw, &icbs, colrs);
 		if (icbs.x)
 			icbs.x = (icbs.x * wchange) / 100;
 		if (icbs.y)
@@ -1096,12 +1253,11 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 			while (tmp) {
 				new_width = (tmp->width * wchange) / 100;
 				new_height = (tmp->height * hchange) / 100;
-				RescalePic(hw, tmp,
-					(new_width ? new_width : 1),
-					(new_height ? new_height : 1));
-				for (i=0; i < tmp->num_colors; i++)
+				RescalePic(tmp, (new_width ? new_width : 1),
+					   (new_height ? new_height : 1));
+				for (i = 0; i < tmp->num_colors; i++)
 					colrs[i] = tmp->colrs[i];
-				ProcessImageData(hw, tmp, colrs);
+				ProcessImageData((Widget)hw, tmp, colrs);
 				/* Adjust image offset, if any */
 				if (tmp->x)
 					tmp->x = (tmp->x * wchange) / 100;
@@ -1120,9 +1276,8 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 	*picd = icbs;
 
 	/* Fixup animation struct */
-	if (picd->anim_info) {
+	if (picd->anim_info)
 		picd->anim_info->start = picd;
-	}
 	return;
 }
 
@@ -1136,14 +1291,13 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	int height = 0;
 	int baseline;
 	ImageInfo *picd;
-	int extra = 0;
+	int extra;
 	ImageInfo lpicd;
 	ImageInfo *saved_picd = mptr->s_picd;
 	int orig_cur_baseline, orig_cur_line_height, orig_x;
 	int dir, ascent, descent;
 	XCharStruct all;
 	XFontStruct *alt_font;
-	char *tptr;
 	int absmiddle = 0;
 	int absbottom = 0;
 	int texttop = 0;
@@ -1158,9 +1312,8 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	      (hw->html.scroll_y + hw->html.view_height))))) {
 		eptr = hw->html.last_formatted_elem;
 		if (pcc->last_progressive_ele) {
-			if (pcc->last_progressive_ele->next) {
+			if (pcc->last_progressive_ele->next)
 				eptr = pcc->last_progressive_ele->next;
-			}
 			ProgressiveDisplay(hw, eptr, pcc);
 		} else {
 			ProgressiveDisplay(hw, hw->html.formatted_elements,
@@ -1225,6 +1378,8 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	lpicd.anim_image = None;
 	lpicd.has_anim_image = 0;
 	lpicd.disposal = 0;
+	lpicd.alpha = NULL;
+	lpicd.ori_colrs = NULL;
 
         if (valignPtr) {
 	        if (caseless_equal(valignPtr, "TOP")) {
@@ -1327,7 +1482,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			picd->height = lpicd.req_height;
 		if (lpicd.percent_width)
 			picd->width = (lpicd.percent_width *
-				pcc->cur_line_width) / 100;
+				       pcc->cur_line_width) / 100;
 		if (!picd->width || !picd->height)
 			HtmlGetImage(hw, picd, pcc, False);
 	} else {
@@ -1335,14 +1490,14 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		HtmlGetImage(hw, picd, pcc, False); /* Don't force load */
 	}
 
-/* Now we have an image.  It is:
- *	- an internal-gopher	(internal=1, fetched=0, delayed=0)
- *	- a delayed image	(internal=2, fetched=0, delayed=1)
- *	- a no (bad) image	(internal=2, fetched=0, delayed=0)
- *	- a blank image		(internal=3, fetched=0, delayed=0)
- *	- the requested image	(internal=0, fetched=1, delayed=0)
- *	- didn't do it		(internal=0, fetched=0, delayed=X)
- */
+	/* Now we have an image.  It is:
+	 *	- an internal-gopher	(internal=1, fetched=0, delayed=0)
+	 *	- a delayed image	(internal=2, fetched=0, delayed=1)
+	 *	- a no (bad) image	(internal=2, fetched=0, delayed=0)
+	 *	- a blank image		(internal=3, fetched=0, delayed=0)
+	 *	- the requested image	(internal=0, fetched=1, delayed=0)
+	 *	- didn't do it		(internal=0, fetched=0, delayed=X)
+	 */
 
 	/* Save the work */
 	if (!pcc->cw_only)
@@ -1352,13 +1507,13 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	if (pcc->anchor_tag_ptr->anc_href) {
 		extra = 2 * picd->border;
 	} else if (picd->ismap && pcc->cur_form && picd->fetched) {
-	/* SUPER SPECIAL CASE!
- 	 * If you have an ISMAP image inside a form, and that form doesn't
-	 * already have an HREF by being inside an anchor, (Being a
-	 * DelayedHRef is considered no href) clicking in that image will
-	 * submit the form, adding the x,y coordinates of the click as part
-	 * of the list of name/value pairs.
-	 */
+	    /* SUPER SPECIAL CASE!
+ 	     * If you have an ISMAP image inside a form, and that form doesn't
+	     * already have an HREF by being inside an anchor, (Being a
+	     * DelayedHRef is considered no href) clicking in that image will
+	     * submit the form, adding the x,y coordinates of the click as part
+	     * of the list of name/value pairs.
+	     */
 		picd->fptr = pcc->cur_form;
 	}
 
@@ -1383,7 +1538,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		pcc->cur_font_type = FONT;
 		SetFontSize(hw, pcc, 0);
 		XTextExtents(pcc->cur_font, " ", strlen(" "), &dir, &ascent,
-			&descent, &all);
+			     &descent, &all);
 		if (!picd->alt_text) {
 			char *sptr;
 			char *tptr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
@@ -1396,7 +1551,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			}
 		}
 		twidth = XTextWidth(pcc->cur_font, picd->alt_text,
-			strlen(picd->alt_text)) + all.width + 2;
+				    strlen(picd->alt_text)) + all.width + 2;
 		/* Don't do text for bad images in tables if not enough room */
 		if (pcc->in_table && !picd->delayed && !pcc->cw_only &&
 		    ((width + twidth) > pcc->cur_line_width)) {
@@ -1422,9 +1577,9 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	width += extra;
 
 	if ((picd->align == HALIGN_LEFT) &&
-	    (height < (pcc->cur_font->ascent + pcc->cur_font->descent))) {
+	    (height < (pcc->cur_font->ascent + pcc->cur_font->descent)))
 		height = pcc->cur_font->ascent + pcc->cur_font->descent;
-	}
+
 	baseline = height + picd->vspace;
 
 	/* How is it aligned? */
@@ -1456,16 +1611,14 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	 * that space now.
 	 */
 	XTextExtents(pcc->cur_font, " ", strlen(" "), &dir, &ascent,
-		&descent, &all);
+		     &descent, &all);
 	extra = all.width;
-	if (!pcc->preformat && pcc->have_space_after && !pcc->is_bol) {
+	if (!pcc->preformat && pcc->have_space_after && !pcc->is_bol)
 		pcc->x += extra;
-	}
 
 	/* Left aligned images go at beginning of line */
-	if ((picd->align == HALIGN_LEFT) && !pcc->is_bol) {
+	if ((picd->align == HALIGN_LEFT) && !pcc->is_bol)
 		ConditionalLineFeed(hw, 1, pcc);
-	}
 
 	width += picd->hspace;
 
@@ -1504,15 +1657,15 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		     (width + extra)) >= pcc->x) && ((width + picd->hspace) <=
 		    (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
 			pcc->x = pcc->eoffsetx + pcc->left_margin +
-				pcc->cur_line_width - width - picd->hspace;
+				 pcc->cur_line_width - width - picd->hspace;
 		} else {
 			ConditionalLineFeed(hw, 1, pcc);
 			orig_x = pcc->eoffsetx + pcc->left_margin;
 			if ((width + picd->hspace + extra) < (pcc->eoffsetx +
 			    pcc->left_margin + pcc->cur_line_width)) {
 				pcc->x = pcc->eoffsetx + pcc->left_margin +
-					pcc->cur_line_width - width -
-					picd->hspace;
+					 pcc->cur_line_width - width -
+					 picd->hspace;
 			} else {
 				/* No room to do any right alignment */
 				pcc->x += picd->hspace;
@@ -1526,44 +1679,47 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	    if (picd->percent_width) {
 	        if ((pcc->eoffsetx + pcc->left_margin + 1 +
 		     (2 * picd->hspace)) > pcc->computed_min_x)
-			pcc->computed_min_x = pcc->eoffsetx +
-				pcc->left_margin + 1 + (2 * picd->hspace);
+		    pcc->computed_min_x = pcc->eoffsetx + pcc->left_margin +
+					  1 + (2 * picd->hspace);
 	    } else {
 	        if ((pcc->eoffsetx + pcc->left_margin + width + picd->hspace) >
 		    pcc->computed_min_x)
-			pcc->computed_min_x = pcc->eoffsetx + pcc->left_margin +
-			picd->hspace + width;
+		    pcc->computed_min_x = pcc->eoffsetx + pcc->left_margin +
+					  picd->hspace + width;
 		if (pcc->nobr && (pcc->computed_min_x <
-		     (pcc->nobr_x + picd->hspace + width))) {
-			pcc->computed_min_x = pcc->nobr_x + picd->hspace +
-				width;
-		}
+				  (pcc->nobr_x + picd->hspace + width)))
+		    pcc->computed_min_x = pcc->nobr_x + picd->hspace + width;
 	    }
-	    if ((pcc->x + width) > pcc->computed_max_x) {
+	    if ((pcc->x + width) > pcc->computed_max_x)
                 pcc->computed_max_x = pcc->x + width;
-	    }
 	}
 
 	/* By default, a short image not in a table has space above it */
 	if (!pcc->in_table && !pcc->cur_line_height &&
 	    (height < pcc->cur_font->ascent) &&
-	    (lpicd.align == ALIGN_NONE) && (lpicd.valign == VALIGN_BOTTOM)) {
+	    (lpicd.align == ALIGN_NONE) && (lpicd.valign == VALIGN_BOTTOM))
 		pcc->cur_line_height = pcc->cur_baseline =
-			pcc->cur_font->ascent;
+				       pcc->cur_font->ascent;
 
-	}
 	orig_cur_baseline = pcc->cur_baseline;
 	orig_cur_line_height = pcc->cur_line_height;
 	if (!pcc->cw_only) {
+		/* Do implicit label */
+		if (picd->fptr && pcc->in_label && pcc->label_id) {
+			mptr->anc_name = pcc->label_id;
+			pcc->label_id = NULL;
+			CreateAnchorElement(hw, mptr, pcc);
+			pcc->in_label = 0;
+		}
 		eptr = CreateElement(hw, E_IMAGE, alt_font,
-			pcc->x, pcc->y + picd->vspace,
-			width, height, baseline, pcc);
+				     pcc->x, pcc->y + picd->vspace,
+				     width, height, baseline, pcc);
 		eptr->underline_number = 0; /* Images can't be underlined! */
 		eptr->anchor_tag_ptr = pcc->anchor_tag_ptr;
 		eptr->pic_data = picd;
 		if ((picd->align != HALIGN_RIGHT) &&
 		    (picd->align != HALIGN_LEFT))
-			AdjustBaseLine(hw, eptr, pcc);
+			AdjustBaseLine(eptr, pcc);
 		eptr->bwidth = picd->border;
 		if (picd->fptr) /* Special ISMAP in a form */
 			eptr->is_in_form = 1;
@@ -1603,14 +1759,15 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 				/* Keep Adjustbaseline from messing it up */
 				picd->aligned = 2;
 				eptr = CreateElement(hw, E_CR, pcc->cur_font,
-					pcc->x, pcc->y, 0, pcc->cur_line_height,
-					pcc->cur_baseline, pcc);
+						     pcc->x, pcc->y, 0,
+						     pcc->cur_line_height,
+						     pcc->cur_baseline, pcc);
 			}
 			if (pcc->in_paragraph)
 				pcc->in_paragraph++;
 		} else {
 			if (!pcc->cw_only)
-				AdjustBaseLine(hw, eptr, pcc);
+				AdjustBaseLine(eptr, pcc);
 			pcc->is_bol = False;
 			pcc->pf_lf_state = 0;
 			pcc->x += width;
@@ -1640,7 +1797,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 				pcc->in_paragraph++;
 		} else {
 			if (!pcc->cw_only)
-				AdjustBaseLine(hw, eptr, pcc);
+				AdjustBaseLine(eptr, pcc);
 			pcc->is_bol = False;
 			pcc->pf_lf_state = 0;
 			pcc->x += width;
@@ -1670,6 +1827,8 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 	int x, y, ax, ay, axe, aye, extra;
 	int height, width;
 	int timer_refresh;
+	Display *dsp = XtDisplay(hw);
+	Window win = XtWindow(hw->html.view);
 
 	epic_data = eptr->pic_data;
 
@@ -1685,9 +1844,8 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 		pic_data = epic_data;
 		/* If done running, refresh last image of animation */
 		if (epic_data->fetched && epic_data->anim_info &&
-		    (epic_data->running == 2)) {
+		    (epic_data->running == 2))
 			pic_data = epic_data->last;
-		}
 	}
 
 	if ((eptr->anchor_tag_ptr->anc_href || epic_data->has_border) &&
@@ -1711,38 +1869,30 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 		height = pic_data->height;
 		width = pic_data->width;
 	}
-	XSetForeground(XtDisplay(hw), hw->html.drawGC, eptr->fg);
-	XSetBackground(XtDisplay(hw), hw->html.drawGC, eptr->bg);
+	XSetForeground(dsp, hw->html.drawGC, eptr->fg);
+	XSetBackground(dsp, hw->html.drawGC, eptr->bg);
 	/* Do ALT text if delayed or bad image */
 	if ((epic_data->internal == 2) && epic_data->alt_text &&
 	    *epic_data->alt_text) {
-		XSetFont(XtDisplay(hw), hw->html.drawGC, eptr->font->fid);
-		XDrawString(XtDisplay(hw), XtWindow(hw->html.view),
-			hw->html.drawGC,
-			axe + epic_data->width + 1,
-			aye + (height/2) + (eptr->font->max_bounds.ascent/2) -2,
-			epic_data->alt_text, strlen(epic_data->alt_text));
+		XSetFont(dsp, hw->html.drawGC, eptr->font->fid);
+		XDrawString(dsp, win, hw->html.drawGC,
+			    axe + epic_data->width + 1,
+			    aye + (height / 2) +
+				(eptr->font->max_bounds.ascent / 2) - 2,
+			    epic_data->alt_text, strlen(epic_data->alt_text));
 		/* Compute new width so text inside border */
 		width = eptr->width - epic_data->hspace - (2 * extra);
 	}
 	/* Draw border */
 	if (extra && !timer_refresh) {
-		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view), 
-				hw->html.drawGC,
-				axe, ay,
-				width, extra);
-		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view), 
-				hw->html.drawGC,
-				axe, (aye + height),
-				width, extra);
-		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view),
-				hw->html.drawGC,
-				ax, ay,
-				extra, (height + (2 * extra)));
-		XFillRectangle(XtDisplay(hw), XtWindow(hw->html.view),
-				hw->html.drawGC,
-				(axe + width), ay,
-				extra, (height + (2 * extra)));
+		XFillRectangle(dsp, win, hw->html.drawGC, axe, ay,
+			       width, extra);
+		XFillRectangle(dsp, win, hw->html.drawGC, axe, (aye + height),
+			       width, extra);
+		XFillRectangle(dsp, win, hw->html.drawGC, ax, ay,
+			       extra, (height + (2 * extra)));
+		XFillRectangle(dsp, win, hw->html.drawGC, (axe + width), ay,
+			       extra, (height + (2 * extra)));
 	}
 	/* Don't refresh an animation while running unless it has
 	 * a saved animation image.
@@ -1754,35 +1904,41 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 			if ((epic_data->running == 1) && epic_data->bg_image &&
 			    !epic_data->bg_visible)
 				return;
-			XCopyArea(XtDisplay(hw),
-				epic_data->anim_image,
-				XtWindow(hw->html.view),
-				hw->html.drawGC,
-		  		0, 0,
-		  		epic_data->awidth,
-		  		epic_data->aheight,
-		  		axe, aye);
+			XCopyArea(dsp, epic_data->anim_image, win,
+				  hw->html.drawGC,
+		  		  0, 0,
+		  		  epic_data->awidth,
+		  		  epic_data->aheight,
+		  		  axe, aye);
 			return;
 		} else if (epic_data->running == 1) {
 			return;
 		}
 	}
+	/* If alpha channel image moved over background image, redo Pixmap */ 
+	if (pic_data->image && pic_data->alpha && hw->html.bgmap_SAVE &&
+	    ((eptr->x != pic_data->saved_x) || (eptr->y != pic_data->saved_y))){
+		int i;
+
+		XFreePixmap(dsp, pic_data->image);
+		pic_data->image = (Pixmap)NULL;
+		/* Put original colors back */
+		for (i = 0; i < 256; i++)
+			pic_data->colrs[i] = pic_data->ori_colrs[i];
+	}
 	if (pic_data->image == (Pixmap)NULL) {
-		pic_data->image = InfoToImage(hw, pic_data, 0);
+		pic_data->image = InfoToImage(hw, pic_data, 0, eptr);
 		if (pic_data->image != (Pixmap)NULL) {
 			if (pic_data->transparent &&
 			    pic_data->clip == None) {
-				pic_data->clip =
-					XCreatePixmapFromBitmapData(
-						XtDisplay(hw),
-						XtWindow(hw->html.view),
-						(char*) pic_data->clip_data,
-						pic_data->width,
-						pic_data->height,
-						1, 0, 1);
-			} else {
-				if (!pic_data->transparent)
-					pic_data->clip = None;
+				pic_data->clip = XCreatePixmapFromBitmapData(
+						   dsp, win,
+						   (char *) pic_data->clip_data,
+						   pic_data->width,
+						   pic_data->height,
+						   1, 0, 1);
+			} else if (!pic_data->transparent) {
+				pic_data->clip = None;
 			}
 		}
 		/* Force background overwrite the first time. */
@@ -1796,125 +1952,114 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
  		*/
 		if ((pic_data->transparent == 1) &&
 		    (hw->html.bgmap_SAVE || epic_data->has_anim_image)) {
-			unsigned long valuemask;
-			XGCValues values;
-
 			values.clip_mask = pic_data->clip;
 			if (epic_data->has_anim_image) {
 				values.clip_x_origin = pic_data->x;
 				values.clip_y_origin = pic_data->y;
 				/* Get background in animation image */
 				if (epic_data->has_anim_image != 1) {
-					if (hw->html.bgmap_SAVE) {
-					    if (!epic_data->bg_image) {
-						epic_data->bg_image =
-						    XCreatePixmap(XtDisplay(hw),
-							XtWindow(hw),
-							epic_data->awidth,
-							epic_data->aheight,
-							DefaultDepthOfScreen(
-							    XtScreen(hw)));
-					    }
-					    /* Save the background, but must */
-					    /* be fully visible to get it all */
-					    if (!epic_data->bg_visible &&
-						((aye + epic_data->aheight) >
-						 0) &&
-						(aye < hw->html.view_height) &&
-						((axe + epic_data->awidth) >
-						 0) &&
-						(axe < hw->html.view_width)) {
-						HTMLDrawBackgroundImage(
-						    (Widget)hw,
-			 		 	    axe, aye,
-					  	    epic_data->awidth,
-					  	    epic_data->aheight);
-						XCopyArea(XtDisplay(hw),
-						    XtWindow(hw->html.view),
-						    epic_data->bg_image,
-						    hw->html.drawGC,
-						    axe, aye,
-						    epic_data->awidth,
-						    epic_data->aheight,
-						    0, 0);
-						/* Is it fully visible? */
-						if ((aye >= 0) &&
-			    			    ((aye + epic_data->aheight) <=
-						     hw->html.view_height) &&
-						    (axe >= 0) &&
-						    ((axe + epic_data->awidth) <= 
-						     hw->html.view_width)) {
-						    epic_data->bg_visible = 1;
-						}
-					    }
-					    if (epic_data == pic_data) {
-						/* Redisplay it all for first image */
-						XCopyArea(XtDisplay(hw),
-						    epic_data->bg_image,
-						    epic_data->anim_image,
-						    hw->html.drawGC,
-						    0, 0,
-						    epic_data->awidth,
-						    epic_data->aheight,
-						    0, 0);
-					    } else {
-						XCopyArea(XtDisplay(hw),
-						    epic_data->bg_image,
-						    epic_data->anim_image,
-						    hw->html.drawGC,
-						    pic_data->x,
-						    pic_data->y,
-						    pic_data->width,
-						    pic_data->height,
-						    pic_data->x,
-						    pic_data->y);
-						/* Clear previous image's area */
-						if (epic_data->prev) {
-						    pic = epic_data->prev;
-						    XCopyArea(XtDisplay(hw),
-							epic_data->bg_image,
-							epic_data->anim_image,
-							hw->html.drawGC,
-							pic->x, pic->y,
-							pic->width,
-							pic->height,
-							pic->x, pic->y);
-						}
-					    }
-					} else {
-					    /* Get background color */
-					    XSetForeground(XtDisplay(hw),
-						hw->html.drawGC,
-						eptr->bg);
-					    if (epic_data == pic_data) {
-						XFillRectangle(XtDisplay(hw),
-						    epic_data->anim_image,
-						    hw->html.drawGC,
-						    0, 0,
-						    epic_data->awidth,
-						    epic_data->aheight);
-					    } else {
-						XFillRectangle(
-						    XtDisplay(hw),
-						    epic_data->anim_image,
-						    hw->html.drawGC,
-						    pic_data->x,
-						    pic_data->y,
-						    pic_data->width,
-						    pic_data->height);
-						/* Redo previous area */
-						if (epic_data->prev) {
-						    pic = epic_data->prev;
-						    XFillRectangle(
-							XtDisplay(hw),
-							epic_data->anim_image,
-							hw->html.drawGC,
-							pic->x, pic->y,
-							pic->width,
-							pic->height);
-						}
+				    if (hw->html.bgmap_SAVE) {
+					if (!epic_data->bg_image)
+					    epic_data->bg_image =
+						XCreatePixmap(dsp, XtWindow(hw),
+							   epic_data->awidth,
+							   epic_data->aheight,
+							   DefaultDepthOfScreen(
+							       XtScreen(hw)));
+
+					/* Save the background, but must */
+					/* be fully visible to get it all */
+					if (!epic_data->bg_visible &&
+					    ((aye + epic_data->aheight) > 0) &&
+					    (aye < hw->html.view_height) &&
+					    ((axe + epic_data->awidth) > 0) &&
+					    (axe < hw->html.view_width)) {
+					    HTMLDrawBackgroundImage((Widget)hw,
+			 		 		    axe, aye,
+					  		    epic_data->awidth,
+					  		    epic_data->aheight);
+					    XCopyArea(dsp, win,
+						      epic_data->bg_image,
+						      hw->html.drawGC,
+						      axe, aye,
+						      epic_data->awidth,
+						      epic_data->aheight,
+						      0, 0);
+					    /* Is it fully visible? */
+					    if ((aye >= 0) &&
+			    		        ((aye + epic_data->aheight) <=
+						 hw->html.view_height) &&
+						(axe >= 0) &&
+						((axe + epic_data->awidth) <= 
+						 hw->html.view_width)) {
+						epic_data->bg_visible = 1;
 					    }
 					}
+					if (epic_data == pic_data) {
+					    /* Redisplay all for first image */
+					    XCopyArea(dsp,
+						      epic_data->bg_image,
+						      epic_data->anim_image,
+						      hw->html.drawGC,
+						      0, 0,
+						      epic_data->awidth,
+						      epic_data->aheight,
+						      0, 0);
+					} else {
+					    XCopyArea(dsp,
+						      epic_data->bg_image,
+						      epic_data->anim_image,
+						      hw->html.drawGC,
+						      pic_data->x,
+						      pic_data->y,
+						      pic_data->width,
+						      pic_data->height,
+						      pic_data->x,
+						      pic_data->y);
+					    /* Clear previous image's area */
+					    if (epic_data->prev) {
+						pic = epic_data->prev;
+						XCopyArea(dsp,
+							  epic_data->bg_image,
+							  epic_data->anim_image,
+							  hw->html.drawGC,
+							  pic->x, pic->y,
+							  pic->width,
+							  pic->height,
+							  pic->x, pic->y);
+					    }
+					}
+				    } else {
+					/* Get background color */
+					XSetForeground(dsp, hw->html.drawGC,
+						       eptr->bg);
+					if (epic_data == pic_data) {
+					    XFillRectangle(dsp,
+						          epic_data->anim_image,
+						          hw->html.drawGC,
+						          0, 0,
+						          epic_data->awidth,
+						          epic_data->aheight);
+					} else {
+					    XFillRectangle(dsp,
+						          epic_data->anim_image,
+						          hw->html.drawGC,
+						          pic_data->x,
+						          pic_data->y,
+						          pic_data->width,
+						          pic_data->height);
+					    /* Redo previous area */
+					    if (epic_data->prev) {
+						pic = epic_data->prev;
+						XFillRectangle(dsp,
+							  epic_data->anim_image,
+							  hw->html.drawGC,
+							  pic->x, pic->y,
+							  pic->width,
+							  pic->height);
+					    }
+					}
+				    }
 				}
 			} else {
 				values.clip_x_origin = x + extra;
@@ -1922,158 +2067,130 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 			}
 
 			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
-			XChangeGC(XtDisplay(hw), 
-				  hw->html.drawGC,
-				  valuemask, &values);
+			XChangeGC(dsp, hw->html.drawGC, valuemask, &values);
 
 			if (epic_data->has_anim_image) {
-				XCopyArea(XtDisplay(hw),
-					pic_data->image,
-					epic_data->anim_image,
-					hw->html.drawGC,
-					0, 0,
-					pic_data->width, pic_data->height,
-					pic_data->x, pic_data->y);
+				XCopyArea(dsp, pic_data->image,
+					  epic_data->anim_image,
+					  hw->html.drawGC,
+					  0, 0,
+					  pic_data->width, pic_data->height,
+					  pic_data->x, pic_data->y);
 				epic_data->has_anim_image = 1;
 			} else {
-				XCopyArea(XtDisplay(hw),
-					pic_data->image,
-					XtWindow(hw->html.view),
-					hw->html.drawGC,
-					0, 0,
-					pic_data->width, pic_data->height,
-					(x + extra),
-					(y + extra));
+				XCopyArea(dsp, pic_data->image, win,
+					  hw->html.drawGC,
+					  0, 0,
+					  pic_data->width, pic_data->height,
+					  (x + extra),
+					  (y + extra));
 			}
 			values.clip_mask = None;
 			values.clip_x_origin = 0;
 			values.clip_y_origin = 0;
-			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
-			XChangeGC(XtDisplay(hw),
-				  hw->html.drawGC,
-				  valuemask, &values);
+			valuemask = GCClipMask | GCClipXOrigin | GCClipYOrigin;
+			XChangeGC(dsp, hw->html.drawGC, valuemask, &values);
 
 			/* Now display the animation image if visible */
 			if (epic_data->has_anim_image &&
 			    (((aye + epic_data->aheight) > 0) &&
 			    (aye < hw->html.view_height))) {
-				XCopyArea(XtDisplay(hw),
-					epic_data->anim_image,
-					XtWindow(hw->html.view),
-					hw->html.drawGC,
-			  		0, 0,
-			  		epic_data->awidth,
-			  		epic_data->aheight,
-			  		axe, aye);
+				XCopyArea(dsp, epic_data->anim_image, win,
+					  hw->html.drawGC,
+			  		  0, 0,
+			  		  epic_data->awidth,
+			  		  epic_data->aheight,
+			  		  axe, aye);
 			}
-		}
  		/*
 		** If (image is transparent) and (background is solid
 		** and color is different from transparent color used
 		** in image) then change image to match background
 		** color.
  		*/
-		else {
+		} else {
 			if (pic_data->transparent &&
 			    (pic_data->background_pixel !=
 			     hw->core.background_pixel)) {
 
 				/* Create a GC if not already done. */
 				if (maskGC == NULL) {
-					maskGC = XCreateGC(XtDisplay(hw),
-						XtWindow(hw->html.view), 0, 0);
-					XCopyGC(XtDisplay(hw),
-						hw->html.drawGC, 0xFFFFFFFF,
-						maskGC);
+					maskGC = XCreateGC(dsp, win, 0, 0);
+					XCopyGC(dsp, hw->html.drawGC,
+						0xFFFFFFFF, maskGC);
 				}
 
 				/* Clear the background pixels to 0 */
 				values.foreground = 0xFFFFFFFF;
 				values.background = 0;
 				values.function = GXand;
-				valuemask = GCForeground|GCBackground|GCFunction;
-				XChangeGC(XtDisplay(hw),
-					  maskGC,
-					  valuemask,
-					  &values);
-				XCopyPlane (XtDisplay(hw),
-					    pic_data->clip,
-					    pic_data->image,
-					    maskGC,
-					    0, 0,
-					    pic_data->width,
-					    pic_data->height,
-					    0, 0, 1);
+				valuemask = GCForeground | GCBackground |
+					    GCFunction;
+				XChangeGC(dsp, maskGC, valuemask, &values);
+				XCopyPlane(dsp, pic_data->clip,
+					   pic_data->image,
+					   maskGC,
+					   0, 0,
+					   pic_data->width,
+					   pic_data->height,
+					   0, 0, 1);
 				/* Set background pixels to background color */
 				values.foreground = 0;
 				values.background = hw->core.background_pixel;
 				values.function = GXor;
-				valuemask = GCForeground|GCBackground|GCFunction;
-				XChangeGC(XtDisplay(hw),
-					  maskGC,
-					  valuemask,
-					  &values);
-				XCopyPlane (XtDisplay(hw),
-					    pic_data->clip,
-					    pic_data->image,
-					    maskGC,
-					    0, 0,
-					    pic_data->width,
-					    pic_data->height,
-					    0, 0, 1);
+				valuemask = GCForeground | GCBackground |
+					    GCFunction;
+				XChangeGC(dsp, maskGC, valuemask, &values);
+				XCopyPlane(dsp, pic_data->clip,
+					   pic_data->image,
+					   maskGC,
+					   0, 0,
+					   pic_data->width,
+					   pic_data->height,
+					   0, 0, 1);
 				pic_data->background_pixel =
 					hw->core.background_pixel;
-                        }
-
+			}
 			values.clip_mask = None;
 			values.clip_x_origin = 0;
 			values.clip_y_origin = 0;
-			valuemask = GCClipMask|GCClipXOrigin|GCClipYOrigin;
-			XChangeGC(XtDisplay(hw),
-				  hw->html.drawGC,
-				  valuemask, &values);
+			valuemask = GCClipMask | GCClipXOrigin | GCClipYOrigin;
+			XChangeGC(dsp, hw->html.drawGC, valuemask, &values);
 
 			/* If has animation image, then need to save */
 			if (epic_data->has_anim_image) {
 				/* If image is empty, put background in */
 				if (epic_data->has_anim_image != 1) {
-					if (hw->html.bgmap_SAVE) {
-						XCopyArea(XtDisplay(hw),
-							XtWindow(hw->html.view),
-							epic_data->anim_image,
-							hw->html.drawGC,
-							axe, aye,
-							epic_data->awidth,
-							epic_data->aheight,
-							0, 0);
-					} else {
-						XSetForeground(XtDisplay(hw),
-							hw->html.drawGC,
-							eptr->bg);
-						XFillRectangle(XtDisplay(hw),
-							epic_data->anim_image,
-							hw->html.drawGC,
-							0, 0,
-							epic_data->awidth,
-							epic_data->aheight);
-					}
+				    if (hw->html.bgmap_SAVE) {
+					XCopyArea(dsp, win,
+						  epic_data->anim_image,
+						  hw->html.drawGC,
+						  axe, aye,
+						  epic_data->awidth,
+						  epic_data->aheight,
+						  0, 0);
+				    } else {
+					XSetForeground(dsp, hw->html.drawGC,
+						       eptr->bg);
+					XFillRectangle(dsp,
+						       epic_data->anim_image,
+						       hw->html.drawGC,
+						       0, 0,
+						       epic_data->awidth,
+						       epic_data->aheight);
+				    }
 				}
-				XCopyArea(XtDisplay(hw),
-					pic_data->image,
-					epic_data->anim_image,
-					hw->html.drawGC,
-				  	0, 0,
-			 	 	pic_data->width,
-					pic_data->height,
-					pic_data->x, pic_data->y);
+				XCopyArea(dsp, pic_data->image,
+					  epic_data->anim_image,
+					  hw->html.drawGC,
+				  	  0, 0,
+			 	 	  pic_data->width,
+					  pic_data->height,
+					  pic_data->x, pic_data->y);
 				epic_data->has_anim_image = 1;
 			}
-			XCopyArea(XtDisplay(hw),
-				  pic_data->image,
-				  XtWindow(hw->html.view),
-				  hw->html.drawGC,
-				  0,
-				  0,
+			XCopyArea(dsp, pic_data->image, win, hw->html.drawGC,
+				  0, 0,
 				  pic_data->width,
 				  pic_data->height,
 				  (x + extra),
@@ -2083,19 +2200,21 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 	/* Is it the first image in an animation? */
 	if (!timer_refresh && epic_data->fetched && epic_data->anim_info &&
 	    !epic_data->running) {
+		int delay = pic_data->delay;
+
+		if (!app_con)
+			app_con = XtWidgetToApplicationContext((Widget) hw);
+
+		if (!delay)
+			delay = 10;
+
 		epic_data->anim_info->current = pic_data;
 		epic_data->anim_info->eptr = eptr;
 		/* Because of refresh sequence, need to start over */
 		epic_data->anim_info->next = epic_data->anim_info->start;
-		if (pic_data->delay)
-			epic_data->timer = XtAppAddTimeOut(app_context,
-				pic_data->delay * 10,
-				(XtTimerCallbackProc)ImageAnimate,
-				(XtPointer) epic_data->anim_info);
-		else
-			epic_data->timer = XtAppAddTimeOut(app_context, 10,
-				(XtTimerCallbackProc)ImageAnimate,
-				(XtPointer) epic_data->anim_info);
+		epic_data->timer = XtAppAddTimeOut(app_con, delay,
+					      (XtTimerCallbackProc)ImageAnimate,
+					      (XtPointer) epic_data->anim_info);
 		/* We don't want to start it again until a reformat */
 		epic_data->running = 1;
 	}
@@ -2104,12 +2223,13 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 /* Timer routine to display next GIF animation image.  It frees the
  * animation data record when done.
  */
-void ImageAnimate(XtPointer cld, XtIntervalId *id)
+static void ImageAnimate(XtPointer cld, XtIntervalId *id)
 {
 	AnimInfo *anim_info = (AnimInfo *) cld;
 	ImageInfo *pic_data = anim_info->next;
 	ImageInfo *current, *epic;
 	int sx, sy, width, height, extra;
+	int delay;
 	HTMLWidget hw = anim_info->hw;
 	ElemInfo *eptr = anim_info->eptr;
 	unsigned long save_bg;
@@ -2179,13 +2299,13 @@ void ImageAnimate(XtPointer cld, XtIntervalId *id)
 			sy = eptr->y + current->y + extra - hw->html.scroll_y;
 			if ((current->x + current->width) > epic->awidth) {
 				width = epic->awidth -
-					(current->x + current->width);
+						  (current->x + current->width);
 			} else {
 				width = current->width;
 			}
 			if ((current->y + current->height) > epic->aheight) {
 				height = epic->aheight -
-					(current->y + current->height);
+						 (current->y + current->height);
 			} else {
 				height = current->height;
 			}
@@ -2193,21 +2313,21 @@ void ImageAnimate(XtPointer cld, XtIntervalId *id)
 				if (hw->html.bgmap_SAVE) {
 					/* There is a background image */
 					HTMLDrawBackgroundImage((Widget)hw,
-						sx, sy, width, height);
+						         sx, sy, width, height);
 				} else {
 					/* Get correct background color */
 					XSetForeground(XtDisplay(hw),
-						hw->html.drawGC,
-						eptr->bg);
+						       hw->html.drawGC,
+						       eptr->bg);
 					XFillRectangle(XtDisplay(hw),
-						XtWindow(hw->html.view),
-						hw->html.drawGC, sx, sy,
-						width, height);
+						       XtWindow(hw->html.view),
+						       hw->html.drawGC, sx, sy,
+						       width, height);
 				}
 			}
 		}
 	}
-skipped_it:
+ skipped_it:
 
 	anim_info->current = pic_data;
 	anim_info->next = pic_data->next;
@@ -2227,17 +2347,15 @@ skipped_it:
 		hw->core.background_pixel = save_bg;
 	}
 
-	if (hw->html.drawing && (pic_data->delay < 500))
+	if (hw->html.drawing && (pic_data->delay < 500)) {
 		/* If still formatting window, them slow down animations */
-		epic->timer = XtAppAddTimeOut(app_context, 500,
-			(XtTimerCallbackProc)ImageAnimate,
-			(XtPointer)anim_info);
-	else if (pic_data->delay)
-		epic->timer = XtAppAddTimeOut(app_context, pic_data->delay * 10,
-			(XtTimerCallbackProc)ImageAnimate,
-			(XtPointer)anim_info);
-	else
-		epic->timer = XtAppAddTimeOut(app_context, 10,
-			(XtTimerCallbackProc)ImageAnimate,
-			(XtPointer)anim_info);
+		delay = 500;
+	} else if (pic_data->delay) {
+		delay = pic_data->delay * 10;
+	} else {
+		delay = 10;
+	}
+	epic->timer = XtAppAddTimeOut(app_con, delay,
+				      (XtTimerCallbackProc)ImageAnimate,
+				      (XtPointer)anim_info);
 }

@@ -1,4 +1,4 @@
-/*                               /Net/dxcern/userd/timbl/hypertext/WWW/Library/src/HTTCP.html
+/*
                                GENERIC TCP/IP COMMUNICATION
                                              
    This module has the common code for handling TCP/IP connections etc.
@@ -7,9 +7,9 @@
 #ifndef HTTCP_H
 #define HTTCP_H
 
+#ifndef HTUTILS_H
 #include "HTUtils.h"
-
-#include "tcp.h"
+#endif
 
 #ifdef SHORT_NAMES
 #define HTInetStatus            HTInStat
@@ -25,11 +25,7 @@
 **           returns a pointer to a static string which must be copied if
 **                it is to be kept.
 */
-#ifdef __STDC__
-        extern char * HTInetString(struct sockaddr_in* sin);
-#else
-        extern char * HTInetString();
-#endif
+extern char *HTInetString(struct sockaddr_in *sin);
 
 
 /*      Encode INET status (as in sys/errno.h)                    inet_status()
@@ -42,17 +38,7 @@
 ** On return:
 **      returns a negative status in the unix way.
 */
-#ifdef __STDC__
-        extern int HTInetStatus(char *where);
-#else
-        extern int HTInetStatus();
-#endif
-
-/*      Publicly accessible variables
-*/
-/* extern struct sockaddr_in HTHostAddress; */
-                        /* The internet address of the host */
-                        /* Valid after call to HTHostName() */
+extern int HTInetStatus(char *where);
 
 
 /*      Parse a cardinal value                                 parse_cardinal()
@@ -86,22 +72,17 @@ extern unsigned int HTCardinal PARAMS((int *pstatus,
 **               *sin is filled in. If no port is specified in str, that
 **               field is left unchanged in *sin.
 */
-#ifdef __STDC__
-        extern int HTParseInet(struct sockaddr_in * sin, WWW_CONST char * str);
-        /*!! had to change this to get it to compile. CTB */
-#else
-        extern int HTParseInet();
-#endif
+extern int HTParseInet(struct sockaddr_in *sin, WWW_CONST char *str);
+
 
 /*      Get Name of This Machine
 **      ------------------------
 **
 */
+extern WWW_CONST char *HTHostName NOPARAMS;
 
-extern WWW_CONST char * HTHostName NOPARAMS;
+extern int HTDoConnect(char *, char *, int, int *);
 
-extern int HTDoConnect (char *, char *, int, int *);
-
-extern int HTDoRead (int, void *, unsigned);
+extern int HTDoRead(int, void *, unsigned);
 
 #endif   /* HTTCP_H */

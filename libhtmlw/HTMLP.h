@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006 - The VMS Mosaic Project */
 
 #ifndef HTMLP_H
 #define HTMLP_H
@@ -126,11 +126,11 @@ typedef struct align_rec {
  * To allow arbitrary nesting of alignment changes
  */
 typedef struct float_rec {
-	int		type;		/* 1 is image, 2 is table */
-	int		marg;
-	int		y;
-	int		table_extra;	/* Size of extra space after table */
-	int		image_extra;	/* Space before right floating image */
+	int type;		/* 1 is image, 2 is table */
+	int marg;
+	int y;
+	int table_extra;	/* Size of extra space after table */
+	int image_extra;	/* Space before right floating image */
         struct float_rec *next;
 } FloatRec;
 
@@ -182,6 +182,7 @@ typedef struct _PhotoComposeContext {
 	int		underline_number;
 	int		in_underlined;
 	Boolean		dashed_underlines;
+	Boolean		underline_start; /* Indicate starting underlining */
 	FormInfo	*cur_form;	/* Current form */
 	Boolean		in_form;	/* In form? */
 	int		widget_id;
@@ -191,12 +192,14 @@ typedef struct _PhotoComposeContext {
 	int		subscript;
 	int		indent_level;
 	char		*text_area_buf;	 /* Buffer for Form TextArea */
+	char		*button_buf;	 /* Buffer for Form Button */
 	int		ignore;		 /* Ignore some tags when formating */
 	SelectInfo	*current_select; /* SELECT in FORM */
 	Boolean		in_select;	 /* A select? */
 	int		is_index;
 	int		Width;
 	Boolean		Strikeout;
+	Boolean		strikeout_start;
 	DescRec		DescType;
 	int		InDocHead;
 	char		*TitleText;
@@ -209,6 +212,8 @@ typedef struct _PhotoComposeContext {
 	Boolean		anchor_start;	/* Mark start of anchor in text */
 	Boolean		at_top;		/* At top of a page or cell? */
 	Boolean		in_anchor;	/* In an anchor? */
+	Boolean		in_label;	/* In a label? */
+	char 		*label_id;	/* Label FOR=id */
 	FloatRec	*float_left;	/* Current float stacks */
 	FloatRec	*float_right;
 	Boolean		ignore_float;
@@ -223,6 +228,8 @@ typedef struct _PhotoComposeContext {
 	Boolean		noformat;	/* Are we formatting? */
 	int		sub_or_sup;	/* Is it subscript or superscript? */
 	char		*basetarget;	/* Target set by <BASE> */
+	char		*mark_title;	/* Mark title */
+	char		*span_title;	/* Span title */
 } PhotoComposeContext;
 
 /* New fields for the HTML widget */
@@ -238,15 +245,17 @@ typedef struct _HTMLPart {
 	XtCallbackList		anchor_callback;
 	XtCallbackList		base_callback;
 	XtCallbackList		form_callback;
+	XtCallbackList		title_callback;
 
 	char			*title;
 	char			*raw_text;
 	char			*header_text;
 	char			*footer_text;
-/*
- * Without Motif we have to define our own foreground resource
- * instead of using the manager's
- */
+	char			*charset;
+	/*
+	 * Without Motif we have to define our own foreground resource
+	 * instead of using the manager's
+	 */
 	Pixel			anchor_fg;
 	Pixel			visitedAnchor_fg;
 	Pixel			activeAnchor_fg;
@@ -265,6 +274,7 @@ typedef struct _HTMLPart {
 	Pixmap			bgclip_SAVE;
         int                     bg_height;
         int                     bg_width; 
+	ImageInfo		*bg_pic_data;
 
         Pixel                   foreground_SAVE;
 	Pixel			anchor_fg_SAVE;
@@ -274,6 +284,7 @@ typedef struct _HTMLPart {
 	Pixel			top_color_SAVE;
 	Pixel			bottom_color_SAVE;    
         Pixel                   background_SAVE;
+        Pixel                   formbuttonbackground;
     
 	int			num_anchor_underlines;
 	int			num_visitedAnchor_underlines;
@@ -306,6 +317,7 @@ typedef struct _HTMLPart {
 
         XtPointer		previously_visited_test;
 	XtCallbackList		image_callback;
+	XtCallbackList		quantize_callback;
 	Boolean			delay_image_loads;
 	XtCallbackList		get_url_data_cb;
         XtCallbackList		pointer_motion_callback;
@@ -344,6 +356,7 @@ typedef struct _HTMLPart {
 	MarkInfo		*html_objects;
 	MarkInfo		*html_header_objects;
 	MarkInfo		*html_footer_objects;
+	MarkInfo		*html_refresh_objects;
 	WidgetInfo		*widget_list;
 	FormInfo		*form_list;
 	MapInfo                 *map_list;
@@ -366,6 +379,7 @@ typedef struct _HTMLPart {
         unsigned int		refresh_count;
 	Boolean			changing_font;
 	int			pushfont_count;
+	int			font_save_count;
 	FontRec			*fontstack;
 	Boolean			ignore_setvalues;
 	ElemInfo		*blinking_elements;
@@ -376,6 +390,7 @@ typedef struct _HTMLPart {
 	XtWorkProcId		workprocid;
 	WorkInfo		*workprocdata;
 	int			allocation_index[256];
+	ElemInfo		*title_elem;
 
 	/* Frame resources */
 	FrameInfo	**frames;
@@ -384,7 +399,6 @@ typedef struct _HTMLPart {
 	FrameInfo	*iframe_list;	/* iframe list */
 } HTMLPart;
 
-
 typedef struct _HTMLRec {
 	CorePart		core;
 	CompositePart		composite;
@@ -392,16 +406,5 @@ typedef struct _HTMLRec {
 	XmManagerPart		manager;
 	HTMLPart		html;
 } HTMLRec;
-
-extern int FormatAll(HTMLWidget hw, int *Fwidth);
-extern ElemInfo *RefreshElement(HTMLWidget hw, ElemInfo *eptr);
-extern void HtmlGetImage (HTMLWidget w, ImageInfo *picd,
-				PhotoComposeContext *pcc, int force_load);
-extern MarkInfo *HTMLParse(HTMLWidget hw, char *str);
-extern void RefreshURL(XtPointer cld, XtIntervalId *id);
-
-extern void _FreeAprogStruct(AprogInfo *aps);
-extern void _FreeAppletStruct(AppletInfo *ats);
-extern void _FreeTableStruct(TableInfo *t);
 
 #endif /* HTMLP_H */

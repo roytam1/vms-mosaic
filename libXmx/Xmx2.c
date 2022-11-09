@@ -51,6 +51,9 @@
  * Comments and questions are welcome and can be sent to                    *
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
+
+/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+
 #include "../config.h"
 #include "XmxP.h"
 
@@ -61,83 +64,79 @@
 /* ----------------------- _XmxMenuAddEntryToRecord ----------------------- */
 
 /* Create a new MenuEntry and add it to the head of a MenuRecord list. */
-private void 
-_XmxMenuAddEntryToRecord (XmxMenuRecord *rec, Widget w, int token)
+static void _XmxMenuAddEntryToRecord(XmxMenuRecord *rec, Widget w, int token)
 {
-  XmxMenuEntry *_ent;
+  XmxMenuEntry *ent;
 
   /* Create new menu entry. */
-  _ent = (XmxMenuEntry *)malloc (sizeof (XmxMenuEntry));
-  _ent->w = w;
-  _ent->token = token;
+  ent = (XmxMenuEntry *)malloc(sizeof(XmxMenuEntry));
+  ent->w = w;
+  ent->token = token;
 
   /* Add rest of list to tail of this entry. */
-  _ent->next = rec->first_entry;
+  ent->next = rec->first_entry;
 
   /* Make this entry head of list. */
-  rec->first_entry = _ent;
+  rec->first_entry = ent;
 
   return;
 }
 
 /* ---------------------- _XmxMenuGetEntryFromRecord ---------------------- */
 
-private XmxMenuEntry *
-_XmxMenuGetEntryFromRecord (XmxMenuRecord *rec, int token)
+static XmxMenuEntry *_XmxMenuGetEntryFromRecord(XmxMenuRecord *rec, int token)
 {
   /* Given token, fetch the corresponding entry. */
-  XmxMenuEntry *_ent = NULL;
-  int _done;
+  XmxMenuEntry *ent;
+  int done;
 
   /* Search the linked list. */
-  _ent = rec->first_entry;
-  _done = 0;
-  while (_ent != NULL && !_done)
-    {
-      if (_ent->token == token)
-        _done = 1;
-      else
-        _ent = _ent->next;
-    }
+  ent = rec->first_entry;
+  done = 0;
+  while (ent && !done) {
+      if (ent->token == token) {
+          done = 1;
+      } else {
+          ent = ent->next;
+      }
+  }
 
   /* Punish the application for asking for a nonexistent entry. */
-  /* assert (_done); */
-  return _ent;
+  /* assert (done); */
+  return ent;
 }
 
 /* ------------------------- _XmxMenuCreateRecord ------------------------- */
 
 /* Create a new MenuRecord and clear out its list. */
-private XmxMenuRecord *
-_XmxMenuCreateRecord (Widget base)
+static XmxMenuRecord *_XmxMenuCreateRecord(Widget base)
 {
-  XmxMenuRecord *_rec;
+  XmxMenuRecord *rec;
 
   /* Create the new XmxMenuRecord. */
-  _rec = (XmxMenuRecord *)malloc (sizeof (XmxMenuRecord));
-  _rec->base = base;
-  _rec->first_entry = NULL;
+  rec = (XmxMenuRecord *)malloc(sizeof(XmxMenuRecord));
+  rec->base = base;
+  rec->first_entry = NULL;
 
-  return _rec;
+  return rec;
 }
 
 /* ------------------------------------------------------------------------ */
-/* --------------------------- PUBLIC ROUTINES ---------------------------- */
+/* --------------------------- ROUTINES ---------------------------- */
 /* ------------------------------------------------------------------------ */
 
 /* --------------------------- XmxRSetSensitive --------------------------- */
 
 /* args NOT used on Widget */
-public void
-XmxRSetSensitive (XmxMenuRecord *rec, int token, int state)
+void XmxRSetSensitive(XmxMenuRecord *rec, int token, int state)
 {
-  XmxMenuEntry *_entry;
+  XmxMenuEntry *entry;
 
-  assert (state == XmxSensitive || state == XmxUnsensitive);
-  _entry = _XmxMenuGetEntryFromRecord (rec, XmxExtractToken (token));
+  assert(state == XmxSensitive || state == XmxUnsensitive);
+  entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
   /* XtSetSensitive propagates down Widget hierarchy. */
-  if (_entry)
-    XtSetSensitive (_entry->w, (state == XmxSensitive) ? True : False);
+  if (entry)
+      XtSetSensitive(entry->w, (state == XmxSensitive) ? True : False);
   
   return;
 }
@@ -145,16 +144,14 @@ XmxRSetSensitive (XmxMenuRecord *rec, int token, int state)
 /* -------------------------- XmxRSetToggleState -------------------------- */
 
 /* args not used */
-public void
-XmxRSetToggleState (XmxMenuRecord *rec, int token, int state)
+void XmxRSetToggleState(XmxMenuRecord *rec, int token, int state)
 {
-  XmxMenuEntry *_entry;
+  XmxMenuEntry *entry;
 
-  assert (state == XmxSet || state == XmxUnset);
-  _entry = _XmxMenuGetEntryFromRecord (rec, XmxExtractToken (token));
-  if (_entry)
-    XmToggleButtonGadgetSetState 
-      (_entry->w, (state == XmxSet) ? True : False, False);
+  assert(state == XmxSet || state == XmxUnset);
+  entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
+  if (entry)
+      XmToggleButtonSetState(entry->w, (state == XmxSet) ? True : False, False);
   
   return;
 }
@@ -162,14 +159,12 @@ XmxRSetToggleState (XmxMenuRecord *rec, int token, int state)
 /* ------------------------- XmxRUnsetAllToggles -------------------------- */
 
 /* args not used */
-public void
-XmxRUnsetAllToggles (XmxMenuRecord *rec)
+void XmxRUnsetAllToggles(XmxMenuRecord *rec)
 {
-  XmxMenuEntry *_ent;
+  XmxMenuEntry *ent;
 
-  for (_ent = rec->first_entry; _ent != NULL; _ent = _ent->next)
-    XmToggleButtonGadgetSetState
-      (_ent->w, False, False);
+  for (ent = rec->first_entry; ent; ent = ent->next)
+      XmToggleButtonSetState(ent->w, False, False);
 
   return;
 }
@@ -177,17 +172,15 @@ XmxRUnsetAllToggles (XmxMenuRecord *rec)
 /* ----------------------- XmxRSetOptionMenuHistory ----------------------- */
 
 /* args used on Widget */
-public void
-XmxRSetOptionMenuHistory (XmxMenuRecord *rec, int token)
+void XmxRSetOptionMenuHistory(XmxMenuRecord *rec, int token)
 {
-  XmxMenuEntry *_entry;
+  XmxMenuEntry *entry;
 
-  _entry = _XmxMenuGetEntryFromRecord (rec, XmxExtractToken (token));
-  if (_entry)
-    {
-      XmxSetArg (XmNmenuHistory, (XtArgVal)(_entry->w));
-      XtSetValues (rec->base, Xmx_wargs, Xmx_n);
-    }
+  entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
+  if (entry) {
+      XmxSetArg(XmNmenuHistory, (XtArgVal)(entry->w));
+      XtSetValues(rec->base, Xmx_wargs, Xmx_n);
+  }
 
   Xmx_n = 0;
   return;
@@ -196,15 +189,14 @@ XmxRSetOptionMenuHistory (XmxMenuRecord *rec, int token)
 /* ---------------------------- XmxRSetValues ----------------------------- */
 
 /* args used on Widget */
-public void
-XmxRSetValues (XmxMenuRecord *rec, int token)
+void XmxRSetValues(XmxMenuRecord *rec, int token)
 {
-  XmxMenuEntry *_entry;
+  XmxMenuEntry *entry;
 
   /* Strip out uniqid, if present. */
-  _entry = _XmxMenuGetEntryFromRecord (rec, XmxExtractToken (token));
-  if (_entry)
-    XtSetValues (_entry->w, Xmx_wargs, Xmx_n);
+  entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
+  if (entry)
+      XtSetValues(entry->w, Xmx_wargs, Xmx_n);
 
   Xmx_n = 0;
   return;
@@ -213,261 +205,255 @@ XmxRSetValues (XmxMenuRecord *rec, int token)
 /* ---------------------------- XmxRGetWidget ----------------------------- */
 
 /* args irrelevant */
-public Widget
-XmxRGetWidget (XmxMenuRecord *rec, int token)
+Widget XmxRGetWidget(XmxMenuRecord *rec, int token)
 {
-  XmxMenuEntry *_entry;
+  XmxMenuEntry *entry;
 
   /* Strip out uniqid, if present. */
-  _entry = _XmxMenuGetEntryFromRecord (rec, XmxExtractToken (token));
+  entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
 
-  if (_entry)
-    return _entry->w;
-  else
-    return NULL;
+  if (entry) {
+      return entry->w;
+  } else {
+      return NULL;
+  }
 }
 
 /* -------------------------- XmxRMakeOptionMenu -------------------------- */
 
 /* args apply to pulldown menu */
-public XmxMenuRecord *
-XmxRMakeOptionMenu (Widget parent, String name, XtCallbackProc cb,
-                    XmxOptionMenuStruct *opts)
+XmxMenuRecord *XmxRMakeOptionMenu(Widget parent, String name, XtCallbackProc cb,
+				  XmxOptionMenuStruct *opts)
 {
-  XmxMenuRecord *_rec;
-  Widget _pulldown, _button, _menuhist = (Widget)NULL;
-  int _i;
+  XmxMenuRecord *rec;
+  Widget pulldown, button;
+  Widget menuhist = NULL;
+  int i;
+  XmString xmstr;
 
   /* Create a pulldown menupane to attach to the option menu;
-     preloaded wargs affect this. */
-  _pulldown = XmCreatePulldownMenu (parent, "pulldownmenu", Xmx_wargs, Xmx_n);
+   * preloaded wargs affect this. */
+  pulldown = XmCreatePulldownMenu(parent, "pulldownmenu", Xmx_wargs, Xmx_n);
 
-  /* menuHistory will not be applied to _pulldown, so we'll modify
-     _rec directly after creating the option menu. */
-  _rec = _XmxMenuCreateRecord (_pulldown);
+  /* menuHistory will not be applied to pulldown, so we'll modify
+   * rec directly after creating the option menu. */
+  rec = _XmxMenuCreateRecord(pulldown);
 
   /* Create pushbutton gadgets as childen of the pulldown menu. */
-  _i = 0;
-  while (opts[_i].namestr)
-    {
+  i = 0;
+  while (opts[i].namestr) {
       Xmx_n = 0;
-      XmxSetArg (XmNlabelString,
-                 (XtArgVal)XmStringCreateLtoR (opts[_i].namestr,
-                                               XmSTRING_DEFAULT_CHARSET));
-      _button = XmCreatePushButtonGadget (_pulldown, "pushbutton",
-                                          Xmx_wargs, Xmx_n);
-      XtManageChild (_button);
-      XtAddCallback (_button, XmNactivateCallback, cb,
-                     (XtPointer)_XmxMakeClientData (opts[_i].data));
-      if (opts[_i].set_state == XmxSet)
-        _menuhist = _button;
 
-      _XmxMenuAddEntryToRecord (_rec, _button, opts[_i].data);
+      xmstr = XmStringCreateLtoR(opts[i].namestr, XmSTRING_DEFAULT_CHARSET);
+      XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+      button = XmCreatePushButtonGadget(pulldown, "pushbutton",
+                                        Xmx_wargs, Xmx_n);
+      XmStringFree(xmstr);
+      XtManageChild(button);
+      XtAddCallback(button, XmNactivateCallback, cb,
+                    (XtPointer)_XmxMakeClientData(opts[i].data));
+      if (opts[i].set_state == XmxSet)
+          menuhist = button;
 
-      _i++;
-    }
+      _XmxMenuAddEntryToRecord(rec, button, opts[i].data);
+      i++;
+  }
 
   /* Create the option menu itself; tie in the pulldown menu. */
   Xmx_n = 0;
-  XmxSetArg (XmNsubMenuId, (XtArgVal)_pulldown);
-  if (_menuhist != (Widget)NULL)
-    XmxSetArg (XmNmenuHistory, (XtArgVal)_menuhist);
-  Xmx_w = XmCreateOptionMenu (parent, "optionmenu", Xmx_wargs, Xmx_n);
-  XtManageChild (Xmx_w);
+  XmxSetArg(XmNsubMenuId, (XtArgVal)pulldown);
+  if (menuhist)
+      XmxSetArg(XmNmenuHistory, (XtArgVal)menuhist);
+  Xmx_w = XmCreateOptionMenu(parent, "optionmenu", Xmx_wargs, Xmx_n);
+  XtManageChild(Xmx_w);
 
-  XmxSetArg (XmNalignment, (XtArgVal)XmALIGNMENT_BEGINNING);
-  XmxSetValues (XmOptionButtonGadget (Xmx_w));
+  XmxSetArg(XmNalignment, (XtArgVal)XmALIGNMENT_BEGINNING);
+  XmxSetValues(XmOptionButtonGadget(Xmx_w));
 
-  if (name)
-    {
-      XmxSetArg (XmNlabelString,
-                 (XtArgVal)XmStringCreateLtoR (name, XmSTRING_DEFAULT_CHARSET));
-      XmxSetValues (XmOptionLabelGadget (Xmx_w));
-    }
-  else
-    {
-      XmxSetArg (XmNspacing, (XtArgVal)0);
-      XmxSetArg (XmNmarginWidth, (XtArgVal)0);
-      XmxSetValues (Xmx_w);
-      XmxSetArg (XmNlabelString, (XtArgVal)NULL);
-      XmxSetValues (XmOptionLabelGadget (Xmx_w));
-    }
+  if (name) {
+      xmstr = XmStringCreateLtoR(name, XmSTRING_DEFAULT_CHARSET);
+      XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+      XmxSetValues(XmOptionLabelGadget(Xmx_w));
+      XmStringFree(xmstr);
+  } else {
+      XmxSetArg(XmNspacing, (XtArgVal)0);
+      XmxSetArg(XmNmarginWidth, (XtArgVal)0);
+      XmxSetValues(Xmx_w);
+      XmxSetArg(XmNlabelString, (XtArgVal)NULL);
+      XmxSetValues(XmOptionLabelGadget(Xmx_w));
+  }
 
   /* Explicitly set base Widget of record. */
-  _rec->base = Xmx_w;
+  rec->base = Xmx_w;
 
   Xmx_n = 0;
-  return _rec;
+  return rec;
 }
 
 /* -------------------------- XmxRMakeToggleMenu -------------------------- */
 
 /* args apply to radiobox or optionbox */
-public XmxMenuRecord *
-XmxRMakeToggleMenu (Widget parent, int behavior, XtCallbackProc cb,
-                    XmxToggleMenuStruct *opts)
+XmxMenuRecord *XmxRMakeToggleMenu(Widget parent, int behavior,
+				  XtCallbackProc cb, XmxToggleMenuStruct *opts)
 {
-  XmxMenuRecord *_rec;
-  Widget _box;
-  int _i;
+  XmxMenuRecord *rec;
+  Widget box;
+  int i;
 
-  assert (behavior == XmxOneOfMany || behavior == XmxNOfMany);
-  switch (behavior)
-    {
+  assert(behavior == XmxOneOfMany || behavior == XmxNOfMany);
+  switch (behavior) {
     case XmxOneOfMany:
-      _box = XmxMakeRadioBox (parent);
+      box = XmxMakeRadioBox(parent);
       break;
     case XmxNOfMany:
-      _box = XmxMakeOptionBox (parent);
+      box = XmxMakeOptionBox(parent);
       break;
-    }
+  }
 
-  _rec = _XmxMenuCreateRecord (_box);
+  rec = _XmxMenuCreateRecord(box);
 
-  _i = 0;
-  while (opts[_i].namestr)
-    {
-      XmxMakeToggleButton (_box, opts[_i].namestr, cb, opts[_i].data);
-      XmxSetToggleButton (Xmx_w, opts[_i].set_state);
-      _XmxMenuAddEntryToRecord (_rec, Xmx_w, opts[_i].data);
+  i = 0;
+  while (opts[i].namestr) {
+      XmxMakeToggleButton(box, opts[i].namestr, cb, opts[i].data);
+      XmxSetToggleButton(Xmx_w, opts[i].set_state);
+      _XmxMenuAddEntryToRecord(rec, Xmx_w, opts[i].data);
+      i++;
+  }
 
-      _i++;
-    }
-
-  Xmx_w = _box;
+  Xmx_w = box;
 
   Xmx_n = 0;
-  return _rec;
+  return rec;
 }
 
 /* -------------------------- _XmxRCreateMenubar -------------------------- */
 
 /* Possible deficiency: will not be able to grey out a submenu
-   (cascade button). */
-private void 
-_XmxRCreateMenubar (Widget menu, XmxMenubarStruct *menulist, 
-                    XmxMenuRecord *rec)
+ * (cascade button). */
+static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist, 
+                               XmxMenuRecord *rec, Boolean tearoff)
 {
-  int _i;
-  Widget *_buttons;
-  int _separators = 0, _nitems;
+  int i;
+  Widget *buttons;
+  int separators = 0, nitems;
 
-  _nitems = 0;
-  while (menulist[_nitems].namestr)
-    _nitems++;
+  nitems = 0;
+  while (menulist[nitems].namestr)
+      nitems++;
 
-  _buttons = (Widget *)XtMalloc (_nitems * sizeof (Widget));
+  buttons = (Widget *)XtMalloc(nitems * sizeof(Widget));
 
-  for (_i = 0; _i < _nitems; _i++)
-    {
+  for (i = 0; i < nitems; i++) {
       /* Name of "----" means make a separator. */
-      if (strcmp(menulist[_i].namestr, "----") == 0)
-        {
-          XtCreateManagedWidget ("separator", xmSeparatorGadgetClass,
-                                 menu, NULL, 0);
-          _separators++;
-        }
+      if (!strncmp(menulist[i].namestr, "----", 4)) {
+          XtCreateManagedWidget("separator", xmSeparatorWidgetClass,
+                                menu, NULL, 0);
+	  /* Double separator */
+	  if (menulist[i].namestr[4] == '2')
+              XtCreateManagedWidget("separator", xmSeparatorWidgetClass,
+                                    menu, NULL, 0);
+          separators++;
       /* A function means it's an ordinary entry with callback. */
-      else if (menulist[_i].func)
-        {
+      } else if (menulist[i].func) {
+          XmString xmstr;
+
           Xmx_n = 0;
-          if (menulist[_i].mnemonic)
-            XmxSetArg (XmNmnemonic, (XtArgVal)(menulist[_i].mnemonic));
-          if (menulist[_i].namestr[0] == '#' ||
-              menulist[_i].namestr[0] == '<') /* option/toggle button */
-            {
-              XmString xmstr;
+          if (menulist[i].mnemonic)
+              XmxSetArg(XmNmnemonic, (XtArgVal)(menulist[i].mnemonic));
+          if ((menulist[i].namestr[0] == '#') ||
+              (menulist[i].namestr[0] == '<')) {  /* option/toggle button */
 
               /* A toggle button is diamond-shaped. */
-              if (menulist[_i].namestr[0] == '<')
-                XmxSetArg (XmNindicatorType, (XtArgVal)XmONE_OF_MANY);
+              if (menulist[i].namestr[0] == '<')
+                  XmxSetArg(XmNindicatorType, (XtArgVal)XmONE_OF_MANY);
 
 	      /* Make sure the button shows up even when toggled off. */
-              if (menulist[_i].namestr[0] == '#')
-                XmxSetArg (XmNvisibleWhenOff, (XtArgVal)True);
+              if (menulist[i].namestr[0] == '#')
+                  XmxSetArg(XmNvisibleWhenOff, (XtArgVal)True);
 
               /* Ignore first character of label. */
-              xmstr = XmxMakeXmstrFromString (&(menulist[_i].namestr[1]));
-              XmxSetArg (XmNlabelString, (XtArgVal)xmstr);
-              _buttons[_i - _separators] = XtCreateManagedWidget
-                ("togglebutton", xmToggleButtonGadgetClass,
-                 menu, Xmx_wargs, Xmx_n);
-              XmStringFree (xmstr);
+              xmstr = XmStringCreateLtoR(&(menulist[i].namestr[1]),
+					 XmSTRING_DEFAULT_CHARSET);
+              XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+              buttons[i - separators] = XmCreateToggleButton(menu,
+							     "togglebutton",
+							     Xmx_wargs, Xmx_n);
+              XmStringFree(xmstr);
 
-              XtAddCallback
-                (_buttons[_i - _separators], XmNvalueChangedCallback,
-                 menulist[_i].func, 
-                 (XtPointer)_XmxMakeClientData (menulist[_i].data));
-
-              /* Add thie button to the menu record. */
-              _XmxMenuAddEntryToRecord 
-                (rec, _buttons[_i - _separators], menulist[_i].data);
-            }
-          else /* regular button */
-            {
-              XmString xmstr = 
-                XmStringCreateLtoR
-                  (menulist[_i].namestr, XmSTRING_DEFAULT_CHARSET);
-              XmxSetArg (XmNlabelString, (XtArgVal)xmstr);
-              _buttons[_i - _separators] = XtCreateManagedWidget
-                ("pushbutton", xmPushButtonGadgetClass,
-                 menu, Xmx_wargs, Xmx_n);
-              XmStringFree (xmstr);
-              XtAddCallback 
-                (_buttons[_i - _separators], XmNactivateCallback,
-                 menulist[_i].func, 
-                 (XtPointer)_XmxMakeClientData (menulist[_i].data));
-
-              /* Add thie button to the menu record. */
-              _XmxMenuAddEntryToRecord 
-                (rec, _buttons[_i - _separators], menulist[_i].data);
-            }
-        }
-
+              XtAddCallback(buttons[i - separators], XmNvalueChangedCallback,
+              		    menulist[i].func, 
+              		    (XtPointer)_XmxMakeClientData(menulist[i].data));
+              /* Add the button to the menu record. */
+              _XmxMenuAddEntryToRecord(rec, buttons[i - separators],
+				       menulist[i].data);
+          } else {    /* Regular button */
+	      xmstr = XmStringCreateLtoR(menulist[i].namestr,
+					 XmSTRING_DEFAULT_CHARSET);
+              XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+              buttons[i - separators] = XtCreateManagedWidget("pushbutton",
+							xmPushButtonWidgetClass,
+					                menu, Xmx_wargs, Xmx_n);
+              XmStringFree(xmstr);
+              XtAddCallback(buttons[i - separators], XmNactivateCallback,
+			    menulist[i].func, 
+              		    (XtPointer)_XmxMakeClientData(menulist[i].data));
+              /* Add button to the menu record. */
+              _XmxMenuAddEntryToRecord(rec, buttons[i - separators],
+				       menulist[i].data);
+          }
       /* No function and no submenu entry means it's just a label. */
-      else if (menulist[_i].sub_menu == (XmxMenubarStruct *)NULL)
-        {
+      } else if (!menulist[i].sub_menu) {
+          XmString xmstr;
+
           Xmx_n = 0;
-          XmxSetArg (XmNlabelString, (XtArgVal)XmStringCreateLtoR
-                     (menulist[_i].namestr, XmSTRING_DEFAULT_CHARSET));
-          _buttons[_i - _separators] = XtCreateManagedWidget
-            ("label", xmLabelGadgetClass, menu, Xmx_wargs, Xmx_n);
-        }
+	  xmstr = XmStringCreateLtoR(menulist[i].namestr,
+				     XmSTRING_DEFAULT_CHARSET);
+          XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+          buttons[i - separators] = XtCreateManagedWidget("label",
+							  xmLabelWidgetClass,
+							  menu, Xmx_wargs,
+							  Xmx_n);
+          XmStringFree(xmstr);
 
       /* If all else fails, it's a submenu. */
-      else
-        {
+      } else {
           XmString xmstr;
-          Widget _sub_menu;
-          _sub_menu = XmCreatePulldownMenu (menu, "pulldownmenu", NULL, 0);
+          Widget sub_menu;
 
           Xmx_n = 0;
-          XmxSetArg (XmNsubMenuId, (XtArgVal)_sub_menu);
-          if (menulist[_i].mnemonic)
-            XmxSetArg (XmNmnemonic, (XtArgVal)(menulist[_i].mnemonic));
-          xmstr = XmStringCreateLtoR
-            (menulist[_i].namestr, XmSTRING_DEFAULT_CHARSET);
-          XmxSetArg (XmNlabelString, (XtArgVal)xmstr);
-          _buttons[_i - _separators] = XtCreateWidget
-            ("cascadebutton", xmCascadeButtonGadgetClass,
-             menu, Xmx_wargs, Xmx_n);
-          XmStringFree (xmstr);
+#ifdef MOTIF1_2
+	  if (tearoff)
+              XmxSetArg(XmNtearOffModel, (XtArgVal)XmTEAR_OFF_ENABLED);
+#endif
+          sub_menu = XmCreatePulldownMenu(menu, "pulldownmenu",
+					  Xmx_wargs, Xmx_n);
+          Xmx_n = 0;
+          XmxSetArg(XmNsubMenuId, (XtArgVal)sub_menu);
+          if (menulist[i].mnemonic)
+              XmxSetArg(XmNmnemonic, (XtArgVal)(menulist[i].mnemonic));
+          xmstr = XmStringCreateLtoR(menulist[i].namestr,
+				     XmSTRING_DEFAULT_CHARSET);
+          XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
+          buttons[i - separators] = XtCreateWidget("cascadebutton",
+						   xmCascadeButtonWidgetClass,
+          					   menu, Xmx_wargs, Xmx_n);
+          XmStringFree(xmstr);
 
           /* If name is "Help", put on far right. */
-          if (strcmp (menulist[_i].namestr, "Help") == 0)
-            {
+          if (!strcmp(menulist[i].namestr, "Help")) {
               Xmx_n = 0;
-              XmxSetArg (XmNmenuHelpWidget, (XtArgVal)_buttons[_i - _separators]);
-              XtSetValues (menu, Xmx_wargs, Xmx_n);
-            }
+              XmxSetArg(XmNmenuHelpWidget,
+			(XtArgVal)buttons[i - separators]);
+              XtSetValues(menu, Xmx_wargs, Xmx_n);
+          }
           /* Recursively create new submenu. */
-          _XmxRCreateMenubar (_sub_menu, menulist[_i].sub_menu, rec);
-        }
-    }
+          _XmxRCreateMenubar(sub_menu, menulist[i].sub_menu, rec, tearoff);
+      }
+  }
 
-  XtManageChildren (_buttons, _nitems - _separators);
+  XtManageChildren(buttons, nitems - separators);
 
-  XtFree ((char *)_buttons);
+  XtFree((char *)buttons);
 
   return;
 }
@@ -475,23 +461,23 @@ _XmxRCreateMenubar (Widget menu, XmxMenubarStruct *menulist,
 /* --------------------------- XmxRMakeMenubar ---------------------------- */
 
 /* args apply to menubar */
-public XmxMenuRecord *
-XmxRMakeMenubar (Widget parent, XmxMenubarStruct *mainmenu)
+XmxMenuRecord *XmxRMakeMenubar(Widget parent, XmxMenubarStruct *mainmenu,
+			       Boolean tearoff)
 {
-  Widget _menubar;
-  XmxMenuRecord *_rec;
+  Widget menubar;
+  XmxMenuRecord *rec;
 
   /* Preset resources applied to main menubar only. */
-  _menubar = XmCreateMenuBar (parent, "menubar", Xmx_wargs, Xmx_n);
-  XtManageChild (_menubar);
+  menubar = XmCreateMenuBar(parent, "menubar", Xmx_wargs, Xmx_n);
+  XtManageChild(menubar);
 
   /* Create the new XmxMenuRecord. */
-  _rec = _XmxMenuCreateRecord (_menubar);
+  rec = _XmxMenuCreateRecord(menubar);
 
   Xmx_n = 0;
-  _XmxRCreateMenubar (_menubar, mainmenu, _rec);
+  _XmxRCreateMenubar(menubar, mainmenu, rec, tearoff);
 
   Xmx_n = 0;
-  Xmx_w = _menubar;
-  return _rec;
+  Xmx_w = menubar;
+  return rec;
 }

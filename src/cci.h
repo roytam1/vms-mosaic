@@ -52,6 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
+/* Copyright (C) 2004, 2005 - The VMS Mosaic Project */
+
 #ifndef __CCI_H__
 #define __CCI_H__
 
@@ -60,7 +62,7 @@
 #define MCCI_VERSION		"1.0"
 
 
-/* return codes from cci api */
+/* Return codes from cci api */
 #define MCCI_OK			0
 #define MCCI_FAIL		1
 #define MCCI_OUTOFMEMORY	2
@@ -117,7 +119,7 @@
 #define MCCI_S_POST		"POST"
 #define MCCI_POST             	"cciPOST"
 
-/* for DOCOMMAND options */
+/* For DOCOMMAND options */
 #define MCCI_ON			"ON"
 #define MCCI_OFF		"OFF"
 #define MCCI_UP			"UP"
@@ -180,7 +182,7 @@
 
 /******************* RETURN CODES ***********************/
 
-/* successful return codes in protocol*/
+/* Successful return codes in protocol */
 #define MCCIR_OK			200
 #define MCCIR_GET_OK			210
 #define MCCIR_DISPLAY_OK		211
@@ -213,7 +215,7 @@
 #define MCCIR_SEND_ANCH_BEF_MCCI_OK	288  /* from CCI */
 #define MCCIR_SEND_ANCH_BEF_OTHR_OK	289  /* from other source */      
 
-/* sendAnchor After return codes */
+/* Send Anchor After return codes */
 #define MCCIR_SEND_ANCH_AFT_LINK_OK	290  /* clicked link  */          
 #define MCCIR_SEND_ANCH_AFT_OPEN_OK	291  /* used open dialog */       
 #define MCCIR_SEND_ANCH_AFT_EDIT_OK	292  /* edited URL field  */      
@@ -225,10 +227,9 @@
 #define MCCIR_SEND_ANCH_AFT_MCCI_OK	298  /* from CCI */               
 #define MCCIR_SEND_ANCH_AFT_OTHR_OK	299  /* from other source */      
 
-/* ADC ZZZ */
 #define MCCIR_SEND_ANCH_HAN_OTHR_OK     270  /*  ADC ZZZ */
 
-/* additional data follows repsonse code */
+/* Additional data follows repsonse code */
 #define MCCIR_ANCHOR_INFO	301 /* anchor visited information */
 #define MCCIR_SEND_DATA_OUTPUT	302 /* output from Send Output protocol */
 #define MCCIR_SEND_BROWSERVIEW	303 /* output from Send Browserview proto */
@@ -240,85 +241,84 @@
 #define MCCIR_SEND_EVENT	309 /* output form send event protocol */
 #define MCCIR_SEND_MOUSE_ANCHOR 310 /* output from Send Mouse Anchor */
 
-/* problem response codes... client problems*/
+/* Problem response codes... client problems */
 #define MCCIR_UNRECOGNIZED	401  /* what's this? */
 #define MCCIR_ERROR		402  /* does not follow protocol */
 
-/* problem response codes... broswer problems*/
+/* Problem response codes... broswer problems */
 #define MCCIR_REQ_FAILED	500  /* request failed */
 #define MCCIR_GET_FAILED	501  /* request failed */
 #define MCCIR_MAX_CONNECTIONS   502  /* Max number of connections exceeded */
 #define MCCIR_NO_URL_FOR_FILE	503  /* couldn't translate filename to url */
 #define MCCIR_DOCOMMAND_FAILED	504  /* command not implemented yet */
 
-/* all possible events on the Web browser */
-typedef enum{
+/* All possible events on the Web browser */
+typedef enum {
 
-/* selected from menu */
-  MOSAIC_NEW, MOSAIC_CLONE, MOSAIC_OPEN_URL, FILE_OPEN_LOCAL, 
+	/* Selected from menu */
+	MOSAIC_NEW, MOSAIC_CLONE, MOSAIC_OPEN_URL, FILE_OPEN_LOCAL, 
   	MOSAIC_RELOAD_CURRENT,
-/*5*/	FILE_RELOAD_IMAGES, FILE_REFRESH_CURRENT, FILE_FIND_IN_CURRENT,
-/*8*/	FILE_VIEW_SOURCE, FILE_EDIT_SOURCE, FILE_SOURCE_DATE, MOSAIC_SAVE_AS,
-/*12*/	FILE_PRINT, FILE_MAIL_TO, FILE_CCI, MOSAIC_CLOSE, FILE_EXIT_PROGRAM,
+	FILE_RELOAD_IMAGES, FILE_REFRESH_CURRENT, FILE_FIND_IN_CURRENT,
+	FILE_VIEW_SOURCE, FILE_EDIT_SOURCE, FILE_SOURCE_DATE, MOSAIC_SAVE_AS,
+	FILE_PRINT, FILE_MAIL_TO, FILE_CCI, MOSAIC_CLOSE, FILE_EXIT_PROGRAM,
 
-/*17*/
-  OPTIONS_FANCY_SELECTIONS_ON, OPTIONS_FANCY_SELECTIONS_OFF, 
+	OPTIONS_FANCY_SELECTIONS_ON, OPTIONS_FANCY_SELECTIONS_OFF, 
 	OPTIONS_LOAD_TO_LOCAL_DISK_ON, OPTIONS_LOAD_TO_LOCAL_DISK_OFF,
 	OPTIONS_DELAY_IMAGE_LOADING_ON, OPTIONS_DELAY_IMAGE_LOADING_OFF,
 	OPTIONS_LOAD_IMAGES_IN_CURRENT, OPTIONS_RELOAD_CONFIG_FILES, 
 	OPTIONS_FLUSH_IMAGE_CACHE, OPTIONS_CLEAR_GLOBAL_HISTORY, 
-/*27*/
 	OPTIONS_FONTS_TR, OPTIONS_FONTS_TS, OPTIONS_FONTS_TL,
 	OPTIONS_FONTS_HR, OPTIONS_FONTS_HS, OPTIONS_FONTS_HL, 
 	OPTIONS_FONTS_NCR, OPTIONS_FONTS_NCS, OPTIONS_FONTS_NCL,
 	OPTIONS_FONTS_LBR, OPTIONS_FONTS_LBS, OPTIONS_FONTS_LBL,
-/*39*/
 	OPTIONS_ANCHOR_UNDERLINES_DU, OPTIONS_ANCHOR_UNDERLINES_LU,
 	OPTIONS_ANCHOR_UNDERLINES_MU, OPTIONS_ANCHOR_UNDERLINES_HU,
 	OPTIONS_ANCHOR_UNDERLINES_NU,
-/*44*/
-  MOSAIC_BACK, MOSAIC_FORWARD, MOSAIC_HOME_DOCUMENT, 
+	MOSAIC_BACK, MOSAIC_FORWARD, MOSAIC_HOME_DOCUMENT, 
 	NAVIGATE_WINDOW_HISTORY, NAVIGATE_HOTLIST, 
-	NAVIGATE_ADD_CURRENT_TO_HOTLIST, NAVIGATE_INTERNET_STARTING_POINTS, 
+	NAVIGATE_ADD_CURRENT_TO_HOTLIST, NAVIGATE_SEARCH,
+	NAVIGATE_USENET_SEARCH, 
+	NAVIGATE_PEOPLE_SEARCH, 
+	NAVIGATE_META_SEARCH, 
+	NAVIGATE_LIST_SEARCH, 
+	NAVIGATE_MAP_SEARCH, 
+	NAVIGATE_AUCTION_SEARCH, 
 	NAVIGATE_INTERNET_RESOURCES_META_INDEX,
-/*52*/
-  ANNOTATE_ANNOTATE, ANNOTATE_AUDIO_ANNOTATE, ANNOTATE_EDIT_THIS_ANNOTATION, 
+	ANNOTATE_ANNOTATE, ANNOTATE_AUDIO_ANNOTATE,
+	ANNOTATE_EDIT_THIS_ANNOTATION, 
 	ANNOTATE_DELETE_THIS_ANNOTATION,
-/*56*/
-  NEWS_NEXT, NEWS_PREV, NEWS_NEXT_THREAD, NEWS_PREV_THREAD, NEWS_INDEX,
+	NEWS_NEXT, NEWS_PREV, NEWS_NEXT_THREAD, NEWS_PREV_THREAD, NEWS_INDEX,
 	NEWS_LIST_GROUPS, NEWS_POST, NEWS_FOLLOW_UP, NEWS_FORMAT_TV,
 	NEWS_FORMAT_GV,
-/*66*/
-/* when user click on globe */
-  MOSAIC_GLOBE,
+	/* When user click on globe */
+	MOSAIC_GLOBE,
+	AUTHENTICATION_BUTTON,
+	ENCRYPT_BUTTON,
 
-/* when user make selections from the bottom panel */
-  AUTHENTICATION_BUTTON,
+	/* When user submit a form, has to be valid */
+	FORM_SUBMIT,
 
-/* when user submit a form, has to be valid */
-  FORM_SUBMIT,
+	/* When user edits the url text field in mosaic window and hit return */
+	MOSAIC_URL_TEXT_FIELD,
 
-/* when user edits the url text field in mosaic window and hit return */
-  MOSAIC_URL_TEXT_FIELD,
+	/* Triggering anchor in HTML widget */
+	MOSAIC_URL_TRIGGER,
 
-/*71*/
-/* triggering anchor in HTML widget */
-  MOSAIC_URL_TRIGGER,
+	HELP_MANUAL, HELP_ABOUT, HELP_ON_WINDOW,
+	HELP_ON_VERSION, HELP_ON_FAQ, HELP_ON_HTML, HELP_ON_URLS,
+	HELP_MAIL_TECH_SUPPORT, FILE_OPEN_DTM_OUTPORT, FILE_BROADCAST_DOCUMENT,
+	FILE_KERBEROS_V4_LOGIN, FILE_KERBEROS_V5_LOGIN, HELP_COMMENT_CARD,
+	IMAGE_LOADED, LINK_LOADED, STARTUP,
 
-/* SWP -- 8/3/95 */
-  HELP_DEMO, HELP_MANUAL, HELP_ABOUT, HELP_ON_WINDOW, HELP_WHATS_NEW,
-  HELP_ON_VERSION, HELP_ON_FAQ, HELP_ON_HTML, HELP_ON_URLS,
-  HELP_MAIL_TECH_SUPPORT, FILE_OPEN_DTM_OUTPORT, FILE_BROADCAST_DOCUMENT,
-  FILE_KERBEROS_V4_LOGIN, FILE_KERBEROS_V5_LOGIN, HELP_COMMENT_CARD,
-  IMAGE_LOADED, LINK_LOADED, STARTUP,
+	/* Events for FTP transfer/commands. */
+	FTP_PUT, FTP_REMOVE, FTP_MKDIR,
 
-/*90*/
-/* Events for FTP transfer/commands. */
-  FTP_PUT, FTP_REMOVE, FTP_MKDIR ,
+	OPTIONS_FLUSH_PASSWD_CACHE,
+	OPTIONS_BINARY_FTP_MODE_ON, OPTIONS_BINARY_FTP_MODE_OFF,
+	HELP_ON_VMS_VERSION, OPEN_COOKIEJAR,
+	OPTIONS_VERIFY_CERTS_ON, OPTIONS_VERIFY_CERTS_OFF
 
-  OPTIONS_FLUSH_PASSWD_CACHE 
-
-}CCI_events;
+	} CCI_events;
 
 
 /*****************************************************************/

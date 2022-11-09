@@ -531,6 +531,4 @@ typedef enum {
 	MAX_INTER_TYPES
 } iType;
 
-#else
-
 #endif

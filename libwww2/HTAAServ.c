@@ -60,7 +60,6 @@
 #include "HTAAServ.h"		/* Implemented here		*/
 
 
-
 /*
 ** Global variables
 */
@@ -70,10 +69,9 @@ PUBLIC time_t theTime;
 /*
 ** Module-wide global variables
 */
-PRIVATE FILE *  htaa_logfile	    = NULL; 		/* Log file	      */
+PRIVATE FILE     *htaa_logfile = NULL;	 		/* Log file	      */
 PRIVATE HTAAUser *htaa_user = NULL;			/* Authenticated user */
 PRIVATE HTAAFailReasonType HTAAFailReason = HTAA_OK;	/* AA fail reason     */
-
 
 
 /* SERVER PUBLIC					HTAA_statusMessage()
@@ -130,7 +128,6 @@ PUBLIC char *HTAA_statusMessage NOARGS
 }
 
 
-
 PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
 {
     switch (HTAAFailReason) {
@@ -176,10 +173,6 @@ PRIVATE char *status_name ARGS1(HTAAFailReasonType, reason)
     } /* switch */
 }
 
-    
-
-
-
 
 /* PRIVATE						check_uthorization()
 **		CHECK IF USER IS AUTHORIZED TO ACCESS A FILE
@@ -216,15 +209,16 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 
     if (!pathname) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr,
-			   "HTAA_checkAuthorization: Forbidden by rule\n");
+	if (www2Trace)
+	    fprintf(stderr, "HTAA_checkAuthorization: Forbidden by rule\n");
 #endif
 	return HTAA_BY_RULE;
     }
 #ifndef DISABLE_TRACE
-    if (www2Trace) fprintf(stderr, "%s `%s' %s %s\n",
-		       "HTAA_checkAuthorization: translated path:",
-		       pathname, "method:", HTAAMethod_name(method));
+    if (www2Trace)
+	fprintf(stderr, "%s `%s' %s %s\n",
+	        "HTAA_checkAuthorization: translated path:",
+	        pathname, "method:", HTAAMethod_name(method));
 #endif
     /*
     ** Get protection setting (set up by callbacks from rule system)
@@ -252,9 +246,10 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 						  scheme_specifics,
 						  prot);
 #ifndef DISABLE_TRACE
-		    if (www2Trace) fprintf(stderr, "Authentication returned: %s\n",
-				       (htaa_user ? htaa_user->username
-					          : "NOT-AUTHENTICATED"));
+		    if (www2Trace)
+			fprintf(stderr, "Authentication returned: %s\n",
+			        (htaa_user ? htaa_user->username
+			         : "NOT-AUTHENTICATED"));
 #endif
 		}
 		HTAA_resolveGroupReferences(prot->mask_group, group_def_list);
@@ -265,33 +260,35 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 						 NULL);
 #ifndef DISABLE_TRACE
 		if (www2Trace) {
-		    if (reason != HTAA_OK)
+		    if (reason != HTAA_OK) {
 			fprintf(stderr, "%s %s %s %s\n",
 				"HTAA_checkAuthorization: access denied",
 				"by mask (no ACL, only Protect rule)",
 				"host", HTClientHost);
-		    else fprintf(stderr, "%s %s %s %s\n",
-				 "HTAA_checkAuthorization: request from",
-				 HTClientHost, 
-				 "accepted by only mask match (no ACL, only",
-				 "Protect rule, and only mask enabled)");
+		    } else {
+			fprintf(stderr, "%s %s %s %s\n",
+			        "HTAA_checkAuthorization: request from",
+				HTClientHost, 
+				"accepted by only mask match (no ACL, only",
+				"Protect rule, and only mask enabled)");
+		    }
 		}
 #endif
 		return reason;
-	    }
-	    else {	/* 403 Forbidden */
+	    } else {	/* 403 Forbidden */
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s %s\n",
-				   "HTAA_checkAuthorization: Protected, but",
-				   "no mask group nor ACL -- forbidden");
+		if (www2Trace)
+		    fprintf(stderr, "%s %s\n",
+			    "HTAA_checkAuthorization: Protected, but",
+			    "no mask group nor ACL -- forbidden");
 #endif
 		return HTAA_NO_ACL;
 	    }
-	}
-	else { /* No protect rule and no ACL => OK 200 */
+	} else { /* No protect rule and no ACL => OK 200 */
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "HTAA_checkAuthorization: %s\n",
-			       "no protect rule nor ACL -- ok\n");
+	    if (www2Trace)
+		fprintf(stderr, "HTAA_checkAuthorization: %s\n",
+		        "no protect rule nor ACL -- ok\n");
 #endif
 	    return HTAA_OK;
 	}
@@ -302,16 +299,17 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
     */
     if (!prot) {		/* Not protected by "protect" rule */
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr,
-			   "HTAA_checkAuthorization: default protection\n");
+	if (www2Trace)
+	    fprintf(stderr, "HTAA_checkAuthorization: default protection\n");
 #endif
 	prot = HTAA_getDefaultProtection();   /* Also sets current protection */
 
 	if (!prot) {		/* @@ Default protection not set ?? */
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "%s %s\n",
-			       "HTAA_checkAuthorization: default protection",
-			       "not set (internal server error)!!");
+	    if (www2Trace)
+		fprintf(stderr, "%s %s\n",
+		        "HTAA_checkAuthorization: default protection",
+			"not set (internal server error)!!");
 #endif
 	    return HTAA_SETUP_ERROR;
 	}
@@ -333,9 +331,10 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 					  scheme_specifics,
 					  prot);
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "Authentication returned: %s\n",
-			       (htaa_user
-				? htaa_user->username : "NOT-AUTHENTICATED"));
+	    if (www2Trace)
+		fprintf(stderr, "Authentication returned: %s\n",
+		        (htaa_user ?
+			 htaa_user->username : "NOT-AUTHENTICATED"));
 #endif
 	}
 	/* 
@@ -343,25 +342,27 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 	*/
 	if (prot->mask_group) {
 	    HTAA_resolveGroupReferences(prot->mask_group, group_def_list);
-	    reason=HTAA_userAndInetInGroup(prot->mask_group,
+	    reason = HTAA_userAndInetInGroup(prot->mask_group,
 					   htaa_user ? htaa_user->username : "",
 					   HTClientHost,
 					   NULL);
 	    if (reason != HTAA_OK) {
 #ifndef DISABLE_TRACE
-		if (www2Trace) fprintf(stderr, "%s %s %s\n",
-				   "HTAA_checkAuthorization: access denied",
-				   "by mask, host:", HTClientHost);
+		if (www2Trace)
+		    fprintf(stderr, "%s %s %s\n",
+			    "HTAA_checkAuthorization: access denied",
+			    "by mask, host:", HTClientHost);
 #endif
 		return reason;
 	    }
 #ifndef DISABLE_TRACE
-	    else if (www2Trace) fprintf(stderr, "%s %s %s %s %s\n",
-				   "HTAA_checkAuthorization: request from",
-				   HTClientHost, 
-				   "accepted by just mask group match",
-				   "(no ACL, only Protect rule, and only",
-				   "mask enabled)");
+	    else if (www2Trace)
+		fprintf(stderr, "%s %s %s %s %s\n",
+		        "HTAA_checkAuthorization: request from",
+		        HTClientHost, 
+			"accepted by just mask group match",
+			"(no ACL, only Protect rule, and only",
+			"mask enabled)");
 #endif
 	    /* And continue authorization checking */
 	}
@@ -373,13 +374,13 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 	allowed_groups = HTAA_getAclEntry(acl_file, pathname, method);
 	if (!allowed_groups) {
 #ifndef DISABLE_TRACE
-	    if (www2Trace) fprintf(stderr, "%s `%s' %s\n",
-			       "No entry for file", pathname, "in ACL");
+	    if (www2Trace)
+		fprintf(stderr, "%s `%s' %s\n",
+		        "No entry for file", pathname, "in ACL");
 #endif
 	    HTAA_closeAcl(acl_file);
 	    return HTAA_NO_ENTRY;	/* Forbidden -- no entry in the ACL */
-	}
-	else {
+	} else {
 	    do {
 		HTAA_resolveGroupReferences(allowed_groups, group_def_list);
 		reason = HTAA_userAndInetInGroup(allowed_groups,
@@ -398,7 +399,6 @@ PRIVATE HTAAFailReasonType check_authorization ARGS4(WWW_CONST char *,  pathname
 	}
     }
 }
-
 
 
 /* PUBLIC					      HTAA_checkAuthorization()
@@ -445,12 +445,15 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
     StrAllocCopy(local_copy, url);
     {
 	char *keywords = strchr(local_copy, '?');
-	if (keywords) *keywords = (char)0;	/* Chop off keywords */
+
+	if (keywords)
+	    *keywords = (char)0;	/* Chop off keywords */
     }
     HTSimplify(local_copy);	/* Remove ".." etc. */
     pathname = HTTranslate(local_copy);
     if (!HTSecure) {
 	char *localname = HTLocalName(pathname);
+
 	free(pathname);
 	pathname = localname;
     }	    
@@ -471,14 +474,15 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 		? htaa_user->username : "");
 	fflush(htaa_logfile);	/* Actually update it on disk */
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "Log: %24.24s %s %s %s %s %s\n",
-			   ctime(&theTime),
-			   HTClientHost ? HTClientHost : "local",
-			   method_name,
-			   url,
-			   status_name(HTAAFailReason),
-			   htaa_user && htaa_user->username
-			   ? htaa_user->username : "");
+	if (www2Trace)
+	    fprintf(stderr, "Log: %24.24s %s %s %s %s %s\n",
+		    ctime(&theTime),
+		    HTClientHost ? HTClientHost : "local",
+		    method_name,
+		    url,
+		    status_name(HTAAFailReason),
+		    htaa_user && htaa_user->username
+		    ? htaa_user->username : "");
 #endif
     }
 
@@ -511,9 +515,6 @@ PUBLIC int HTAA_checkAuthorization ARGS4(WWW_CONST char *,	url,
 }
 
 
-
-
-
 /* PRIVATE					compose_scheme_specifics()
 **		COMPOSE SCHEME-SPECIFIC PARAMETERS
 **		TO BE SENT ALONG WITH SERVER REPLY
@@ -538,6 +539,7 @@ PRIVATE char *compose_scheme_specifics ARGS2(HTAAScheme,	scheme,
       case HTAA_BASIC:
 	{
 	    char *realm = HTAssocList_lookup(prot->values, "server");
+
 	    result = (char*)malloc(60);
 	    sprintf(result, "realm=\"%s\"",
 		    (realm ? realm : "UNKNOWN"));
@@ -545,16 +547,6 @@ PRIVATE char *compose_scheme_specifics ARGS2(HTAAScheme,	scheme,
 	}
 	break;
 
-      case HTAA_PUBKEY:
-	{
-	    char *realm = HTAssocList_lookup(prot->values, "server");
-	    result = (char*)malloc(200);
-	    sprintf(result, "realm=\"%s\", key=\"%s\"",
-		    (realm ? realm : "UNKNOWN"),
-		    "PUBKEY-NOT-IMPLEMENTED");
-	    return result;
-	}
-	break;
       default:
 	return NULL;
     }
@@ -587,15 +579,17 @@ PUBLIC char *HTAA_composeAuthHeaders NOARGS
 
     if (!prot) {
 #ifndef DISABLE_TRACE
-	if (www2Trace) fprintf(stderr, "%s %s\n",
-			   "HTAA_composeAuthHeaders: Document not protected",
-			   "-- why was this function called??");
+	if (www2Trace)
+	    fprintf(stderr, "%s %s\n",
+		    "HTAA_composeAuthHeaders: Document not protected",
+		    "-- why was this function called??");
 #endif
 	return NULL;
     }
 #ifndef DISABLE_TRACE
-    else if (www2Trace) fprintf(stderr, "HTAA_composeAuthHeaders: for file `%s'\n",
-			    prot->filename);
+    else if (www2Trace)
+        fprintf(stderr, "HTAA_composeAuthHeaders: for file `%s'\n",
+		prot->filename);
 #endif
 
     FREE(result);	/* From previous call */
@@ -616,15 +610,15 @@ PUBLIC char *HTAA_composeAuthHeaders NOARGS
 		strcat(result, "\r\n");
 	    } /* scheme name found */
 #ifndef DISABLE_TRACE
-	    else if (www2Trace) fprintf(stderr, "HTAA_composeAuthHeaders: %s %d\n",
-				    "No name found for scheme number", scheme);
+	    else if (www2Trace)
+		fprintf(stderr, "HTAA_composeAuthHeaders: %s %d\n",
+		        "No name found for scheme number", scheme);
 #endif
 	} /* scheme valid for requested document */
     } /* for every scheme */
     
     return result;
 }
-
 
 
 /* PUBLIC						HTAA_startLogging()
