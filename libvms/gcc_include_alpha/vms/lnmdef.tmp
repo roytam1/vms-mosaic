@@ -1,0 +1,65 @@
+/* <lnmdef.h>
+ *
+ *	Logical name definitions
+ */
+#ifndef _LNMDEF_H
+#define _LNMDEF_H
+
+#define LNM$V_NO_ALIAS	0
+#define LNM$V_CONFINE	1
+#define LNM$V_CRELOG	2
+#define LNM$V_TABLE	3
+#define LNM$M_NO_ALIAS	(1<<LNM$V_NO_ALIAS)	/* 0x01 */
+#define LNM$M_CONFINE	(1<<LNM$V_CONFINE)	/* 0x02 */
+#define LNM$M_CRELOG	(1<<LNM$V_CRELOG)	/* 0x04 */
+#define LNM$M_TABLE	(1<<LNM$V_TABLE)	/* 0x08 */
+#define LNM$V_CONCEALED 8
+#define LNM$V_TERMINAL	9
+#define LNM$V_EXISTS	10
+#define LNM$M_CONCEALED (1<<LNM$V_CONCEALED)	/* 0x0100 */
+#define LNM$M_TERMINAL	(1<<LNM$V_TERMINAL)	/* 0x0200 */
+#define LNM$M_EXISTS	(1<<LNM$V_EXISTS)	/* 0x0400 */
+#define LNM$V_SHAREABLE 16
+#define LNM$M_SHAREABLE (1<<LNM$V_SHAREABLE)	/* 0x010000 */
+#define LNM$V_CREATE_IF 24
+#define LNM$V_CASE_BLIND 25
+#define LNM$M_CREATE_IF (1<<LNM$V_CREATE_IF)	/* 0x01000000 */
+#define LNM$M_CASE_BLIND (1<<LNM$V_CASE_BLIND)	/* 0x02000000 */
+struct lnmdef {
+/* logical name attributes -- bits 0-7 */
+    unsigned lnm$v_no_alias	: 1;	/* do not allow outer mode alias */
+    unsigned lnm$v_confine	: 1;	/* do not copy into subprocess */
+    unsigned lnm$v_crelog	: 1;	/* created with old $CRELOG service */
+    unsigned lnm$v_table	: 1;	/* this is a table name */
+    unsigned			: 4;	/* fill out logical name byte */
+/* logical name translation attributes -- bits 8-15 */
+    unsigned lnm$v_concealed	: 1;	/* do not display result of translation */
+    unsigned lnm$v_terminal	: 1;	/* do not retranslate result of translation */
+    unsigned lnm$v_exists	: 1;	/* translation does exist at this index */
+    unsigned			: 5;	/* fill out translation byte */
+/* logical name table characteristics -- bits 16-23 */
+    unsigned lnm$v_shareable	: 1;	/* logical name table is shareable (S0 space) */
+    unsigned			: 3;	/* reserved bit numbers 17-19 */
+    unsigned			: 4;	/* fill out table byte */
+/* system service options -- bits 24-31 */
+    unsigned lnm$v_create_if	: 1;	/* may map to existing logical name table */
+    unsigned lnm$v_case_blind	: 1;	/* perform case-insensitive translation */
+    unsigned			: 6;	/* fill out options byte */
+};
+#define LNM$C_TABNAMLEN 31	/* maximum length of a name contained within a directory table */
+#define LNM$C_NAMLENGTH 255	/* maximum logical name / translation length */
+#define LNM$C_MAXDEPTH	10	/* maximum logical name recursion depth */
+/* Define item list codes */
+#define LNM$_INDEX	1	/* translation index */
+#define LNM$_STRING	2	/* translation string */
+#define LNM$_ATTRIBUTES 3	/* attribute bits */
+#define LNM$_TABLE	4	/* logical name table name */
+#define LNM$_LENGTH	5	/* length of translation string */
+#define LNM$_ACMODE	6	/* access mode of name */
+#define LNM$_MAX_INDEX	7	/* maximum translation index */
+#define LNM$_PARENT	8	/* parent logical name table name */
+#define LNM$_LNMB_ADDR	9	/* return LNM block address */
+/*  internal use by MTL and mailbox UCB */
+#define LNM$_CHAIN	(-1)	/* chain to next list */
+
+#endif	/*_LNMDEF_H*/

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -85,7 +85,7 @@ extern char *cached_url;
 extern int browserSafeColors;
 extern int BSCnum;
 extern Boolean currently_delaying_images;
-         
+
 /* Defined in gui-documents.c */
 extern int interrupted;
 
@@ -194,7 +194,7 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 
 		/* This code copied from xpmread.c.  I could almost delete
 		 * the code from there, but I suppose an XPM file could
-		 * pathologically have multiple transparent colour indicies.
+		 * pathologically have multiple transparent color indexes.
 		 *  -- GWP
 		 */
 		XtVaGetValues(w,
@@ -338,8 +338,8 @@ void ProcessImageData(Widget w, ImageInfo *img_info, XColor *colrs)
 		img_info->colrs[cnt - 1].red = bg_red;
 		img_info->colrs[cnt - 1].green = bg_green;
 		img_info->colrs[cnt - 1].blue = bg_blue;
-		img_info->bg_index = cnt - 1; 
-	}                              
+		img_info->bg_index = cnt - 1;
+	}
 	bgptr = bg_map;
 	ptr = img_info->image_data;
 	for (i = 0; i < widthbyheight; i++) {
@@ -402,13 +402,13 @@ void ResetMultiLoad()
 	/* Safe to reset it here */
 	mo_set_image_cache_nuke_point();
 
-	/* Call WWW2 to clean up streams and files */
-	if (image_loads) {
-		HTResetMultiLoad();
-		ele = HTBTree_next(image_loads, NULL);
-	} else {
+	if (!image_loads)
 		return;
-	}
+
+	/* Call LIBWWW2 to clean up streams and files */
+	HTResetMultiLoad();
+
+	ele = HTBTree_next(image_loads, NULL);
 
 	while (ele) {
 		multi = (MultiInfo *)HTBTree_object(ele);
@@ -418,6 +418,8 @@ void ResetMultiLoad()
 			free(multi->filename);
 		if (multi->referer)
 			free(multi->referer);
+		if (multi->host)
+			free(multi->host);
 		ele = HTBTree_next(image_loads, ele);
 	}
 	HTBTreeAndObject_free(image_loads);
@@ -528,7 +530,7 @@ static void killimage(HTMLWidget hw, ImageInfo *img_info)
 
 	img_info->width = bim->width;
 	img_info->height = bim->height;
-	img_info->internal = 3;
+	img_info->internal = INT_BLANK;
 	img_info->delayed = 0;
 	img_info->fetched = 0;
 	img_info->image_data = bim->image_data;
@@ -567,7 +569,8 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 	static unsigned int depth;
 	static char *referer = NULL;
 
-        img_info->fetched = img_info->internal = img_info->cached = 0;
+        img_info->fetched = img_info->cached = 0;
+	img_info->internal = INT_NO;
         img_info->width = img_info->height = 0;
         img_info->num_colors = 0;
         img_info->image_data = img_info->clip_data = NULL;
@@ -661,7 +664,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
         }
 
         if (cache_info && cache_info->image_data) {
-        	img_info->internal = 0;
+        	img_info->internal = INT_NO;
         	img_info->delayed = 0;
         	img_info->fetched = 1;
 		img_info->cached = 1;
@@ -687,7 +690,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			img_info->anim_info->start = img_info;
 			img_info->anim_info->next = NULL;
 			img_info->anim_info->window = (int *)(&win->base);
-			img_info->running = 0;
+			img_info->running = NOT_RAN;
 			img_info->has_anim_image = cache_info->has_anim_image;
 			img_info->timer = 0;
 			if (img_info->has_anim_image) {
@@ -721,7 +724,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 				ainfo->next = NULL;
 				ainfo->image = (Pixmap)NULL;
 				ainfo->clip = None;
-				ainfo->internal = 0;
+				ainfo->internal = INT_NO;
 				ainfo->anim_info = NULL;
 				**/
 				ainfo->num_colors = tmp->num_colors;
@@ -834,7 +837,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 		} else {
 			adisposal = 0;
 		}
-		img_info->running = 0;
+		img_info->running = NOT_RAN;
 		anim_info = (AnimInfo *)malloc(sizeof(AnimInfo));
 		anim_info->hw = hw;
 		anim_info->drawing = anim_info->hw->html.draw_count;
@@ -874,7 +877,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			ainfo->next = NULL;
 			ainfo->image = (Pixmap)NULL;
 			ainfo->alpha = NULL;
-			ainfo->internal = 0;
+			ainfo->internal = INT_NO;
 			ainfo->anim_info = NULL;
 			**/
 			ProcessImageData(w, ainfo, acolrs);
@@ -932,7 +935,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 	free(filename);
 
        	img_info->bg_index = bg;        
-       	img_info->internal = 0;
+       	img_info->internal = INT_NO;
        	img_info->delayed = 0;
 	img_info->fetched = 1;
 	img_info->cached = 1;
@@ -967,7 +970,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 	cache_info->width = width;
 	cache_info->height = height;
 	/** GetImageRec zeros them
-       	cache_info->internal = 0;
+       	cache_info->internal = INT_NO;
        	cache_info->delayed = 0;
 	**/
 	cache_info->awidth = img_info->awidth;
@@ -1017,7 +1020,7 @@ void ImageResolve(Widget w, XtPointer clid, XtPointer calld)
 			ainfo->next = NULL;
 			ainfo->image = (Pixmap)NULL;
 			ainfo->clip = None;
-			ainfo->internal = 0;
+			ainfo->internal = INT_NO;
 			ainfo->anim_info = NULL;
 			**/
 			ainfo->num_colors = tmp->num_colors;

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2008 - The VMS Mosaic Project */
 
 #ifndef __HOTLIST_H__
 #define __HOTLIST_H__
@@ -79,7 +79,7 @@ typedef enum _mo_item_type {
 /* ------------------------------ mo_any_item ----------------------------- */
 
 /* mo_any_item is any item in a mo_hotlist. */
-typedef struct mo_any_item {
+typedef struct mo_any_item_rec {
   mo_item_type type;
   /* Title for an URL, name for a hotlist */
   char *name;
@@ -92,7 +92,7 @@ typedef struct mo_any_item {
 /* ------------------------------ mo_hotnode ------------------------------ */
 
 /* mo_hotnode is a single item in a mo_hotlist. */
-typedef struct mo_hotnode {
+typedef struct mo_hotnode_rec {
   mo_item_type type;
   /* URL title */
   char *title;
@@ -110,7 +110,7 @@ typedef struct mo_hotnode {
 /* mo_hotlist is a list of URL's and (cached) titles that can be added to
  * and deleted from freely, and stored and maintained across sessions.
  */
-typedef struct mo_hotlist {
+typedef struct mo_hotlist_rec {
   mo_item_type type;
   /* Hotlist name */
   char *name;
@@ -120,7 +120,7 @@ typedef struct mo_hotlist {
   union mo_hot_item *next;
 
   /* Specific to mo_hotlist */
-  struct mo_hotlist *parent;
+  struct mo_hotlist_rec *parent;
 
   union mo_hot_item *nodelist;
   /* Point to last element in nodelist for fast appends. */
@@ -131,7 +131,7 @@ typedef struct mo_hotlist {
 /* ------------------------------ mo_root_hotlist ------------------------- */
 
 /* mo_root_hotlist is the root hotlist */
-typedef struct mo_root_hotlist {
+typedef struct mo_root_hotlist_rec {
   mo_item_type type;
   char *name;
   /* Position in the list; starting at 1... */
@@ -140,7 +140,7 @@ typedef struct mo_root_hotlist {
   union mo_hot_item *next;
 
   /* Specific to mo_hotlist */
-  struct mo_hotlist *parent;
+  struct mo_hotlist_rec *parent;
 
   union mo_hot_item *nodelist;
   /* Point to last element in nodelist for fast appends. */
@@ -169,7 +169,7 @@ extern void mo_append_item_to_hotlist(mo_hotlist *list, mo_hot_item *node);
 extern mo_status mo_add_item_to_hotlist(mo_hotlist *list, mo_item_type type,
                                         char *title, char *url, int position,
                                         int rbm);
-#if 0
+#if DUMP_HOTLIST
 extern mo_status mo_dump_hotlist(mo_hotlist *);
 #endif
 extern mo_status mo_setup_default_hotlist(void);

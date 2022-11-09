@@ -328,8 +328,6 @@ int WindowWidth = 0;
 int WindowHeight = 0;
 
 extern HashInfo *Hash[256];
-extern HashInfo *free_hash;
-static HashInfo *hash_ptr;
 extern int hash_scale;
 
 #define PBUF 1024

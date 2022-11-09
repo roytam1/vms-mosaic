@@ -53,6 +53,11 @@
  ==========================================================
 */
 
+/* Ignore GCC attributes if this is not GCC */
+#ifndef __GNUC__
+#define __attribute__(x) /* __attribute__(x) */
+#endif
+
 /*
 The inline keyword is supported by C99 but not by C90. 
 Most compilers implement their own version of this keyword ... 
@@ -70,7 +75,36 @@ Most compilers implement their own version of this keyword ...
 #endif /* defined(<Compiler>) */
 #endif /* INLINE */
 
+#ifdef VMS
+#define restrict
+#else
+/* Are restricted pointers available? (C99) */
+#if (__STDC_VERSION__ != 199901L)
+/* Not a C99 compiler */
+#ifdef __GNUC__
+#define restrict __restrict__
+#else
+#define restrict /* restrict */
+#endif
+#endif
+#endif
+
+/* MSVC does not have lrintf */
+#ifdef _MSC_VER
+static INLINE long lrintf(float f){
+	int i;
+
+	_asm{
+		fld f
+		fistp i
+	};
+
+	return i;
+}
+#endif
+
 #include "j2k_lib.h"
+#include "opj_malloc.h"
 #include "event.h"
 #include "cio.h"
 

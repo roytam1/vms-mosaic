@@ -1,4 +1,4 @@
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #ifndef LIBHTMLW_HTMLP_UTIL_H
 #define LIBHTMLW_HTMLP_UTIL_H
@@ -25,7 +25,7 @@ extern void 		PartOfPreTextPlace(HTMLWidget hw, MarkInfo *mptr,
 extern void 		LinefeedPlace(HTMLWidget hw, PhotoComposeContext *pcc);
 extern void 		ConditionalLineFeed(HTMLWidget hw, int state,
 					    PhotoComposeContext *pcc);
-extern void 		HRulePlace(HTMLWidget hw, MarkInfo *mptr, 
+extern void 		HRulePlace(HTMLWidget hw, MarkInfo *mptr,
 				   PhotoComposeContext *pcc);
 extern void 		BulletPlace(HTMLWidget hw, PhotoComposeContext *pcc,
 				    int list);
@@ -42,6 +42,8 @@ extern int		FormatAll(HTMLWidget hw, int *Fwidth);
 extern void 		FormatChunk(HTMLWidget hw, MarkInfo *start_mark,
         			    MarkInfo *end_mark,
 				    PhotoComposeContext *pcc);
+extern void		TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
+					   PhotoComposeContext *pcc);
 extern ElemInfo 	*LocateElement(HTMLWidget hw, int x, int y, int *pos);
 extern char  		*ParseTextToString(ElemInfo *elist,
 					   ElemInfo *startp, ElemInfo *endp,
@@ -66,7 +68,7 @@ extern int 		FindColor(HTMLWidget hw, Colormap colormap,
 				  XColor *colr);
 extern Pixmap 		InfoToImage(HTMLWidget hw, ImageInfo *img_info,
 				    int clip, ElemInfo *eptr);
-extern void 		ImagePlace(HTMLWidget hw, MarkInfo *mptr, 
+extern void 		ImagePlace(HTMLWidget hw, MarkInfo *mptr,
 				   PhotoComposeContext *pcc);
 extern void 		HtmlGetImage(HTMLWidget hw, ImageInfo *picd,
 				     PhotoComposeContext *pcc, int force_load);
@@ -92,13 +94,13 @@ extern void		hw_do_bg(HTMLWidget hw, char *bgname,
 				 PhotoComposeContext *pcc);
 extern void		hw_do_color(HTMLWidget hw, char *att, char *cname,
 				    PhotoComposeContext *pcc);
-extern void 		TablePlace(HTMLWidget hw, MarkInfo **mptr, 
+extern void 		TablePlace(HTMLWidget hw, MarkInfo **mptr,
 				   PhotoComposeContext *pcc);
 extern void 		TableRefresh(HTMLWidget hw, ElemInfo *eptr);
 extern void		_FreeTableStruct(TableInfo *t);
 extern ElemInfo 	*CellRefresh(HTMLWidget hw, ElemInfo *eptr);
 
-extern void 		AppletPlace(HTMLWidget hw, MarkInfo **mptr, 
+extern void 		AppletPlace(HTMLWidget hw, MarkInfo **mptr,
 				    PhotoComposeContext *pcc, Boolean save);
 extern void 		AppletRefresh(HTMLWidget hw, ElemInfo *eptr);
 extern void		_FreeAppletStruct(AppletInfo *ats);

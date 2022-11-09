@@ -65,16 +65,15 @@ PUBLIC void HTAssocList_add (HTAssocList *alist,
 	**/
 
 	if (name)
-	    StrAllocCopy(assoc->name, name);
+	    assoc->name = strdup(name);
 	if (value)
-	    StrAllocCopy(assoc->value, value);
+	    assoc->value = strdup(value);
 	HTList_addObject(alist, (void *)assoc);
-    }
 #ifndef DISABLE_TRACE
-    else if (www2Trace) {
+    } else if (www2Trace) {
         fprintf(stderr, "HTAssoc_add: ERROR: assoc list NULL!!\n");
-    }
 #endif
+    }
 }
 
 

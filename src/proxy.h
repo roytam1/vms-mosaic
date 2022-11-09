@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #define FONTNAME "-adobe-courier-medium-r-normal-*-17-*-*-*-*-*-iso8859-1"
 
@@ -62,31 +62,31 @@
 #define PROXY 0
 #define PROXY_DOMAIN 1
 
-struct ProxyDomain {
-	struct ProxyDomain *next;
-	struct ProxyDomain *prev;
+typedef struct _ProxyDomain {
+	struct _ProxyDomain *next;
+	struct _ProxyDomain *prev;
 	char *domain;
-};
+} ProxyDomain;
 	
-struct Proxy {
-	struct Proxy *next;
-	struct Proxy *prev;
+typedef struct _Proxy {
+	struct _Proxy *next;
+	struct _Proxy *prev;
 	char *scheme;
 	char *address;
 	char *port;
 	char *transport;
 	int trans_val;
 	int alive;
-	struct ProxyDomain *list;
-};
+	ProxyDomain *list;
+} Proxy;
 
 /* Added function prototypes - DXP */
 
 void ClearTempBongedProxies();
-struct Proxy *ReadProxies(char *filename);
-struct Proxy *ReadNoProxies(char *filename);
-struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList);
-void DeleteProxyDomain(struct ProxyDomain *p);
+Proxy *ReadProxies(char *filename);
+Proxy *ReadNoProxies(char *filename);
+ProxyDomain *AddProxyDomain(char *sbDomain, ProxyDomain **pdList);
+void DeleteProxyDomain(ProxyDomain *p);
 int has_fallbacks(char *protocol);
-struct Proxy *GetProxy(char *proxy, char *access, int fMatchEnd);
-struct Proxy *GetNoProxy(char *access, char *site);
+Proxy *GetProxy(char *proxy, char *access, int fMatchEnd);
+Proxy *GetNoProxy(char *access, char *site);

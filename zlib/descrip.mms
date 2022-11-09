@@ -26,6 +26,16 @@ CQUAL =
 .ENDIF
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .IFDEF DEBUG
 CC_DEFS = $(CQUAL)/NoOpt/Debug
 .ELSE
@@ -41,13 +51,13 @@ OBJS = Odir:adler32.obj, Odir:compress.obj, Odir:crc32.obj, Odir:deflate.obj,\
        Odir:gzio.obj, Odir:infback.obj, Odir:inffast.obj, Odir:inflate.obj,\
        Odir:inftrees.obj, Odir:trees.obj, Odir:uncompr.obj, Odir:zutil.obj
 
-CFLAGS= $(CC_DEFS)
+CFLAGS = $(CC_DEFS)
 
 $(LIBTARGET) : $(LIBTARGET)($(OBJS))
 	@ Write SYS$Output "Library libz.olb built."
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

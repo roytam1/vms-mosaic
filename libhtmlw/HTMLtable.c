@@ -3,13 +3,13 @@
  *
  * Copyright (C) 1996 - G.Dauphin, P.Dax
  * See the file "license.mMosaic" for information on usage and redistribution
- * of this file, and for a DISCLAIMER OF ALL WARRANTIES. 
+ * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
  * 3D table borders from : malber@easynet.fr [Apr 98]
  *
  * VMS version 3.0 by George Cook [Mar 98]
  *
- * Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007
+ * Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -48,7 +48,7 @@ extern DescRec *DescType;
 static void FreeColList(ColumnList *col_list)
 {
 	if (col_list->cells)
-		free(col_list->cells);
+	    free(col_list->cells);
 	free(col_list);
 }
 
@@ -57,7 +57,7 @@ static void FreeRowlist(RowList *row_list)
 	int i;
 
 	for (i = 0; i < row_list->row_count; i++)
-		free(row_list->cells_lines[i]);
+	    free(row_list->cells_lines[i]);
 	free(row_list->cells_lines);
 	free(row_list);
 }
@@ -71,7 +71,7 @@ void _FreeTableStruct(TableInfo *t)
 	free(t->col_req_w);
 	free(t->col_abs_w);
 	if (t->col_info)
-		free(t->col_info);
+	    free(t->col_info);
 	free(t);
 }
 
@@ -178,8 +178,7 @@ static void handle_colinfo_col(MarkInfo *sm, ColElemInfo *info,
 	    info[pos].prop_width = prop_w;
 	    info[pos].halign = halign;
 	    info[pos].valign = valign;
-	    info[pos].group = group;
-	    ++pos;
+	    info[pos++].group = group;
    	}
 	*nr_cols = pos;
 }
@@ -404,7 +403,7 @@ static void apply_colinfo(MarkInfo *start, TableInfo *table)
 	if (Nr_abs == Nr_cols) {
 	    table->absolute_width = Abs_w;
 	} else if (Nr_rel == Nr_cols) {
-	    if (Rel_w > 100) 
+	    if (Rel_w > 100)
 		Rel_w = 100;
 	    table->relative_width = Rel_w;
 	}
@@ -463,7 +462,7 @@ static void UpdateColList(ColumnList **col_list, int td_count,
 	ns = nspan;
 	for (i = 0; i < nspan; i++) {
 		cells[cur_cell_num].td_count = td_count;
-		cells[cur_cell_num].colspan = ns;
+		cells[cur_cell_num].colspan = ns--;
 		cells[cur_cell_num].back_cs = i + 1;
 		cells[cur_cell_num].back_rs = 0;
 		cells[cur_cell_num].rowspan = rowspan;
@@ -478,9 +477,7 @@ static void UpdateColList(ColumnList **col_list, int td_count,
 		cells[cur_cell_num].absolute_width = 0;
 		cells[cur_cell_num].req_height = 0;
 		cells[cur_cell_num].nowrap = 0;
-		cells[cur_cell_num].line_bottom = 0;
-		cur_cell_num++;
-		ns--;
+		cells[cur_cell_num++].line_bottom = 0;
 	}
 	cl->cells = cells;
 	cl->cell_count = cell_count;
@@ -720,7 +717,7 @@ static void UpdateRowList(RowList **row_list, int tr_count, ColumnList **cl)
 		}
 	}
 	if (ncell_for_this_cl < n_rl_free_cell)
-		AddPadAtEndColList(cl, n_rl_free_cell - ncell_for_this_cl); 
+		AddPadAtEndColList(cl, n_rl_free_cell - ncell_for_this_cl);
 
 	if (ncell_for_this_cl > n_rl_free_cell) {
 #ifndef DISABLE_TRACE
@@ -799,10 +796,10 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 {
 	TableInfo *t;
 	TableInfo lt;
-	MarkInfo *tb_start_mark;    /* Save the marker <TABLE> */
+	MarkInfo *tb_start_mark;     /* Save the marker <TABLE> */
 	MarkInfo *tb_end_mark = NULL;
-	MarkInfo *start_other_mark; /* Is mark between TABLE and TR */
-				    /* or CAPTION? */
+	MarkInfo *start_other_mark;  /* Is mark between TABLE and TR */
+				     /* or CAPTION? */
 	MarkInfo *end_other_mark, *caption_end_mark, *caption_start_mark;
 	MarkInfo *tr_start_mark, *td_start_mark, *td_end_mark;
 	MarkInfo *sm, *psm, *mark, *start_col_info, *end_col_info;
@@ -844,7 +841,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 		}
 		if (lt.borders) {
 			lt.frame = BOX;
-			lt.rules = ALL;
+			lt.rules = BORDERS;
 		}
 		free(tptr);
 	}
@@ -876,9 +873,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 	}
 	if (tptr = ParseMarkTag(mptr->start, MT_TABLE, "RULES")) {
 		if (*tptr) {
-			if (caseless_equal(tptr, "NONE")) {
-				lt.rules = NONE;
-			} else if (caseless_equal(tptr, "GROUPS")) {
+			if (caseless_equal(tptr, "GROUPS")) {
 				lt.rules = GROUPS;
 			} else if (caseless_equal(tptr, "ROWS")) {
 				lt.rules = ROWS;
@@ -911,23 +906,23 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 	}
 	if (tptr = ParseMarkTag(mptr->start, MT_TABLE, "ALIGN")) {
 		if (caseless_equal(tptr, "LEFT")) {
-			/* Use HALIGN_LEFT so only do it if explicitly asked */
-			lt.align = HALIGN_LEFT;
+			/* Only do it if explicitly asked */
+			lt.align = DIV_TABLE_LEFT;
 		} else if (caseless_equal(tptr, "CENTER")) {
 			lt.align = DIV_ALIGN_CENTER;
 		} else if (caseless_equal(tptr, "RIGHT")) {
-			/* Use HALIGN_RIGHT so only do it if explicitly asked */
-			lt.align = HALIGN_RIGHT;
+			/* Only do it if explicitly asked */
+			lt.align = DIV_TABLE_RIGHT;
 		}
 		free(tptr);
 	}
 	if (tptr = ParseMarkTag(mptr->start, MT_TABLE, "CELLSPACING")) {
-		if (*tptr) 
+		if (*tptr)
 	 		lt.cellspacing = atoi(tptr);
 		free(tptr);
 	}
 	if (tptr = ParseMarkTag(mptr->start, MT_TABLE, "CELLPADDING")) {
-		if (*tptr) 
+		if (*tptr)
 			lt.cellpadding = atoi(tptr);
 		free(tptr);
 	}
@@ -1256,13 +1251,9 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 
 			rwidth = awidth = 0;
 			/* Don't know how to handle width spanning columns */
-			if (colspan < 2) {
-				val = ParseMarkTag(sm->start, mt_cell_type,
-						   "WIDTH");
-			} else {
-				val = NULL;
-			}
-			if (val) {
+			if ((colspan < 2) &&
+			    (val = ParseMarkTag(sm->start, mt_cell_type,
+						"WIDTH"))) {
 				if (*val) {
 					awidth = atoi(val);
 					if (strchr(val, '%')) { 
@@ -1341,7 +1332,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			if (tr_start_found) {
 				tr_count++;
 				if (col_list) {
-					UpdateRowList(&row_list, tr_count, 
+					UpdateRowList(&row_list, tr_count,
 						      &col_list);
 					FreeColList(col_list);
 					col_list = NULL;
@@ -1428,7 +1419,7 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 			if (tr_start_found) {
 				if (col_list) {
 					tr_count++;
-					UpdateRowList(&row_list, tr_count, 
+					UpdateRowList(&row_list, tr_count,
 						      &col_list);
 					FreeColList(col_list);
 					col_list = NULL;
@@ -1522,8 +1513,8 @@ static TableInfo *FirstPassTable(HTMLWidget hw, MarkInfo *mptr,
 					fprintf(stderr,
 						"Buggy Table in Table!\n");
 #endif
-				sm->type = M_BUGGY_TABLE; /* Change type */
-							  /* and give up */
+				/* Change type and give up */
+				sm->type = M_BUGGY_TABLE;
 			} else {
 				sm->t_p1 = tt;
 				psm = tt->tb_end_mark;
@@ -1606,7 +1597,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 	deb_pcc.cw_only = True;
 	deb_pcc.x = deb_pcc.y = 0;
 	deb_pcc.is_bol = 1;
-	deb_pcc.pf_lf_state = 1;
+	deb_pcc.pf_lf_state = LF_LEFT;
 	deb_pcc.nobr = 0;
 	deb_pcc.eoffsetx = 0;
 	deb_pcc.left_margin = 0;
@@ -1654,14 +1645,14 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 	**/
 
 	extra = t->first_tr_mark;
-     
+
 	/* Execute HTML between <TABLE> and first <TR> or <CAPTION> */
 	if (t->start_other_mark) {
 		FormatChunk(hw, t->start_other_mark, t->end_other_mark,
 			    &deb_pcc);
 		deb_pcc.cur_line_height = 0;
 		deb_pcc.is_bol = 1;
-		deb_pcc.pf_lf_state = 1;
+		deb_pcc.pf_lf_state = LF_LEFT;
 		deb_pcc.x = deb_pcc.y = 0;
 	}
 	/* Do caption to get approximate height */
@@ -1689,7 +1680,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 		estimate_height = deb_pcc.y;
 		deb_pcc.cur_line_height = 0;
 		deb_pcc.is_bol = 1;
-		deb_pcc.pf_lf_state = 1;
+		deb_pcc.pf_lf_state = LF_LEFT;
 		deb_pcc.x = deb_pcc.y = 0;
 	}
 
@@ -1708,7 +1699,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 			    FormatChunk(hw, extra, cell.td_start, &deb_pcc);
 			    deb_pcc.cur_line_height = 0;
 			    deb_pcc.is_bol = 1;
-			    deb_pcc.pf_lf_state = 1;
+			    deb_pcc.pf_lf_state = LF_LEFT;
 			    deb_pcc.x = deb_pcc.y = 0;
 			    extra = cell.td_end->next;
 			    last_extra = cell.td_end;
@@ -1718,6 +1709,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 			it = j;
 			save_DescType = DescType;
 			if (cell.cell_type == M_TABLE_HEADER) {
+			    fin_pcc.cur_mark = cell.td_start;
 			    PushFont(hw, &fin_pcc);
 			    fin_pcc.cur_font = hw->html.bold_font;
 			}
@@ -1880,7 +1872,7 @@ static void EstimateMinMaxTable(HTMLWidget hw, TableInfo *t,
 	for (i = 0; i < t->num_row; i++) {
 		line = t->row_list->cells_lines[i];
 		for (j = 0; j < t->num_col; j++) {
-			if ((line[j].colspan > 1) && 
+			if ((line[j].colspan > 1) &&
 			    ((line[j].cell_type == M_TABLE_DATA) ||
 			     (line[j].cell_type == M_TABLE_HEADER))) {
 				int ncol = 0;
@@ -2047,7 +2039,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		sm->t_p1 = t = FirstPassTable(hw, sm, pcc);
 		if (!t) {
 #ifndef DISABLE_TRACE
-			if (tableTrace || reportBugs) 
+			if (tableTrace || reportBugs)
 				fprintf(stderr, "Invalid table structure!\n");
 #endif
 			return;
@@ -2057,7 +2049,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	}
 
 	/* Remove extra leading space if there is a left aligned table */
-	if (pcc->float_left && pcc->float_left->type == 2) {
+	if (pcc->float_left && pcc->float_left->type == FLOAT_TABLE) {
 		if (pcc->x == (pcc->left_margin + pcc->eoffsetx))
 			pcc->x -= pcc->float_left->table_extra;
 		pcc->cur_line_width += pcc->float_left->table_extra;
@@ -2090,10 +2082,10 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			}
 		}
 		if (pcc->computed_min_x < (pcc->left_margin + pcc->eoffsetx +
-		    t->min_width))
+					   t->min_width))
 			pcc->computed_min_x = pcc->left_margin + pcc->eoffsetx +
 								   t->min_width;
-		if (pcc->computed_max_x < pcc->x + t->max_width)
+		if (pcc->computed_max_x < (pcc->x + t->max_width))
 			pcc->computed_max_x = pcc->x + t->max_width;
 
 		/* Advance mark pointer to table end */
@@ -2174,12 +2166,10 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		fprintf(stderr, "Computed column widths:\n");
 		for (i = 0; i < t->num_col; i++)
 			fprintf(stderr, "|%d", t->col_w[i]);
-		fprintf(stderr, "|\n");
-		fprintf(stderr, "Maximum column widths:\n");
+		fprintf(stderr, "|\nMaximum column widths:\n");
 		for (i = 0; i < t->num_col; i++)
 			fprintf(stderr, "|%d", t->col_max_w[i]);
-		fprintf(stderr, "|\n");
-		fprintf(stderr, "Minimum column widths:\n");
+		fprintf(stderr, "|\nMinimum column widths:\n");
 		for (i = 0; i < t->num_col; i++)
 			fprintf(stderr, "|%d", t->col_min_w[i]);
 		fprintf(stderr, "|\n");
@@ -2212,7 +2202,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			}
 		}
 		/* Requested a percentage */
-		if (left) { 
+		if (left) {
 			for (i = 0; i < t->num_col; i++) {
 				if (t->col_req_w[i] > 0) {
 					wanted = ((wanted_w * t->col_req_w[i]) /
@@ -2354,8 +2344,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	}
 #ifndef DISABLE_TRACE
 	if (tableTrace) {
-		fprintf(stderr, "Final width = %d\n", w_table);
-		fprintf(stderr, "Final column widths:\n");
+		fprintf(stderr, "Final width = %d\nFinal column widths:\n",
+			w_table);
 		for (i = 0; i < t->num_col; i++)
 			fprintf(stderr, "|%d", t->col_w[i]);
 		fprintf(stderr, "|\n");
@@ -2371,7 +2361,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 	/* Mark table start with special CR */
 	eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y,
-			     0, pcc->cur_line_height, pcc->cur_baseline, pcc); 
+			     0, pcc->cur_line_height, pcc->cur_baseline, pcc);
 	eptr->table_data = t;
 
 	/* Execute HTML between <TABLE> and <CAPTION> */
@@ -2442,7 +2432,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	}
 	pcc->in_table = 1;		/* In table */
 	tbl_pcc = *pcc;
-	
+
 	/* Do table background color */
 	table_has_bg = 0;
 	if (tptr = ParseMarkTag(sm->start, MT_TABLE, "BGCOLOR")) {
@@ -2460,7 +2450,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	tbl_pcc.cur_baseline = 0;
 	tbl_pcc.max_line_ascent = 0;
 	tbl_pcc.is_bol = 1;
-	tbl_pcc.pf_lf_state = 1;
+	tbl_pcc.pf_lf_state = LF_LEFT;
 	tbl_pcc.nobr = 0;
 	tbl_pcc.at_top = True;
 	tbl_pcc.float_left = NULL;
@@ -2491,7 +2481,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		}
 	    }
 	    for (j = 0; j < t->num_col; j++) {  /* For each cell */
-		w_in_cell = t->col_w[j]; 
+		w_in_cell = t->col_w[j];
 		cell = line[j];		/* Get a cell */
 		/* Do crap between table cells */
 		if ((cell.cell_type == M_TABLE_DATA) ||
@@ -2510,7 +2500,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		work_pcc = line_pcc;	/* Grab one to work with */
 		add_offset = w_in_cell + x2border_pad;
 		cell.width = w_in_cell + x2border_pad;
-		cell.y = line_pcc.y; 
+		cell.y = line_pcc.y;
 		cell.height = x2border_pad;
 		cell.line_bottom = line_pcc.y + border_pad;
 
@@ -2545,6 +2535,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			work_pcc.y = line_pcc.y + border_pad;
 			work_pcc.have_space_after = 0;
 			if (cell.cell_type == M_TABLE_HEADER) {
+			    work_pcc.cur_mark = cell.td_start;
 			    PushFont(hw, &work_pcc);
 			    work_pcc.cur_font = hw->html.bold_font;
 			    work_pcc.div = DIV_ALIGN_CENTER;
@@ -2561,7 +2552,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			work_pcc.valign = cell.valignment;
 			/* Still needed for cell alignment, etc. */
 			eptr = CreateElement(hw, E_CR, work_pcc.cur_font,
-                			     work_pcc.x, work_pcc.y,        
+                			     work_pcc.x, work_pcc.y,
                 			     0, work_pcc.cur_line_height,
                 			     work_pcc.cur_baseline, &work_pcc);
 			save_x = work_pcc.x;
@@ -2694,7 +2685,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 			break;
 #ifndef DISABLE_TRACE
 		    default:
-			if (reportBugs) 
+			if (reportBugs)
 			    fprintf(stderr, "BUG: Bad cell type in TABLE\n");
 #endif
 		}
@@ -2808,8 +2799,8 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	t->height = h_table;
 
 	/* Mark the graphical element that wraps around the table */
-	eptr = CreateElement(hw, E_TABLE, pcc->cur_font,
-			     pcc->x, pcc->y, w_table, h_table, h_table, pcc); 
+	eptr = CreateElement(hw, E_TABLE, pcc->cur_font, pcc->x, pcc->y,
+			     w_table, h_table, h_table, pcc);
 
 	eptr->underline_number = 0;  /* Tables can't be underlined */
 	eptr->table_data = t;
@@ -2819,7 +2810,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 	/* Now align it */
 	if ((t->align == DIV_ALIGN_CENTER) || (t->align == DIV_ALIGN_RIGHT) ||
-	    (t->align == HALIGN_RIGHT)) {
+	    (t->align == DIV_TABLE_RIGHT)) {
 		adjx = pcc->cur_line_width - eptr->width;
 		if (t->align == DIV_ALIGN_CENTER)
 			adjx = adjx / 2;
@@ -2838,7 +2829,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	pcc->div = DIV_ALIGN_NONE;
 
 	/* Get to left margin */
-	pcc->pf_lf_state = 1;
+	pcc->pf_lf_state = LF_LEFT;
 	pcc->x = pcc->left_margin + pcc->eoffsetx;
 	pcc->y += eptr->height;
 	pcc->is_bol = 1;
@@ -2848,7 +2839,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 
 	/* Keep AdjustBaseLine from screwing with table height */
 	eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y,
-			     0, pcc->cur_line_height, pcc->cur_baseline, pcc); 
+			     0, pcc->cur_line_height, pcc->cur_baseline, pcc);
 
 	/* Put bottom caption here */
 	if (t->caption_start_mark && !t->captionIsLegend &&
@@ -2870,9 +2861,10 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		pcc->ignore_float = 0;
 		pcc->div = tmp;
 		pcc->cur_line_width = save_cur_line_width;
-		/* Allow following alignment code to process the caption */ 
-		eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y, 0,
-				  pcc->cur_line_height, pcc->cur_baseline, pcc);
+		/* Allow following alignment code to process the caption */
+		eptr = CreateElement(hw, E_CR, pcc->cur_font, pcc->x, pcc->y,
+				     0, pcc->cur_line_height,
+				     pcc->cur_baseline, pcc);
 	}
 
 	/* Back to the list until special CR and adjust each x with adjx. */
@@ -2885,7 +2877,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 				int orig_y = pcc->y;
 				unsigned long orig_bg = pcc->bg;
 
-				/* It is already there so don't need markup */
+				/* It is already there, so don't need markup */
 				pcc->x = eptr->x;
 				pcc->y = eptr->y;
 				pcc->bg = eptr->bg;
@@ -2913,14 +2905,14 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	pcc->in_table = in_table;	/* Indicate no longer in this table */
 
 	/* Restore extra leading space if there is a left aligned table */
-	if (pcc->float_left && pcc->float_left->type == 2) {
+	if (pcc->float_left && pcc->float_left->type == FLOAT_TABLE) {
 		pcc->x += pcc->float_left->table_extra;
 		pcc->cur_line_width -= pcc->float_left->table_extra;
 		pcc->left_margin += pcc->float_left->table_extra;
 	}
 
 	/* Check if done floating around stuff */
-	if ((t->align != HALIGN_LEFT) && (t->align != HALIGN_RIGHT)) {
+	if ((t->align != DIV_TABLE_LEFT) && (t->align != DIV_TABLE_RIGHT)) {
 		while (pcc->float_left && (pcc->y >= pcc->float_left->y)) {
 			pcc->left_margin -= pcc->float_left->marg;
 			pcc->cur_line_width += pcc->float_left->marg;
@@ -2943,13 +2935,12 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		}
 	}
 	/* Do left/right alignment stuff */
-	if ((t->align == HALIGN_LEFT) && ((pcc->x + w_table) <
+	if ((t->align == DIV_TABLE_LEFT) && ((pcc->x + w_table) <
 	     (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
 		tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 		tmp_float->next = pcc->float_left;
 		pcc->float_left = tmp_float;
-		/* 1 is image, 2 is table */
-		tmp_float->type = 2;
+		tmp_float->type = FLOAT_TABLE;
 		tmp_float->table_extra = XTextWidth(pcc->cur_font, " ", 1);
 		w_table += tmp_float->table_extra;  /* Space after it */
 		pcc->left_margin += w_table;
@@ -2958,7 +2949,7 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 		pcc->cur_baseline = save_cur_baseline;
 		pcc->cur_line_height = save_cur_line_height;
 		pcc->is_bol = 1;
-		pcc->pf_lf_state = 1;
+		pcc->pf_lf_state = LF_LEFT;
 		pcc->x += w_table;
 		tmp_float->y = pcc->y;
 		pcc->y = ori_y;
@@ -2970,12 +2961,12 @@ void TablePlace(HTMLWidget hw, MarkInfo **mptr, PhotoComposeContext *pcc)
 	     	if (tableTrace || htmlwTrace)
 			fprintf(stderr, "Float left started in TablePlace\n");
 #endif
-	} else if ((t->align == HALIGN_RIGHT) && ((pcc->x + w_table) <
+	} else if ((t->align == DIV_TABLE_RIGHT) && ((pcc->x + w_table) <
 	            (pcc->eoffsetx + pcc->left_margin + pcc->cur_line_width))) {
 		tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 		tmp_float->next = pcc->float_right;
 		pcc->float_right = tmp_float;
-		tmp_float->type = 2;
+		tmp_float->type = FLOAT_TABLE;
 		/* Space before it */
 		w_table += XTextWidth(pcc->cur_font, " ", 1);
 		pcc->right_margin += w_table;
@@ -3019,7 +3010,7 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 	GC ltopGC, lbotGC;
 	XSegment segT[MAX_SEG], segB[MAX_SEG];
 	int x, y, i, j, iseg, group, do_group;
-	int cw1, ch1, cx, cy, ax, ay;
+	int cw1, ch1, cx, cy, ax, ay, borders;
 	FrameType ft;
 	RulesType rules;
 
@@ -3221,6 +3212,15 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 	if (rules == NONE)
 		return;
 
+	/* Did TABLE tag ask for borders and didn't specify RULES? */
+	if (rules == BORDERS) {
+		/* Skip cells with no content */
+		borders = 1;
+		rules = ALL;
+	} else {
+		borders = 0;
+	}
+
 	cells_lines = t->row_list->cells_lines;
 	iseg = 0;
 
@@ -3231,14 +3231,14 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 			cx = cell.x + ax;
 			cy = cell.y + ay;
 			if ((rules == GROUPS) && (cell.group > group) &&
-			    (cell.back_rs == 0) && (cell.back_cs == 0)) {
+			    !cell.back_rs && !cell.back_cs) {
 				group = cell.group;
 				do_group = 1;
 			} else {
 				do_group = 0;
 			}
 			cw1 = cell.width;
-			if (rules != ROWS) {
+			if ((rules != ROWS) && (rules != ALL)) {
  				cw1--;
 			} else {
 				/* Add border in */
@@ -3246,7 +3246,7 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 				cw1++;
 			}
 			ch1 = cell.height;
-			if ((rules != COLS) && !do_group) {
+			if ((rules != COLS) && (rules != ALL) && !do_group) {
 				ch1--;
 			} else {
 				/* Add border in */
@@ -3258,8 +3258,8 @@ void TableRefresh(HTMLWidget hw, ElemInfo *eptr)
 			if (cy - 1 > hw->html.view_height)
 				continue;   /* Not visible : after */
 
-			if ((cell.back_rs == 0) && (cell.back_cs == 0) &&
-			    (cell.has_content || (rules != ALL))) {
+			if (!cell.back_rs && !cell.back_cs &&
+			    (!borders || cell.has_content)) {
 				XSegment *pseg = segB + iseg;
 
 				/* Top line */
@@ -3394,8 +3394,7 @@ ElemInfo *CellRefresh(HTMLWidget hw, ElemInfo *eptr)
 		}
 #ifndef DISABLE_TRACE
 		if (refreshTrace)
-			fprintf(stderr,
-				"Calling RefreshElement in CellRefresh\n");
+			fprintf(stderr,	"Call RefreshElement in CellRefresh\n");
 #endif
 		eptr = RefreshElement(hw, eptr);
 		tptr = eptr;

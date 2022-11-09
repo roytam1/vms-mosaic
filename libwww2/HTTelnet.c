@@ -43,121 +43,118 @@ extern int www2Trace;
 */
 PRIVATE void make_system_secure (char *str)
 {
-	char *ptr1, *ptr2;
+    char *ptr1, *ptr2;
 
-	if (!str || !*str)
-		return;
+    if (!str || !*str)
+	return;
 
-	/*
-	 * Remove leading '-' or '+' by making it into whitespace that
-	 * will be stripped later.
-	 */
-	if ((*str == '-') || (*str == '+'))
-		*str = ' ';
+    /*
+     * Remove leading '-' or '+' by making it into whitespace that
+     * will be stripped later.
+     */
+    if ((*str == '-') || (*str == '+'))
+	*str = ' ';
 
-	ptr1 = ptr2 = str;
+    ptr1 = ptr2 = str;
 
-	while (*ptr1) {
-		if (!isalpha((int)*ptr1) && !isdigit((int)*ptr1) &&
-			(*ptr1 != '.') && (*ptr1 != '_') &&
-			(*ptr1 != '+') && (*ptr1 != '-')) {
-			ptr1++;
-		} else {
-			*ptr2++ = *ptr1++;
-		}
+    while (*ptr1) {
+	if (!isalpha((int)*ptr1) && !isdigit((int)*ptr1) && (*ptr1 != '.') &&
+	    (*ptr1 != '_') && (*ptr1 != '+') && (*ptr1 != '-')) {
+	    ptr1++;
+	} else {
+	    *ptr2++ = *ptr1++;
 	}
-	*ptr2 = *ptr1;
+    }
+    *ptr2 = *ptr1;
 }
 
 
 #ifndef VMS
 PRIVATE void run_a_command (char *command)
 {
-	char **argv;
-	char *str;
-	int argc = 0;
-	int alen = 10;
-	int i;
+    char **argv;
+    char *str;
+    int argc = 0;
+    int alen = 10;
+    int i;
 
-	argv = (char **)malloc(10 * sizeof(char *));
-	if (!argv)
+    if (!(argv = (char **)malloc(10 * sizeof(char *))))
+	return;
+
+    str = strtok(command, " \t\n");
+    while (str) {
+	argv[argc] = strdup(str);
+	if (++argc >= alen) {
+	    char **tmp_av = (char **)malloc((alen + 10) * sizeof(char *));
+
+	    if (!tmp_av)
 		return;
-
-	str = strtok(command, " \t\n");
-	while (str) {
-		argv[argc] = strdup(str);
-		if (++argc >= alen) {
-			char **tmp_av;
-
-			tmp_av = (char **)malloc((alen + 10) * sizeof(char *));
-			if (!tmp_av)
-				return;
-			for (i = 0; i < alen; i++)
-				tmp_av[i] = argv[i];
-			alen += 10;
-			free((char *)argv);
-			argv = tmp_av;
-		}
-		str = strtok(NULL, " \t\n");
+	    for (i = 0; i < alen; i++)
+		tmp_av[i] = argv[i];
+	    alen += 10;
+	    free((char *)argv);
+	    argv = tmp_av;
 	}
-	argv[argc] = NULL;
+	str = strtok(NULL, " \t\n");
+    }
+    argv[argc] = NULL;
 
-	if (!fork()) {
-		execvp(argv[0], argv);
-	} else {
-		/*
-		 * The signal handler in main.c will clean this child
-		 * up when it exits.
-		 */
-		for (i = 0; i < argc; i++) {
-			if (argv[i])
-				free(argv[i]);
-		}
-		free((char *)argv);
+    if (!fork()) {
+	execvp(argv[0], argv);
+    } else {
+	/*
+	 * The signal handler in main.c will clean this child
+	 * up when it exits.
+	 */
+	for (i = 0; i < argc; i++) {
+	    if (argv[i])
+		free(argv[i]);
 	}
+	free((char *)argv);
+    }
 #else
 /*
  * Spawn a subprocess, but do not wait for completion so that the
  * application_user_feedback can pop up before we need it.
- * Also, do not close the terminal window after logout until the user
- * has hit Return.
+ * Also, do not close the terminal window after logout until the
+ * user has hit Return.
  * Clean up this later.
  */
 PRIVATE void run_a_command (char *command, char *xterm_str)
 {
-	char cmd[256];
-	char *fcname;
-	char null_dev[] = "NL:";
-	FILE *fpc;
-	int flags = 1;
-        $DESCRIPTOR(cmd_desc, NULL);
-        $DESCRIPTOR(null_dev_desc, NULL);
+    char cmd[256];
+    char *fcname;
+    char null_dev[] = "NL:";
+    FILE *fpc;
+    int flags = 1;
+    $DESCRIPTOR(cmd_desc, NULL);
+    $DESCRIPTOR(null_dev_desc, NULL);
 
-        cmd_desc.dsc$a_pointer = cmd;
-        null_dev_desc.dsc$a_pointer = null_dev;
+    cmd_desc.dsc$a_pointer = cmd;
+    null_dev_desc.dsc$a_pointer = null_dev;
 
-	fcname = mo_tmpnam(NULL);
-	strcat(fcname, ".COM");
+    fcname = mo_tmpnam(NULL);
+    strcat(fcname, ".COM");
 
-	if (!(fpc = fopen(fcname, "w"))) {
-	    fprintf(stderr, "\nVMS scratch file open error: %s\n",
-		    strerror(errno, vaxc$errno));
-	    return;
-	}
-	fprintf(fpc, "$ Set NoVerify\n$ On Error Then GoTo End\n");
-	fprintf(fpc, "$ Define/User SYS$Input SYS$Command\n");
-	fprintf(fpc, "$ %s\n$End:\n$ Write SYS$Output \" \"\n", command);
-	fprintf(fpc,
+    if (!(fpc = fopen(fcname, "w"))) {
+	fprintf(stderr, "\nVMS scratch file open error: %s\n",
+		strerror(errno, vaxc$errno));
+	return;
+    }
+    fprintf(fpc, "$ Set NoVerify\n$ On Error Then GoTo End\n");
+    fprintf(fpc, "$ Define/User SYS$Input SYS$Command\n");
+    fprintf(fpc, "$ %s\n$End:\n$ Write SYS$Output \" \"\n", command);
+    fprintf(fpc,
 	    "$ Read/Prompt=\"Hit Return to close window: \" SYS$Command ANS\n");
-	fprintf(fpc, "$ Set NoOn\n$ Delete$$/NoConfirm/NoLog %s;\n$ Exit\n",
-		fcname);
-	fclose(fpc);
-	sprintf(cmd, "%s @%s", xterm_str, fcname);
-	cmd_desc.dsc$w_length = strlen(cmd);
+    fprintf(fpc, "$ Set NoOn\n$ Delete$$/NoConfirm/NoLog %s;\n$ Exit\n",
+	    fcname);
+    fclose(fpc);
+    sprintf(cmd, "%s @%s", xterm_str, fcname);
+    cmd_desc.dsc$w_length = strlen(cmd);
 
-	lib$spawn(&cmd_desc, &null_dev_desc, &null_dev_desc, &flags);
-	free(fcname);
-#endif /* VMS, BSN, GEC for PE */
+    lib$spawn(&cmd_desc, &null_dev_desc, &null_dev_desc, &flags);
+    free(fcname);
+#endif  /* VMS, BSN, GEC for PE */
 }
 
 
@@ -166,11 +163,12 @@ PRIVATE void run_a_command (char *command, char *xterm_str)
 */
 PRIVATE int remote_session (char *access, char *host)
 {
-  char *user, *hostname, *port;
+  char *user, *hostname, *port, *xterm_str;
   char command[256];
-  char *xterm_str;
   int portnum;
-  enum _login_protocol { telnet, rlogin, tn3270 } login_protocol;
+  enum _login_protocol {
+      telnet, rlogin, tn3270
+  } login_protocol;
   extern char *global_xterm_str;
 
   if (!access || !host) {

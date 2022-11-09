@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "XmxP.h"
@@ -167,9 +167,10 @@ void XmxRSetOptionMenuHistory(XmxMenuRecord *rec, int token)
 
   if (entry) {
       XmxSetArg(XmNmenuHistory, (XtArgVal)(entry->w));
-      XtSetValues(rec->base, Xmx_wargs, Xmx_n);
+      XmxSetValues(rec->base);
+  } else {
+      Xmx_n = 0;
   }
-  Xmx_n = 0;
   return;
 }
 
@@ -180,10 +181,11 @@ void XmxRSetValues(XmxMenuRecord *rec, int token)
 {
   XmxMenuEntry *entry = _XmxMenuGetEntryFromRecord(rec, XmxExtractToken(token));
 
-  if (entry)
-      XtSetValues(entry->w, Xmx_wargs, Xmx_n);
-
-  Xmx_n = 0;
+  if (entry) {
+      XmxSetValues(entry->w);
+  } else {
+      Xmx_n = 0;
+  }
   return;
 }
 
@@ -264,7 +266,6 @@ XmxMenuRecord *XmxRMakeOptionMenu(Widget parent, String name, XtCallbackProc cb,
   /* Explicitly set base Widget of record. */
   rec->base = Xmx_w;
 
-  Xmx_n = 0;
   return rec;
 }
 
@@ -287,6 +288,7 @@ XmxMenuRecord *XmxRMakeToggleMenu(Widget parent, int behavior,
       break;
     default:
       fprintf(stderr, "Bug in XmxRMakeToggleMenu.  behavior = %d\n", behavior);
+      Xmx_n = 0;
       return NULL;
   }
   rec = _XmxMenuCreateRecord(box);
@@ -298,7 +300,6 @@ XmxMenuRecord *XmxRMakeToggleMenu(Widget parent, int behavior,
       i++;
   }
   Xmx_w = box;
-  Xmx_n = 0;
   return rec;
 }
 
@@ -310,9 +311,10 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
                                XmxMenuRecord *rec, Boolean tearoff)
 {
   Widget *buttons;
-  int i, bnum;
-  int separators = 0;
+  int i;
+  int bnum = 0;
   int nitems = 0;
+  XmString xmstr;
 
   while (menulist[nitems].namestr)
       nitems++;
@@ -320,7 +322,7 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
   buttons = (Widget *)XtMalloc(nitems * sizeof(Widget));
 
   for (i = 0; i < nitems; i++) {
-      bnum = i - separators;
+      Xmx_n = 0;
 
       /* Name of "----" means make a separator. */
       if (!strncmp(menulist[i].namestr, "----", 4)) {
@@ -330,12 +332,9 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
 	  if (menulist[i].namestr[4] == '2')
               XtCreateManagedWidget("separator", xmSeparatorWidgetClass,
                                     menu, NULL, 0);
-          separators++;
+          bnum--;
       /* A function means it's an ordinary entry with callback. */
       } else if (menulist[i].func) {
-          XmString xmstr;
-
-          Xmx_n = 0;
           if (menulist[i].mnemonic)
               XmxSetArg(XmNmnemonic, (XtArgVal)menulist[i].mnemonic);
           if ((menulist[i].namestr[0] == '#') ||
@@ -377,9 +376,6 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
           }
       /* No function and no submenu entry means it's just a label. */
       } else if (!menulist[i].sub_menu) {
-          XmString xmstr;
-
-          Xmx_n = 0;
 	  xmstr = XmStringCreateLtoR(menulist[i].namestr,
 				     XmSTRING_DEFAULT_CHARSET);
           XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
@@ -389,10 +385,8 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
 
       /* If all else fails, it's a submenu. */
       } else {
-          XmString xmstr;
           Widget sub_menu;
 
-          Xmx_n = 0;
 #ifdef MOTIF1_2
 	  if (tearoff)
               XmxSetArg(XmNtearOffModel, (XtArgVal)XmTEAR_OFF_ENABLED);
@@ -415,15 +409,17 @@ static void _XmxRCreateMenubar(Widget menu, XmxMenubarStruct *menulist,
           if (!strcmp(menulist[i].namestr, "Help")) {
               Xmx_n = 0;
               XmxSetArg(XmNmenuHelpWidget, (XtArgVal)buttons[bnum]);
-              XtSetValues(menu, Xmx_wargs, Xmx_n);
+              XmxSetValues(menu);
           }
           /* Recursively create new submenu. */
           _XmxRCreateMenubar(sub_menu, menulist[i].sub_menu, rec, tearoff);
       }
+      bnum++;
   }
-  XtManageChildren(buttons, nitems - separators);
+  XtManageChildren(buttons, bnum);
 
   XtFree((char *)buttons);
+  Xmx_n = 0;
   return;
 }
 
@@ -443,10 +439,9 @@ XmxMenuRecord *XmxRMakeMenubar(Widget parent, XmxMenubarStruct *mainmenu,
   /* Create the new XmxMenuRecord. */
   rec = _XmxMenuCreateRecord(menubar);
 
-  Xmx_n = 0;
+  /* Clears Xmx_n on entry and exit */
   _XmxRCreateMenubar(menubar, mainmenu, rec, tearoff);
 
-  Xmx_n = 0;
   Xmx_w = menubar;
   return rec;
 }

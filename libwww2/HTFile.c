@@ -150,7 +150,7 @@ PUBLIC void HTSetSuffix (WWW_CONST char *suffix, WWW_CONST char *representation,
 	binary = HTAtom_for("binary");
 	init = 1;
     }
-    
+
     if (!strcmp(suffix, "*")) {
 	suff = &no_suffix;
     } else if (!strcmp(suffix, "*.*")) {
@@ -162,12 +162,12 @@ PUBLIC void HTSetSuffix (WWW_CONST char *suffix, WWW_CONST char *representation,
 	if (!HTSuffixes)
 	    HTSuffixes = HTList_new();
 	HTList_addObject(HTSuffixes, suff);
-	
+
 	StrAllocCopy(suff->suffix, suffix);
     }
 
     suff->rep = HTAtom_for(representation);
-    
+
     if (!strcmp(encoding, "binary")) {
 	suff->encoding = binary;
     } else {
@@ -180,7 +180,7 @@ PUBLIC void HTSetSuffix (WWW_CONST char *suffix, WWW_CONST char *representation,
 	suff->encoding = HTAtom_for(enc);
         free(enc);
     }
-    
+
     suff->quality = quality;
 }
 
@@ -232,12 +232,10 @@ PRIVATE void do_readme (HTStructured *target, WWW_CONST char *localname)
     strcpy(readme_file_name, localname);
     strcat(readme_file_name, "/");
     strcat(readme_file_name, HT_DIR_README_FILE);
-    
-    fp = fopen(readme_file_name, "r");
-    
-    if (fp) {
+
+    if (fp = fopen(readme_file_name, "r")) {
 	HTStructuredClass targetClass;
-	
+
 	targetClass = *target->isa;	/* (Can't init agregate in K&R) */
 	START(HTML_PRE);
 	for (;;) {
@@ -266,7 +264,7 @@ PRIVATE void do_readme (HTStructured *target, WWW_CONST char *localname)
 	}
 	END(HTML_PRE);
 	fclose(fp);
-    } 
+    }
 }
 #endif
 
@@ -287,7 +285,7 @@ PUBLIC char *HTCacheFileName (WWW_CONST char *name)
     char *host = HTParse(name, "", PARSE_HOST);
     char *path = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
     char *result;
-    
+
     result = (char *)malloc(strlen(HTCacheRoot) + strlen(access) +
 			    strlen(host) + strlen(path) + 6 + 1);
     if (!result)
@@ -318,36 +316,31 @@ PRIVATE int HTCreatePath (WWW_CONST char *path)
 PUBLIC char *HTLocalName (WWW_CONST char *name)
 {
   char *access = HTParse(name, "", PARSE_ACCESS);
-  char *host = HTParse(name, "", PARSE_HOST);
-  char *path = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
-  
-  HTUnEscape(path);	/* Interpret % signs */
-  
+
   if (!strcmp(access, "file")) {
-      free(access);	
+      char *host = HTParse(name, "", PARSE_HOST);
+
+      free(access);
       if (!host || !*host || !my_strcasecmp(host, HTHostName()) ||
           !my_strcasecmp(host, "localhost")) {
+          char *path = HTParse(name, "", PARSE_PATH + PARSE_PUNCTUATION);
+
           if (host)
               free(host);
+	  HTUnEscape(path);	 /* Interpret % signs */
 #ifndef DISABLE_TRACE
-          if (www2Trace) 
+          if (www2Trace)
               fprintf(stderr, "Node `%s' means path `%s'\n", name, path);
 #endif
           return(path);
       } else {
           free(host);
-          if (path)
-              free(path);
           return NULL;
       }
   }
-  
+
   /* Not file */
-  if (host)
-      free(host);
   free(access);
-  if (path)
-      free(path);
   return NULL;
 }
 
@@ -479,7 +472,7 @@ PUBLIC HTFormat HTFileFormat (char *filename, HTAtom **pencoding,
               lf = strlen(filename);
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                  fprintf(stderr, 
+                  fprintf(stderr,
                           "[HTFileFormat] Got hit on .gz; filename '%s'\n",
                           filename);
 #endif
@@ -494,16 +487,16 @@ PUBLIC HTFormat HTFileFormat (char *filename, HTAtom **pencoding,
               lf = strlen(filename);
 #ifndef DISABLE_TRACE
               if (www2Trace)
-                  fprintf(stderr, 
+                  fprintf(stderr,
                           "[HTFileFormat] Got hit on .tgz; filename '%s'\n",
                           filename);
 #endif
 	  }
-      }      
-  }      
-  
+      }
+  }
+
  ok_ready:
-  if (!HTSuffixes) 
+  if (!HTSuffixes)
       HTFileInit();
 
   *pencoding = NULL;
@@ -519,29 +512,29 @@ PUBLIC HTFormat HTFileFormat (char *filename, HTAtom **pencoding,
           int j;
 
           *pencoding = suff->encoding;
-          if (suff->rep) 
+          if (suff->rep)
               goto done;
-          
+
           for (j = 0; j < n; j++) {  /* Got encoding, need representation */
               int ls2;
 
               suff = HTList_objectAt(HTSuffixes, j);
               ls2 = strlen(suff->suffix);
-              if ((ls <= lf) && 
+              if ((ls <= lf) &&
                   !my_strncasecmp(suff->suffix, filename + lf - ls -ls2, ls2)) {
-                  if (suff->rep) 
+                  if (suff->rep)
                       goto done;
 	      }
 	  }
       }
   }
-  
+
   suff = strchr(filename, '.') ? 	/* Unknown suffix */
          (unknown_suffix.rep ? &unknown_suffix : &no_suffix) : &no_suffix;
-  
+
   /* For now, assuming default is 8bit text/plain.
    * We also want default 8bit text/html for http connections. */
-  
+
   /* Set default encoding unless found with suffix already */
   if (!*pencoding)
       *pencoding = suff->encoding ? suff->encoding : HTAtom_for("8bit");
@@ -639,13 +632,13 @@ char *HTDescribeURL(char *url)
           st = &st[2];
 #ifndef DISABLE_TRACE
       if (www2Trace)
-          fprintf(stderr, 
+          fprintf(stderr,
                   "DESCRIBE: in if (st); pasting together %s %s %s %s %s\n", t,
-                  !strcmp(t, "Application") ? " data" : "", 
+                  !strcmp(t, "Application") ? " data" : "",
                   st, host, access);
 #endif
       sprintf(line, "%s%s, type %s, on host %s, via %s.", t,
-              !strcmp(t, "Application") ? " data" : "", 
+              !strcmp(t, "Application") ? " data" : "",
               st, host, access);
   } else {
       sprintf(line, "Type %s, on host %s, via %s.", type, host, access);
@@ -721,12 +714,12 @@ PUBLIC BOOL HTEditable (WWW_CONST char *filename)
 #ifdef NO_GROUPS
     return NO;		/* Safe answer till we find the correct algorithm */
 #else
-    int groups[NGROUPS];	
+    int groups[NGROUPS];
     uid_t myUid;
     int	ngroups;				/* The number of groups */
     int	i;
     struct stat	fileStatus;
-        
+
     if (stat(filename, &fileStatus))		/* Get details of filename */
     	return NO;				/* Can't even access file! */
 
@@ -736,7 +729,7 @@ PUBLIC BOOL HTEditable (WWW_CONST char *filename)
 
 #ifndef DISABLE_TRACE
     if (www2Trace) {
-	fprintf(stderr, 
+	fprintf(stderr,
 	        "File mode is 0%o, uid=%d, gid=%d. My uid=%d, %d groups (",
     	        (unsigned int) fileStatus.st_mode, fileStatus.st_uid,
 	        fileStatus.st_gid, myUid, ngroups);
@@ -745,10 +738,10 @@ PUBLIC BOOL HTEditable (WWW_CONST char *filename)
 	fprintf(stderr, ")\n");
     }
 #endif
-    
+
     if (fileStatus.st_mode & 0002)		/* I can write anyway? */
     	return YES;
-	
+
     if ((fileStatus.st_mode & 0200) &&		/* I can write my own file? */
         (fileStatus.st_uid == myUid))
     	return YES;
@@ -811,7 +804,7 @@ PUBLIC void HTDirEntry (HTStructured *target, WWW_CONST char *tail,
     PUTS("\">");
     free(escaped);
 }
- 
+
 /*    Output parent directory entry
 **
 **    This gives the TITLE and H1 header, and also a link
@@ -831,8 +824,8 @@ PUBLIC void HTDirTitles (HTStructured *target, HTAnchor *anchor)
     START(HTML_TITLE);
     PUTS(*printable ? printable : "Welcome ");
     PUTS(" directory");
-    END(HTML_TITLE);    
-  
+    END(HTML_TITLE);
+
     START(HTML_H1);
     PUTS(*printable ? printable : "Welcome");
     END(HTML_H1);
@@ -851,10 +844,9 @@ PUBLIC void HTDirTitles (HTStructured *target, HTAnchor *anchor)
 	sprintf(relative, "%s/..", current);
         PUTS("<A HREF=\"");
         PUTS(relative);
-        PUTS("\">");
 	free(relative);
+	PUTS("\">Up to ");
 
-	PUTS("Up to ");
 	if (parent) {
 	    printable = NULL;
 	    StrAllocCopy(printable, parent + 1);
@@ -868,7 +860,7 @@ PUBLIC void HTDirTitles (HTStructured *target, HTAnchor *anchor)
     }
     free(path);
 }
-		
+
 /*	Load a document
 **	---------------
 **
@@ -877,8 +869,8 @@ PUBLIC void HTDirTitles (HTStructured *target, HTAnchor *anchor)
 **			This is the physical address of the file
 **
 ** On exit,
-**	returns		<0		Error has occured.
-**			HTLOADED	OK 
+**	returns		<0		Error has occurred.
+**			HTLOADED	OK
 **
 */
 PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
@@ -928,7 +920,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 	char *file = strdup(addr);
 
         if (strstr(file, "%20")) {
-	    /* Convert escaped spaces to real spaces */ 
+	    /* Convert escaped spaces to real spaces */
 	    char *p = file;
 	    char *q = file;
 
@@ -961,7 +953,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 #ifdef VMS
     HTUnEscape(filename);
 #endif /* VMS */
-    
+
 #ifndef VMS   /* New code for VMS port, PGE for DL */
     format = HTFileFormat(filename, &encoding, plaintext, &compressed);
 #else
@@ -1040,9 +1032,10 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 	    } else {
 		int status;
 
+		vmsname = NULL;
 		/* Must start and end with slash */
 		if (*wwwname != '/') {
-		    vmsname = strdup("/");
+		    StrAllocCopy(vmsname, "/");
 		    StrAllocCat(vmsname, wwwname);
 		} else {
 		    StrAllocCopy(vmsname, wwwname);
@@ -1069,7 +1062,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 	    goto suicide;
 	}
 	fp = fopen(vmsname, "r", "shr=put", "shr=upd");
-	
+
 	/*  If the file wasn't VMS syntax, then perhaps it is ultrix
 	 */
 	if (!fp) {
@@ -1120,7 +1113,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
     }
 #else
     free(filename);
-    
+
     /*	For unix, we try to translate the name into the name of a
     **  transparently mounted file.
     **
@@ -1128,14 +1121,14 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
     */
 #ifndef NO_UNIX_IO
     /*  Need protection here for telnet server but not httpd server */
-	 
+
     {	/* Try local file system */
 	char *localname = HTLocalName(addr);
 	struct stat dir_info;
 
         if (!localname)
             goto suicide;
-	
+
 #ifdef GOT_READ_DIR
 	/*		  Multiformat handling
 	**
@@ -1166,13 +1159,13 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 		return HTLoadError(sink, 500,
 			           "Multiformat: directory scan failed.");
 	    }
-	    
+
 	    /* While there are directory entries to be read */
 	    while (dirbuf = readdir(dp)) {
 		/* If the entry is not being used, skip it */
 		if (dirbuf->d_ino == 0)
 		    continue;
-		if (!strncmp(dirbuf->d_name, base, baselen)) {	
+		if (!strncmp(dirbuf->d_name, base, baselen)) {
 		    HTFormat rep = HTFileFormat(dirbuf->d_name, &encoding,
                                                 plaintext, &compressed);
 		    float value = HTStackValue(rep, format_out,
@@ -1190,11 +1183,11 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 			    best = value;
 			    best_dirbuf = *dirbuf;
 		        }
-		    }	/* If best so far */ 		    
-		}  /* If match */  
+		    }	/* If best so far */
+		}  /* If match */
 	    }
 	    closedir(dp);
-	    
+
 	    if (best_rep) {
 		format = best_rep;
 		base[-1] = '/';		/* Restore directory name */
@@ -1209,7 +1202,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 	}  /* If multi suffix */
         /*
         ** Check to see if the 'localname' is in fact a directory.  If it is
-        ** create a new hypertext object containing a list of files and 
+        ** create a new hypertext object containing a list of files and
         ** subdirectories contained in the directory.  All of these are links
         ** to the directories or files listed.
         ** NB This assumes the existance of a type 'STRUCT_DIRENT', which will
@@ -1224,7 +1217,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 #endif
 	}  else {		/* Stat was OK */
 	    if (((dir_info.st_mode) & S_IFMT) == S_IFDIR) {
-		/* If localname is a directory */	
+		/* If localname is a directory */
  		/*
 		** Read the localdirectory and present a nicely formatted list
 		** to the user.  Re-wrote most of the read directory code here,
@@ -1248,7 +1241,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 #ifndef DISABLE_TRACE
 		if (www2Trace)
 		    fprintf(stderr, "%s is a directory\n", localname);
-#endif			
+#endif
 		/*	Check directory access.
 		**	Selective access means only those directories
 		**	containing a marker file can be browsed
@@ -1265,7 +1258,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 		    strcpy(enable_file_name, localname);
 		    strcat(enable_file_name, "/");
 		    strcat(enable_file_name, HT_DIR_ENABLE_FILE);
-		    if (stat(enable_file_name, &statbuf) != 0) {
+		    if (stat(enable_file_name, &statbuf)) {
 			free(localname);
 			return HTLoadError(sink, 403,
 			 "Selective access is not enabled for this directory.");
@@ -1288,7 +1281,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 		        return HTLoadError(sink, 403,
 					"Ran out of memory in directory read!");
                     strcpy(ptr, dp->d_name);
-                     
+
                     HTSortAdd(ptr);
                 }
                 closedir(dfp);
@@ -1302,18 +1295,18 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                 HText_appendText(HT, "<H1>Local Directory ");
                 HText_appendText(HT, localname);
                 HText_appendText(HT, "</H1>\n");
-                HText_appendText(HT, "<DL>\n"); 
+                HText_appendText(HT, "<DL>\n");
 
 		/* Sort the list and then spit it out in a nice form */
 
 		/* How this for a disgusting loop :) */
-                for (count = 0, dataptr = HTSortFetch(count); dataptr; 
+                for (count = 0, dataptr = HTSortFetch(count); dataptr;
                     free(dataptr), count++, dataptr = HTSortFetch(count)) {
 
-		    /* We do not want to see . */
+		    /* We do not want to see. */
                     if (!strcmp(dataptr, "."))
 			continue;
- 
+
 		    /* If it's .. *and* the current directory is / don't show
 		    ** anything, otherwise print out a nice Parent Directory
 		    ** entry.
@@ -1322,9 +1315,8 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                         if (strcmp(localname, "/")) {
                             strcpy(buffer, localname);
 
-                            ptr = strrchr(buffer, '/');
-                            if (ptr)
-				*ptr = '\0'; 
+                            if (ptr = strrchr(buffer, '/'))
+				*ptr = '\0';
                             if (!*buffer)
 				strcpy(buffer, "/");
                             HText_appendText(HT, "<DD><A HREF=\"");
@@ -1339,7 +1331,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                             continue;
                         }
                     }
-                      
+
 		    /* Get the filesize information from a stat.  If we
 		     * cannot stat it, we probably cannot read it either,
 		     * so ignore it.
@@ -1372,7 +1364,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                     } else {
                         sprintf(buffer, "%s (%d bytes)",
 				dataptr, statbuf.st_size);
-                        format = HTFileFormat(dataptr, &pencoding, 
+                        format = HTFileFormat(dataptr, &pencoding,
                                      	      www_source, &cmpr);
 
 			/* If it's executable then call it application,
@@ -1380,12 +1372,12 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                         if (cmpr == 0) {
                             HText_appendText(HT, "<IMG SRC=\"");
                             if ((statbuf.st_mode & S_IXUSR) ||
-                                (statbuf.st_mode & S_IXGRP) || 
+                                (statbuf.st_mode & S_IXGRP) ||
                                 (statbuf.st_mode & S_IXOTH)) {
-                                HText_appendText(HT, 
+                                HText_appendText(HT,
                                           HTgeticonname(format, "application"));
                             } else {
-                                HText_appendText(HT, 
+                                HText_appendText(HT,
                                                  HTgeticonname(format, "text"));
                             }
                             HText_appendText(HT, "\"> ");
@@ -1407,7 +1399,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
                 return HT_LOADED;
 	    }  /* End if localname is directory */
 	}  /* End if file stat worked */
-	
+
  /* End of directory reading section */
 #endif
  open_file:
@@ -1431,7 +1423,7 @@ PUBLIC int HTLoadFile (WWW_CONST char *addr, HTParentAnchor *anchor,
 		return HT_LOADED;
 	    }
 	}
-    }  /* Local unix file system */    
+    }  /* Local unix file system */
 #endif
 #endif
 

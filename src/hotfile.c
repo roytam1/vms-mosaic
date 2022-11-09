@@ -359,10 +359,8 @@ char *mo_read_new_hotlist(mo_hotlist *list, FILE *fp)
    *   have hotlist names that are space infested.
    */
   if (name) {
-      char *ptr;
-
-      for (ptr = name + strlen(name) - 1; ptr && *ptr == ' '; ptr--)
-          *ptr = '\0';
+      for (text = name + strlen(name) - 1; text && *text == ' '; text--)
+          *text = '\0';
   }
   return name;
 }
@@ -438,9 +436,9 @@ mo_status mo_write_hotlist(mo_hotlist *list, FILE *fp)
       init = 1;
   }
 
-  fprintf(fp, "<HTML>\n%s\n", NCSA_HOTLIST_FORMAT_COOKIE_THREE);
+  fprintf(fp, "<HTML>\n%s\n<TITLE>Hotlist from ",
+	  NCSA_HOTLIST_FORMAT_COOKIE_THREE);
 
-  fputs("<TITLE>Hotlist from ", fp);
   if (!DAN) {
       fputs("Unknown", fp);      
   } else {

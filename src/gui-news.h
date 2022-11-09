@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2006, 2008, 2011 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -65,14 +65,12 @@
 
 mo_status mo_post_news_win(mo_window *);
 mo_status mo_post_follow_win(mo_window *);
-mo_status mo_post_generic_news_win(mo_window *, int follow);
 
-void gui_news_post_subgroupwin(mo_window *win);
 void gui_news_updateprefs(mo_window *win);
 void gui_news_subgroup(mo_window *win);
 void gui_news_unsubgroup(mo_window *win);
 void gui_news_flush(mo_window *win);
-void gui_news_flushgroup(mo_window *win);
+/* void gui_news_flushgroup(mo_window *win); */
 void gui_news_list(mo_window *win);
 void gui_news_showAllGroups(mo_window *win);
 void gui_news_showGroups(mo_window *win);
@@ -82,7 +80,6 @@ void gui_news_showArticles(mo_window *win);
 void gui_news_markGroupRead(mo_window *win);
 void gui_news_markGroupUnread(mo_window *win);
 void gui_news_markArticleUnread(mo_window *win);
-void gui_news_initflush(mo_window *win);
 void gui_news_index(mo_window *win);
 void gui_news_prev(mo_window *win);
 void gui_news_next(mo_window *win);

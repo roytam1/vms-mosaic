@@ -35,7 +35,7 @@
 #endif /* WIN32 */
 #include "opj_includes.h"
 
-double opj_clock() {
+double opj_clock(void) {
 #ifdef WIN32
 	/* WIN32: use QueryPerformance (very accurate) */
     LARGE_INTEGER freq , t ;
@@ -63,20 +63,13 @@ double opj_clock() {
 #endif
 }
 
-void* opj_malloc( size_t size ) {
-	void *memblock = malloc(size);
-	if(memblock) {
-		memset(memblock, 0, size);
-	}
-	return memblock;
-}
-
+#ifdef VMS
+/* Avoid realloc bug */
 void* opj_realloc( void *memblock, size_t size ) {
-	return realloc(memblock, size);
+        if (memblock) {
+                return realloc(memblock, size);
+        } else {
+                return calloc(1, size);
+        }
 }
-
-void opj_free( void *memblock ) {
-	free(memblock);
-}
-
-
+#endif

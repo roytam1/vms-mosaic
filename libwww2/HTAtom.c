@@ -25,7 +25,7 @@ extern int www2Trace;
 #endif
 
 PRIVATE HTAtom *hash_table[HASH_SIZE];
-PRIVATE BOOL initialised = NO;
+PRIVATE BOOL initialized = NO;
 
 PUBLIC HTAtom *HTAtom_for(char *string)
 {
@@ -35,23 +35,23 @@ PUBLIC HTAtom *HTAtom_for(char *string)
 
     /* Bug hack. */
     if (!string)
-        string = strdup("blargh");
-    
+        string = "blargh";
+
     /*		First time around, clear hash table
     */
-    if (!initialised) {
+    if (!initialized) {
         int i;
 
 	for (i = 0; i < HASH_SIZE; i++)
 	    hash_table[i] = NULL;
-	initialised = YES;
+	initialized = YES;
     }
-    
+
     /*		Generate hash function
     */
     for (p = string; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
-    
+
     /*		Search for the string in the list
     */
     for (a = hash_table[hash]; a; a = a->next) {
@@ -63,7 +63,7 @@ PUBLIC HTAtom *HTAtom_for(char *string)
 	    return a;			/* Found: return it */
 	}
     }
-    
+
     /*		Generate a new entry
     */
     if (!(a = (HTAtom *)malloc(sizeof(*a))))
@@ -86,15 +86,15 @@ PUBLIC HTAtom *HTAtom_exists(char *string)
     int hash = 0;
     char *p;
     HTAtom *a;
-    
-    if (!initialised)
+
+    if (!initialized)
         return NULL;
-    
+
     /*		Generate hash function
     */
     for (p = string; *p; p++)
         hash = (hash * 3 + *p) % HASH_SIZE;
-    
+
     /*		Search for the string in the list
     */
     for (a = hash_table[hash]; a; a = a->next) {

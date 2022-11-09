@@ -19,7 +19,7 @@ PUBLIC HTChunk *HTChunkCreate (int growby)
 
     ch->growby = growby;
     /** calloc zeros
-    ch->data = 0;
+    ch->data = NULL;
     ch->size = 0;
     ch->allocated = 0;
     **/
@@ -34,7 +34,7 @@ PUBLIC void HTChunkClear (HTChunk *ch)
 {
     if (ch->data) {
 	free(ch->data);
-	ch->data = 0;
+	ch->data = NULL;
     }
     ch->size = 0;
     ch->allocated = 0;

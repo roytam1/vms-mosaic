@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -125,11 +125,8 @@ static XmxCallback(include_fsb_cb)
 	          15 + (strlen(buf) + 13);
       final = (char *)malloc(final_len);
 
-      strcpy(final,"\nUnable to Open File:\n");
-      sprintf(final + strlen(final), "   %s\n",
-	      !efname || !*efname ? " " : efname);
-      sprintf(final + strlen(final), "\nOpen Error:\n");
-      sprintf(final + strlen(final), "   %s\n", buf);
+      sprintf(final, "\nUnable to Open File:\n   %s\n\nOpen Error:\n   %s\n",
+	      !efname || !*efname ? " " : efname, buf);
 
       XmxMakeErrorDialog(win->mailto_win, final, "Open Error");
 
@@ -374,9 +371,9 @@ mo_status mo_post_mailto_win(char *to_address, char *subject)
       char str[BUFSIZ];
 
       sprintf(str, "Mail from %s", pre_title);
-      XmTextFieldSetString(win->mailto_subfield, str);
+      XmxTextSetString(win->mailto_subfield, str);
   } else {
-      XmTextFieldSetString(win->mailto_subfield, subject);
+      XmxTextSetString(win->mailto_subfield, subject);
   }
   XmxTextSetString(win->mailto_text, "");
   
@@ -576,14 +573,14 @@ mo_status mo_post_mailto_form_win(char *to_address, char *subject)
   XmxTextSetString(win->mailto_form_fromfield, namestr);
   XmxTextSetString(win->mailto_form_tofield, to_address);
   if (subject) {
-      XmTextFieldSetString(win->mailto_form_subfield, subject);
+      XmxTextSetString(win->mailto_form_subfield, subject);
   } else {
-      XmTextFieldSetString(win->mailto_form_subfield, "");
+      XmxTextSetString(win->mailto_form_subfield, "");
   }
   win->post_data = strdup(post_data);
 
   buf = makeReadable(post_data, 1);
-  XmTextSetString(win->mailto_form_text, buf);
+  XmxTextSetString(win->mailto_form_text, buf);
   if (buf)
       free(buf);
 
@@ -666,12 +663,10 @@ FILE *mo_start_sending_mail_message(char *to, char *subj,
   if (!(_fp = popen(cmd, "w")))
       return NULL;
 
-  fprintf(_fp, "To: %s\n", to);
-  fprintf(_fp, "Subject: %s\n", subj);
+  fprintf(_fp, "To: %s\nSubject: %s\n", to, subj);
   fprintf(_fp, "Reply-To: %s <%s>\n", get_pref_string(eDEFAULT_AUTHOR_NAME),
           get_pref_string(eDEFAULT_AUTHOR_EMAIL));
-  fprintf(_fp, "Content-Type: %s\n", content_type);
-  fprintf(_fp, "Mime-Version: 1.0\n");
+  fprintf(_fp, "Content-Type: %s\nMime-Version: 1.0\n", content_type);
   fprintf(_fp, "X-Mailer: VMS Mosaic %s on %s\n", 
           MO_VERSION_STRING, MO_MACHINE_TYPE);
   if (url)
@@ -695,8 +690,7 @@ FILE *mo_start_sending_mail_message(char *to, char *subj,
       if (*cp == '\"')
           *cp = ' ';
   }
-  fprintf(_fp, "$ Set NoVerify\n");
-  fprintf(_fp, "$ On Error Then Goto End\n");
+  fprintf(_fp, "$ Set NoVerify\n$ On Error Then Goto End\n");
   fprintf(_fp, "$ Set Message/NoIdent/NoFacil/Notext/NoSever\n");
 
   prefix = get_pref_string(eVMS_MAIL_PREFIX);
@@ -742,8 +736,7 @@ mo_status mo_finish_sending_mail_message(void)
   if (_fp) {
       char *cmd = (char *)malloc(strlen(mail_fnam) + 8);
 
-      fprintf(_fp, "\n$ EOD_MOSAIC\n");
-      fprintf(_fp, "$End:\n");
+      fprintf(_fp, "\n$ EOD_MOSAIC\n$End:\n");
       fclose(_fp);
       sprintf(cmd, "@%s.", mail_fnam);
 

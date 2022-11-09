@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -79,6 +79,8 @@
 #ifndef VMS
 #include "../libnut/system.h"
 #endif
+
+extern char *home_document;
 
 typedef enum {
   mo_new_annotation = 0,
@@ -342,10 +344,10 @@ static XmxCallback (annotate_win_cb)
                   mo_reload_window_text(win, 0);
               }
 	      XtFree(txt);
-	      if (author)
+	      if (title)
 		  XtFree(title);
 	      if (author)
-		  XtFree(title);
+		  XtFree(author);
           } else if (txt) {
 	      XtFree(txt);
 	  }
@@ -391,16 +393,13 @@ static void do_slate (mo_window *win)
 {
   /* Namestr has to be long, as passwd entries are now getting absurdly long. */
   char namestr[1024];
-  
-  sprintf(namestr, "%s (%s)",     
-          get_pref_string(eDEFAULT_AUTHOR_EMAIL),
-          get_pref_string(eDEFAULT_AUTHOR_NAME));
+  char *name = get_pref_string(eDEFAULT_AUTHOR_NAME);
+
+  sprintf(namestr, "%s (%s)", get_pref_string(eDEFAULT_AUTHOR_EMAIL), name);
 
   XmxTextSetString(win->annotate_author, namestr);
 
-  sprintf(namestr, "Annotation by %s",
-          get_pref_string(eDEFAULT_AUTHOR_NAME));
-  XmxTextSetString(win->annotate_title, namestr);
+  sprintf(namestr, "Annotation by %s", name);
 
   XmxTextSetString(win->annotate_title, namestr);
 
@@ -504,8 +503,6 @@ static XmxCallback (clear_button_cb)
 mo_status mo_delete_annotation (mo_window *win, int id)
 {
   /* Delete the annotation currently being viewed. */
-  extern char *home_document;
-
   if (!win->current_node)
       return mo_fail;
 
@@ -539,7 +536,6 @@ mo_status mo_delete_annotation (mo_window *win, int id)
 mo_status mo_delete_group_annotation (mo_window *win, char *url)
 {
   /* Delete the annotation currently being viewed. */
-  extern char *home_document;
   char *tmpurl;
 
   if (!win->current_node)
@@ -729,7 +725,7 @@ static void make_annotate_win (mo_window *win)
   clear_button = XmxMakePushButton(annotate_form, "Clean Slate",
 				   clear_button_cb, 0);
   include_button = XmxMakePushButton(annotate_form, "Include File...",
-				    include_button_cb, 0);
+				     include_button_cb, 0);
   win->delete_button = XmxMakePushButton(annotate_form, "Delete",
 					 delete_button_cb, 0);
   XmxSetArg(XmNscrolledWindowMarginWidth, 10);

@@ -75,7 +75,7 @@ PUBLIC int HTMultiLoadLimit = 8;
 /*	To generate other things, play with these
 */
 PRIVATE HTFormat HTOutputFormat = NULL;
-PRIVATE HTStream *HTOutputStream = NULL;  /* For non-interactive, set this */ 
+PRIVATE HTStream *HTOutputStream = NULL;  /* For non-interactive, set this */
 
 PUBLIC BOOL using_gateway = NO;      /* Are we using a gateway? */
 PUBLIC BOOL using_proxy = NO;        /* Are we using a proxy gateway? */
@@ -88,7 +88,7 @@ PUBLIC MultiInfo *HTMultiLoading = NULL;
 PRIVATE MultiInfo *multi_loading = NULL;
 PRIVATE int multi_count = 0;
 PRIVATE HTBTree *multi_more = NULL;
-extern int HTCopyOneRead; 
+extern int HTCopyOneRead;
 extern int force_dump_to_file;
 extern char *force_dump_filename;
 
@@ -174,7 +174,7 @@ PRIVATE void HTAccessInit (void)			/* Call me once */
 **	anchor		a parent anchor whose address is addr
 **
 ** On exit,
-**	returns		HT_NO_ACCESS		Error has occured.
+**	returns		HT_NO_ACCESS		Error has occurred.
 **			HT_OK			Success
 **
 */
@@ -183,7 +183,7 @@ PRIVATE int get_physical (char *addr, HTParentAnchor *anchor, int bong)
     char *access = HTParse(addr, "file:", PARSE_ACCESS);
     char *host = HTParse(addr, "", PARSE_HOST);
     extern int useKeepAlive;
-    
+
     HTAnchor_setPhysical(anchor, addr);
 
 #ifndef DISABLE_TRACE
@@ -217,107 +217,101 @@ PRIVATE int get_physical (char *addr, HTParentAnchor *anchor, int bong)
 	    *ptr = tolower(*ptr);
 
 	if (!GetNoProxy(tmp_access, tmp_host)) {
-		char *gateway_parameter, *gateway, *proxy;
-		struct Proxy *proxent = NULL;
-		extern struct Proxy *proxy_list;
-		char *proxyentry = NULL;
+	    char *gateway_parameter, *gateway, *proxy;
+	    Proxy *proxent = NULL;
+	    extern Proxy *proxy_list;
+	    char *proxyentry = NULL;
 
-		proxy_host_fix = strdup(tmp_host);
+	    proxy_host_fix = strdup(tmp_host);
 
-		/* Search for gateways */
-		gateway_parameter = (char *)malloc(strlen(tmp_access) + 20);
-		if (!gateway_parameter)
-		        outofmem(__FILE__, "HTLoad");
-		strcpy(gateway_parameter, "WWW_");
-		strcat(gateway_parameter, tmp_access);
-		strcat(gateway_parameter, "_GATEWAY");
-		/* Return value of getenv not freeable */
-		gateway = (char *)getenv(gateway_parameter);
+	    /* Search for gateways */
+	    gateway_parameter = (char *)malloc(strlen(tmp_access) + 20);
+	    if (!gateway_parameter)
+		outofmem(__FILE__, "HTLoad");
+	    sprintf(gateway_parameter, "WWW_%s_GATEWAY", tmp_access);
+	    /* Return value of getenv not freeable */
+	    gateway = (char *)getenv(gateway_parameter);
 
-		/* Search for proxy servers */
-		strcpy(gateway_parameter, tmp_access);
-		strcat(gateway_parameter, "_proxy");
-		proxy = (char *)getenv(gateway_parameter);
-		free(gateway_parameter);
-		/*
-		 * Check the proxies list
-		 */
-		if (!proxy || !*proxy) {
-			int fMatchEnd = 1;  /* Match hosts from the end */
-			char *scheme_info = strdup(host);
+	    /* Search for proxy servers */
+	    sprintf(gateway_parameter, "%s_proxy", tmp_access);
+	    proxy = (char *)getenv(gateway_parameter);
+	    free(gateway_parameter);
+	    /*
+	     * Check the proxies list
+	     */
+	    if (!proxy || !*proxy) {
+		int fMatchEnd = 1;  /* Match hosts from the end */
+		char *scheme_info = strdup(host);
 
-			if (scheme_info && !*scheme_info) {
-				free(scheme_info);
-				scheme_info = HTParse(addr, "", PARSE_PATH);
-				/* Match other scheme_info at beginning */
-				fMatchEnd = 0;
-			}
-			if (bong) {  /* This one is bad - disable! */
-#ifndef DISABLE_TRACE
-				if (www2Trace)
-		 			fprintf(stderr, 
-						"Disabling proxy, bong = %d\n",
-						bong);
-#endif
-				proxent = GetProxy(tmp_access, scheme_info,
-					           fMatchEnd);
-				if (proxent)
-					proxent->alive = bong;
-			}
-			proxent = GetProxy(tmp_access, scheme_info, fMatchEnd);
-			if (scheme_info)
-				free(scheme_info);
-			if (proxent) {
-				useKeepAlive = 0;  /* Proxies don't keepalive */
-				StrAllocCopy(proxyentry, proxent->transport);
-				StrAllocCat(proxyentry, "://");
-				StrAllocCat(proxyentry, proxent->address);
-				StrAllocCat(proxyentry, ":");
-				StrAllocCat(proxyentry, proxent->port);
-				StrAllocCat(proxyentry, "/");
-				proxy = proxyentry;
-			}
+		if (scheme_info && !*scheme_info) {
+		    free(scheme_info);
+		    scheme_info = HTParse(addr, "", PARSE_PATH);
+		    /* Match other scheme_info at beginning */
+		    fMatchEnd = 0;
 		}
+		if (bong) {  /* This one is bad - disable! */
 #ifndef DISABLE_TRACE
-		if (www2Trace && proxy)
- 			fprintf(stderr,	"Got proxy %s\n", proxy);
+		    if (www2Trace)
+		 	fprintf(stderr,	"Disabling proxy, bong = %d\n",	bong);
+#endif
+		    proxent = GetProxy(tmp_access, scheme_info, fMatchEnd);
+		    if (proxent)
+			proxent->alive = bong;
+		}
+		proxent = GetProxy(tmp_access, scheme_info, fMatchEnd);
+		if (scheme_info)
+		    free(scheme_info);
+		if (proxent) {
+		    useKeepAlive = 0;  /* Proxies don't keepalive */
+		    StrAllocCopy(proxyentry, proxent->transport);
+		    StrAllocCat(proxyentry, "://");
+		    StrAllocCat(proxyentry, proxent->address);
+		    StrAllocCat(proxyentry, ":");
+		    StrAllocCat(proxyentry, proxent->port);
+		    StrAllocCat(proxyentry, "/");
+		    proxy = proxyentry;
+		}
+	    }
+#ifndef DISABLE_TRACE
+	    if (www2Trace && proxy)
+ 		fprintf(stderr,	"Got proxy %s\n", proxy);
 #endif
 #ifndef HAVE_WAIS
-		if (!gateway && !strcmp(tmp_access, "wais"))
-			gateway = DEFAULT_WAIS_GATEWAY;
+	    if (!gateway && !strcmp(tmp_access, "wais"))
+		gateway = DEFAULT_WAIS_GATEWAY;
 #endif
-		/* Proxy servers have precedence over gateway servers */
-		if (proxy) {
-			char *gatewayed = NULL;
+	    /* Proxy servers have precedence over gateway servers */
+	    if (proxy) {
+		char *gatewayed = NULL;
 
-			StrAllocCopy(gatewayed, proxy);
-			StrAllocCat(gatewayed, addr);
-			using_proxy = YES;
-			HTAnchor_setPhysical(anchor, gatewayed);
-			free(access);
-			if (proxyentry)
-				free(proxyentry);
-			access = HTParse(gatewayed, "http:", PARSE_ACCESS);
-			free(gatewayed);
-		} else if (gateway) {
-			char *gatewayed = NULL;
+		StrAllocCopy(gatewayed, proxy);
+		StrAllocCat(gatewayed, addr);
+		using_proxy = YES;
+		HTAnchor_setPhysical(anchor, gatewayed);
+		free(access);
+		if (proxyentry)
+		    free(proxyentry);
+		access = HTParse(gatewayed, "http:", PARSE_ACCESS);
+		free(gatewayed);
+	    } else if (gateway) {
+		char *gatewayed = NULL;
 
-			StrAllocCopy(gatewayed, gateway);
-			StrAllocCat(gatewayed, addr);
-			using_gateway = YES;
-			HTAnchor_setPhysical(anchor, gatewayed);
-			free(access);
-			access = HTParse(gatewayed, "http:", PARSE_ACCESS);
-			free(gatewayed);
-		} else {
-			if (proxy_host_fix) {
-				free(proxy_host_fix);
-				proxy_host_fix = NULL;
-			}
-			using_proxy = NO;
-			using_gateway = NO;
-			ClearTempBongedProxies();
+		StrAllocCopy(gatewayed, gateway);
+		StrAllocCat(gatewayed, addr);
+		using_gateway = YES;
+		HTAnchor_setPhysical(anchor, gatewayed);
+		free(access);
+		access = HTParse(gatewayed, "http:", PARSE_ACCESS);
+		free(gatewayed);
+	    } else {
+		if (proxy_host_fix) {
+		    free(proxy_host_fix);
+		    proxy_host_fix = NULL;
 		}
+		using_proxy = NO;
+		using_gateway = NO;
+		ClearTempBongedProxies();
+	    }
 	}
 	free(tmp_access);
 	free(tmp_host);
@@ -357,10 +351,10 @@ PRIVATE int get_physical (char *addr, HTParentAnchor *anchor, int bong)
 **	anchor		a pareent anchor with whose address is addr
 **
 ** On exit,
-**	returns		<0		Error has occured.
+**	returns		<0		Error has occurred.
 **			HT_LOADED	Success
 **			HT_NO_DATA	Success, but no document loaded.
-**					(telnet sesssion started etc)
+**					(telnet sesssion started, etc.)
 **
 */
 PRIVATE int HTLoad (WWW_CONST char *addr,
@@ -419,10 +413,9 @@ PRIVATE int HTLoad (WWW_CONST char *addr,
 	sprintf(finbuf, "%s%s?%s", buf1, host, buf2);
 	if (HTConfirm(finbuf)) {
 	    free(finbuf);
-	    finbuf = (char *)malloc(strlen(host) +
-				    strlen("Disabling proxy server ") +
-				    strlen(" and trying again.") + 5);
-	    sprintf(finbuf, "Disabling proxy server %s and trying again.",host);
+	    finbuf = (char *)malloc(strlen(host) + 5 +
+			       strlen("Disabling proxy server  and retrying."));
+	    sprintf(finbuf, "Disabling proxy server %s and retrying.", host);
 	    HTProgress(finbuf);
 	    application_user_feedback(finbuf);
 	    status = get_physical(addr, anchor, 1);  /* Perm disable */
@@ -435,7 +428,7 @@ PRIVATE int HTLoad (WWW_CONST char *addr,
 	if (finbuf)
 	    free(finbuf);
 
-	/* get_physical messes with anchor */ 
+	/* get_physical messes with anchor */
     	p = HTAnchor_protocol(anchor);
     }
 }
@@ -450,7 +443,7 @@ PUBLIC HTStream *HTSaveStream (HTParentAnchor *anchor)
 
     if (!p)
 	return NULL;
-    
+
     return (*p->saveStream)(anchor);
 }
 
@@ -470,7 +463,7 @@ PUBLIC HTStream *HTSaveStream (HTParentAnchor *anchor)
 **
 **    On Exit,
 **        returns    1     Success in opening document
-**                   0     Failure 
+**                   0     Failure
 **                   -1    Interrupted
 **
 */
@@ -488,7 +481,7 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
 
     use_this_url_instead = NULL;
 
-    /* We LOVE goto's! 
+    /* We LOVE goto's!
      *
      * Let's rephrase this..._You_ love goto's...we _abhore_ goto's.  People who
      *   LOVE goto's should be shot.
@@ -504,7 +497,7 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
 #endif
 
     status = HTLoad(full_address, anchor, format_out, sink);
-    
+
     if (status == HT_LOADED) {
 #ifndef DISABLE_TRACE
 	if (www2Trace)
@@ -516,7 +509,7 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
     if ((status == HT_REDIRECTING) && redirecting_url) {
 #ifndef DISABLE_TRACE
         if (www2Trace) {
-            fprintf(stderr, "HTAccess: '%s' is a redirection URL.\n", 
+            fprintf(stderr, "HTAccess: '%s' is a redirection URL.\n",
                     full_address);
             fprintf(stderr, "HTAccess: Redirecting to '%s'\n", redirecting_url);
         }
@@ -535,16 +528,16 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
 #endif
         return -1;
     }
-    
+
     if (status == HT_NO_DATA) {
 #ifndef DISABLE_TRACE
 	if (www2Trace)
-	    fprintf(stderr, "HTAccess: `%s' has been accessed, No data left.\n",
+	    fprintf(stderr, "HTAccess: `%s' has been accessed, no data left.\n",
 		    full_address);
 #endif
-	return 0;    
+	return 0;
     }
-    
+
     if (status < 0) {		      /* Failure in accessing a document */
 #ifndef DISABLE_TRACE
 	if (www2Trace)
@@ -552,14 +545,13 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
 #endif
 	return 0;
     }
- 
+
     /* If you get this, then please find which routine is returning
      * a positive unrecognized error code! */
 #ifndef DISABLE_TRACE
     if (www2Trace)
-        fprintf(stderr,
-         "HTAccess: socket or file num %d returned by obsolete load routine!\n",
-	 status);
+        fprintf(stderr, "HTAccess: bogus status %d returned by load routine!\n",
+		status);
 #endif
     return 0;
 }
@@ -574,8 +566,8 @@ PRIVATE int HTLoadDocument (WWW_CONST char *full_address,
 **
 **    On Exit,
 **        returns    1     Success in opening document
-**                   0      Failure 
-**                   -1      Interrupted
+**                   0     Failure
+**                  -1     Interrupted
 **
 */
 PUBLIC int HTLoadAbsolute (WWW_CONST char *addr)
@@ -624,7 +616,7 @@ PUBLIC int HTLoadAbsolute (WWW_CONST char *addr)
 **
 **    On Exit,
 **        returns    YES     Success in opening document
-**                   NO      Failure 
+**                   NO      Failure
 **
 **
 */
@@ -646,7 +638,7 @@ PUBLIC BOOL HTLoadToStream (WWW_CONST char *addr, BOOL filter, HTStream *sink)
 **
 **    On Exit,
 **        returns    YES     Success in opening document
-**                   NO      Failure 
+**                   NO      Failure
 */
 PUBLIC BOOL HTLoadRelative (WWW_CONST char *relative_name, HTParentAnchor *here)
 {
@@ -674,7 +666,7 @@ PUBLIC BOOL HTLoadRelative (WWW_CONST char *relative_name, HTParentAnchor *here)
 **        document_list     The list of documents to be accessed.
 **
 **    On Exit,
-**        returns    1      Success in starting
+**        returns     1     Success in starting
 **                   -1     Interrupted
 */
 PUBLIC int HTStartMultiLoad (HTBTree *image_loads)
@@ -737,7 +729,7 @@ PUBLIC int HTStartMultiLoad (HTBTree *image_loads)
 **    On Exit,
 **        returns    1     Success in starting load
 **		     0	   Failure
-**                   -1    Interrupted
+**                  -1     Interrupted
 */
 PUBLIC int HTMultiLoad (MultiInfo *img)
 {
@@ -871,7 +863,7 @@ PUBLIC int HTMultiLoad (MultiInfo *img)
 	    next->filename = NULL;
 	    /* Treat all errors as interrupts */
 	    (*stream->isa->handle_interrupt)(stream);
-	    HTClose_HTTP_Socket(next->socket, next->handle);
+	    HTClose_HTTP_Socket(next->socket, next->handle, next->host);
 	    (*stream->isa->free)(stream);
 	    multi_count--;
 	    if (img == next)
@@ -889,7 +881,7 @@ PUBLIC int HTMultiLoad (MultiInfo *img)
 		/* Finished it */
 		force_dump_to_file = 1;
 		(*stream->isa->end_document)(stream);
-		HTClose_HTTP_Socket(next->socket, next->handle);
+		HTClose_HTTP_Socket(next->socket, next->handle, next->host);
 		(*stream->isa->free)(stream);
 		force_dump_to_file = 0;
 		next->loaded = 1;
@@ -904,7 +896,7 @@ PUBLIC int HTMultiLoad (MultiInfo *img)
 		next->filename = NULL;
 		/* Treat all errors as interrupts */
 		(*stream->isa->handle_interrupt)(stream);
-		HTClose_HTTP_Socket(next->socket, next->handle);
+		HTClose_HTTP_Socket(next->socket, next->handle, next->host);
 	        (*stream->isa->free)(stream);
 		multi_count--;
 		if (status == -1) {
@@ -917,8 +909,7 @@ PUBLIC int HTMultiLoad (MultiInfo *img)
 	    }
 	}
 
-	next = next->next;
-	if (!next) {
+	if (!(next = next->next)) {
 	    if (HTCheckActiveIcon(1))
             	return -1;	/* Interrupted */
 	    first_loop = 0;	/* Enable non-zero timeout to slow logo down */
@@ -948,10 +939,10 @@ PUBLIC Boolean HTResetMultiLoad (void)
 		HTStream *stream = (HTStream *)next->stream;
 
 	        (*stream->isa->handle_interrupt)(stream);
-		HTClose_HTTP_Socket(next->socket, next->handle);
+		HTClose_HTTP_Socket(next->socket, next->handle, next->host);
 	        (*stream->isa->free)(stream);
 	    } else {
-	        HTClose_HTTP_Socket(next->socket, next->handle);
+	        HTClose_HTTP_Socket(next->socket, next->handle, next->host);
 	    }
 	}
 	next = next->next;

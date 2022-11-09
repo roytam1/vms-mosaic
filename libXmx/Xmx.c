@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -66,7 +66,7 @@ extern int srcTrace;
 
 #include "XmxP.h"
 
-#include "../libliteclue/liteclue.h"
+#include "../libliteclue/LiteClue.h"
 
 #if defined(ultrix) || (defined(VMS) && (!defined(__DECC) || (__VMS_VER < 70000000) || (__DECC_VER <= 50230003))) || defined(NeXT)
 extern char *strdup();
@@ -505,9 +505,8 @@ Widget XmxMakeScale(Widget parent, XtCallbackProc cb, int cb_data,
 void XmxAdjustScale(Widget scale, int val)
 {
   XmxSetArg(XmNvalue, (XtArgVal)val);
-  XtSetValues(scale, Xmx_wargs, Xmx_n);
+  XmxSetValues(scale);
 
-  Xmx_n = 0;
   return;
 }
 
@@ -569,8 +568,6 @@ void XmxSetPositions(Widget w, int top, int bottom, int left, int right)
   }
 
   XmxSetValues(w);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -587,8 +584,6 @@ void XmxSetOffsets(Widget w, int top, int bottom, int left, int right)
       XmxSetArg(XmNrightOffset, (XtArgVal)right);
   
   XmxSetValues(w);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -618,8 +613,6 @@ void XmxSetConstraints(Widget w, int top, int bottom, int left, int right,
   }
   
   XmxSetValues(w);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -731,10 +724,8 @@ void XmxAdjustLabelText(Widget label, String text)
   XmString xmstr = XmStringCreateLtoR(text, XmSTRING_DEFAULT_CHARSET);
 
   XmxSetArg(XmNlabelString, (XtArgVal)xmstr);
-  XtSetValues(label, Xmx_wargs, Xmx_n);
+  XmxSetValues(label);
   XmStringFree(xmstr);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -992,12 +983,11 @@ Widget XmxMakeFileSBDialog(Widget parent, String title, String selection_txt,
   Xmx_n = 0;
   selection_label = XmFileSelectionBoxGetChild(Xmx_w, XmDIALOG_SELECTION_LABEL);
   XmxSetArg(XmNlabelString, (XtArgVal)label);
-  XtSetValues(selection_label, Xmx_wargs, Xmx_n);
+  XmxSetValues(selection_label);
 
   XmStringFree(dialog_title);
   XmStringFree(label);
 
-  Xmx_n = 0;
   return Xmx_w;
 }
 
@@ -1082,7 +1072,6 @@ Widget XmxMakeHelpTextDialog(Widget parent, String str, String title,
   /* Return scr_text in text_w argument. */
   *text_w = scr_text;
   Xmx_w = box;
-  Xmx_n = 0;
   return Xmx_w;
 }
 
@@ -1093,11 +1082,10 @@ void XmxAdjustHelpDialogText(Widget dialog, XmString message, String title)
 
   XmxSetArg(XmNdialogTitle, (XtArgVal)dialog_title);
   XmxSetArg(XmNmessageString, (XtArgVal)message);
-  XtSetValues(dialog, Xmx_wargs, Xmx_n);
+  XmxSetValues(dialog);
 
   XmStringFree(dialog_title);
 
-  Xmx_n = 0;
   return;
 }
 
@@ -1111,7 +1099,6 @@ void XmxAdjustDialogTitle(Widget dialog, String title)
 
   XmStringFree(dialog_title);
 
-  Xmx_n = 0;
   return;
 }
 
@@ -1338,8 +1325,7 @@ void XmxApplyBitmapToLabelWidget(Widget label, String data,
   Xmx_n = 0;
   XmxSetArg(XmNforeground, (XtArgVal)&fg);
   XmxSetArg(XmNbackground, (XtArgVal)&bg);
-  XtGetValues(label, Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
+  XmxGetValues(label);
 
   pix = XCreatePixmapFromBitmapData(dsp, DefaultRootWindow(dsp), data, width,
 			     height, fg, bg,
@@ -1347,8 +1333,6 @@ void XmxApplyBitmapToLabelWidget(Widget label, String data,
   XmxSetArg(XmNlabelPixmap, (XtArgVal)pix);
   XmxSetArg(XmNlabelType, (XtArgVal)XmPIXMAP);
   XmxSetValues(label);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -1362,8 +1346,7 @@ Pixmap XmxCreatePixmapFromBitmap(Widget label, String data,
   Xmx_n = 0;
   XmxSetArg(XmNforeground, (XtArgVal)&fg);
   XmxSetArg(XmNbackground, (XtArgVal)&bg);
-  XtGetValues(label, Xmx_wargs, Xmx_n);
-  Xmx_n = 0;
+  XmxGetValues(label);
 
   pix = XCreatePixmapFromBitmapData(dsp, DefaultRootWindow(dsp), data, width,
 			     height, fg, bg,
@@ -1377,8 +1360,6 @@ void XmxApplyPixmapToLabelWidget(Widget label, Pixmap pix)
   XmxSetArg(XmNlabelPixmap, (XtArgVal)pix);
   XmxSetArg(XmNlabelType, (XtArgVal)XmPIXMAP);
   XmxSetValues(label);
-
-  Xmx_n = 0;
   return;
 }
 
@@ -1402,7 +1383,6 @@ Widget XmxMakeFormAndOneButton(Widget parent, XtCallbackProc cb,
   XmxSetPositions(button1, XmxNoPosition, XmxNoPosition, 1, 2);
   XmxSetOffsets(button1, XmxNoOffset, XmxNoOffset, 8, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1432,7 +1412,6 @@ Widget XmxMakeFormAndTwoButtons(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button1, XmxNoOffset, XmxNoOffset, 8, 4);
   XmxSetOffsets(button2, XmxNoOffset, XmxNoOffset, 4, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1462,7 +1441,6 @@ Widget XmxMakeFormAndTwoButtonsTight(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button1, XmxNoOffset, XmxNoOffset, 8, 4);
   XmxSetOffsets(button2, XmxNoOffset, XmxNoOffset, 4, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1498,7 +1476,6 @@ Widget XmxMakeFormAndThreeButtonsTight(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button2, XmxNoOffset, XmxNoOffset, 4, 4);
   XmxSetOffsets(button3, XmxNoOffset, XmxNoOffset, 4, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1534,7 +1511,6 @@ Widget XmxMakeFormAndThreeButtons(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button2, XmxNoOffset, XmxNoOffset, 4, 4);
   XmxSetOffsets(button3, XmxNoOffset, XmxNoOffset, 4, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1576,7 +1552,6 @@ Widget XmxMakeFormAndFourButtons(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button3, XmxNoOffset, XmxNoOffset, 4, 4);
   XmxSetOffsets(button4, XmxNoOffset, XmxNoOffset, 4, 8);
   
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -1625,7 +1600,6 @@ Widget XmxMakeFormAndFiveButtons(Widget parent, XtCallbackProc cb,
   XmxSetOffsets(button4, XmxNoOffset, XmxNoOffset, 4, 4);
   XmxSetOffsets(button5, XmxNoOffset, XmxNoOffset, 4, 8);
 
-  Xmx_n = 0;
   Xmx_w = form;
   return Xmx_w;
 }
@@ -2264,6 +2238,12 @@ void XmxSetButtonClueText(String H1, String H2, String H3, String H4, String H5)
   Xmx_button3_help = H3;
   Xmx_button4_help = H4;
   Xmx_button5_help = H5;
+}
+
+void XmxClearButtonClueText(void)
+{
+  Xmx_button1_help = Xmx_button2_help = Xmx_button3_help = NULL;
+  Xmx_button4_help = Xmx_button5_help = NULL;
 }
 
 void XmxSetButtonClue(String c1, String c2, String c3, String c4, String c5)

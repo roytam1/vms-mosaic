@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2003, 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 /*
  * Written By:  Scott Powers
@@ -69,11 +69,11 @@
 #undef _COMMENT_H
 #include <stdio.h>
 
+#include <Xm/XmosP.h>
+
 #ifndef VMS
-#include <pwd.h>
 #include <sys/utsname.h>
 #else
-#include "vms_pwd.h"
 #include <lib$routines.h>
 
 /* This .h file should not be referenced in DESCRIP.MMS for this module */
@@ -99,29 +99,22 @@ static int DumpHtml(char *htmlname);
 
 static char *MakeFilename()
 {
-	char *hptr, *fname;
-	char home[256];
-#ifndef VMS
-	struct passwd *pwdent;
-#endif
+	char *home, *fname;
 
 	/*
-	 * Try the HOME environment variable, then the password file, and
-	 *   finally give up.
+	 * Try the HOME environment variable, then ask Motif
 	 */
-	if (!(hptr = getenv("HOME"))) {
-#ifndef VMS
-		if (!(pwdent = getpwuid(getuid()))) {
-			return(NULL);
-		} else {
-			strcpy(home, pwdent->pw_dir);
-		}
+	if (!(home = getenv("HOME")))
+#ifdef MOTIF2_0
+		home = XmeGetHomeDirName();
+#else
+#ifdef MOTIF1_2
+		home = _XmOSGetHomeDirName();
 #else
 		return(NULL);
 #endif
-	} else {
-		strcpy(home, hptr);
-	}
+#endif
+
  	fname = (char *)malloc(strlen(home) + strlen(COMMENT_CARD_FILENAME) +
 			       strlen(MO_VERSION_STRING) + 5);
 #ifndef VMS

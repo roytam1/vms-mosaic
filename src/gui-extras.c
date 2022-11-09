@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008, 2011
  * The VMS Mosaic Project
  */
 
@@ -80,7 +80,7 @@ static XmxCallback(links_win_cb)
   char *text, *fnam, *url;
   
   switch (XmxExtractToken((int)client_data)) {
-    case 0:  /* GOTO */
+    case 0:  /* Goto */
       if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
           if (pcount && XmStringGetLtoR(win->links_items[posns[0] - 1],
                                         XmSTRING_DEFAULT_CHARSET, &text)) {
@@ -93,12 +93,12 @@ static XmxCallback(links_win_cb)
       mo_gui_done_with_icon();
 
       return;
-    case 3:  /* SAVE */
+    case 3:  /* Save */
       if (XmListGetSelectedPos(win->links_list, &posns, &pcount)) {
           if (pcount && XmStringGetLtoR(win->links_items[posns[0] - 1],
                                         XmSTRING_DEFAULT_CHARSET, &text)) {
               if (strncmp(text, "===", 3)) {
-                  /* SAVE TO FILE */
+                  /* Save to file */
                   url = mo_url_canonicalize(text, win->current_node->url);
 		  mo_gui_clear_icon();
                   if (mo_pull_er_over_virgin(url, fnam = mo_tmpnam(text)))
@@ -113,10 +113,10 @@ static XmxCallback(links_win_cb)
       mo_gui_done_with_icon();
 
       return;        
-    case 1:  /* DISMISS */
+    case 1:  /* Dismiss */
       XtUnmanageChild(win->links_win);
       break;
-    case 2:  /* HELP */
+    case 2:  /* Help */
       mo_open_another_window(win,
 			     mo_assemble_help_url("help-on-links-win.html"),
                              NULL, NULL);
@@ -146,26 +146,25 @@ mo_status mo_post_links_window(mo_window *win)
 {
   Widget dialog_frame, dialog_sep, buttons_form;
   Widget links_form, list, scroller, label;
-    
+
   if (!win->links_win) {
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
 
-      Xmx_n = 0;
       win->links_win = XmxMakeFormDialog(win->base,
 					 "VMS Mosaic: Document Links");
       dialog_frame = XmxMakeFrame(win->links_win, XmxShadowOut);
 
       /* Constraints for base. */
-      XmxSetConstraints 
-        (dialog_frame, XmATTACH_FORM, XmATTACH_FORM, 
+      XmxSetConstraints
+        (dialog_frame, XmATTACH_FORM, XmATTACH_FORM,
          XmATTACH_FORM, XmATTACH_FORM, NULL, NULL, NULL, NULL);
-      
+
       /* Main form. */
       links_form = XmxMakeForm(dialog_frame);
-      
+
       dialog_sep = XmxMakeHorizontalSeparator(links_form);
-      
+
       buttons_form = XmxMakeFormAndFourButtons(links_form, links_win_cb, 
 				       "Goto URL", "Save", "Dismiss", "Help...",
 				       0, 3, 1, 2);
@@ -301,7 +300,7 @@ static struct {
 	 <li><a href=\"about:motif\">motif</a>\n\
 	 <li><a href=\"about:cats\">cats</a>\n\
          <li><a href=\"about:wvnet\">wvnet</a>\n</ul></p>"},
-    {"mosaic", "0http://vaxa.wvnet.edu/vmswww/vms_mosaic.html"},
+    {"mosaic", "0http://wvnvms.wvnet.edu/vmswww/vms_mosaic.html"},
     {"xmosaic",
 #if !defined(VMS) || defined(__DECC)  /* VAX C is different (and has a line length limit) */
 	"<TITLE>NCSA X Mosaic</TITLE><P>Please read our disclaimer below (can you say, 'Joke?') before proceeding to:"

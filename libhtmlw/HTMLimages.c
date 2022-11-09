@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008, 2009
  * The VMS Mosaic Project
  */
 
@@ -89,6 +89,7 @@
 #include "../src/bitmaps/gopher_index.xbm"
 #include "../src/bitmaps/gopher_telnet.xbm"
 #include "../src/bitmaps/gopher_binary.xbm"
+#include "../src/bitmaps/gopher_url.xbm"
 #include "../src/bitmaps/gopher_unknown.xbm"
 
 #ifndef DISABLE_TRACE
@@ -104,6 +105,7 @@ static ImageInfo *gopher_sound = NULL;
 static ImageInfo *gopher_index = NULL;
 static ImageInfo *gopher_telnet = NULL;
 static ImageInfo *gopher_binary = NULL;
+static ImageInfo *gopher_url = NULL;
 static ImageInfo *gopher_unknown = NULL;
 
 extern Pixmap internalCookie;
@@ -123,7 +125,7 @@ extern Visual *theVisual;
 extern int LimDim;
 extern int LimDimX;
 extern int LimDimY;
- 
+
 /* From COLORS.C */
 extern XColor BSColors[256];
 extern int BSCnum;
@@ -153,7 +155,7 @@ int progressiveDisplayEnabled;
 	picd->req_width = -1; \
 	picd->req_height = -1; \
 	picd->image_data = (unsigned char *) x##_bits; \
-	picd->internal = 1; \
+	picd->internal = INT_YES; \
 	picd->delayed = 0; \
 	picd->num_colors = 2; \
 	picd->image = x->image; \
@@ -173,7 +175,7 @@ int progressiveDisplayEnabled;
 	picd->req_width = -1; \
 	picd->req_height = -1; \
 	picd->image_data = (unsigned char *) x/**/_bits; \
-	picd->internal = 1; \
+	picd->internal = INT_YES; \
 	picd->delayed = 0; \
 	picd->num_colors = 2; \
 	picd->image = x->image; \
@@ -214,9 +216,9 @@ int FindColor(HTMLWidget hw, Colormap colormap, XColor *colr)
 	static int have_colors = 0;
 	Display *d = hw->html.dsp;
 
-        tempcolr.red = colr->red;      
-        tempcolr.green = colr->green;  
-        tempcolr.blue = colr->blue;    
+        tempcolr.red = colr->red;
+        tempcolr.green = colr->green;
+        tempcolr.blue = colr->blue;
         /* XAllocColor doesn't use flags */
 
 	ret = match = XAllocColor(d, colormap, colr);
@@ -226,7 +228,7 @@ int FindColor(HTMLWidget hw, Colormap colormap, XColor *colr)
 
                 colr->red = tempcolr.red;
                 colr->green = tempcolr.green;
-                colr->blue = tempcolr.blue;  
+                colr->blue = tempcolr.blue;
 
 		NumCells = DisplayCells(d, DefaultScreen(d));
 		if (!have_colors) {
@@ -252,15 +254,15 @@ int FindColor(HTMLWidget hw, Colormap colormap, XColor *colr)
 					break;
 			}
 		}
-                if (cindx == (-1)) {   
+                if (cindx == (-1)) {
                         colr->pixel = BlackPixel(d, DefaultScreen(d));
                         colr->red = colr->green = colr->blue = 0;
-                } else {               
+                } else {
                         colr->pixel = cindx;
                         colr->red = def_colrs[cindx].red;
                         colr->green = def_colrs[cindx].green;
                         colr->blue = def_colrs[cindx].blue;
-                } 
+                }
 	} else {
 		/* Keep a count of how many times we have allocated the
 		 * same color, so we can properly free them later.
@@ -290,10 +292,10 @@ static int highbit(unsigned long ul)
 
 /*
  * Rescale an image GD 24 Apr 97
- * From the XV Software 3.10a.  See the copyright notice of xv-3.10a 
+ * From the XV Software 3.10a.  See the copyright notice of xv-3.10a
  */
 static void RescalePic(ImageInfo *picd, int nw, int nh)
-{ 
+{
 	/* Change image_data width and height in picd */
 	int cy = 0;
 	int ex, ey;
@@ -327,17 +329,17 @@ static void RescalePic(ImageInfo *picd, int nw, int nh)
 	 * OPTIMIZATON:  Malloc an nw array of ints which will hold the
 	 * values of the equation px = (pWIDE * ex) / nw.  Faster than doing
 	 * a mul and a div for every point in picture. */
-	for (ex = 0; ex < nw; ex++)        
+	for (ex = 0; ex < nw; ex++)
 		cxarr[ex] = (picd->width * ex) / nw;
 
 	for (ey = 0; ey < nh; ey++, elptr += nw) {
-		cy = (picd->height * ey) / nh;      
+		cy = (picd->height * ey) / nh;
 		epptr = elptr;
 		clptr = picd->image_data + (cy * picd->width);
 		if (alpha) {
 			apptr = alptr;
 			alptr += nw;
-			aptr = picd->alpha + (cy * picd->width); 
+			aptr = picd->alpha + (cy * picd->width);
 		}
 		for (ex = 0, cxarrp = cxarr; ex < nw; ex++, epptr++) {
 			*epptr = clptr[*cxarrp];
@@ -345,7 +347,7 @@ static void RescalePic(ImageInfo *picd, int nw, int nh)
 				*apptr++ = aptr[*cxarrp];
 			cxarrp++;
 		}
-	}                                 
+	}
 	free(cxarr);
 
 	picd->image_data = epic;
@@ -384,7 +386,7 @@ static XImage *MakeImage(Display *dsp, unsigned char *data, int depth,
     if (!newimage) {
 	application_user_feedback("Image too large:  XCreateImage failure");
 	return NULL;
-    } 
+    }
 
     /* Allocate data space using scanline width from XCreateImage. */
     bitp = bit_data = (unsigned char *) malloc(newimage->bytes_per_line *
@@ -552,8 +554,8 @@ static ImageInfo *DelayedImageData(HTMLWidget hw)
 		images = (ImgList *)malloc(sizeof(ImgList));
 		images->next = NULL;
 		delayed_image = GetImageRec();
-                                 
-		delayed_image->internal = 2;
+
+		delayed_image->internal = INT_NOIMAGE;
 		delayed_image->delayed = 1;
 		delayed_image->width = DelayedImage_width;
 		delayed_image->height = DelayedImage_height;
@@ -589,11 +591,11 @@ static ImageInfo *DelayedImageData(HTMLWidget hw)
 		    images->fg_pixel = fg_pixel = hw->manager.foreground;
 		    images->bg_pixel = bg_pixel = hw->core.background_pixel;
 		    delayed_image->image = XCreatePixmapFromBitmapData(
-				       hw->html.dsp, XtWindow(hw),
-				       (char *) DelayedImage_bits,
-                        	       DelayedImage_width, DelayedImage_height,
-                        	       fg_pixel, bg_pixel,
-                        	       DefaultDepthOfScreen(XtScreen(hw)));
+				        hw->html.dsp, XtWindow(hw),
+				        (char *) DelayedImage_bits,
+                        	        DelayedImage_width, DelayedImage_height,
+                        	        fg_pixel, bg_pixel,
+                        	        DefaultDepthOfScreen(XtScreen(hw)));
 		    images->img = delayed_image->image;
 		}
 	}
@@ -613,7 +615,7 @@ static ImageInfo *AnchoredImageData(HTMLWidget hw)
 		images->next = NULL;
 		anchored_image = GetImageRec();
 
-		anchored_image->internal = 2;
+		anchored_image->internal = INT_NOIMAGE;
 		anchored_image->delayed = 1;
 		anchored_image->width = AnchoredImage_width;
 		anchored_image->height = AnchoredImage_height;
@@ -673,7 +675,7 @@ static ImageInfo *NoImageData(HTMLWidget hw)
 		images->next = NULL;
 		no_image = GetImageRec();
 
-		no_image->internal = 2;
+		no_image->internal = INT_NOIMAGE;
 		no_image->delayed = 0;
 		no_image->width = NoImage_width;
 		no_image->height = NoImage_height;
@@ -765,7 +767,8 @@ static unsigned char *ProcessImageAlpha(HTMLWidget hw, ImageInfo *pic,
 		} else if (hw->html.bg_pic_data->alpha) {
 			bg_data = hw->html.bg_pic_data->alpha_image_data;
 		}
-		if (pic->has_border && (!pic->internal || (pic->internal == 2)))
+		if (pic->has_border &&
+		    (!pic->internal || (pic->internal == INT_NOIMAGE)))
 			extra = eptr->bwidth;
 		x = eptr->x - hw->html.scroll_x + extra;
 		y = eptr->y - hw->html.scroll_y + extra;
@@ -793,7 +796,7 @@ static unsigned char *ProcessImageAlpha(HTMLWidget hw, ImageInfo *pic,
 				    *p2++ = GB >> 8;
 				    *p2++ = BB >> 8;
 				} else if (A == 255) {
-				    /* Fully opaque, return image pixel */ 
+				    /* Fully opaque, return image pixel */
 				    *p2++ = R >> 8;
 				    *p2++ = G >> 8;
 				    *p2++ = B >> 8;
@@ -824,7 +827,7 @@ static unsigned char *ProcessImageAlpha(HTMLWidget hw, ImageInfo *pic,
 
 		for (i = 0; i < h; i++) {
 			for (j = 0; j < w; j++) {
-				/* Get unsigned shorts in signed ints */ 
+				/* Get unsigned shorts in signed ints */
 				R = cmap[*p1].red;
 				G = cmap[*p1].green;
 				B = cmap[*p1++].blue;
@@ -836,7 +839,7 @@ static unsigned char *ProcessImageAlpha(HTMLWidget hw, ImageInfo *pic,
 				    *p2++ = GB >> 8;
 				    *p2++ = BB >> 8;
 				} else if (A == 255) {
-				    /* Fully opaque, return image pixel */ 
+				    /* Fully opaque, return image pixel */
 				    *p2++ = R >> 8;
 				    *p2++ = G >> 8;
 				    *p2++ = B >> 8;
@@ -998,7 +1001,7 @@ Pixmap InfoToImage(HTMLWidget hw, ImageInfo *img_info, int clip, ElemInfo *eptr)
 		cmap = BSColors;
 	} else {
 		for (i = 0; i < size; i++) {
-			if (clip) { 
+			if (clip) {
 				*ptr2++ = *ptr++;
 			} else {
 				*ptr2++ = (unsigned char)Mapping[(int)*ptr++];
@@ -1065,7 +1068,7 @@ Pixmap InfoToImage(HTMLWidget hw, ImageInfo *img_info, int clip, ElemInfo *eptr)
 			free(img_info->ori_colrs);
 		img_info->width = noim->width;
 		img_info->height = noim->height;
-		img_info->internal = 2;
+		img_info->internal = INT_NOIMAGE;
 		img_info->fetched = 0;
 		img_info->transparent = 0;
 		Img = noim->image;
@@ -1105,7 +1108,7 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 			picd->req_width = -1;
 			picd->req_height = -1;
 			picd->image_data = NULL;
-			picd->internal = 1;
+			picd->internal = INT_YES;
 			picd->delayed = 0;
 			picd->num_colors = 8;
 		} else if (!strcmp(picd->src, "internal-gopher-image")) {
@@ -1124,6 +1127,8 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 			IMGINFO_FROM_BITMAP(gopher_telnet)
 		} else if (!strcmp(picd->src, "internal-gopher-binary")) {
 			IMGINFO_FROM_BITMAP(gopher_binary)
+		} else if (!strcmp(picd->src, "internal-gopher-url")) {
+			IMGINFO_FROM_BITMAP(gopher_url)
 		} else {
 			/* "internal-gopher-unknown" or no match */
 			IMGINFO_FROM_BITMAP(gopher_unknown)
@@ -1133,13 +1138,13 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 
 	icbs = *picd;
 	/* Not internal, maybe delayed or in cache? */
-	if ((hw->html.delay_image_loads || (currently_delaying_images == 1) ||
+	if ((hw->html.delay_image_loads || currently_delaying_images ||
 	     icbs.urldelayed) && !force_load) {
 		/* Only looks in cache */
 		XtCallCallbackList((Widget)hw, hw->html.image_callback,
 				   (XtPointer) &icbs);
 		/* The image is not cached or not blanked out. */
-		if (!icbs.fetched && (icbs.internal != 3)) {
+		if (!icbs.fetched && (icbs.internal != INT_BLANK)) {
 			ImageInfo *dlim;
 
 			/* Update picd from the correct delayed image */
@@ -1149,35 +1154,31 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 				dlim = AnchoredImageData(hw);
 			}
 			*picd = icbs;
-			if (currently_delaying_images) {
-				picd->urldelayed = 1;
-			} else {
-				picd->urldelayed = 0;
-			}
+			picd->urldelayed = currently_delaying_images;
 			picd->height = dlim->height;
 			picd->width = dlim->width;
-			picd->internal = 2;
+			picd->internal = INT_NOIMAGE;
 			picd->delayed = 1;
 			picd->fetched = 0;
 			picd->image_data = dlim->image_data;
-			picd->image = dlim->image; 
+			picd->image = dlim->image;
                 	return;
 		}
 	} else {	/* Load image from the cache or net */
 		XtCallCallbackList((Widget)hw, hw->html.image_callback,
                                    (XtPointer) &icbs);
 		/* Can't find image.  Put NoImage in picd unless blanked out */
-		if (!icbs.fetched && (icbs.internal != 3)) {
+		if (!icbs.fetched && (icbs.internal != INT_BLANK)) {
 			ImageInfo *img;
 
 			*picd = icbs;
 			if ((icbs.req_height == 1) || (icbs.req_width == 1)) {
 				/* Use blank for tiny requested images */
 				img  = BlankImageData(hw);
-				picd->internal = 3;
+				picd->internal = INT_BLANK;
 			} else {
 				img = NoImageData(hw);
-				picd->internal = 2;
+				picd->internal = INT_NOIMAGE;
 			}
 			picd->height = img->height;
 			picd->width = img->width;
@@ -1199,11 +1200,11 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 
 		picd->height = noim->height;
 		picd->width = noim->width;
-		picd->internal = 2;
+		picd->internal = INT_NOIMAGE;
 		picd->delayed = 0;
 		picd->fetched = 0;
 		picd->image_data = noim->image_data;
-		picd->image = noim->image; 
+		picd->image = noim->image;
                 return;
 	}
 
@@ -1213,7 +1214,7 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
         /* Fields set to const. are untouched 				*/
         /*   src alt_text align req_height req_width border hspace	*/
         /*   vspace usemap map ismap fptr				*/
-        /*   internal = 0						*/
+        /*   internal = INT_NO						*/
         /*   delayed = 0 						*/
         /*   cw_only	 						*/
         /*								*/
@@ -1249,8 +1250,12 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 		icbs.req_height = height;
 	if (icbs.percent_width &&
 	    (((icbs.percent_width * pcc->cur_line_width) / 100) > 0)) {
+		int change;
+
 		icbs.req_width =
 			       (icbs.percent_width * pcc->cur_line_width) / 100;
+		change = (icbs.req_width * 100) / width;
+		icbs.req_height = (icbs.req_height * change) / 100;
 	}
 	/* Rescale if too large for display card */
 	if (MaxPixmapWidth && (icbs.req_width > MaxPixmapWidth)) {
@@ -1326,8 +1331,8 @@ void HtmlGetImage(HTMLWidget hw, ImageInfo *picd, PhotoComposeContext *pcc,
 /* Place an image and create an element record for it. */
 void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 {
-	char *srcPtr, *altPtr, *alignPtr, *valignPtr, *heightPtr, *widthPtr;
-	char *borderPtr, *hspacePtr, *vspacePtr, *usemapPtr, *ismapPtr, *tptr;
+	char *srcPtr, *alignPtr, *valignPtr, *heightPtr, *widthPtr;
+	char *borderPtr, *hspacePtr, *vspacePtr, *ismapPtr, *tptr;
 	ElemInfo *eptr;
 	ImageInfo *picd;
 	ImageInfo lpicd;
@@ -1342,6 +1347,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	int width = 0;
 	int height = 0;
 	FloatRec *tmp_float;
+	char *srcatt = "SRC";
 
 	/* Do progressive display of elements up to this point */
 	if (!pcc->cw_only && progressiveDisplayEnabled &&
@@ -1362,19 +1368,29 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		pcc->last_progressive_ele = hw->html.last_formatted_elem;
 	}
 
-	if (tptr = ParseMarkTag(mptr->start, MT_INPUT, "STYLE")) {
+	if (tptr = ParseMarkTag(mptr->start, MT_IMAGE, "STYLE")) {
 		if (!strcmp(tptr, "display:none")) {
 			free(tptr);
 			return;
 		}
+		free(tptr);
 	}
-	if (!(srcPtr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC")))
+	/* If OBJECT tag, check if type is image. */
+	if ((mptr->type == M_OBJECT) &&
+	    (tptr = ParseMarkTag(mptr->start, MT_IMAGE, "TYPE"))) {
+		if (strncmp(tptr, "image", 5)) {
+			free(tptr);
+			return;
+		}
+		srcatt = "DATA";
+		free(tptr);
+	} 
+	if (!(srcPtr = ParseMarkTag(mptr->start, MT_IMAGE, srcatt)))
 		return;
 	if (!*srcPtr) {
 		free(srcPtr);
 		return;
 	}
-	altPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ALT");
 	alignPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ALIGN");
 	valignPtr = ParseMarkTag(mptr->start, MT_IMAGE, "VALIGN");
 	heightPtr = ParseMarkTag(mptr->start, MT_IMAGE, "HEIGHT");
@@ -1382,19 +1398,18 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	borderPtr = ParseMarkTag(mptr->start, MT_IMAGE, "BORDER");
 	hspacePtr = ParseMarkTag(mptr->start, MT_IMAGE, "HSPACE");
 	vspacePtr = ParseMarkTag(mptr->start, MT_IMAGE, "VSPACE");
-	usemapPtr = ParseMarkTag(mptr->start, MT_IMAGE, "USEMAP");
 	ismapPtr = ParseMarkTag(mptr->start, MT_IMAGE, "ISMAP");
 
 	memset(&lpicd, 0, sizeof(ImageInfo));
 	lpicd.src = srcPtr;
-	lpicd.alt_text = altPtr;
+	lpicd.alt_text = ParseMarkTag(mptr->start, MT_IMAGE, "ALT");
 	lpicd.align = ALIGN_NONE;
 	lpicd.valign = VALIGN_BOTTOM;
 	lpicd.req_height = -1;	/* No req_height */
 	lpicd.req_width = -1;	/* No req_width */
 	lpicd.hspace = DEF_IMAGE_HSPACE;
 	lpicd.vspace = DEF_IMAGE_VSPACE;
-	lpicd.usemap = usemapPtr;
+	lpicd.usemap = ParseMarkTag(mptr->start, MT_IMAGE, "USEMAP");
 	lpicd.delayed = hw->html.delay_image_loads;
 	lpicd.cw_only = pcc->cw_only;
 	if (mptr->s_picd)
@@ -1408,15 +1423,15 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	lpicd.has_border = 0;
 	lpicd.map = NULL;
 	lpicd.ismap = 0;
-	lpicd.fptr = NULL; 
-	lpicd.internal = 0;
+	lpicd.fptr = NULL;
+	lpicd.internal = INT_NO;
 	lpicd.fetched = 0;
 	lpicd.cached = 0;
 	lpicd.num_colors = 0;
 	lpicd.bg_index = 0;
 	lpicd.image_data = NULL;
 	lpicd.clip_data = NULL;
-	lpicd.transparent = 0; 
+	lpicd.transparent = 0;
 	lpicd.image = None;
 	lpicd.clip = None;
 	lpicd.is_bg_image = 0;
@@ -1466,9 +1481,12 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	        free(alignPtr);
 	}
 	if (heightPtr) {
-		lpicd.req_height = atoi(heightPtr);
-		if (lpicd.req_height < 1) 	/* Too small ... */
-			lpicd.req_height = -1;
+		/* No support for height percent */
+		if (!strchr(heightPtr, '%')) {
+			lpicd.req_height = atoi(heightPtr);
+			if (lpicd.req_height < 1) 	/* Too small ... */
+				lpicd.req_height = -1;
+		}
 		free(heightPtr);
 	}
 	if (widthPtr) {
@@ -1484,7 +1502,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 
 	/* Use default border if in anchor */
 	if (pcc->in_anchor) {
-		lpicd.border = IMAGE_DEFAULT_BORDER; 
+		lpicd.border = IMAGE_DEFAULT_BORDER;
 		lpicd.has_border = 1;
 	}
 	/* However, specified border overrides the default action */
@@ -1536,9 +1554,6 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			picd->width = lpicd.req_width;
 		if (lpicd.req_height > 0)
 			picd->height = lpicd.req_height;
-		if (lpicd.percent_width)
-			picd->width = (lpicd.percent_width *
-				       pcc->cur_line_width) / 100;
 		if (!picd->width || !picd->height)
 			HtmlGetImage(hw, picd, pcc, False);
 	} else {
@@ -1547,12 +1562,12 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	}
 
 	/* Now we have an image.  It is:
-	 *	- an internal-gopher	(internal=1, fetched=0, delayed=0)
-	 *	- a delayed image	(internal=2, fetched=0, delayed=1)
-	 *	- a no (bad) image	(internal=2, fetched=0, delayed=0)
-	 *	- a blank image		(internal=3, fetched=0, delayed=0)
-	 *	- the requested image	(internal=0, fetched=1, delayed=0)
-	 *	- didn't do it		(internal=0, fetched=0, delayed=X)
+	 *	- internal-gopher   (internal=INT_YES, fetched=0, delayed=0)
+	 *	- a delayed image   (internal=INT_NOIMAGE, fetched=0, delayed=1)
+	 *	- a no (bad) image  (internal=INT_NOIMAGE, fetched=0, delayed=0)
+	 *	- a blank image	    (internal=INT_BLANK, fetched=0, delayed=0)
+	 *	- requested image   (internal=INT_NO, fetched=1, delayed=0)
+	 *	- didn't do it	    (internal=INT_NO, fetched=0, delayed=X)
 	 */
 
 	/* Save the work */
@@ -1582,9 +1597,10 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	}
 
 	/* Do ALT text if delayed or bad image */
-	if (picd->internal == 2) {
+	if (picd->internal == INT_NOIMAGE) {
 		int twidth;
 
+		pcc->cur_mark = mptr;
 		PushFont(hw, pcc);
 		pcc->cur_font_size = 3;
 		pcc->cur_font_type = FONT;
@@ -1593,7 +1609,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			     &descent, &all);
 		if (!picd->alt_text) {
 			char *sptr;
-			char *tptr = ParseMarkTag(mptr->start, MT_IMAGE, "SRC");
+			char *tptr = ParseMarkTag(mptr->start, MT_IMAGE,srcatt);
 
 			if (sptr = strrchr(tptr, '/')) {
 				picd->alt_text = strdup(sptr + 1);
@@ -1677,7 +1693,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		int space = 0;
 
 		/* Ignore space in front of right aligned image */
-		if (pcc->float_right && (pcc->float_right->type == 1))
+		if (pcc->float_right && (pcc->float_right->type == FLOAT_IMAGE))
 			space = pcc->float_right->image_extra;
 
 		if ((!pcc->is_bol || pcc->float_right) &&
@@ -1789,12 +1805,12 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_left;
 			pcc->float_left = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width + picd->hspace;
 			pcc->cur_baseline = orig_cur_baseline;
 			pcc->cur_line_height = orig_cur_line_height;
 			pcc->is_bol = 1;
-			pcc->pf_lf_state = 1;
+			pcc->pf_lf_state = LF_LEFT;
 			pcc->x += width + extra;
 			if (pcc->cw_only) {
 				tmp_float->y = pcc->y + height;
@@ -1813,7 +1829,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			if (!pcc->cw_only)
 				AdjustBaseLine(eptr, pcc);
 			pcc->is_bol = 0;
-			pcc->pf_lf_state = 0;
+			pcc->pf_lf_state = LF_MIDDLE;
 			pcc->x += width;
 		}
 	} else if (picd->align == HALIGN_RIGHT) {
@@ -1824,7 +1840,7 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_right;
 			pcc->float_right = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width + picd->hspace;
 			tmp_float->image_extra = picd->hspace;
 			if (pcc->cw_only) {
@@ -1843,12 +1859,12 @@ void ImagePlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 			if (!pcc->cw_only)
 				AdjustBaseLine(eptr, pcc);
 			pcc->is_bol = 0;
-			pcc->pf_lf_state = 0;
+			pcc->pf_lf_state = LF_MIDDLE;
 			pcc->x += width;
 		}
 	} else {
 		pcc->is_bol = 0;
-		pcc->pf_lf_state = 0;
+		pcc->pf_lf_state = LF_MIDDLE;
 		pcc->x += width;
 		if (pcc->cw_only && pcc->nobr)
 			pcc->nobr_x += width;
@@ -1888,11 +1904,11 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 		pic_data = epic_data;
 		/* If done running, refresh last image of animation */
 		if (epic_data->fetched && epic_data->anim_info &&
-		    (epic_data->running == 2))
+		    (epic_data->running == RAN))
 			pic_data = epic_data->last;
 	}
 	if (epic_data->has_border &&
-	    (!epic_data->internal || (epic_data->internal == 2)))
+	    (!epic_data->internal || (epic_data->internal == INT_NOIMAGE)))
 		extra = eptr->bwidth;
 
 	ax = x;
@@ -1919,7 +1935,7 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 		hw->html.cur_bg = eptr->bg;
 	}
 	/* Do ALT text if delayed or bad image */
-	if ((epic_data->internal == 2) && epic_data->alt_text &&
+	if ((epic_data->internal == INT_NOIMAGE) && epic_data->alt_text &&
 	    *epic_data->alt_text) {
 		if (eptr->font != hw->html.cur_font) {
 			XSetFont(dsp, gc, eptr->font->fid);
@@ -1945,17 +1961,17 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 	 * a saved animation image.
 	 */
 	if (!timer_refresh && epic_data->fetched && epic_data->anim_info &&
-	    epic_data->running) {
+	    (epic_data->running != NOT_RAN)) {
 		if (epic_data->has_anim_image == 1) {
 			/* Don't display if incomplete background image */
-			if ((epic_data->running == 1) && epic_data->bg_image &&
-			    !epic_data->bg_visible)
+			if ((epic_data->running == RUNNING) &&
+			    epic_data->bg_image && !epic_data->bg_visible)
 				return;
 			XCopyArea(dsp, epic_data->anim_image, win, gc, 0, 0,
 		  		  epic_data->awidth, epic_data->aheight,
 		  		  axe, aye);
 			return;
-		} else if (epic_data->running == 1) {
+		} else if (epic_data->running == RUNNING) {
 			return;
 		}
 	}
@@ -2030,7 +2046,7 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 			    		    ((aye + epic_data->aheight) <=
 					     hw->html.view_height) &&
 					    (axe >= 0) &&
-					    ((axe + epic_data->awidth) <= 
+					    ((axe + epic_data->awidth) <=
 					     hw->html.view_width))
 					    epic_data->bg_visible = 1;
 				    }
@@ -2207,7 +2223,7 @@ void ImageRefresh(HTMLWidget hw, ElemInfo *eptr, ImageInfo *iptr)
 					      (XtTimerCallbackProc)ImageAnimate,
 					      (XtPointer)epic_data->anim_info);
 		/* We don't want to start it again until a reformat */
-		epic_data->running = 1;
+		epic_data->running = RUNNING;
 	}
 }
 
@@ -2244,7 +2260,7 @@ static void ImageAnimate(XtPointer cld, XtIntervalId *id)
 		if (anim_info->count) {
 			/* Interations finished */
 			if (!--anim_info->count) {
-				anim_info->start->running = 2;
+				anim_info->start->running = RAN;
 				anim_info->start->last = anim_info->current;
 				free(anim_info);
 				return;
@@ -2284,8 +2300,8 @@ static void ImageAnimate(XtPointer cld, XtIntervalId *id)
 			int extra = 0;
 
 			/* Get border width, if any */
-			if (epic->has_border &&
-			    (!epic->internal || (epic->internal == 2)))
+			if (epic->has_border && (!epic->internal ||
+					       (epic->internal == INT_NOIMAGE)))
 				extra = eptr->bwidth;
 
 			sx += current->x + extra - hw->html.scroll_x;
@@ -2313,7 +2329,7 @@ static void ImageAnimate(XtPointer cld, XtIntervalId *id)
 						       hw->html.drawGC,
 						       eptr->bg);
 					/* Must set every time due to drawGC
-					 * being shared between windows */ 
+					 * being shared between windows */
 					hw->html.cur_fg = eptr->bg;
 					XFillRectangle(hw->html.dsp,
 						       XtWindow(hw->html.view),

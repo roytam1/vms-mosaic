@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -65,14 +65,9 @@
 #include "../config.h"
 #include "mosaic.h"
 #include "../libnut/str-tools.h"
-
-#ifndef VMS
-#include <pwd.h>
-#include <sys/utsname.h>
-#else
-#include "vms_pwd.h"
 #include "../libnut/system.h"
-#endif
+
+#include <Xm/XmosP.h>
 
 /***********/
 /* Defines */
@@ -86,14 +81,16 @@
 #define PREFERENCES_FILENAME "mosaic.preferences"
 #endif
 #define PREFERENCES_MAJOR_VERSION 3
-#define PREFERENCES_MINOR_VERSION 0
+#define PREFERENCES_MINOR_VERSION 1
+#define PREFERENCES_MAJOR_VERSION_S '3' 
+#define PREFERENCES_MINOR_VERSION_S '1'
 
 /***************************/
 /* Static Global Variables */
 /***************************/
 
 static prefsStructP thePrefsStructP;
-static char prefs_file_pathname[512];
+static char *prefs_file_pathname;
 
 /****************************************************************************
  ****************************************************************************
@@ -145,42 +142,36 @@ static Boolean preferences_armegeddon(void)
  ***************************************************************************/
 
 /****************************************************************************
-   Function: create_prefs_filename(char *fname) 
+   Function: create_prefs_filename(void)
    Desc:     Generates a full path name for the preferences file
  ***************************************************************************/
-static Boolean create_prefs_filename(char *fname)
+static char *create_prefs_filename(void)
 {
-    char *home_ptr;
-    char home[256];
-#ifndef VMS
-    struct passwd *pwdent;
-#endif
+    char *home, *fname;
     
     /*
-     * Try the HOME environment variable, then the password file, and
+     * Try the HOME environment variable, ask Motif, and
      * finally give up.
      */
-    if (!(home_ptr = getenv("HOME"))) {
-#ifndef VMS
-        if (!(pwdent = getpwuid(getuid()))) {
-            return(0);
-        } else {
-            strcpy(home, pwdent->pw_dir);
-        }
+    if (!(home = getenv("HOME"))) {
+#ifdef MOTIF2_0
+	home = XmeGetHomeDirName();
 #else
-	return False;
+	home = _XmOSGetHomeDirName();
 #endif
-    } else {
-        strcpy(home, home_ptr);
+	/* Returned zero length string if failed */
+	if (!*home)
+	    return NULL;
     }
     
+    fname = malloc(strlen(home) + strlen(PREFERENCES_FILENAME) + 2);
 #ifndef VMS
     sprintf(fname, "%s/%s", home, PREFERENCES_FILENAME);
 #else
     sprintf(fname, "%s%s", home, PREFERENCES_FILENAME);
 #endif
     
-    return True;
+    return fname;
 }
 
 /****************************************************************************
@@ -332,16 +323,16 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     FILE *fp;
     char line[MAXLINE];
     char version[5];
-    char cp;
     Boolean status = True;
     Boolean good = False;
+    Boolean current;
 
     /* If the incoming pointer is NULL, then we use the main structure */
     if (!inPrefsStruct)
         inPrefsStruct = thePrefsStructP;
     
     /* Look for the file */    
-    if (!create_prefs_filename(prefs_file_pathname)) {
+    if (!(prefs_file_pathname = create_prefs_filename())) {
         fprintf(stderr, "Error: Can't generate pathname for preference file\n");
         return False;
     }
@@ -363,21 +354,27 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     sscanf(line, "%*s%*s%*s%4s", version);
 
     if (version[1] == '.') {
-	cp = version[2];
-        switch (version[0]) {
-	    case '1':
-		if ((cp >= '0') && (cp <= '8'))
-		    good = True;
-		break;
-	    case '2':
-		if ((cp >= '0') && (cp <= '9'))
-		    good = True;
-		break;
-	    case '3':
-		if ((cp >= '0') && (cp <= '9'))
-		    good = True;
-		break;
-	    default: ;
+	if ((version[0] == PREFERENCES_MAJOR_VERSION_S) && 
+	    (version[2] == PREFERENCES_MINOR_VERSION_S)) {
+	    current = True;
+	    good = True;
+	} else {
+	    char cp = version[2];
+
+	    current = False;
+	    switch (version[0]) {
+		case '1':
+		    if ((cp >= '0') && (cp <= '8'))
+			good = True;
+		    break;
+	        case '2':
+	        case '3':
+	        case '4':
+		    if ((cp >= '0') && (cp <= '9'))
+		        good = True;
+		    break;
+	        default: ;
+	    }
 	}
     }
     if (!good) {
@@ -536,7 +533,7 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_boolean(fp,
 	eTITLEISWINDOWTITLE, "TITLEISWINDOWTITLE") ? status : 0;
 
-    if (strcmp(version, "2.9")) {
+    if (current || strcmp(version, "2.9")) {
         status = read_pref_skip(fp,"USEICONBAR") ? status : 0;
         status = read_pref_skip(fp, "USETEXTBUTTONBAR") ? status : 0;
     }
@@ -549,7 +546,7 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_string(fp,
 	eSAVE_MODE, "SAVE_MODE") ? status : 0;
 
-    if (strcmp(version, "2.0") < 0) {
+    if (!current && (strcmp(version, "2.0") < 0)) {
 	status = read_pref_skip(fp, "HDF_MAX_IMAGE_DIMENSION") ? status : 0;
 	status = read_pref_skip(fp, "HDF_MAX_DISPLAYED_DATASETS") ? status : 0;
 	status = read_pref_skip(fp, "HDF_MAX_DISPLAYED_ATTRIBUTES") ? status :0;
@@ -639,7 +636,7 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_boolean(fp,
 	eNUTTRACE, "NUTTRACE") ? status : 0;
 
-    if (strcmp(version, "1.0") != 0)
+    if (current || strcmp(version, "1.0"))
 	    status = read_pref_boolean(fp,
 		eTABLETRACE, "TABLETRACE") ? status : 0;
 
@@ -654,13 +651,13 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_int(fp,
 	eURLEXPIRED, "URLEXPIRED") ? status : 0;
 
-    if (strcmp(version, "2.0") < 0)
+    if (!current && (strcmp(version, "2.0") < 0))
 	status = read_pref_skip(fp, "RBM_CASCADE_OFFSET") ? status : 0;
 
     status = read_pref_int(fp,
 	ePOPUPCASCADEMAPPINGDELAY, "POPUPCASCADEMAPPINGDELAY") ? status : 0;
 
-    if (strcmp(version, "2.0") < 0) {
+    if (!current && (strcmp(version, "2.0") < 0)) {
 	status = read_pref_skip(fp, "FRAME_HACK") ? status : 0;
 	set_pref_boolean(eFRAME_SUPPORT, 1);
     } else {
@@ -730,19 +727,19 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_int(fp,
 	eBACKUPFILEVERSIONS, "BACKUPFILEVERSIONS") ? status : 0;
 
-    if (strcmp(version, "1.1") > 0) {
+    if (current || (strcmp(version, "1.1") > 0)) {
 	    status = read_pref_boolean(fp,
 		eFONTCOLORS, "FONTCOLORS") ? status : 0;
 	    status = read_pref_boolean(fp,
 		ePROGRESSIVE_DISPLAY, "PROGRESSIVE_DISPLAY") ? status : 0;
     }
-    if (strcmp(version, "1.2") > 0) {
+    if (current || (strcmp(version, "1.2") > 0)) {
 	    status = read_pref_boolean(fp,
 		eFONTSIZES, "FONTSIZES") ? status : 0;
 	    status = read_pref_int(fp,
 		eFONTBASESIZE, "FONTBASESIZE") ? status : 0;
     }
-    if (strcmp(version, "1.3") > 0) {
+    if (current || (strcmp(version, "1.3") > 0)) {
 	    status = read_pref_boolean(fp,
 		eTRACK_TARGET_ANCHORS, "TRACK_TARGET_ANCHORS") ? status : 0;
 	    status = read_pref_boolean(fp,
@@ -750,25 +747,25 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		eREPORTBUGS, "REPORTBUGS") ? status : 0;
     }
-    if (strcmp(version, "1.4") > 0) {
+    if (current || (strcmp(version, "1.4") > 0)) {
 	    status = read_pref_boolean(fp,
 		eIMAGE_ANIMATION, "IMAGE_ANIMATION") ? status : 0;
 	    status = read_pref_int(fp,
 		eMIN_ANIMATION_DELAY, "MIN_ANIMATION_DELAY") ? status : 0;
     }
-    if (strcmp(version, "1.5") > 0) {
+    if (current || (strcmp(version, "1.5") > 0)) {
 	    status = read_pref_boolean(fp,
 		eREFRESHTRACE, "REFRESHTRACE") ? status : 0;
     }
-    if (strcmp(version, "1.6") > 0) {
+    if (current || (strcmp(version, "1.6") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eREFRESH_URL, "REFRESH_URL") ? status : 0;
     }
-    if (strcmp(version, "1.7") > 0) {
+    if (current || (strcmp(version, "1.7") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eBROWSER_SAFE_COLORS, "BROWSER_SAFE_COLORS") ? status : 0;
     }
-    if (strcmp(version, "1.9") > 0) {
+    if (current || (strcmp(version, "1.9") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eBLINKING_TEXT, "BLINKING_TEXT") ? status : 0;
 	    status = read_pref_int(fp,
@@ -778,23 +775,23 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		 eACCEPT_ALL_COOKIES, "ACCEPT_ALL_COOKIES") ? status : 0;
     }
-    if (strcmp(version, "2.0") > 0) {
+    if (current || (strcmp(version, "2.0") > 0)) {
 	    status = read_pref_int(fp,
 		 eMAXPIXMAPWIDTH, "MAXPIXMAPWIDTH") ? status : 0;
 	    status = read_pref_int(fp,
 		 eMAXPIXMAPHEIGHT, "MAXPIXMAPHEIGHT") ? status : 0;
     }
-    if (strcmp(version, "2.1") > 0) {
+    if (current || (strcmp(version, "2.1") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eUSE_COOKIE_FILE, "USE_COOKIE_FILE") ? status : 0;
 	    status = read_pref_string(fp,
 		 eCOOKIE_FILE, "COOKIE_FILE") ? status : 0;
     }
-    if (strcmp(version, "2.2") > 0) {
+    if (current || (strcmp(version, "2.2") > 0)) {
 	    status = read_pref_string(fp,
 		 eIMAGEDELAY_FILE, "IMAGEDELAY_FILE") ? status : 0;
     }
-    if (strcmp(version, "2.3") > 0) {
+    if (current || (strcmp(version, "2.3") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eBROWSERSAFECOLORS_IF_TRUECOLOR,
 		 "BROWSERSAFECOLORS_IF_TRUECOLOR") ? status : 0;
@@ -807,13 +804,13 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_int(fp,
 		 eCOOKIE_DOMAIN_LIMIT, "COOKIE_DOMAIN_LIMIT") ? status : 0;
     }
-    if (strcmp(version, "2.4") > 0) {
+    if (current || (strcmp(version, "2.4") > 0)) {
 	    status = read_pref_string(fp,
 		 ePERM_FILE, "PERM_FILE") ? status : 0;
 	    status = read_pref_string(fp,
 		 eFORM_BUTTON_BACKGROUND, "FORM_BUTTON_BACKGROUND") ? status :0;
     }
-    if (strcmp(version, "2.5") > 0) {
+    if (current || (strcmp(version, "2.5") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eVERIFY_SSL_CERTIFICATES, "VERIFY_SSL_CERTIFICATES") ?
 		 status : 0;
@@ -830,19 +827,19 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		 eCOOKIETRACE, "COOKIETRACE") ? status : 0;
     }
-    if (strcmp(version, "2.6") > 0) {
+    if (current || (strcmp(version, "2.6") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eCLUE_HELP, "CLUE_HELP") ? status : 0;
 	    status = read_pref_string(fp,
-		 eCLUE_FOREGROUND, "CLUE_FOREGROUND") ? status :0;
+		 eCLUE_FOREGROUND, "CLUE_FOREGROUND") ? status : 0;
 	    status = read_pref_string(fp,
-		 eCLUE_BACKGROUND, "CLUE_BACKGROUND") ? status :0;
+		 eCLUE_BACKGROUND, "CLUE_BACKGROUND") ? status : 0;
 	    status = read_pref_int(fp,
 		 eCLUE_POPUP_DELAY, "CLUE_POPUP_DELAY") ? status : 0;
 	    status = read_pref_int(fp,
 		 eCLUE_POPDOWN_DELAY, "CLUE_POPDOWN_DELAY") ? status : 0;
 	    status = read_pref_string(fp,
-		 eCLUE_FONT, "CLUE_FONT") ? status :0;
+		 eCLUE_FONT, "CLUE_FONT") ? status : 0;
 	    status = read_pref_boolean(fp,
 		 eCLUE_OVAL, "CLUE_OVAL") ? status : 0;
 	    status = read_pref_boolean(fp,
@@ -852,7 +849,7 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		 eMENUBAR_TEAROFF, "MENUBAR_TEAROFF") ? status : 0;
     }
-    if (strcmp(version, "2.7") > 0) {
+    if (current || (strcmp(version, "2.7") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eTIFF_ERROR_MESSAGES, "TIFF_ERROR_MESSAGES") ? status : 0;
 	    status = read_pref_boolean(fp,
@@ -860,7 +857,7 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		 eJPEG_ERROR_MESSAGES, "JPEG_ERROR_MESSAGES") ? status : 0;
     }
-    if (strcmp(version, "2.8") > 0) {
+    if (current || (strcmp(version, "2.8") > 0)) {
 	    status = read_pref_boolean(fp,
 		 eDETACHED_TOOLBAR, "DETACHED_TOOLBAR") ? status : 0;
 	    status = read_pref_boolean(fp,
@@ -880,6 +877,15 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
 	    status = read_pref_boolean(fp,
 		 eJPEG2000_ERROR_MESSAGES, "JPEG2000_ERROR_MESSAGES") ?
 		 status : 0;
+    }
+    if (current || (strcmp(version, "3.0") > 0)) {
+	    status = read_pref_string(fp,
+		 eNEWS_AUTHENTICATION_FILE, "NEWS_AUTHENTICATION_FILE") ?
+		 status : 0;
+	    status = read_pref_boolean(fp,
+		 ePRINT_LANDSCAPE, "PRINT_LANDSCAPE") ? status : 0;
+	    status = read_pref_boolean(fp,
+		 ePRINT_DUPLEX_TUMBLED, "PRINT_DUPLEX_TUMBLED") ? status : 0;
     }
     fclose(fp);
 
@@ -1199,6 +1205,9 @@ Boolean write_preferences_file(prefsStructP inPrefsStruct)
     write_pref_boolean(fp, eMULTIPLE_IMAGE_LOAD, "MULTIPLE_IMAGE_LOAD");
     write_pref_int(fp, eMULTIPLE_IMAGE_LIMIT, "MULTIPLE_IMAGE_LIMIT");
     write_pref_boolean(fp, eJPEG2000_ERROR_MESSAGES, "JPEG2000_ERROR_MESSAGES");
+    write_pref_string(fp, eNEWS_AUTHENTICATION_FILE, "NEWS_AUTHENTICATION_FILE");
+    write_pref_boolean(fp, ePRINT_LANDSCAPE, "PRINT_LANDSCAPE");
+    write_pref_boolean(fp, ePRINT_DUPLEX_TUMBLED, "PRINT_DUPLEX_TUMBLED");
 
     fclose(fp);
     return True;
@@ -1722,6 +1731,15 @@ void *get_pref(int pref_id)
 
         case eJPEG2000_ERROR_MESSAGES:
             return (void *)&(thePrefsStructP->RdataP->jpeg2000_error_messages);
+
+        case eNEWS_AUTHENTICATION_FILE:
+            return (void *)(thePrefsStructP->RdataP->news_authentication_file);
+
+        case ePRINT_LANDSCAPE:
+            return (void *)&(thePrefsStructP->RdataP->print_landscape);
+
+        case ePRINT_DUPLEX_TUMBLED:
+            return (void *)&(thePrefsStructP->RdataP->print_duplex_tumbled);
     }
 
     fprintf(stderr, "Error: tried to get nonexistant preference\n");
@@ -2682,6 +2700,20 @@ void set_pref(int pref_id, void *incoming)
 		*((Boolean *)incoming);
             break;
 
+        case eNEWS_AUTHENTICATION_FILE:
+            thePrefsStructP->RdataP->news_authentication_file =
+		(char *)incoming;
+            break;
+
+        case ePRINT_LANDSCAPE:
+            thePrefsStructP->RdataP->print_landscape = *((Boolean *)incoming);
+            break;
+
+        case ePRINT_DUPLEX_TUMBLED:
+            thePrefsStructP->RdataP->print_duplex_tumbled =
+		*((Boolean *)incoming);
+            break;
+
         default:
             fprintf(stderr, "Error: tried to set nonexistant preference\n");
     }
@@ -2695,6 +2727,7 @@ void set_pref(int pref_id, void *incoming)
  ***************************************************************************/
 
 #ifndef VMS
+/* VMS, Useless but gets in way, GEC */
 /****************************************************************************
    Function: mo_preferences_dialog(mo_window *win)
    Desc:     Displays the preferences dialog
@@ -2703,4 +2736,4 @@ void mo_preferences_dialog(mo_window *win)
 {
 
 }
-#endif  /* VMS, Useless but gets in way, GEC */
+#endif

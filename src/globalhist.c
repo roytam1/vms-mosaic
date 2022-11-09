@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -118,7 +118,7 @@ extern int cacheTrace;
 
 /* Cached data in a hash entry for a given URL; one or both
  * slots can be filled; non-filled slots will be NULL. */
-typedef struct cached_data {
+typedef struct cached_data_rec {
   void *image_data;
   cached_frame_data *frame_data;
   int last_access;
@@ -128,18 +128,18 @@ typedef struct cached_data {
 /* An entry in a hash bucket, containing a URL (in canonical,
  * absolute form) and possibly cached info (right now, an ImageInfo
  * struct for inlined images). */
-typedef struct entry {
+typedef struct entry_rec {
   /* Canonical URL for this document. */
   char *url;
   char *lastdate;
   /* This could be one of a several things:
    * for an image, it's the ImageInfo struct */
   cached_data *cached_data;
-  struct entry *next;
+  struct entry_rec *next;
 } entry;
 
 /* A bucket in the hash table; contains a linked list of entries. */
-typedef struct bucket {
+typedef struct bucket_rec {
   entry *head;
   int count;
 } bucket;
@@ -148,7 +148,6 @@ static bucket hash_table[HASH_TABLE_SIZE];
 
 static mo_status mo_cache_image_data(cached_data *cd, void *info);
 static mo_status mo_uncache_image_data(cached_data *cd);
-static int mo_kbytes_in_image_data(void *image_data);
 
 static int access_counter = 0;
 static int dont_nuke_after_me = 0;
@@ -1015,7 +1014,7 @@ static mo_status mo_dump_cached_cd_array(void)
   int i;
 
   if (!cached_cd_array) {
-      fprintf(stderr, "[mo_dump_cached_cd_array] No array; punting\n");
+      fprintf(stderr, "[mo_dump_cached] No array; punting\n");
       return mo_fail;
   }
 
@@ -1042,11 +1041,11 @@ static mo_status mo_init_cached_cd_array(void)
 {
   cached_cd_array = (cached_data **)calloc(sizeof(cached_data *),
 					   CHUNK_OF_IMAGES);
-  size_of_cached_cd_array += CHUNK_OF_IMAGES;
+  size_of_cached_cd_array = CHUNK_OF_IMAGES;
 
 #ifndef DISABLE_TRACE
   if (cacheTrace)
-      fprintf(stderr, "[mo_init] Did it 0x%08x -- allocated %d pointers.\n",
+      fprintf(stderr, "[init] cached_cd_array 0x%08x -- size %d\n",
               cached_cd_array, size_of_cached_cd_array);
 #endif
 
@@ -1067,9 +1066,9 @@ static mo_status mo_grow_cached_cd_array(void)
 #ifndef DISABLE_TRACE
   if (cacheTrace)
       fprintf(stderr,
-	"[grow] cached_cd_array 0x%08x, size_of_cached_cd_array 0x%08x, sum 0x%08x\n",
-        cached_cd_array, size_of_cached_cd_array, 
-        cached_cd_array + size_of_cached_cd_array);
+	      "[grow] cached_cd_array 0x%08x, size: old 0x%08x, new 0x%08x\n",
+              cached_cd_array, size_of_cached_cd_array, 
+              size_of_cached_cd_array + CHUNK_OF_IMAGES);
 #endif
   memset((char *)(cached_cd_array + size_of_cached_cd_array), 0,
          CHUNK_OF_IMAGES * sizeof(cached_cd_array[0]));
@@ -1094,7 +1093,7 @@ static int mo_sort_cd_for_qsort(MO_CONST void *a1, MO_CONST void *a2)
 
 #ifndef DISABLE_TRACE
   if (cacheTrace)
-      fprintf(stderr, "sort: hi there! %d %d\n",
+      fprintf(stderr, "cache sort: %d %d\n",
               (*d1)->last_access, (*d2)->last_access);
 #endif
 
@@ -1107,7 +1106,7 @@ static mo_status mo_sort_cached_cd_array(void)
   if (!cached_cd_array) {
 #ifndef DISABLE_TRACE
       if (cacheTrace)
-          fprintf(stderr, "[mo_sort_cached_cd_array] No array; punting\n");
+          fprintf(stderr, "[mo_sort_cached] No array; punting\n");
 #endif
       return mo_fail;
   }
@@ -1116,15 +1115,14 @@ static mo_status mo_sort_cached_cd_array(void)
 #ifndef DISABLE_TRACE
       if (cacheTrace)
           fprintf(stderr,
-		  "[mo_sort_cached_cd_array] Num in array 0; punting\n");
+		  "[mo_sort_cached] Num in array 0; punting\n");
 #endif
       return mo_fail;
   }
 
 #ifndef DISABLE_TRACE
   if (cacheTrace) {
-      fprintf(stderr, "[mo_sort_cached_cd_array] Sorting 0x%08x!\n",
-              cached_cd_array);
+      fprintf(stderr, "[mo_sort_cached] Sorting 0x%08x!\n", cached_cd_array);
       mo_dump_cached_cd_array();
   }
 #endif
@@ -1137,184 +1135,6 @@ static mo_status mo_sort_cached_cd_array(void)
       mo_dump_cached_cd_array();
 #endif
   
-  return mo_succeed;
-}
-
-
-static mo_status mo_remove_cd_from_cached_cd_array(cached_data *cd)
-{
-  int i;
-  int freed_kb = 0;
-  
-  if (!cached_cd_array)
-      return mo_fail;
-
-  for (i = 0; i < size_of_cached_cd_array; i++) {
-      if (cached_cd_array[i] == cd) {
-#ifndef DISABLE_TRACE
-          if (cacheTrace)
-              fprintf(stderr, 
-                "[mo_remove_cd_from_cached_cd_array] Found data 0x%08x, location %d\n", 
-                cached_cd_array[i]->image_data, i);
-#endif
-          freed_kb = mo_kbytes_in_image_data(cached_cd_array[i]->image_data);
-          mo_free_image_data(cached_cd_array[i]->image_data);
-          cached_cd_array[i] = NULL;
-          goto done;
-      }
-  }
-#ifndef DISABLE_TRACE
-  if (cacheTrace)
-      fprintf(stderr, "[mo_remove_cd] UH OH, DIDN'T FIND IT!!\n");
-#endif
-
-  return mo_fail;
-  
- done:
-  num_in_cached_cd_array--;
-  kbytes_cached -= freed_kb;
-  return mo_succeed;
-}
-
-
-static mo_status mo_add_cd_to_cached_cd_array(cached_data *cd)
-{
-  int i, num;
-  int kbytes_in_new_image = mo_kbytes_in_image_data(cd->image_data);
-  static int init = 0;
-  static long cachesize;
-  
-  if (!init) {
-      cachesize = get_pref_int(eIMAGE_CACHE_SIZE);
-      init = 1;
-  }
-
-#ifndef DISABLE_TRACE
-  if (cacheTrace)
-      fprintf(stderr, "[mo_add_cd] New image is %d kbytes.\n",
-              kbytes_in_new_image);
-#endif
-
-  if (!cached_cd_array) {
-      mo_init_cached_cd_array();
-#ifndef DISABLE_TRACE
-      if (cacheTrace)
-          fprintf(stderr, "[mo_add_cd] Init'd cached_cd_array.\n");
-#endif
-  } else {
-      /* Maybe it's already in there. */
-      for (i = 0; i < size_of_cached_cd_array; i++) {
-          if (cached_cd_array[i] == cd)
-              return mo_succeed;
-      }
-  }
-
-  /* Here's the magic part. */
-  if ((kbytes_cached + kbytes_in_new_image) > cachesize) {
-      int num_to_remove = 0;
-
-#ifndef DISABLE_TRACE
-      if (cacheTrace)
-          fprintf(stderr, "[mo_add_cd] Going to sort 0x%08x...\n", 
-                  cached_cd_array);
-#endif
-      mo_sort_cached_cd_array();
-#ifndef DISABLE_TRACE
-      if (cacheTrace) {
-          fprintf(stderr, 
-                  "[mo_add_to] Just sorted in preparation for purging...\n");
-	  mo_dump_cached_cd_array();
-      }
-#endif
-
-      while ((kbytes_cached + kbytes_in_new_image) > cachesize) {
-#ifndef DISABLE_TRACE
-          if (cacheTrace)
-              fprintf(stderr,
-		      "[mo_add_cd] Trying to free another image (%d > %d).\n",
-                      kbytes_cached + kbytes_in_new_image, cachesize);
-#endif
-          /* Try to remove one -- we rely on the fact that NULL
-           * entries in cached_cd_array are at the end of the array. */
-          if (num_to_remove < size_of_cached_cd_array &&
-              cached_cd_array[num_to_remove]) {
-#ifndef DISABLE_TRACE
-              if (cacheTrace)
-                  fprintf(stderr,
-		    "        ** try to remove %d; last_access %d < dont_nuke_after_me %d??\n",
-                    num_to_remove,
-                    cached_cd_array[num_to_remove]->last_access,
-                    dont_nuke_after_me);
-#endif
-              if (cached_cd_array[num_to_remove]->last_access <
-                  dont_nuke_after_me) {
-#ifndef DISABLE_TRACE
-                  if (cacheTrace)
-                      fprintf(stderr, "        ** really removing %d\n",
-                              num_to_remove);
-#endif
-                  mo_uncache_image_data(cached_cd_array[num_to_remove]);
-#ifndef DISABLE_TRACE
-                  if (cacheTrace)
-                      mo_dump_cached_cd_array();
-#endif
-              }
-              num_to_remove++;
-          } else {
-#ifndef DISABLE_TRACE
-              if (cacheTrace) {
-                  fprintf(stderr, "        ** no more to remove\n");
-                  mo_dump_cached_cd_array();
-	      }
-#endif
-              break;
-          }
-      }
-  }
-  
-  if (num_in_cached_cd_array == size_of_cached_cd_array) {
-#ifndef DISABLE_TRACE
-      if (cacheTrace)
-          fprintf(stderr, "[mo_add_cd] Growing array... \n");
-#endif
-      num = size_of_cached_cd_array;
-      mo_grow_cached_cd_array();
-  } else {
-      num = -1;
-      for (i = 0; i < size_of_cached_cd_array; i++) {
-          if (!cached_cd_array[i]) {
-              num = i;
-              goto got_num;
-          }
-      }
-#ifndef DISABLE_TRACE
-      if (cacheTrace)
-          fprintf(stderr, 
-                  "[mo_add_cd_to_cached_cd_array] Couldn't find empty slot!\n");
-#endif
-      /* Try to grow array -- flow of control should never reach here */
-      num = size_of_cached_cd_array;
-      mo_grow_cached_cd_array();
-  }
-  
- got_num:
-  cached_cd_array[num] = cd;
-  num_in_cached_cd_array++;
-
-  kbytes_cached += kbytes_in_new_image;
-
-#ifndef DISABLE_TRACE
-  if (cacheTrace) {
-      fprintf(stderr,
-	      "[mo_add_cd_to_cached_cd_array] Added cd, data 0x%08x, num %d\n",
-              cd->image_data, num);
-      fprintf(stderr,
-              "[mo_add_cd_to_cached_cd_array] Now cached %d kbytes.\n",
-	      kbytes_cached);
-      mo_dump_cached_cd_array();
-  }
-#endif
-
   return mo_succeed;
 }
 
@@ -1340,6 +1160,174 @@ static int mo_kbytes_in_image_data(void *image_data)
       kbytes = 1;
   
   return kbytes;
+}
+
+
+static mo_status mo_remove_cd_from_cached_cd_array(cached_data *cd)
+{
+  int i;
+  int freed_kb = 0;
+
+  if (!cached_cd_array)
+      return mo_fail;
+
+  for (i = 0; i < size_of_cached_cd_array; i++) {
+      if (cached_cd_array[i] == cd) {
+#ifndef DISABLE_TRACE
+          if (cacheTrace)
+              fprintf(stderr, "[mo_remove_cd] Found data 0x%08x at %d\n",
+		      cached_cd_array[i]->image_data, i);
+#endif
+          freed_kb = mo_kbytes_in_image_data(cached_cd_array[i]->image_data);
+          mo_free_image_data(cached_cd_array[i]->image_data);
+          cached_cd_array[i] = NULL;
+          goto done;
+      }
+  }
+#ifndef DISABLE_TRACE
+  if (cacheTrace)
+      fprintf(stderr, "[mo_remove_cd] UH OH, DIDN'T FIND IT!!\n");
+#endif
+
+  return mo_fail;
+
+ done:
+  num_in_cached_cd_array--;
+  kbytes_cached -= freed_kb;
+  return mo_succeed;
+}
+
+
+static mo_status mo_add_cd_to_cached_cd_array(cached_data *cd)
+{
+  int i, num;
+  int kbytes_in_new_image = mo_kbytes_in_image_data(cd->image_data);
+  static int init = 0;
+  static long cachesize;
+
+  if (!init) {
+      cachesize = get_pref_int(eIMAGE_CACHE_SIZE);
+      init = 1;
+  }
+
+#ifndef DISABLE_TRACE
+  if (cacheTrace)
+      fprintf(stderr, "[mo_add_cd] New image is %d kbytes.\n",
+              kbytes_in_new_image);
+#endif
+
+  if (!cached_cd_array) {
+      mo_init_cached_cd_array();
+  } else {
+      /* Maybe it's already in there. */
+      for (i = 0; i < size_of_cached_cd_array; i++) {
+          if (cached_cd_array[i] == cd)
+              return mo_succeed;
+      }
+  }
+
+  /* Here's the magic part. */
+  if ((kbytes_cached + kbytes_in_new_image) > cachesize) {
+      int num_to_remove = 0;
+
+#ifndef DISABLE_TRACE
+      if (cacheTrace)
+          fprintf(stderr, "[mo_add_cd] Going to sort 0x%08x...\n",
+                  cached_cd_array);
+#endif
+      mo_sort_cached_cd_array();
+#ifndef DISABLE_TRACE
+      if (cacheTrace) {
+          fprintf(stderr, "[mo_add_cd] Sorted in preparation for purging...\n");
+	  mo_dump_cached_cd_array();
+      }
+#endif
+
+      while ((kbytes_cached + kbytes_in_new_image) > cachesize) {
+#ifndef DISABLE_TRACE
+          if (cacheTrace)
+              fprintf(stderr,
+		      "[mo_add_cd] Trying to free another image (%d > %d).\n",
+                      kbytes_cached + kbytes_in_new_image, cachesize);
+#endif
+          /* Try to remove one -- we rely on the fact that NULL
+           * entries in cached_cd_array are at the end of the array. */
+          if (num_to_remove < size_of_cached_cd_array &&
+              cached_cd_array[num_to_remove]) {
+#ifndef DISABLE_TRACE
+              if (cacheTrace)
+                  fprintf(stderr,
+		        "        ** Check %d; last_access %d < dont_nuke %d?\n",
+                        num_to_remove,
+                        cached_cd_array[num_to_remove]->last_access,
+                        dont_nuke_after_me);
+#endif
+              if (cached_cd_array[num_to_remove]->last_access <
+                  dont_nuke_after_me) {
+#ifndef DISABLE_TRACE
+                  if (cacheTrace)
+                      fprintf(stderr, "        ** remove %d\n", num_to_remove);
+#endif
+                  mo_uncache_image_data(cached_cd_array[num_to_remove]);
+#ifndef DISABLE_TRACE
+                  if (cacheTrace)
+                      mo_dump_cached_cd_array();
+#endif
+              }
+              num_to_remove++;
+          } else {
+#ifndef DISABLE_TRACE
+              if (cacheTrace) {
+                  fprintf(stderr, "        ** no more to remove\n");
+                  mo_dump_cached_cd_array();
+	      }
+#endif
+              break;
+          }
+      }
+  }
+
+  if (num_in_cached_cd_array == size_of_cached_cd_array) {
+#ifndef DISABLE_TRACE
+      if (cacheTrace)
+          fprintf(stderr, "[mo_add_cd] Growing array... \n");
+#endif
+      num = size_of_cached_cd_array;
+      mo_grow_cached_cd_array();
+  } else {
+      num = -1;
+      for (i = 0; i < size_of_cached_cd_array; i++) {
+          if (!cached_cd_array[i]) {
+              num = i;
+              goto got_num;
+          }
+      }
+#ifndef DISABLE_TRACE
+      if (cacheTrace)
+          fprintf(stderr, "[mo_add_cd] Couldn't find empty slot!\n");
+#endif
+      /* Try to grow array -- flow of control should never reach here */
+      num = size_of_cached_cd_array;
+      mo_grow_cached_cd_array();
+  }
+
+ got_num:
+  cached_cd_array[num] = cd;
+  num_in_cached_cd_array++;
+
+  kbytes_cached += kbytes_in_new_image;
+
+#ifndef DISABLE_TRACE
+  if (cacheTrace) {
+      fprintf(stderr, "[mo_add_cd] Added cd, data 0x%08x, num %d\n",
+              cd->image_data, num);
+      fprintf(stderr, "[mo_add_cd] Now cached %d kbytes.\n",
+	      kbytes_cached);
+      mo_dump_cached_cd_array();
+  }
+#endif
+
+  return mo_succeed;
 }
 
 

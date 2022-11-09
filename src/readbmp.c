@@ -20,7 +20,7 @@
  * 
 \*/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -221,14 +221,13 @@ static unsigned long BMPlenfile(bmpInfo *bmp)
  * Copyright (C) 1992 by David W. Sanderson.
 \*/
 
-struct bitstream {
+typedef struct bitstream_rec {
 	FILE *f;		/* Bytestream */
 	unsigned long bitbuf;	/* Bit buffer */
 	int nbitbuf;		/* Number of bits in 'bitbuf' */
 	char mode;
-};
+} Bitstream;
 
-typedef struct bitstream *BITSTREAM;
 
 #define MASK(n)		 ((1 << (n)) - 1)
 
@@ -239,23 +238,21 @@ typedef struct bitstream *BITSTREAM;
 #define BitGet(b, n)	 (((b)->bitbuf >> ((b)->nbitbuf -= (n))) & MASK(n))
 
 /*
- * pm_bitinit() - allocate and return a struct bitstream * for the
- * given FILE*.
+ * pm_bitinit() - allocate and return a Bitstream for the given FILE.
  *
  * mode must be one of "r" or "w", according to whether you will be
- * reading from or writing to the struct bitstream *.
+ * reading from or writing to the Bitstream.
  *
- * Returns 0 on error.
+ * Returns NULL on error.
  */
-static struct bitstream *pm_bitinit(FILE *f, char *mode)
+static Bitstream *pm_bitinit(FILE *f, char *mode)
 {
-	struct bitstream *ans = (struct bitstream *) NULL;
+	Bitstream *ans = (Bitstream *) NULL;
 
 	if (!f || !mode || !*mode || (strcmp(mode, "r") && strcmp(mode, "w")))
 		return ans;
 
-	ans = (struct bitstream *)calloc(1, sizeof(struct bitstream));
-	if (ans) {
+	if (ans = (Bitstream *)calloc(1, sizeof(Bitstream))) {
 		ans->f = f;
 		ans->mode = *mode;
 	}
@@ -263,15 +260,15 @@ static struct bitstream *pm_bitinit(FILE *f, char *mode)
 }
 
 /*
- * pm_bitfini() - deallocate the given struct bitstream *.
+ * pm_bitfini() - deallocate the given Bitstream.
  *
- * You must call this after you are done with the struct bitstream *.
+ * You must call this after you are done with the Bitstream.
  * 
  * It may flush some bits left in the buffer.
  *
  * Returns the number of bytes written, -1 on error.
  */
-static int pm_bitfini(struct bitstream *b)
+static int pm_bitfini(Bitstream *b)
 {
 	int nbyte = 0;
 
@@ -308,8 +305,7 @@ static int pm_bitfini(struct bitstream *b)
  * 
  * Returns the number of bytes read, -1 on error.
  */
-static int pm_bitread(struct bitstream *b, unsigned long nbits,
-		      unsigned long *val)
+static int pm_bitread(Bitstream *b, unsigned long nbits, unsigned long *val)
 {
 	int nbyte = 0;
 	int c;
@@ -729,11 +725,11 @@ static int BMPreadrow(bmpInfo *bmp, unsigned char *row)
 			*row++ = (unsigned char) v;
 		}
 	} else {
-		BITSTREAM b;
+		Bitstream *b;
 		int rc;
 		unsigned long v;
 
-		if ((b = pm_bitinit(fp, "r")) == (BITSTREAM) 0)
+		if (!(b = pm_bitinit(fp, "r")))
 			return -1;
 
 		for (x = 0; x < cx; x++) {
@@ -797,6 +793,7 @@ static unsigned char *BMPreadbits(bmpInfo *bmp)
 				fprintf(stderr,
 					"BMP: row had bad # of bytes: %d\n",rc);
 #endif
+			free(image);
 			return NULL;
 		}
 	}
@@ -846,25 +843,22 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 				/* An escape */
 				b2 = fgetc(fp);
 				switch (b2) {
-				    case 0: {
+				    case 0:
 					/* End of line */
 					x = 0;
 					y++;
 					ptr = image + ((cy - y - 1) * cx);
 					break;
-				    }
-				    case 1: {
+				    case 1:
 					/* End of bitmap */
 					return image;
-				    }
-				    case 2: {
+				    case 2:
 					/* Delta offset */
 					x += fgetc(fp);
 					y += fgetc(fp);
 					ptr = image + x + ((cy - y - 1) * cx);
 					break;
-				    }
-				    default: {
+				    default:
 					/* Absolute mode */
 					for (i = 0; i < b2 ; i++, x++) {
 					    if (comp == BI_RLE8) {
@@ -885,7 +879,6 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 						((b2 & 0x03) == 2))
 						fgetc(fp);
 					}
-				    }
 				}
 			}
 		}
@@ -1052,7 +1045,8 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 		if (srcTrace || reportBugs)
 			fprintf(stderr,	"BMP: Unknown compression: %d\n", comp);
 #endif
-		return NULL;
+		free(image);
+		image = NULL;
 	}
 	return image;
 }
@@ -1061,7 +1055,7 @@ static unsigned char *BMPreadcomp(bmpInfo *bmp, unsigned char **alpha_channel)
 unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 		       unsigned char **alpha)
 {
-	unsigned char *image;
+	unsigned char *image = NULL;
 	bmpInfo *bmp = (bmpInfo *)malloc(sizeof(bmpInfo));
 
 	if (!bmp)
@@ -1127,8 +1121,8 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 #endif
 		newimage = QuantizeImage(image, bmp->cx, bmp->cy, 256,
 					 1, colrs, 0);
+		free(image);
 		if (newimage) {
-			free(image);
 			image = newimage;
 		} else {
 #ifndef DISABLE_TRACE
@@ -1136,14 +1130,11 @@ unsigned char *ReadBMP(FILE *ifp, int *width, int *height, XColor *colrs,
 				fprintf(stderr,
 					"BMP: Failed converting RGB image");
 #endif
-			free(image);
-			goto ErrReturn;
+			image = NULL;
 		}
 	}
-	free(bmp);
-	return image;
 
  ErrReturn:
 	free(bmp);
-	return NULL;
+	return image;
 }

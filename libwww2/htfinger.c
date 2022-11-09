@@ -55,7 +55,7 @@ extern int www2Trace;
 
 /*	Module-wide variables
 */
-PRIVATE int s;					/* Socket for FingerHost */
+PRIVATE int s = -1;				/* Socket for FingerHost */
 
 struct _HTStructured {
 	WWW_CONST HTStructuredClass *isa;	/* For gopher streams */
@@ -64,16 +64,6 @@ struct _HTStructured {
 
 PRIVATE HTStructured *target;			/* The output sink */
 PRIVATE HTStructuredClass targetClass;		/* Copy of fn addresses */
-
-/*	Initialisation for this module
-**	------------------------------
-*/
-PRIVATE BOOL initialized = NO;
-PRIVATE BOOL initialize (void)
-{
-    s = -1;		/* Disconnected */
-    return YES;
-}
 
 
 /*	Start anchor element
@@ -189,8 +179,7 @@ PRIVATE int response (WWW_CONST char *command,
 	if (interrupted_in_htgetcharacter) {
 #ifndef DISABLE_TRACE
 	    if (www2Trace)
-	        fprintf(stderr,
-		      "HTFinger: Interrupted in HTGetCharacter, apparently.\n");
+	        fprintf(stderr, "HTFinger: Interrupted in HTGetCharacter.\n");
 #endif
 	    HTProgress("Connection interrupted.");
 	    goto end_html;
@@ -272,12 +261,6 @@ PUBLIC int HTLoadFinger (WWW_CONST char *arg,
     if (!(arg && *arg)) {
         HTAlert("Could not load data.");
 	return HT_NOT_LOADED;			/* Ignore if no name */
-    }
-    if (!initialized) 
-        initialized = initialize();
-    if (!initialized) {
-        HTAlert("Could not set up finger connection.");
-	return HT_NOT_LOADED;	/* Fail */
     }
     
     /*  Set up the host and command fields.
@@ -387,13 +370,10 @@ PUBLIC int HTLoadFinger (WWW_CONST char *arg,
         /* Interrupt cleanly */
 #ifndef DISABLE_TRACE
 	if (www2Trace)
-	    fprintf(stderr,
-	    	    "HTFinger: Interrupted on connect; recovering cleanly.\n");
+	    fprintf(stderr, "HTFinger: Interrupted on connect; recovering.\n");
 #endif
 	HTProgress("Connection interrupted.");
-	free(str);
-	free(command);
-	return HT_NOT_LOADED;
+	goto error;
     }
     if (status < 0) {
         NETCLOSE(s);
@@ -402,26 +382,29 @@ PUBLIC int HTLoadFinger (WWW_CONST char *arg,
 	if (www2Trace) 
 	    fprintf(stderr, "HTFinger: Unable to connect to finger host.\n");
 #endif
-        HTAlert("Could not access finger host.");
-	free(str);
-	free(command);
-	return HT_NOT_LOADED;	/* Fail */
+        HTProgress("Could not access finger host.");
+	goto error;
     }
 #ifndef DISABLE_TRACE
     if (www2Trace)
         fprintf(stderr, "HTFinger: Connected to finger host '%s'.\n", str);
 #endif
-    free(str);
 
     /* Send the command, and process response if successful.
     */
     if (response(command, sitename, anAnchor, format_out, stream)) {
-        HTAlert("No response from finger server.");
-	free(command);
-	return HT_NOT_LOADED;
+        HTProgress("No response from finger server.");
+	goto error;
     }
+
+    free(str);
     free(command);
     return HT_LOADED;
+
+ error:
+    free(str);
+    free(command);
+    return HT_NOT_LOADED;
 }
 
 PUBLIC HTProtocol HTFinger = { "finger", HTLoadFinger, NULL };

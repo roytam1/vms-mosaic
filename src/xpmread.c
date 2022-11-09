@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -403,9 +403,8 @@ static unsigned int xpmNextWord(xpmData *mdata, char *buf)
 static int xpmNextUI(xpmData *mdata, unsigned int *ui_return)
 {
     char buf[BUFSIZ];
-    int l;
+    int l = xpmNextWord(mdata, buf);
 
-    l = xpmNextWord(mdata, buf);
     return atoui(buf, l, ui_return);
 }
 
@@ -579,8 +578,8 @@ static int ParseColors(xpmData *data, unsigned int ncolors, unsigned int cpp,
 	    *curbuf = '\0';		/* Init curbuf */
 	    while (l = xpmNextWord(data, buf)) {
 		if (!lastwaskey) {
-		    for (key = 0, sptr = xpmColorKeys; key < NKEYS; key++,
-			 sptr++) {
+		    sptr = xpmColorKeys;
+		    for (key = 0; key < NKEYS; key++, sptr++) {
 			if ((strlen(*sptr) == l) && !strncmp(*sptr, buf, l))
 			    break;
 		    }
@@ -1096,7 +1095,7 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
     xpmData mdata;
     XpmAttributes attributes;
     xpmInternAttrib attrib;
-    int ErrorStatus, Colors, i;
+    int pix, ErrorStatus, Colors, i;
     XColor tmpcolr;
     char *colorName;
     unsigned char *pix_data, *bptr;
@@ -1161,9 +1160,9 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
 	colrs[i].pixel = i;
 	colrs[i].flags = DoRed | DoGreen | DoBlue;
     }
+
     pixels = attrib.pixelindex;
-    pix_data = (unsigned char *)malloc(size);
-    if (!pix_data) {
+    if (!(pix_data = (unsigned char *)malloc(size))) {
 #ifndef DISABLE_TRACE
 	if (srcTrace || reportBugs)
 	    fprintf(stderr, "Not enough memory for pixmap.\n");
@@ -1171,10 +1170,9 @@ unsigned char *ReadXpmPixmap(Widget wid, char **xpmdata, FILE *fp, int *w,
 	xpmFreeInternAttrib(&attrib);
         return((unsigned char *)NULL);
     }
+
     bptr = pix_data;
     for (i = 0; i < size; i++) {
-	int pix;
-
 	pix = (int)*pixels++;
         if (pix > 255)
             pix = 0;

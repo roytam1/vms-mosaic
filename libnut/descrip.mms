@@ -38,6 +38,16 @@ CQUALC=
 .ENDIF
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .IFDEF DEBUG
 CFLAGS = $(CQUALC)/NoOpt/Debug
 .ELSE
@@ -66,7 +76,7 @@ Odir:system.obj    : system.c [-]config.h system.h
 Odir:url-utils.obj : url-utils.c [-]config.h
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

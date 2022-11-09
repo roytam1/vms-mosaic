@@ -1,18 +1,20 @@
-$ Ident = "4.2"
+$ Ident = "4.3"
 $!
-$! Create Mosaic version 4.2 on VMS.
+$! Create Mosaic version 4.3 on VMS.
 $!
-$! Copyright (C) 2000, 2003, 2004, 2005, 2006, 2007 - The VMS Mosaic Project
+$! Copyright (C) 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+$! The VMS Mosaic Project
 $!
 $! This command procedure compiles and links Mosaic with MMS or MMK if
 $! either is available, otherwise it just compiles and links in one go.
 $!
 $! The debugger is enabled if P1 is set to DEBUG.  Trace dumps are enabled
 $! if P1 is set to TRACE.  P2 can be used to specify the TCP/IP package
-$! (CMU, MULTINET, PATHWAY, SOCKETSHR, TCPWARE or UCX).  MMS parameters
-$! can be added in P3 (e.g. /IGNORE=WARNING to make MMS ignore compilation
-$! warnings).  Additional arguments (e.g. NOVMSLOGO, VAXC, NOMMS, NOUCX)
-$! can be specified in P4 thru P8.
+$! (CMU, MULTINET, PATHWAY, SOCKETSHR, TCPWARE or UCX), but it is usually
+$! best to let this procedure determine the package.  MMS parameters can
+$! be added in P3 (e.g. /IGNORE=WARNING to make MMS ignore compilation
+$! warnings).  Additional arguments (e.g. NOVMSLOGO, VAXC, NOMMS, NOUCX,
+$! NOSVG) can be specified in P4 thru P8.
 $!
 $! Björn S. Nilsson, 25-Nov-1993
 $! Motif 1.2 sensitivity added 2-June-1994
@@ -26,6 +28,8 @@ $! Motif 1.3 support, Dec. 2003, George Cook
 $! IA64 and Motif 1.4 support, Jan. 2004, George Cook
 $! LIBTIFF support, Jul. 2006, George Cook
 $! LIBOPENJPEG support, May 2007, George Cook
+$! LIBXML2 support, Nov. 2007, George Cook
+$! SVG support (MMS/MMK builds only), Aug. 2008, George Cook
 $!
 $!---------------------------------------------------------------------------
 $!
@@ -53,7 +57,7 @@ $   Read/end=End_conf/err=End_conf loc_conf Line
 $   Line = F$Edit(Line, "TRIM,COMPRESS,UNCOMMENT")
 $   If Line .NES. ""
 $    Then
-$     item  = F$Element(0, "#", Line)
+$     item = F$Element(0, "#", Line)
 $     value = F$Element(1, "#", Line)
 $     'item' = 'value'
 $    Endif
@@ -82,14 +86,17 @@ $ If (P2 .EQS. "?") .OR. (P2 .EQS. "HELP")
 $  Then
 $   Write sys$output -
 	"Specify UCX, CMU, MULTINET, PATHWAY, SOCKETSHR or TCPWARE."
+$   Write sys$output "It is best to leave this blank unless the build fails."
 $   Goto The_End
 $  Endif
 $ If (P1 .EQS. "?") .OR. (P1 .EQS. "HELP")
 $  Then
-$   Write sys$output "Specify DEBUG in P1 to build with debugging."
+$   Write sys$output -
+           "Specify DEBUG in P1 to build with debugging and enable trace dumps."
 $   Write sys$output "Specify TRACE in P1 to enable trace dumps."
 $   Write sys$output -
  "The TCP/IP package (UCX, CMU, MULTINET, PATHWAY, SOCKETSHR or TCPWARE) in P2."
+$   Write sys$output "It is best to leave P2 blank unless the build fails."
 $   Write sys$output "Additional MMS parameters (e.g. /IGNORE=WARNING) in P3."
 $   Write sys$output -
        "Additional arguments (e.g. VAXC, GNUC, NOMMS, NOVMSLOGO) in P4 thru P8."
@@ -107,6 +114,7 @@ $  Then
 $   Write sys$output "Invalid TCP/IP package specified in P2."
 $   Write sys$output -
 	"Specify UCX, CMU, MULTINET, PATHWAY, SOCKETSHR or TCPWARE."
+$   Write sys$output "It is best to leave this blank unless the build fails."
 $   Goto The_End
 $  Endif
 $!
@@ -134,7 +142,7 @@ $ If F$Locate("CCI", Args) .NE. F$Length(Args)
 $  Then CCI = 1
 $  Else CCI = 0
 $  Endif
-$!                              
+$!
 $ VMS_Version = F$Extract(1, 3, F$GetSYI("Version"))
 $!
 $ On Warning Then Platform = "VAX"
@@ -148,8 +156,11 @@ $  Then
 $   Macro = Macro + "ALPHA=1,"
 $   Work = "A"
 $  Else If Platform .EQS. "IA64"
-$   Then Work = "I"
-$   Else Work = "V"
+$   Then
+$    Work = "I"
+$   Else
+$    Macro = Macro + "VAX=1,"
+$    Work = "V"
 $   Endif
 $  Endif
 $!
@@ -229,7 +240,7 @@ $   Compiler = "VAXC"
 $  Endif
 $!
 $ If (Compiler .EQS. "") .AND. (F$Trnlnm("GNU_CC_VERSION") .NES. "")
-$  Then                                            
+$  Then
 $   Compiler = "GNUC"
 $  Endif
 $!
@@ -246,16 +257,14 @@ $   If VAXCP
 $    Then
 $     Compiler = "VAXC"
 $     Macro = Macro + "DECCVAXC=1,VAXC=1,"
-$     COpt = "/VAXC/PRECISION=SINGLE"
-$     COpt_NoVAXC = COpt
+$     COpt = "/VAXC/G_FLOAT/PRECISION=SINGLE"
 $    Endif
 $  Else
 $   If ((Compiler .EQS. "VAXC") .OR. VAXCP) .AND. (.NOT. GNUCP)
 $    Then
 $     Compiler = "VAXC"
 $     Macro = Macro + "VAXC=2,"
-$     COpt = ""
-$     COpt_NoVAXC = "/PRECISION=SINGLE"
+$     COpt = "/G_FLOAT/PRECISION=SINGLE"
 $    Endif
 $  Endif
 $!
@@ -268,22 +277,21 @@ $    Else CC = "GCC/Names=Upper"
 $    Endif
 $   Macro = Macro + "GNUC=1,"
 $   COpt = ""
-$   COpt_NoVAXC = ""
 $  Endif
 $!
 $ If Compiler .EQS. "DECC"
 $  Then
 $   Macro = Macro + "DECC=1,"
-$   COpt = "/DECC/Standard=VAXC/PRECISION=SINGLE"
+$   COpt = "/DECC"
+$   If Platform .EQS. "Alpha" Then COpt = COpt + "/FLOAT=IEEE"
+$   If Platform .EQS. "VAX" Then COpt = COpt + "/G_FLOAT"
 $   If F$Locate("UNUSED", Args) .NE. F$Length(Args)
-$    Then COpt_NoVAXC = -
-	"/DECC/WARNING=(ENABLE=UNUSED,DISABLE=(UNUSEDINCL,NESTINCL))"
+$    Then COpt = Copt + "/WARNING=(ENABLE=UNUSED,DISABLE=(UNUSEDINCL,NESTINCL))"
 $    Else If F$Locate("QUESTCODE", Args) .NE. F$Length(Args)
-$     Then COpt_NoVAXC = -
-	"/DECC/WARNING=(ENABLE=QUESTCODE,DISABLE=(UNKNOWNMACRO,INTCONSTSIGN))"
+$     Then COpt = Copt + -
+	   "/WARNING=(ENABLE=QUESTCODE,DISABLE=(UNKNOWNMACRO,INTCONSTSIGN))"
 $     Else If F$Locate("CHECK", Args) .NE. F$Length(Args)
-$      Then COpt_NoVAXC = "/DECC/CHECK"
-$      Else COpt_NoVAXC = "/DECC"
+$      Then COpt = COpt + "/CHECK"
 $      Endif
 $     Endif
 $    Endif
@@ -298,13 +306,13 @@ $   Tiff = 0
 $  Endif
 $!
 $! OpenSSL
-$! 
+$!
 $ SSL = 1
 $ SSL_Log = 0
 $ If F$Locate("NOSSL", Args) .NE. F$Length(Args)
 $  Then
 $   Write sys$output "Building without OpenSSL support."
-$   SSL = 0 
+$   SSL = 0
 $  Else If F$Trnlnm("OPENSSL") .EQS. ""
 $   Then
 $    SSL = 3
@@ -357,7 +365,6 @@ $ If (F$Locate("DEBUG", P1) .EQ. F$Length(P1)) .OR. -
      (F$Locate("NODEBUG", P1) .NE. F$Length(P1))
 $  Then
 $   COpt = COpt + "/Optim"
-$   COpt_NoVAXC = COpt_NoVAXC + "/Optim"
 $   If F$Locate("TRACE", P1) .EQ. F$Length(P1)
 $    Then
 $     LOpt = "/NoTrace"
@@ -369,7 +376,6 @@ $     Macro = Macro + "TRACE=1,"
 $    Endif
 $  Else
 $   COpt = COpt + "/NoOptim/Debug"
-$   COpt_NoVAXC = COpt_NoVAXC + "/NoOptim/Debug"
 $   LOpt = "/Debug"
 $   VMS_Debug = 1
 $   Macro = Macro + "DEBUG=1,"
@@ -417,9 +423,8 @@ $  If F$Locate("SOCKETSHR", IPX) .NE. F$Length(IPX) Then IP ="SOCKETSHR"
 $  If F$Locate("TCPWARE", IPX) .NE. F$Length(IPX) Then IP ="TCPWARE"
 $  If IP .EQS. ""
 $   Then
+$    ! Should never get here because we already verified P2
 $    Write sys$output "Invalid TCP/IP package specified in P2."
-$    Write sys$output -
-	"Must be UCX, CMU, MULTINET, PATHWAY, SOCKETSHR or TCPWARE."
 $    Goto The_End
 $   Endif
 $ Endif
@@ -474,8 +479,20 @@ $  Endif
 $ Macro = Macro + IP + "=1,"
 $ If (IP .EQS. "UCX") .OR. (IP .EQS. "MULTINET_UCX") .OR. (IP .EQS. "CMU") -
      .OR. (IP .EQS. "PATHWAY_UCX") .OR. (IP .EQS. "TCPWARE")
-$  Then Work = Work + "U"
+$  Then
+$   Work = Work + "U"
+$   If F$Locate("NOSVG", Args) .NE. F$Length(Args)
+$    Then
+$     SVG = 0
+$    Else
+$     SVG = 1
+$    Endif
 $  Else
+$   If F$Locate("NOSVG", Args) .EQ. F$Length(Args)
+$    Then
+$     Write sys$output "SVG image support requires UCX compatible build."
+$    Endif
+$   SVG = 0
 $   If Compiler .EQS. "GNUC"
 $    Then
 $     Write sys$output "SOCKETSHR and non-UCX compatible builds are not"
@@ -483,11 +500,22 @@ $     Write sys$output "supported using the GNU C compiler.  Aborting."
 $     Goto The_End
 $    Endif
 $  Endif
+$ If (SVG .EQ. 1) .AND. (Compiler .EQS. "GNUC")
+$  Then
+$   SVG = 0
+$   Write sys$output "DEC C or VAX C is required to build with SVG support."
+$  Endif
+$ If SVG .EQ. 0
+$  Then
+$   Macro = Macro + "NOSVG=1,"
+$   Write sys$output "Building without SVG image support."
+$  Endif
+$!
 $ If IP .EQS. "MULTINET" Then Work = Work + "M"
 $ If IP .EQS. "PATHWAY"
 $  Then
 $   Work = Work + "P"
-$   @[.twg]def.com      ! define the location of PathWay include files
+$   @[.twg]def.com      ! Define the location of PathWay include files
 $  Endif
 $ If IP .EQS. "SOCKETSHR" Then Work = Work + "S"
 $!
@@ -499,17 +527,11 @@ $!
 $ If Compiler .EQS. "DECC"
 $  Then
 $   If IP .EQS. "MULTINET"
-$    Then
-$     COpt = COpt + "/PREFIX=ANSI"
-$     COpt_NoVAXC = COpt_NoVAXC + "/PREFIX=ANSI"
+$    Then COpt = COpt + "/PREFIX=ANSI"
 $    Else
 $     If VMS_Version .GES. "7.0"
-$      Then 
-$	COpt = COpt + "/PREFIX=(ALL,EXCEPT=(GETPWUID,IOCTL))"
-$	COpt_NoVAXC = COpt_NoVAXC + "/PREFIX=(ALL,EXCEPT=(GETPWUID,IOCTL))"
-$      Else
-$	COpt = COpt + "/PREFIX=ALL"
-$	COpt_NoVAXC = COpt_NoVAXC + "/PREFIX=ALL"
+$      Then COpt = COpt + "/PREFIX=(ALL,EXCEPT=(GETPWUID,IOCTL))"
+$      Else COpt = COpt + "/PREFIX=ALL"
 $      Endif
 $    Endif
 $  Endif
@@ -653,7 +675,7 @@ $   Goto Err
 $  EndIf
 $!
 $ If F$Trnlnm("XMU") .EQS. ""
-$  Then   
+$  Then
 $   Write sys$output -
      "You cannot build Mosaic without the XMU auxiliary library.  It comes as"
 $   Write sys$output -
@@ -730,7 +752,7 @@ $!
 $!    The rest of the config has to be customized for each site
 $!    and build configuration.  It is placed in a build specific
 $!    include file.
-$!        
+$!
 $ Open/write config_file test_config_'work'.h
 $ If Motif12 .EQS. ""
 $  Then Write config_file "/* #undef MOTIF1_2 */"
@@ -741,7 +763,7 @@ $ Write config_file ""
 $ Write config_file ""
 $ Write config_file "/* These are VMS port specific */"
 $ If Motif123 .EQS. ""
-$  Then Write config_file "/* #undef MOTIF1_23 */"         
+$  Then Write config_file "/* #undef MOTIF1_23 */"
 $  Else
 $   If Motif123 .EQS. "7"
 $    Then Write config_file "#define MOTIF1_23 7"
@@ -845,6 +867,23 @@ $  Else Write config_file "/* #undef HAVE_TIFF */"
 $  Endif
 $ Close config_file
 $!
+$! This file is referenced by PICREAD.C and MMS descript files
+$ Open/write config_file test_SVG_'work'.h
+$ Write config_file -
+   "/* Dummy file to force recompile of SVG read routine as needed. */"
+$ Write config_file -
+   "/* svg_xx.h  Generated automatically on VMS by MAKE_MOSAIC.COM.  */"
+$ Write config_file -
+   "/*             Do not edit this file, it will just be overwritten  */"
+$ Write config_file -
+   "/*             during the build. */"
+$ Write config_file " "
+$ If SVG .EQ. 1
+$  Then Write config_file "#define HAVE_SVG 1"
+$  Else Write config_file "/* #undef HAVE_SVG */"
+$  Endif
+$ Close config_file
+$!
 $ Open/write config_file Built_'work'.h
 $ Write config_file -
    "/* built_xx.h  Generated automatically on VMS by MAKE_MOSAIC.COM.  */"
@@ -862,7 +901,11 @@ $  Endif
 $ If SSL .EQ. 2
 $  Then Write config_file "#define HAVE_HPSSL 1"
 $  Else Write config_file "/* #undef HAVE_HPSSL */"
-$  Endif  
+$  Endif
+$ If SVG .EQ. 1
+$  Then Write config_file "#define HAVE_SVG 1"
+$  Else Write config_file "/* #undef HAVE_SVG */"
+$  Endif
 $ Close config_file
 $ Purge Built_'work'.h
 $!
@@ -916,15 +959,30 @@ $    Else Rename test_SSL_'work'.h SSL_'work'.h
 $    Endif
 $  Endif
 $!
+$ If F$Search("SVG_''work'.h") .EQS. ""
+$  Then Rename test_SVG_'work'.h SVG_'work'.h
+$  Else
+$   Set noon
+$   Differ/out=nl: test_SVG_'work'.h SVG_'work'.h
+$   Diff_err = $severity
+$   Set on
+$   If diff_err .EQ. 1
+$    Then Delete test_SVG_'work'.h;*
+$    Else Rename test_SVG_'work'.h SVG_'work'.h
+$    Endif
+$  Endif
+$!
 $ Top_Dir = F$Environment("default")
 $ If Compiler .NES. "GNUC"
 $  Then
 $   Define mosaic_config "''Top_Dir'config_''work'.h"
 $   Define mosaic_built "''Top_Dir'built_''work'.h"
+$   Define mosaic_svg "''Top_Dir'svg_''work'.h"
 $   GNUC_Def = ""
 $  Else
 $   GNUC_Def = "/Define=(mosaic_config=<''Top_Dir'config_''work'.h>," + -
-	"mosaic_built=<''Top_dir'built_''work'.h>)/Include=(gcc_include:)"
+	"mosaic_built=<''Top_dir'built_''work'.h>," + -
+	"mosaic_svg=<''Top_dir'svg_''work'.h>/Include=(gcc_include:)"
 $   If Platform .EQS. "Alpha"
 $    Then
 $     If F$Locate("NOMMS", Args) .EQ. F$Length(Args)
@@ -933,7 +991,7 @@ $      Else GNUC_Def = GNUC_Def + "/Undefine=(""alpha"")"
 $     Endif
 $    Endif
 $   If F$Locate("NOMMS", Args) .EQ. F$Length(Args)
-$    Then 
+$    Then
 $     If Platform .EQS. "Alpha"
 $      Then Define GCC_Defines -
 	"/Names=Upper/Float=ieee/cc1=""-fno-exceptions -g0""''GNUC_Def'"
@@ -948,7 +1006,9 @@ $     Define/Translation=Conceal gcc_include -
 	"''Top_Root'.libwww2.]", "''Top_Root'.freewais-0_5.ir.]", -
 	"''Top_Root'.libpng.]", "''Top_Root'.zlib.]", "''Top_Root'.libtiff.]", -
 	"''Top_Root'.libjpeg.]", "''Top_Root'.libopenjpeg.]", -
-	"''Top_Root'.libnut.]", "''Top_Root'.libxmx.]"
+	"''Top_Root'.libnut.]", "''Top_Root'.libxmx.]", -
+	"''Top_Root'.libcroco.]", "''Top_Root'.libxml2.]", -
+	"''Top_Root'.glib.]", "''Top_Root'.libintl.]"
 $    Else
 $     Define/Translation=Conceal gcc_include -
 	"''Top_Root'.libvms.gcc_include_alpha.]", -
@@ -956,7 +1016,9 @@ $     Define/Translation=Conceal gcc_include -
 	"''Top_Root'.libwww2.]", "''Top_Root'.freewais-0_5.ir.]", -
 	"''Top_Root'.libpng.]", "''Top_Root'.zlib.]", "''Top_Root'.libtiff.]", -
 	"''Top_Root'.libjpeg.]", "''Top_Root'.libopenjpeg.]", -
-	"''Top_Root'.libnut.]", "''Top_Root'.libxmx.]"
+	"''Top_Root'.libnut.]", "''Top_Root'.libxmx.]", -
+	"''Top_Root'.libcroco.]", "''Top_Root'.libxml2.]", -
+	"''Top_Root'.glib.]", "''Top_Root'.libintl.]"
 $    Endif
 $  Endif
 $!
@@ -981,6 +1043,7 @@ $     Delete tmpmms.lis;*
 $     Set On
 $     Goto No_MMS
 $    Endif
+$!  If MMS V3.8, then need either V3.8-01 or V3.8-02
 $   Define/User sys$output nl:
 $   Define/User sys$error nl:
 $   Search tmpmms.lis V3.8
@@ -991,20 +1054,26 @@ $     Define/User sys$error nl:
 $     Search tmpmms.lis V3.8-01
 $     If $Severity .EQ. 3
 $      Then
-$       Write sys$output "The MMS on this system is V3.8."
-$       Write sys$output "The Mosaic build will not work if V3.8 was installed"
-$       Write sys$output "with Extended File Specification support."
-$       Write sys$output " "
+$       Define/User sys$output nl:
+$       Define/User sys$error nl:
+$       Search tmpmms.lis V3.8-02
+$       If $Severity .EQ. 3
+$        Then
+$         Write sys$output "The MMS on this system is V3.8."
+$         Write sys$output "The Mosaic build will not work if V3.8 was"
+$         Write sys$output "installed with Extended File Specification support."
+$         Write sys$output " "
+$        Endif
 $      Endif
 $    Endif
 $   Delete tmpmms.lis;*
 $   Set On
 $   Command = "MMS"
 $  Else
-$   If F$Search("MMK_DIR:MMK.Exe") .NES. ""
+$   Set Symbol/Scope = (Global, NoLocal)
+$   If "''MMK'" .NES. ""
 $    Then
 $     Set Noon
-$     Set Symbol/Scope = (Global, NoLocal)
 $     Define/User sys$output tmpmmk.lis
 $     Define/User sys$error tmpmmk.lis
 $     MMK/Ident
@@ -1038,6 +1107,7 @@ $       Write sys$output " "
 $       Goto No_MMS
 $      Endif
 $    Else
+$     Set Symbol/Scope = (NoGlobal, NoLocal)
 $     Write sys$output "Neither MMS or MMK appears to be available."
 $     Write sys$output "Proceeding with complete (re)build."
 $     Write sys$output " "
@@ -1087,6 +1157,47 @@ $!
 $No_MMS:
 $ If F$Locate("DEB", Args) .NE. F$Length(Args) Then Show Symbol/Local *
 $ If F$Locate("CLEAN", Args) .NE. F$Length(Args) Then Goto No_mms_clean
+$!
+$! If needed, recreate config files to disable SVG support
+$ If SVG .EQ. 1
+$  Then
+$   Open/write config_file Built_'work'.h
+$   Write config_file -
+       "/* built_xx.h  Generated automatically on VMS by MAKE_MOSAIC.COM.  */"
+$   Write config_file -
+       "/*             Do not edit this file, it will just be overwritten  */"
+$   Write config_file -
+       "/*             during the build. */"
+$   Write config_file " "
+$   Write config_file "#define BUILD_TIME ""''f$time()'"""
+$   Write config_file "#define IDENT_VER ""''Ident'"""
+$   If VMS_Debug .EQ. 1
+$    Then Write config_file "#define DEBUGVMS 1"
+$    Else Write config_file "/* #undef DEBUGVMS */"
+$   Endif
+$   If SSL .EQ. 2
+$    Then Write config_file "#define HAVE_HPSSL 1"
+$    Else Write config_file "/* #undef HAVE_HPSSL */"
+$   Endif
+$   Write config_file "/* #undef HAVE_SVG */"
+$   Close config_file
+$   Purge Built_'work'.h
+$!
+$   Open/write config_file SVG_'work'.h
+$   Write config_file -
+     "/* Dummy file to force recompile of SVG read routine as needed. */"
+$   Write config_file -
+     "/* svg_xx.h  Generated automatically on VMS by MAKE_MOSAIC.COM.  */"
+$   Write config_file -
+     "/*             Do not edit this file, it will just be overwritten  */"
+$   Write config_file -
+     "/*             during the build. */"
+$   Write config_file " "
+$   Write config_file "/* #undef HAVE_SVG */"
+$   Close config_file
+$   Purge SVG_'work'.h
+$  Endif
+$!
 $ If IP .NES. "PATHWAY"
 $  Then
 $   If Compiler .EQS. "DECC"
@@ -1129,9 +1240,9 @@ $!
 $! Create [.freeWAIS-0_5.ir]libWAIS.olb
 $!
 $ Set Default [.freeWAIS-0_5.ir]
-$ If F$Search("libWAIS.olb") .NES. "" Then Delete libWAIS.olb;* 
+$ If F$Search("libWAIS.olb") .NES. "" Then Delete libWAIS.olb;*
 $ Library/Create/Log libWAIS.olb
-$ Comp = CC + COpt_NoVAXC + "/Define=''IP'"
+$ Comp = CC + COpt + "/DEFINE=''IP'"
 $ 'Comp' cutil.c
 $ 'Comp' futil.c
 $ 'Comp' panic.c
@@ -1148,13 +1259,13 @@ $ Set Default [-.-]
 $After_WAIS:
 $ If End .EQS. "WAIS" Then Goto The_End
 $!
-$! Create [.libwww2]libwww.olb       
+$! Create [.libwww2]libwww.olb
 $!
 $Libwww2:
 $ Set Default [.libwww2]
 $ If F$Search("libwww.olb") .NES. "" Then Delete libwww.olb;*
 $ Library/Create/Log libwww.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' HTAABrow.c
 $ 'Comp' HTAAUtil.c
 $ 'Comp' HTAccess.c
@@ -1170,7 +1281,7 @@ $ 'Comp' HTFile.c
 $ 'Comp' HTFinger.c
 $ 'Comp' HTFormat.c
 $ 'Comp' HTFTP.c
-$ 'Comp' HTFWriter
+$ 'Comp' HTFWriter.c
 $ 'Comp' HTGopher.c
 $ 'Comp' HTIcon.c
 $ 'Comp' HTInit.c
@@ -1179,7 +1290,7 @@ $ 'Comp' HTMailto.c
 $ 'Comp' HTMIME.c
 $ 'Comp' HTML.c
 $ 'Comp' HTMLDTD.c
-$ 'Comp' HTMLGen
+$ 'Comp' HTMLGen.c
 $ 'Comp' HTMosaicHTML.c
 $ 'Comp' HTNews.c
 $ 'Comp' HTParse.c
@@ -1218,7 +1329,7 @@ $Libhtmlw:
 $ Set Default [.libhtmlw]
 $ If F$Search("libhtmlw.olb") .NES. "" Then Delete libhtmlw.olb;*
 $ Library/Create/Log libhtmlw.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' HTML-PSformat.c
 $ 'Comp' HTML.c
 $ 'Comp' HTMLformat.c
@@ -1228,12 +1339,12 @@ $ 'Comp' HTMLparse.c
 $ 'Comp' HTMLtable.c
 $ 'Comp' HTMLwidgets.c
 $ 'Comp' LIST.c
-$ 'Comp' HTMLapplet
-$ 'Comp' HTMLfont
-$ 'Comp' HTMLform
-$ 'Comp' HTMLframe
+$ 'Comp' HTMLapplet.c
+$ 'Comp' HTMLfont.c
+$ 'Comp' HTMLform.c
+$ 'Comp' HTMLframe.c
 $ 'Comp' HTMLimagemap.c
-$ 'Comp' HTMLtext
+$ 'Comp' HTMLtext.c
 $ Library/Replace/Log libhtmlw.olb *.obj
 $ Purge *.obj
 $ Set Default [-]
@@ -1245,7 +1356,7 @@ $LibXmx:
 $ Set Default [.libXmx]
 $ If F$Search("libXmx.olb") .NES. "" Then Delete libXmx.olb;*
 $ Library/Create/Log libXmx.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' Xmx.c
 $ 'Comp' Xmx2.c
 $ Library/Replace/Log libXmx.olb *.obj
@@ -1268,7 +1379,7 @@ $Libopenjpeg:
 $ Set Default [.libopenjpeg]
 $ If F$Search("libopenjpeg.olb") .NES. "" Then Delete libopenjpeg.olb;*
 $ Library/Create/Log libopenjpeg.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' bio.c
 $ 'Comp' cio.c
 $ 'Comp' dwt.c
@@ -1298,7 +1409,7 @@ $Libnut:
 $ Set Default [.libnut]
 $ If F$Search("libnut.olb") .NES. "" Then Delete libnut.olb;*
 $ Library/Create/Log libnut.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' ellipsis.c
 $ 'Comp' mm.c
 $ 'Comp' str-tools.c
@@ -1315,7 +1426,7 @@ $Libpng:
 $ Set Default [.libpng]
 $ If F$Search("libpng.olb") .NES. "" Then Delete libpng.olb;*
 $ Library/Create/Log libpng.olb
-$ Comp = CC + COpt_NoVAXC + "/INCLUDE=[-.ZLIB]"
+$ Comp = CC + COpt + "/INCLUDE=[-.ZLIB]"
 $ 'Comp' png.c
 $ 'Comp' pngpread.c
 $ 'Comp' pngget.c
@@ -1342,7 +1453,7 @@ $Zlib:
 $ Set Default [.zlib]
 $ If F$Search("libz.olb") .NES. "" Then Delete libz.olb;*
 $ Library/Create/Log libz.olb
-$ Comp = CC + COpt_NoVAXC
+$ Comp = CC + COpt
 $ 'Comp' adler32.c
 $ 'Comp' compress.c
 $ 'Comp' crc32.c
@@ -1360,14 +1471,14 @@ $ Purge *.obj
 $ Set Default [-]
 $ If End .EQS. "ZLIB" Then Goto The_End
 $!
-$! Create [.libpng]libtiff.olb
+$! Create [.libtiff]libtiff.olb
 $!
 $Libtiff:
 $ If Tiff .EQ. 0 Then Goto After_TIFF
 $ Set Default [.libtiff]
 $ If F$Search("libtiff.olb") .NES. "" Then Delete libtiff.olb;*
 $ Library/Create/Log libtiff.olb
-$ Comp = CC + COpt_NoVAXC + "/INCLUDE=([-.ZLIB],[-.LIBJPEG])"
+$ Comp = CC + COpt + "/INCLUDE=([-.ZLIB],[-.LIBJPEG])"
 $ 'Comp' tif_aux.c
 $ 'Comp' tif_close.c
 $ 'Comp' tif_codec.c
@@ -1411,13 +1522,181 @@ $ Set Default [-]
 $After_TIFF:
 $ If End .EQS. "LIBTIFF" Then Goto The_End
 $!
+$! Create [.libcroco]libcroco.olb
+$!
+$Libcroco:
+$ Set Default [.libcroco]
+$ If F$Search("libcroco.olb") .NES. "" Then Delete libcroco.olb;*
+$ Library/Create/Log libcroco.olb
+$ Comp = CC + COpt + -
+	"/INCLUDE=([-.GLIB],[-.LIBXML2])/WARNING=(DISABLE=PTRMISMATCH1)"
+$ 'Comp' cr-additional-sel.c
+$ 'Comp' cr-attr-sel.c
+$ 'Comp' cr-cascade.c
+$ 'Comp' cr-declaration.c
+$ 'Comp' cr-doc-handler.c
+$ 'Comp' cr-enc-handler.c
+$ 'Comp' cr-fonts.c
+$ 'Comp' cr-input.c
+$ 'Comp' cr-num.c
+$ 'Comp' cr-om-parser.c
+$ 'Comp' cr-parser.c
+$ 'Comp' cr-parsing-location.c
+$ 'Comp' cr-prop-list.c
+$ 'Comp' cr-pseudo.c
+$ 'Comp' cr-rgb.c
+$ 'Comp' cr-sel-eng.c
+$ 'Comp' cr-selector.c
+$ 'Comp' cr-simple-sel.c
+$ 'Comp' cr-statement.c
+$ 'Comp' cr-string.c
+$ 'Comp' cr-style.c
+$ 'Comp' cr-stylesheet.c
+$ 'Comp' cr-term.c
+$ 'Comp' cr-tknzr.c
+$ 'Comp' cr-token.c
+$ 'Comp' cr-utils.c
+$ Library/Replace/Log libcroco.olb *.obj
+$ Purge *.obj
+$ Set Default [-]
+$ If End .EQS. "LIBCROCO" Then Goto The_End
+$!
+$! Create [.libxml2]libxml2.olb
+$!
+$Libxml2:
+$ Set Default [.libxml2]
+$ If F$Search("libxml2.olb") .NES. "" Then Delete libxml2.olb;*
+$ Library/Create/Log libxml2.olb
+$ Comp = CC + COpt + "/INCLUDE=([-.ZLIB])"
+$ If (Platform .EQS. "Alpha") Then Comp = Comp + "/IEEE_MODE=DENORM_RESULTS"
+$ 'Comp' c14n.c
+$ 'Comp' catalog.c
+$ 'Comp' debugxml.c
+$ 'Comp' docbparser.c
+$ 'Comp' encoding.c
+$ 'Comp' entities.c
+$ 'Comp' error.c
+$ 'Comp' globals.c
+$ 'Comp' hash.c
+$ 'Comp' htmlparser.c
+$ 'Comp' htmltree.c
+$ 'Comp' list.c
+$ 'Comp' nanoftp.c
+$ 'Comp' nanohttp.c
+$ 'Comp' parser.c
+$ 'Comp' parserinternals.c
+$ 'Comp' sax.c
+$ 'Comp' threads.c
+$ 'Comp' tree.c
+$ 'Comp' trio.c
+$ 'Comp' triostr.c
+$ 'Comp' uri.c
+$ 'Comp' valid.c
+$ 'Comp' xinclude.c
+$ 'Comp' xlink.c
+$ 'Comp' xmlio.c
+$ 'Comp' xmlmemory.c
+$ 'Comp' xmlregexp.c
+$ 'Comp' xmlschemas.c
+$ 'Comp' xmlschemastypes.c
+$ 'Comp' xmlunicode.c
+$ 'Comp' xpath.c
+$ 'Comp' xpointer.c
+$ Library/Replace/Log libxml2.olb *.obj
+$ Purge *.obj
+$ Set Default [-]
+$ If End .EQS. "LIBXML2" Then Goto The_End
+$!
+$! Create [.glib]glib.olb
+$!
+$Glib:
+$ Set Default [.glib]
+$ If F$Search("glib.olb") .NES. "" Then Delete glib.olb;*
+$ Library/Create/Log glib.olb
+$ Comp = CC + COpt + "/INCLUDE=([-.LIBINTL])"
+$ 'Comp' garray.c
+$ 'Comp' gatomic.c
+$ 'Comp' gconvert.c
+$ 'Comp' gdataset.c
+$ 'Comp' gerror.c
+$ 'Comp' gdir.c
+$ 'Comp' gfileutils.c
+$ 'Comp' ghook.c
+$ 'Comp' ghash.c
+$ 'Comp' glist.c
+$ 'Comp' gmain.c
+$ 'Comp' gmarkup.c
+$ 'Comp' gmem.c
+$ 'Comp' gmessages.c
+$ 'Comp' gprimes.c
+$ 'Comp' gqueue.c
+$ 'Comp' gprintf.c
+$ 'Comp' grand.c
+$ 'Comp' gslist.c
+$ 'Comp' gstdio.c
+$ 'Comp' gstrfuncs.c
+$ 'Comp' gstring.c
+$ 'Comp' gthread.c
+$ 'Comp' gtree.c
+$ 'Comp' gunibreak.c
+$ 'Comp' gunidecomp.c
+$ 'Comp' guniprop.c
+$ 'Comp' gutf8.c
+$ 'Comp' gutils.c
+$ 'Comp' printf-args.c
+$ 'Comp' printf-parse.c
+$ 'Comp' printf.c
+$ 'Comp' vasnprintf.c
+$ 'Comp' localcharset.c
+$ Library/Replace/Log glib.olb *.obj
+$ Purge *.obj
+$ Set Default [-]
+$ If End .EQS. "GLIB" Then Goto The_End
+$!
+$! Create [.libintl]libintl.olb
+$!
+$Libintl:
+$ Set Default [.libintl]
+$ If F$Search("libintl.olb") .NES. "" Then Delete libintl.olb;*
+$ Library/Create/Log libintl.olb
+$ Localedir = "SYS$DATA:[.share.locale"
+$ Comp = CC + COpt + -
+  "/DEFINE=(""LOCALEDIR=""""''Localedir'"""""",""LOCALE_ALIAS_PATH=""""''Localedir']"""""")"
+$ 'Comp' bindtextdom.c
+$ 'Comp' dcgettext.c
+$ 'Comp' dgettext.c
+$ 'Comp' gettext.c
+$ 'Comp' finddomain.c
+$ 'Comp' loadmsgcat.c
+$ 'Comp' localealias.c
+$ 'Comp' textdomain.c
+$ 'Comp' l10nflist.c
+$ 'Comp' explodename.c
+$ 'Comp' dcigettext.c
+$ 'Comp' dcngettext.c
+$ 'Comp' dngettext.c
+$ 'Comp' ngettext.c
+$ 'Comp' plural.c
+$ 'Comp' plural-exp.c
+$ 'Comp' localcharset.c
+$ 'Comp' relocatable.c
+$ 'Comp' langprefs.c
+$ 'Comp' localename.c
+$ 'Comp' log.c
+$ 'Comp' osdep.c
+$ 'Comp' intl-compat.c
+$ Library/Replace/Log libintl.olb *.obj
+$ Purge *.obj
+$ Set Default [-]
+$ If End .EQS. "LIBINTL" Then Goto The_End
+$!
 $! Create [.libliteclue]libliteclue.olb
 $!
 $Libliteclue:
 $ Set Default [.libliteclue]
 $ If F$Search("libliteclue.olb") .NES. "" Then Delete libliteclue.olb;*
 $ Library/Create/Log libliteclue.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' liteclue.c
 $ Library/Replace/Log libliteclue.olb *.obj
 $ Purge *.obj
@@ -1430,8 +1709,9 @@ $Libvms:
 $ Set Default [.libvms]
 $ If F$Search("libvms.olb") .NES. "" Then Delete libvms.olb;*
 $ Library/Create/Log libvms.olb
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ 'Comp' cmdline.c
+$ 'Comp' vms_utils.c
 $ Set Command/Object mosaic_cld.cld
 $ Library/Replace/Log libvms.olb *.obj
 $ Edit/Tpu/Nosection/Nodisplay/Command=cvthelp.tpu mosaic.help
@@ -1450,7 +1730,7 @@ $! Compile the [.src] modules.
 $!
 $Src:
 $ Set Default [.src]
-$ Comp = CC + COpt_NoVAXC + GNUC_Def
+$ Comp = CC + COpt + GNUC_Def
 $ If F$Search("src.olb") .NES. "" Then Delete src.olb;*
 $ Library/Create/Log src.olb
 $ If Compiler .NES. "GNUC"
@@ -1471,7 +1751,7 @@ $     Define/nolog DECC$User_Include 'F$Environment("Default")', -
         LIBWWW2,LIBHTMLW,LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,SYS
 $     Define/nolog DECC$System_Include 'F$Environment("Default")', -
         LIBWWW2,LIBHTMLW,LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,SYS
-$    Else  
+$    Else
 $     Define/nolog VAXC$Include 'F$Environment("Default")', -
         LIBWWW2,LIBHTMLW,LIBXMX,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,SYS$Library
 $     Define/nolog C$Include 'F$Environment("Default")', -
@@ -1557,6 +1837,10 @@ $ Write libraries_file "[-.libjpeg]libjpeg.olb/Lib"
 $ Write libraries_file "[-.libopenjpeg]libopenjpeg.olb/Lib"
 $ Write libraries_file "[-.libnut]libnut.olb/Lib"
 $ Write libraries_file "[-.libpng]libpng.olb/Lib"
+$ Write libraries_file "[-.libcroco]libcroco.olb/Lib"
+$ Write libraries_file "[-.libxml2]libxml2.olb/Lib"
+$ Write libraries_file "[-.glib]glib.olb/Lib"
+$ Write libraries_file "[-.libintl]libintl.olb/Lib"
 $ Write libraries_file "[-.zlib]libz.olb/Lib"
 $ Write libraries_file "[-.libliteclue]libliteclue.olb/Lib"
 $ Write libraries_file "[-.libvms]libvms.olb/Lib"
@@ -1625,16 +1909,24 @@ $  Then Write libraries_file "TCPWARE:UCX$IPC.Olb/Lib"
 $  EndIf
 $!
 $ If Compiler .EQS. "VAXC"
-$  Then Write libraries_file "SYS$Library:VaxCRTL.Exe/Share"
+$  Then
+$   Write libraries_file "VAXCRTL/Share"
+$   Write libraries_file "SYS$Library:VaxCRTLG.Exe/Share"
 $  EndIf
 $ Close libraries_file
+$!
+$ If Compiler .EQS. "VAXC"
+$  Then Define/User VAXCRTL Sys$Library:VAXC$EMPTY.EXE
+$  Endif
+$!
 $ Link'LOpt'/Exe=mosaic.exe libraries.opt/opt
+$!
 $ xxx = F$Verify(Verify)
 $ Purge *.opt
 $ Set Default [-]
 $ Write sys$output "Linking done.  Welcome to VMS Mosaic " + Ident
 $ Write sys$output "The executable is [.src]Mosaic.exe"
-$ Write sys$output "Please complete the Comment Card (see Help menu)" 
+$ Write sys$output "Please complete the Comment Card (see Help menu)"
 $ Dir/Date=Modif/Size=All [.src]Mosaic.exe
 $ Goto The_End
 $!
@@ -1717,6 +2009,8 @@ $ If F$Trnlnm("MOSAIC_CONFIG", "LNM$PROCESS_TABLE") .NES. "" Then -
    Deassign/Process MOSAIC_CONFIG
 $ If F$Trnlnm("MOSAIC_BUILT", "LNM$PROCESS_TABLE") .NES. "" Then -
    Deassign/Process MOSAIC_BUILT
+$ If F$Trnlnm("MOSAIC_SVG", "LNM$PROCESS_TABLE") .NES. "" Then -
+   Deassign/Process MOSAIC_SVG
 $ If F$Trnlnm("GCC_Include", "LNM$PROCESS_TABLE") .NES. "" Then -
    Deassign/Process GCC_Include
 $ If F$Trnlnm("GCC_Defines", "LNM$PROCESS_TABLE") .NES. "" Then -

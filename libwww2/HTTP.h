@@ -8,7 +8,7 @@
 extern HTProtocol HTTP;
 extern HTProtocol HTTPS;
 extern void HT_SetExtraHeaders(char **headers);
-extern void HTClose_HTTP_Socket(int sock, void *handle);
+extern void HTClose_HTTP_Socket(int sock, void *handle, char *host);
 
 /* Encrypt verification status */
 typedef enum {

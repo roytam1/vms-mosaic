@@ -22,16 +22,11 @@
 extern int HTFTPLoad(char *name, HTParentAnchor *anchor, HTFormat format_out,
 		     HTStream *sink);
 
-/*
- * NLST parameters
- */
-#define NLST_PARAMS "-Lla"
-
 /* Send file to server */
-extern int  HTFTPSend(char *);
+extern int  HTFTPSend(char *name);
 
 extern void HTFTPClearCache(void);
-extern int  HTFTPMkDir(char *);
-extern int  HTFTPRemove(char *);
+extern int  HTFTPMkDir(char *name);
+extern int  HTFTPRemove(char *name);
 
 #endif

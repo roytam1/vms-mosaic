@@ -259,9 +259,9 @@ OpenSSL 0.9.8e
 	@MAKEVMS CRYPTO "" NODEBUG DECC
 	@MAKEVMS SSL "" NODEBUG DECC
 
-	Note 1:  The following fixes to the 0.9.8e MAKEVMS.COM and
-	should be made prior to starting a build on VAX.  Add a new
-        line 323 to MAKEVMS.COM.
+	Note 1:  The following fixes to the 0.9.8e MAKEVMS.COM
+	should be made prior to starting a build on VAX.  Add a
+	new line 323 to MAKEVMS.COM.
 
 ************
 File S4:[OPENSSL.OPENSSL-0_9_8E]MAKEVMS.COM;2

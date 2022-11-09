@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2003, 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #define COMMENT_CARD_FILENAME ".mosaic-cc-"
 #define COMMENT_TIME 5
@@ -66,7 +66,7 @@ extern long GetCardCount(char *fname);
 
 #ifdef _COMMENT_H
 
-char *comment_card_html_top = "<title>Comment Card for VMS Mosaic 4.2</title>\n\
+char *comment_card_html_top = "<title>Comment Card for VMS Mosaic 4.3</title>\n\
 <h1 align=center>\n\
 Please Help Keep VMS Mosaic Alive!\n\
 </h1><hr><h2>\n\
@@ -76,7 +76,7 @@ your taking the time to answer these few questions.\n\
 George Cook&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\n\
 </h2>\n\
 <hr>\n\
-<form method=\"POST\" action=\"http://wvnvms.wvnet.edu/htbin/cgi-mailto-mosaic/mosaic/Mosaic_4.2_Comment_Card\">\n\
+<form method=\"POST\" action=\"http://wvnvms.wvnet.edu/htbin/cgi-mailto-mosaic/mosaic/Mosaic_4.3_Comment_Card\">\n\
 <h3>\n\
 <ul>\n\
 <li>\n\
@@ -143,8 +143,7 @@ you would most like to see in VMS Mosaic:\n\
 <p>\n\
 Please enter your email address (optional):\n\
 <br>\n\
-<textarea name=\"email address\" rows=1 cols=60>\n\
-</textarea>\n\
+<input type=text name=\"email address\" size=60 maxlength=256>\n\
 <p>\n\
 Other comments and/or suggestions are welcomed:\n\
 <br>\n\

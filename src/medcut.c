@@ -96,10 +96,10 @@ static struct c_box_rec {
 	HashInfo *c_data;
 } C_boxes[256];
 
-static int BoxCount;
+static HashInfo *free_hash = (HashInfo *)NULL;
 static HashInfo *hash_ptr;
-HashInfo *free_hash = (HashInfo *)NULL;
 static HashInfo *tptr;
+static int BoxCount;
 static int Size;
 static int ColorCnt;
 static int NCells;
@@ -146,10 +146,7 @@ HashInfo *PixAddHash(int red, int green, int blue)
 	if (free_hash) {
 		hash_ptr = free_hash;
 		free_hash = free_hash->hash_next;
-	} else {
-		hash_ptr = (HashInfo *)	XtMalloc(sizeof(HashInfo));
-	}
-	if (!hash_ptr) {
+	} else if (!(hash_ptr = (HashInfo *) XtMalloc(sizeof(HashInfo)))) {
 		fprintf(stderr, "MedianCut: Cannot malloc color\n");
 		mo_exit();
 	}
@@ -225,8 +222,8 @@ static void CountColors(unsigned char *data, XColor *colrs, int *color_used)
 static void CountColors32x32x32(unsigned char *data, int MaxColors)
 {
 	unsigned char *dptr = data;
-	register int i;
 	unsigned int idx, x;
+	register int i;
 	int red, green, blue;
 	register HashInfo *tptr;
 	char color_used[32768];
@@ -308,7 +305,8 @@ static void SplitBox(int boxnum, int color_indx)
 {
 	HashInfo *low, *high, *data;
 	int med_cnt, split_val, low_cnt, high_cnt;
-	int Low_cnt = 0, High_cnt = 0;
+	int Low_cnt = 0;
+	int High_cnt = 0;
 	int Greater = BoxCount++;
 	int Lesser = boxnum;
 
@@ -467,11 +465,10 @@ static unsigned char *Convert24BitData(unsigned char *data)
 static void PrintColormap(int e_cnt, XColor *colrs)
 {
 	unsigned int Tred, Tgreen, Tblue;
-	int i;
+	int i, c_cnt;
 
 	for (i = 0; i < BoxCount; i++) {
-		int c_cnt = 0;
-
+		c_cnt = 0;
 		Tred = Tgreen = Tblue = 0;
 		tptr = C_boxes[i].c_data;
 		while (tptr) {

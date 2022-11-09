@@ -822,42 +822,52 @@ static XtResource resources[] = {
     offset(multiple_image_limit), XtRString, "12" },
 
   { "jpeg2000ErrorMessages", "Jpeg2000ErrorMessages", XtRBoolean,
-    sizeof(Boolean), offset(jpeg2000_error_messages), XtRString, "True" }
+    sizeof(Boolean), offset(jpeg2000_error_messages), XtRString, "True" },
+
+  /* New in 4.3 */
+  { "newsAuthenticationFile", "NewsAuthenticationFile", XtRString,
+    sizeof(char *), offset(news_authentication_file), XtRString, ".newsauth" },
+
+  { "printLandscape", "PrintLandscape", XtRBoolean, sizeof(Boolean),
+    offset(print_landscape), XtRString, "False" },
+
+  { "printDuplexTumbled", "PrintDuplexTumbled", XtRBoolean, sizeof(Boolean),
+    offset(print_duplex_tumbled), XtRString, "False" }
 };
 
 #undef offset
 
 static XrmOptionDescRec options[] = {
-  {"-fn",     "*fontList",            XrmoptionSepArg, NULL},
-  {"-ft",     "*XmText*fontList",     XrmoptionSepArg, NULL},
-  {"-fm",     "*menubar*fontList",    XrmoptionSepArg, NULL},
-  {"-home",   "*homeDocument",        XrmoptionSepArg, NULL},
-  {"-ngh",    "*useGlobalHistory",    XrmoptionNoArg,  "False"},
+  {"-fn",      "*fontList",            XrmoptionSepArg, NULL},
+  {"-ft",      "*XmText*fontList",     XrmoptionSepArg, NULL},
+  {"-fm",      "*menubar*fontList",    XrmoptionSepArg, NULL},
+  {"-home",    "*homeDocument",        XrmoptionSepArg, NULL},
+  {"-ngh",     "*useGlobalHistory",    XrmoptionNoArg,  "False"},
   /* Let Xt strip out -mono from stuff it considers interesting. */
-  {"-mono",   "*nothingUseful",       XrmoptionNoArg,  "True"},
-  {"-color",  "*nothingUseful",       XrmoptionNoArg,  "True"},
-  {"-ghbnie", "*gethostbynameIsEvil", XrmoptionNoArg,  "True"},
-  {"-iconic", "*initialWindowIconic", XrmoptionNoArg,  "True"},
-  {"-i",      "*initialWindowIconic", XrmoptionNoArg,  "True"},
+  {"-mono",    "*nothingUseful",       XrmoptionNoArg,  "True"},
+  {"-color",   "*nothingUseful",       XrmoptionNoArg,  "True"},
+  {"-ghbnie",  "*gethostbynameIsEvil", XrmoptionNoArg,  "True"},
+  {"-iconic",  "*initialWindowIconic", XrmoptionNoArg,  "True"},
+  {"-i",       "*initialWindowIconic", XrmoptionNoArg,  "True"},
   /* New in 1.1 */
   /* -nd isn't documented since defaults in the widget still take effect,
    * so the benefits of using it are kinda iffy (as if they weren't 
    * anyway)... */
-  {"-nd",     "*nothingUseful",       XrmoptionNoArg,  "True"},
-  {"-tmpdir", "*tmpDirectory",        XrmoptionSepArg, NULL},
-  {"-dil",    "*delayImageLoads",     XrmoptionNoArg,  "True"},
-  {"-ics",    "*imageCacheSize",      XrmoptionSepArg, NULL},
-  {"-protect","*protectMeFromMyself", XrmoptionNoArg,  "True"},
-  {"-kraut",  "*mailFilterCommand",   XrmoptionNoArg,  "kraut"},
+  {"-nd",      "*nothingUseful",       XrmoptionNoArg,  "True"},
+  {"-tmpdir",  "*tmpDirectory",        XrmoptionSepArg, NULL},
+  {"-dil",     "*delayImageLoads",     XrmoptionNoArg,  "True"},
+  {"-ics",     "*imageCacheSize",      XrmoptionSepArg, NULL},
+  {"-protect", "*protectMeFromMyself", XrmoptionNoArg,  "True"},
+  {"-kraut",   "*mailFilterCommand",   XrmoptionNoArg,  "kraut"},
 #ifdef __sgi
-  {"-dm",     "*debuggingMalloc",     XrmoptionNoArg,  "True"},
+  {"-dm",      "*debuggingMalloc",     XrmoptionNoArg,  "True"},
 #endif
-  {"-kiosk",  "*kiosk",               XrmoptionNoArg,  "True"},
-  {"-kioskPrint",  "*kioskPrint",     XrmoptionNoArg,  "True"},
-  {"-kioskNoExit",  "*kioskNoExit",   XrmoptionNoArg,  "True"},
-  {"-cciPort",  "*cciPort",   	      XrmoptionSepArg,  "0"},
-  {"-maxNumCCIConnect",  "*maxNumCCIConnect",  XrmoptionSepArg,  "0"},
-  {"-install",  "*nothingUseful",     XrmoptionNoArg,  "True"},
+  {"-kiosk",   "*kiosk",               XrmoptionNoArg,  "True"},
+  {"-kioskPrint", "*kioskPrint",       XrmoptionNoArg,  "True"},
+  {"-kioskNoExit", "*kioskNoExit",     XrmoptionNoArg,  "True"},
+  {"-cciPort",  "*cciPort",   	       XrmoptionSepArg,  "0"},
+  {"-maxNumCCIConnect", "*maxNumCCIConnect", XrmoptionSepArg, "0"},
+  {"-install",  "*nothingUseful",      XrmoptionNoArg,  "True"},
 };
 
 static String color_resources[] = {

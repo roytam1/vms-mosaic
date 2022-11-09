@@ -27,12 +27,12 @@ CC = CC
 .IFDEF PATHWAY
 .IFDEF DECC
 .INCLUDE [-.TWG]DECC_PREFIX_RULES.MMS
-CQUALC=/DECC/Precision=SINGLE $(CC_PREFIX_NO_SIN)
+CQUALC=/DECC/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2]) $(CC_PREFIX_NO_SIN)
 .ELSE
 .IFDEF DECCVAXC
-CQUALC=/VAXC/Precision=SINGLE
+CQUALC=/VAXC/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
-CQUALC=/Precision=SINGLE
+CQUALC=/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ENDIF
 .ENDIF
 
@@ -40,12 +40,12 @@ CQUALC=/Precision=SINGLE
 
 .IFDEF SOCKETSHR
 .IFDEF DECC
-CQUALC=/DECC/Precision=SINGLE/PREFIX=ALL
+CQUALC=/DECC/Precision=SINGLE/PREFIX=ALL/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
 .IFDEF DECCVAXC
-CQUALC=/VAXC/Precision=SINGLE
+CQUALC=/VAXC/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
-CQUALC=/Precision=SINGLE
+CQUALC=/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ENDIF
 .ENDIF
 
@@ -53,12 +53,12 @@ CQUALC=/Precision=SINGLE
 
 .IFDEF MULTINET
 .IFDEF DECC
-CQUALC=/DECC/Precision=SINGLE/Prefix=ANSI
+CQUALC=/DECC/Precision=SINGLE/Prefix=ANSI/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
 .IFDEF DECCVAXC
-CQUALC=/VAXC/Precision=SINGLE
+CQUALC=/VAXC/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
-CQUALC=/Precision=SINGLE
+CQUALC=/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ENDIF
 .ENDIF
 
@@ -66,15 +66,15 @@ CQUALC=/Precision=SINGLE
 
 !UCX
 .IFDEF DECC
-CQUALC=/DECC/Precision=SINGLE/Prefix=All
+CQUALC=/DECC/Precision=SINGLE/Prefix=All/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
 .IFDEF DECCVAXC
-CQUALC=/VAXC/Precision=SINGLE
+CQUALC=/VAXC/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ELSE
 .IFDEF GNUC
 CQUALC=
 .ELSE
-CQUALC=/Precision=SINGLE
+CQUALC=/Precision=SINGLE/INCLUDE=([-.GLIB],[-.LIBXML2])
 .ENDIF
 .ENDIF
 .ENDIF
@@ -87,6 +87,16 @@ CQUALC=/Precision=SINGLE
 CFLAGS = $(CQUALC)/NoOpt/Debug
 .ELSE
 CFLAGS = $(CQUALC)
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
 .ENDIF
 
 .FIRST
@@ -112,7 +122,7 @@ CFLAGS = $(CQUALC)
 .ENDIF
 
 OBJECTS = Odir:HTML-PSformat.obj Odir:HTML.obj Odir:HTMLapplet.obj \
- Odir:HTMLform.obj Odir:HTMLframe.obj Odir:HTMLformat.obj \
+ Odir:HTMLcss.obj Odir:HTMLform.obj Odir:HTMLframe.obj Odir:HTMLformat.obj \
  Odir:HTMLimages.obj Odir:HTMLlists.obj Odir:HTMLparse.obj Odir:HTMLfont.obj \
  Odir:HTMLtable.obj Odir:HTMLtext.obj Odir:HTMLwidgets.obj Odir:list.obj \
  Odir:HTMLimagemap.obj
@@ -128,13 +138,16 @@ Odir:HTML.obj          : HTML.c [-]config.h [-]config_$(WORK).h htmlp.h html.h \
 			 [-.libnut]system.h [-.libwww2]htbtree.h
 Odir:HTMLapplet.obj    : HTMLapplet.c [-]config.h htmlp.h html.h htmlPutil.h \
 			 htmlparse.h
+Odir:HTMLcss.obj       : HTMLcss.c [-]config.h htmlcss.h htmlp.h html.h \
+			 htmlPutil.h htmlparse.h
 Odir:HTMLfont.obj      : HTMLfont.c [-]config.h htmlp.h html.h htmlPutil.h \
-			 htmlfont.h htmlparse.h [-.libxmx]xmx.h
+			 htmlfont.h htmlparse.h list.h [-.libxmx]xmx.h
 Odir:HTMLform.obj      : HTMLform.c [-]config.h htmlp.h html.h htmlPutil.h \
 			 htmlform.h htmlparse.h [-.src]mosaic.h
 Odir:HTMLframe.obj     : HTMLframe.c [-]config.h htmlp.h html.h htmlPutil.h \
 			 htmlframe.h htmlparse.h
-Odir:HTMLformat.obj    : HTMLformat.c [-]config.h htmlp.h html.h htmlparse.h
+Odir:HTMLformat.obj    : HTMLformat.c [-]config.h htmlp.h html.h htmlparse.h \
+			 htmlcss.h
 Odir:HTMLimages.obj    : HTMLimages.c [-]config.h htmlp.h html.h noimage.xbm \
                          htmlparse.h htmlputil.h htmlfont.h \
 			 [-.src]img.h [-.src]fsdither.h [-.src]mo-www.h \
@@ -154,7 +167,7 @@ Odir:HTMLwidgets.obj   : HTMLwidgets.c [-]config.h [-]config_$(WORK).h \
 Odir:list.obj          : list.c listp.h list.h [-]config.h
 
 .c.obj :
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

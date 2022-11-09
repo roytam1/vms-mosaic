@@ -55,8 +55,8 @@
 
 /* Some part of this file is Copyright (C) 1996 - G.Dauphin
  *
- * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
- * The VMS Mosaic Project
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+ * 2011 The VMS Mosaic Project
  */
 
 #include <sys/time.h>
@@ -78,6 +78,7 @@ struct timezone Tz;
 #include "HTMLform.h"
 #include "HTMLframe.h"
 #include "HTMLfont.h"
+#include "HTMLcss.h"
 
 #include <Xm/Frame.h>
 #include <Xm/DrawingA.h>
@@ -85,7 +86,7 @@ struct timezone Tz;
 
 #if defined(MULTINET) && defined(__DECC) && (__VMS_VER >= 70000000)
 #define strdup  decc$strdup
-#endif /* VMS V7, VRH, GEC, MPJZ */
+#endif  /* VMS V7, VRH, GEC, MPJZ */
 extern char *strdup();
 
 #include "../libnut/str-tools.h"
@@ -341,7 +342,7 @@ static DivAlignType PopAlign()
 		free(aptr);
 	} else {
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) 
+		if (htmlwTrace || reportBugs)
 		       fprintf(stderr, "Warning: popping empty align stack!\n");
 #endif
 		align = AlignStack->align;
@@ -390,7 +391,7 @@ static char *TextAreaAddValue(char *value, char *text)
 	return(value);
 }
 
-/* Create anchor element to hold NAME or ID attribute */ 
+/* Create anchor element to hold NAME or ID attribute */
 void CreateAnchorElement(HTMLWidget hw, MarkInfo *mark,
 			 PhotoComposeContext *pcc)
 {
@@ -423,8 +424,8 @@ void CreateAnchorElement(HTMLWidget hw, MarkInfo *mark,
  * parsed HTML text we are formatting.
  * Some calls create elements that are added to the formatted element list.
  */
-static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
-			       PhotoComposeContext *pcc)
+void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
+			PhotoComposeContext *pcc)
 {
 	MarkInfo *mark = *mptr;
 	int type;
@@ -438,6 +439,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 	    (type != M_META) && (type != M_LINK) && (type != M_STYLE) &&
 	    (type != M_SCRIPT) && (type != M_DOC_HEAD) && (type != M_UNKNOWN) &&
 	    (type != M_MOSAIC)) {
+		/* Ignore expanded symbols in title text.  A fix still needs
+		 * to be done to ignore &bull; (M_MOSAIC) in title text.  It
+		 * also should ignore the following text mark. */
+		if ((type == M_FONT) &&
+		    (mark->is_end || !strcmp(mark->start, "FONT FACE=SYMBOL")))
+			return;
 		pcc->ignore = 0;
 		InDocHead = -1;
 		/* Finish processing the title; too late for </title> */
@@ -466,6 +473,9 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 	    (type != M_DOC_HEAD))
 		return;
 
+	/* Set it for use by Push/Pop font */
+	pcc->cur_mark = mark;
+
 	/* A block element ends current paragraph */
 	if (pcc->in_paragraph && (type >= M_ADDRESS)) {
 		ConditionalLineFeed(hw, 1, pcc);
@@ -475,7 +485,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			/* Was a floating image between empty <P></P> tags? */
 			if ((pcc->in_paragraph > 1) &&
 			    (pcc->para_y == pcc->y)) {
-				pcc->pf_lf_state = 0;
+				pcc->pf_lf_state = LF_MIDDLE;
 				ConditionalLineFeed(hw, 1, pcc);
 			}
 		}
@@ -514,31 +524,29 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			free(pcc->mark_title);
 			pcc->mark_title = NULL;
 		}
-		if (pcc->ignore && !pcc->current_select) {
-			/* Did we finish title already ? */
-			if (!hw->html.title) {
+		if (pcc->ignore) {
+			if (!pcc->current_select) {
+			    /* Did we finish title already ? */
+			    if (!hw->html.title) {
 				/* Did we start it yet? */
 				if (!TitleText) {
-					TitleText = strdup(mark->text);
+				    TitleText = strdup(mark->text);
 				} else {
-					TitleText = (char *)realloc(TitleText,
+				    TitleText = (char *)realloc(TitleText,
 							strlen(TitleText) +
 							strlen(mark->text) + 1);
-					strcat(TitleText, mark->text);
+				    strcat(TitleText, mark->text);
 				}
-			}
-			break;
-		}
-		if (pcc->ignore && pcc->current_select) {
-			if (pcc->current_select->option_buf) {
-				char *tptr = pcc->current_select->option_buf;
+			    }
+			} else if (pcc->current_select->option_buf) {
+			    char *sptr = pcc->current_select->option_buf;
 
-				tptr = (char *)realloc(tptr, strlen(tptr) +
-					      	       strlen(mark->text) + 1);
-				if (tptr) {
-					strcat(tptr, mark->text);
-					pcc->current_select->option_buf = tptr;
-				}
+			    sptr = (char *)realloc(sptr, strlen(sptr) +
+					      	   strlen(mark->text) + 1);
+			    if (sptr) {
+				strcat(sptr, mark->text);
+				pcc->current_select->option_buf = sptr;
+			    }
 			}
 			break;
 		}
@@ -566,36 +574,30 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		}
 		if (pcc->preformat) {
 			PartOfPreTextPlace(hw, *mptr, pcc);
-			break;
-		} 
-		PartOfTextPlace(hw, *mptr, pcc);
+		} else {
+			PartOfTextPlace(hw, *mptr, pcc);
+		}
 		break;
 	    case M_CENTER:
+		ConditionalLineFeed(hw, 1, pcc);
 		if (mark->is_end) {
-			ConditionalLineFeed(hw, 1, pcc);
 			pcc->div = PopAlign();
 		} else {
-			ConditionalLineFeed(hw, 1, pcc);
 			PushAlign(pcc->div);
 			pcc->div = DIV_ALIGN_CENTER;
 		}
 		break;
 	    case M_DIV:
+		if (!pcc->nobr) {
+			ConditionalLineFeed(hw, 1, pcc);
+		} else {
+			pcc->have_space_after = 1;
+		}
 		if (mark->is_end) {
-			if (!pcc->nobr) {
-				ConditionalLineFeed(hw, 1, pcc);
-			} else {
-				pcc->have_space_after = 1;
-			}
 			pcc->div = PopAlign();
 			pcc->in_div_hidden = False;
 			pcc->noformat = False;
 		} else {
-			if (!pcc->nobr) {
-				ConditionalLineFeed(hw, 1, pcc);
-			} else {
-				pcc->have_space_after = 1;
-			}
 			PushAlign(pcc->div);
 			if (tptr = ParseMarkTag(mark->start, MT_DIV, "ALIGN")) {
 				if (caseless_equal(tptr, "LEFT")) {
@@ -689,13 +691,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->ignore = 0;
 			if (!hw->html.title)
 				hw->html.title = TitleText;
-		        TitleText = NULL;
 			XtCallCallbackList((Widget)hw, hw->html.title_callback,
 				           hw->html.title);
 		} else {
 			pcc->ignore = 1;
-			TitleText = NULL;
 		}
+		TitleText = NULL;
 		break;
 	    /*
 	     * Formatting commands just change the current font.
@@ -919,12 +920,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		if (mark->is_end)
 			break;
 
-		/* JavaScript redirect */ 
+		/* JavaScript redirect */
 		if (!pcc->cw_only &&
 		    (tptr = ParseMarkTag(mark->start, MT_DOC_BODY, "onload"))) {
 			int len = strlen(tptr);
 
-			if ((len > 21) && 
+			if ((len > 21) &&
 			    !my_strncasecmp(tptr, "document.location='", 19)) {
 			    XtAppContext app_con;
 			    RefreshInfo *rinfo;
@@ -963,6 +964,11 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			int has_bg = 0;
 
 			InDocBody = 1;
+			if (tptr = ParseMarkTag(mark->start, MT_DOC_BODY,
+						"style")) {
+				HTMLParseCSS(tptr);
+				free(tptr);
+			}
 			if (hw->html.body_colors) {
 				int i;
 
@@ -992,14 +998,13 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 						       pcc->right_margin;
 				pcc->left_margin = atoi(tptr);
 				if (pcc->left_margin > 0) {
-					pcc->cur_line_width -= 2 *
-							       pcc->left_margin;
-					pcc->right_margin = pcc->left_margin;
+				    pcc->cur_line_width -= 2 * pcc->left_margin;
+				    pcc->right_margin = pcc->left_margin;
 				} else {
-					pcc->right_margin = pcc->left_margin =0;
+				    pcc->right_margin = pcc->left_margin = 0;
 				}
 				if (!hw->html.formatted_elements)
-					pcc->x = pcc->left_margin;
+				    pcc->x = pcc->left_margin;
 				free(tptr);
 			}
 			if (tptr = ParseMarkTag(mark->start, MT_DOC_BODY,
@@ -1020,10 +1025,9 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->cur_line_width += pcc->right_margin;
 				pcc->right_margin = atoi(tptr);
 				if (pcc->right_margin > 0) {
-					pcc->cur_line_width -=
-							      pcc->right_margin;
+				    pcc->cur_line_width -= pcc->right_margin;
 				} else {
-					pcc->right_margin = 0;
+				    pcc->right_margin = 0;
 				}
 				free(tptr);
 			}
@@ -1345,31 +1349,27 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		}
 		pcc->in_anchor = 1;
 		pcc->fixed_anchor_color = 0;
-		/* Only change the color of anchors with HREF tags, 
+		/* Only change the color of anchors with HREF tags,
 		 * because other anchors are not active.
 		 */
 		pcc->anchor_tag_ptr = *mptr;
-		tptr = ParseMarkTag(mark->start, MT_ANCHOR, AT_HREF);
-		if (tptr) { 
-			mark->anc_href = GetMarkText(tptr);
-			pcc->anchor_start = 1;
-		        if (hw->html.previously_visited_test &&
-			    ((*(visitTestProc)
-			     (hw->html.previously_visited_test))
-			     ((Widget)hw, tptr))) {
-			        pcc->fg = hw->html.visitedAnchor_fg;
-			        pcc->underline_number =
+		if (tptr = ParseMarkTag(mark->start, MT_ANCHOR, AT_HREF)) {
+		    mark->anc_href = GetMarkText(tptr);
+		    pcc->anchor_start = 1;
+		    if (hw->html.previously_visited_test &&
+			((*(visitTestProc)(hw->html.previously_visited_test))
+			 ((Widget)hw, tptr))) {
+			pcc->fg = hw->html.visitedAnchor_fg;
+			pcc->underline_number =
 					  hw->html.num_visitedAnchor_underlines;
-			        pcc->dashed_underlines =
+			pcc->dashed_underlines =
 					    hw->html.dashed_visitedAnchor_lines;
-			} else {
-				pcc->fg = hw->html.anchor_fg;
-				pcc->underline_number =
-					         hw->html.num_anchor_underlines;
-				pcc->dashed_underlines =
-						   hw->html.dashed_anchor_lines;
-			}
-			free(tptr);
+		    } else {
+			pcc->fg = hw->html.anchor_fg;
+			pcc->underline_number = hw->html.num_anchor_underlines;
+			pcc->dashed_underlines = hw->html.dashed_anchor_lines;
+		    }
+		    free(tptr);
 		}
 		if (pcc->in_underlined) {
 			pcc->dashed_underlines = False;
@@ -1416,15 +1416,13 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 
 	    /* Can only be inside a SELECT tag. */
 	    case M_OPTION:
-		if (mark->is_end)
-			return;
-		FormSelectOptionField(mptr, pcc);
+		if (!mark->is_end)
+			FormSelectOptionField(mptr, pcc);
 		break;
 
 	    case M_OPTGROUP:
-		if (mark->is_end)
-			return;
-		FormSelectOptgroup(mptr, pcc);
+		if (!mark->is_end)
+			FormSelectOptgroup(mptr, pcc);
 		break;
 
 	    /* Special INPUT tag. */
@@ -1454,9 +1452,8 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 
 	    /* Just insert the widget. */
 	    case M_INPUT:
-		if (mark->is_end)	/* No end mark on <input> */
-			return;
-		FormInputField(hw, mptr, pcc);
+		if (!mark->is_end)	/* No end mark on <input> */
+			FormInputField(hw, mptr, pcc);
 		break;
 
 	    case M_LABEL:
@@ -1486,13 +1483,11 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			/* Indicate LF needed at start of table */
 			pcc->in_table = -2;
 		}
+		if (pcc->in_table > -1)
+			ConditionalLineFeed(hw, 2, pcc);
 		if (mark->is_end) {
-			if (pcc->in_table > -1)
-				ConditionalLineFeed(hw, 2, pcc);
 			EndForm(hw, pcc);
 		} else {
-			if (pcc->in_table > -1)
-				ConditionalLineFeed(hw, 2, pcc);
 			BeginForm(hw, mptr, pcc);
 		}
 		break;
@@ -1524,10 +1519,10 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			 * Properly convert the Linefeed state variable
 			 * from preformat to formatted state.
 			 */
-			if (pcc->pf_lf_state == 2) {
-				pcc->pf_lf_state = 1;
+			if (pcc->pf_lf_state == LF_BLANK) {
+				pcc->pf_lf_state = LF_LEFT;
 			} else {
-				pcc->pf_lf_state = 0;
+				pcc->pf_lf_state = LF_MIDDLE;
 			}
 			pcc->preformat = 0;
 			ConditionalLineFeed(hw, 1, pcc);
@@ -1537,7 +1532,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			ConditionalLineFeed(hw, 1, pcc);
 			ConditionalLineFeed(hw, 2, pcc);
 			pcc->preformat = 1;
-			pcc->pf_lf_state = 2;
+			pcc->pf_lf_state = LF_BLANK;
 			PushFont(hw, pcc);
 			pcc->cur_font = hw->html.plain_font;
 			pcc->cur_font_type = PLAIN_FONT;
@@ -1680,7 +1675,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				    free(tptr);
 				}
 				BulletPlace(hw, pcc, 1);
-			}	
+			}
 		}
 		break;
 	    /* Description lists */
@@ -1813,16 +1808,15 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		ConditionalLineFeed(hw, 1, pcc);
 
 		if (!mark_tmp.text) {
-			/* Must be writeable strings for ParseMarkTag */
-			mark_tmp.text = strdup(
+		    /* Must be writeable strings for ParseMarkTag */
+		    mark_tmp.text = strdup(
 		        "This is a searchable index.  Enter search keywords: ");
-			mark_tmp.start = strdup(
-					      "INPUT SIZE=25 NAME=\"isindex\"");
+		    mark_tmp.start = strdup("INPUT SIZE=25 NAME=\"isindex\"");
 		}
 		/* Display text. */
 		PartOfTextPlace(hw, &mark_tmp, pcc);
 
-		/* Fake up the text INPUT tag.  */
+		/* Fake up the text INPUT tag. */
 		{
 		    /* Must keep CreateAnchorElement from touching dummy mark */
 		    Boolean save = pcc->in_label;
@@ -1852,15 +1846,15 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		if (tptr = ParseMarkTag(mark->start, MT_LINEBREAK, "clear")) {
 			if (!my_strcasecmp(tptr, "all")) {
 				if (pcc->float_right)
-					pcc->float_right->type = -1;
+					pcc->float_right->type = FLOAT_CLEAR;
 				if (pcc->float_left)
-					pcc->float_left->type = -1;
+					pcc->float_left->type = FLOAT_CLEAR;
 			} else if (!my_strcasecmp(tptr, "right")) {
 				if (pcc->float_right)
-					pcc->float_right->type = -1;
+					pcc->float_right->type = FLOAT_CLEAR;
 			} else if (!my_strcasecmp(tptr, "left")) {
 				if (pcc->float_left)
-					pcc->float_left->type = -1;
+					pcc->float_left->type = FLOAT_CLEAR;
 			}
 			free(tptr);
 		}
@@ -1898,11 +1892,15 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			pcc->div = PopAlign();
 			PopFontSaved(hw, pcc);
 			hw->html.font_save_count = popsave;
+			/* Need to reset current mark before popping font */
+			pcc->cur_mark = mark;
 			pcc->cur_font = PopFont(hw, pcc);
 		}
 		break;
+	    case M_EMBED:
 	    case M_FIGURE:
 	    case M_IMAGE:
+	    case M_OBJECT:
 		if (mark->is_end)
 			break;
 		if (pcc->button_buf && !pcc->cw_only) {
@@ -1918,7 +1916,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				if (!my_strcasecmp(tptr2, "reset"))
 					strcat(tptr, "=2");
 				free(tptr2);
-			}				
+			}
 			tptr2 = mark->start;
 			mark->start = tptr;
 			ImagePlace(hw, *mptr, pcc);
@@ -1932,15 +1930,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		}
 		break;
 	    case M_APPLET:
-		if (mark->is_end)
-			break;
-		if (appletSupportEnabled)
+		if (!mark->is_end && appletSupportEnabled)
 			AppletPlace(hw, mptr, pcc, 0);
 		break;
 	    case M_SMALL:
 		if (mark->is_end) {
 			pcc->cur_font = PopFont(hw, pcc);
-			SetFontSize(hw, pcc, 0);
 		} else {
 			PushFont(hw, pcc);
 			if (pcc->cur_font_size > 2) {
@@ -1948,13 +1943,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			} else {
 				pcc->cur_font_size = 1;
 			}
-			SetFontSize(hw, pcc, 0);
 		}
+		SetFontSize(hw, pcc, 0);
 		break;
 	    case M_BIG:
 		if (mark->is_end) {
 			pcc->cur_font = PopFont(hw, pcc);
-			SetFontSize(hw, pcc, 0);
 		} else {
 			PushFont(hw, pcc);
 			if (pcc->cur_font_size < 5) {
@@ -1964,8 +1958,8 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			} else {
 				pcc->cur_font_size = 7;
 			}
-			SetFontSize(hw, pcc, 0);
 		}
+		SetFontSize(hw, pcc, 0);
 		break;
 	    case M_BLINK:
 		if (mark->is_end) {
@@ -2029,7 +2023,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				if (tptr) {
 				    char *face = strtok(tptr, ", ");
 
-				    pcc->cur_font_family = TIMES;
+				    pcc->cur_font_family = hw->html.font_family;
 				    while (face) {
 					if (!my_strncasecmp(face, "Times", 5) ||
 					    !my_strncasecmp(face, "Book", 4) ||
@@ -2287,7 +2281,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 					ConditionalLineFeed(hw, 1, pcc);
 					vertical = 1;
 					pcc->is_bol = False;
-					pcc->pf_lf_state = 0;
+					pcc->pf_lf_state = LF_MIDDLE;
 					height = atoi(sptr);
 					if (height <= 0)
 						height = 1;
@@ -2364,7 +2358,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			    eptr->underline_number = 0;
 			    AdjustBaseLine(eptr, pcc);
 			}
-		} else {                   
+		} else {
 			if (pcc->computed_min_x < (width + pcc->eoffsetx +
 			    			   pcc->left_margin))
                 		pcc->computed_min_x = width + pcc->eoffsetx +
@@ -2374,8 +2368,8 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->computed_min_x = pcc->nobr_x + width;
 			if ((pcc->x + width) > pcc->computed_max_x)
                 		pcc->computed_max_x = pcc->x + width;
-                	if (pcc->cur_line_height < height)       
-				pcc->cur_line_height = height;        
+                	if (pcc->cur_line_height < height)
+				pcc->cur_line_height = height;
 	        }
 		if (vertical) {
 			ConditionalLineFeed(hw, 1, pcc);
@@ -2385,13 +2379,13 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_left;
 			pcc->float_left = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width;
 			pcc->left_margin += width;
 			pcc->cur_line_width -= width;
 			tmp_float->y = pcc->y + height;
 			pcc->is_bol = True;
-			pcc->pf_lf_state = 1;
+			pcc->pf_lf_state = LF_LEFT;
 			pcc->x += width;
 			if (pcc->in_paragraph)
 				pcc->in_paragraph++;
@@ -2401,7 +2395,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_right;
 			pcc->float_right = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width;
 			pcc->right_margin += width;
 			pcc->cur_line_width -= width;
@@ -2415,12 +2409,12 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->nobr_x += width;
 			pcc->have_space_after = 0;
 			pcc->is_bol = False;
-			pcc->pf_lf_state = 0;
+			pcc->pf_lf_state = LF_MIDDLE;
 		}
 		break;
 	    }
 	    /* The "IFRAME in tables" support works in the general case,
-             * but may have problems otherwise
+             * but may have problems otherwise.
 	     */
 	    case M_IFRAME: {
 		int width = 1;
@@ -2452,9 +2446,11 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				}
 				sptr++;
 			}
-			free(tptr);
-			if (sptr)
+			if (*sptr) {
+				free(tptr);
 				break;
+			}
+			free(tptr);
 		}
 		frame = calloc(1, sizeof(FrameInfo));
 
@@ -2569,18 +2565,16 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				frame->frame_height = height = cbs.doc_height;
 #ifndef DISABLE_TRACE
 				if (htmlwTrace)
-					fprintf(stderr,
-						"Computed IFRAME H=%d\n",
-					        frame->frame_height);
+				    fprintf(stderr, "Computed IFRAME H=%d\n",
+					    frame->frame_height);
 #endif
 			}
 			if (!found_w) {
 				frame->frame_width = width = cbs.doc_width;
 #ifndef DISABLE_TRACE
 				if (htmlwTrace)
-					fprintf(stderr,
-						"Computed IFRAME W=%d\n",
-					        frame->frame_width);
+				    fprintf(stderr, "Computed IFRAME W=%d\n",
+					    frame->frame_width);
 #endif
 			}
 		}
@@ -2619,19 +2613,18 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 		    (!pcc->is_bol || pcc->float_right) &&
 		    ((pcc->x + width) > (pcc->eoffsetx +
 		      pcc->left_margin + pcc->cur_line_width))) {
-			ConditionalLineFeed(hw, 1, pcc);
-			/* If still no room, then have a previous right
-			 * floating object.  Force a linefeed past it. */
-			if (pcc->float_right && ((pcc->x + width) >
-			     (pcc->eoffsetx + pcc->left_margin +
-			      pcc->cur_line_width))) {
-				if (pcc->cur_line_height <
-				    (pcc->float_right->y - pcc->y + 1)) {
-					pcc->cur_line_height =
-					       pcc->float_right->y - pcc->y + 1;
-					LinefeedPlace(hw, pcc);
-				}
-			}
+		    ConditionalLineFeed(hw, 1, pcc);
+
+		    /* If still no room, then have a previous right
+		     * floating object.  Force a linefeed past it. */
+		    if (pcc->float_right &&
+			((pcc->x + width) > (pcc->eoffsetx + pcc->left_margin +
+					     pcc->cur_line_width)) &&
+			(pcc->cur_line_height <
+			 (pcc->float_right->y - pcc->y + 1))) {
+			pcc->cur_line_height = pcc->float_right->y - pcc->y + 1;
+			LinefeedPlace(hw, pcc);
+		    }
 		}
 		if (aligned == HALIGN_RIGHT) {
 		    orig_x = pcc->x;
@@ -2646,11 +2639,11 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			orig_x = pcc->eoffsetx + pcc->left_margin;
 			if (width < (pcc->eoffsetx +
 				     pcc->left_margin + pcc->cur_line_width)) {
-				pcc->x = pcc->eoffsetx + pcc->left_margin +
-					 pcc->cur_line_width - width;
+			    pcc->x = pcc->eoffsetx + pcc->left_margin +
+				     pcc->cur_line_width - width;
 			} else {
-				/* No room to do any right alignment */
-				aligned = ALIGN_NONE;
+			    /* No room to do any right alignment */
+			    aligned = ALIGN_NONE;
 			}
 		    }
 		}
@@ -2667,7 +2660,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				frame->aligned = 1;
 			}
 			eptr->frame = frame;
-		} else {                   
+		} else {
 			if (pcc->computed_min_x < (width + pcc->eoffsetx +
 			    			   pcc->left_margin))
                 		pcc->computed_min_x = width + pcc->eoffsetx +
@@ -2677,8 +2670,8 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->computed_min_x = pcc->nobr_x + width;
 			if ((pcc->x + width) > pcc->computed_max_x)
                 		pcc->computed_max_x = pcc->x + width;
-                	if (pcc->cur_line_height < height)       
-				pcc->cur_line_height = height;        
+                	if (pcc->cur_line_height < height)
+				pcc->cur_line_height = height;
 	        }
 		if (aligned == HALIGN_LEFT) {
 			FloatRec *tmp_float;
@@ -2686,13 +2679,13 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_left;
 			pcc->float_left = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width;
 			pcc->left_margin += width;
 			pcc->cur_line_width -= width;
 			tmp_float->y = pcc->y + height;
 			pcc->is_bol = True;
-			pcc->pf_lf_state = 1;
+			pcc->pf_lf_state = LF_LEFT;
 			pcc->x += width;
 			if (pcc->in_paragraph)
 				pcc->in_paragraph++;
@@ -2702,7 +2695,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 			tmp_float = (FloatRec *)malloc(sizeof(FloatRec));
 			tmp_float->next = pcc->float_right;
 			pcc->float_right = tmp_float;
-			tmp_float->type = 1;
+			tmp_float->type = FLOAT_IMAGE;
 			tmp_float->marg = width;
 			pcc->right_margin += width;
 			pcc->cur_line_width -= width;
@@ -2716,7 +2709,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 				pcc->nobr_x += width;
 			pcc->have_space_after = 0;
 			pcc->is_bol = False;
-			pcc->pf_lf_state = 0;
+			pcc->pf_lf_state = LF_MIDDLE;
 		}
 		/* Skip contents between IFRAME tags */
 		for (mark = mark->next; mark; mark = mark->next) {
@@ -2762,11 +2755,20 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 	    /* Mosaic internal tags */
 	    case M_MOSAIC:
 		if (!pcc->ignore && (InDocHead != 1)) {
+			int save_level = pcc->indent_level;
+
 			if (tptr = ParseMarkTag(mark->start, MT_MOSAIC,
 						"BULLET")) {
+				pcc->indent_level = 1;
+				BulletPlace(hw, pcc, 0);
+				free(tptr);
+			} else if (tptr = ParseMarkTag(mark->start, MT_MOSAIC,
+						       "BLOCK")) {
+				pcc->indent_level = 2;
 				BulletPlace(hw, pcc, 0);
 				free(tptr);
 			}
+			pcc->indent_level = save_level;
 		}
 		break;
 
@@ -2810,7 +2812,7 @@ static void TriggerMarkChanges(HTMLWidget hw, MarkInfo **mptr,
 
 
 /* Format all the objects in the passed Widget's parsed object list to fit
- * the locally global Width.  Passes in the x,y coords of where to start 
+ * the locally global Width.  Passes in the x,y coords of where to start
  * placing the formatted text.  Returns the ending x,y in same variables.
  * The locally global variables are assumed to have been initialized
  * before this function was called.
@@ -2833,9 +2835,9 @@ void FormatChunk(HTMLWidget hw, MarkInfo *start_mark, MarkInfo *end_mark,
 	/* Now clean up any outstanding floating alignment */
 	if ((pcc->float_left || pcc->float_right) && !pcc->ignore_float) {
 		if (pcc->float_right)
-			pcc->float_right->type = -1;
+			pcc->float_right->type = FLOAT_CLEAR;
 		if (pcc->float_left)
-			pcc->float_left->type = -1;
+			pcc->float_left->type = FLOAT_CLEAR;
 		LinefeedPlace(hw, pcc);
 	}
 }
@@ -2886,7 +2888,7 @@ int FormatAll(HTMLWidget hw, int *Fwidth)
 	pcc.margin_height = hw->html.margin_height;
 	pcc.is_bol = True;	/* We are at begin of line */
 	pcc.anchor_tag_ptr = NULL_ANCHOR_PTR;	/* Are we in anchor? */
-	pcc.pf_lf_state = 2;	/* Linefeed state is at start of line */
+	pcc.pf_lf_state = LF_BLANK;  /* Linefeed state is at start of line */
 	pcc.div = DIV_ALIGN_NONE;
 	pcc.valign = VALIGN_MIDDLE;
 	pcc.fg = hw->manager.foreground;
@@ -2897,7 +2899,7 @@ int FormatAll(HTMLWidget hw, int *Fwidth)
 	pcc.eoffsetx = 0;	* I am the master element *
 	pcc.cur_baseline = 0;	* All objects in a line must have the same
 				* baseline.  If baseline changes then adjust
-				* pcc.y, pcc.cur_line_height 
+				* pcc.y, pcc.cur_line_height
 				* and the y value in each element of line *
 	pcc.cur_line_height = 0;
 	pcc.max_line_ascent = 0;
@@ -2933,6 +2935,7 @@ int FormatAll(HTMLWidget hw, int *Fwidth)
 	pcc.in_div_hidden = False;
 	pcc.in_table = False;
 	pcc.noformat = False;
+	pcc.nolinefeeds = False;
 	pcc.last_progressive_ele = NULL;
 	pcc.in_anchor = False;
 	pcc.fixed_anchor_color = False;
@@ -2999,7 +3002,7 @@ int FormatAll(HTMLWidget hw, int *Fwidth)
 	hw->html.select_start = hw->html.select_end = NULL;
 	hw->html.new_start = hw->html.new_end = NULL;
 
-	/* Get correct font in html.font and pcc.cur_font */ 
+	/* Get correct font in html.font and pcc.cur_font */
 	InitFontStack(hw, &pcc);
 	SetFontSize(hw, &pcc, 0);
 
@@ -3032,7 +3035,7 @@ int FormatAll(HTMLWidget hw, int *Fwidth)
 	 */
 	if (hw->html.html_footer_objects) {
 		pcc.preformat = 0;
-		pcc.pf_lf_state = 0;
+		pcc.pf_lf_state = LF_MIDDLE;
 		LinefeedPlace(hw, &pcc);
 		FormatChunk(hw, hw->html.html_footer_objects, NULL, &pcc);
 	}
@@ -3172,8 +3175,8 @@ ElemInfo *LocateElement(HTMLWidget hw, int x, int y, int *pos)
 		    case E_IMAGE:
 			/* Ignore if a blank image */
 			if (eptr->pic_data->fetched ||
-			    (eptr->pic_data->internal &&
-			     (eptr->pic_data->internal != 3))) {
+			    ((eptr->pic_data->internal != INT_NO) &&
+			     (eptr->pic_data->internal != INT_BLANK))) {
 				if ((x >= tx1) && (x <= tx2) && (y >= ty1) &&
 				    (y <= ty2))
 					rptr = eptr;
@@ -3298,7 +3301,6 @@ char *ParseTextToString(ElemInfo *elist, ElemInfo *startp, ElemInfo *endp,
 			} else {
 				tptr = (char *)eptr->edata;
 			}
-
 			if (newline) {
 				spaces = (eptr->x - lmargin) / space_width;
 				if (spaces < 0)
@@ -3324,7 +3326,6 @@ char *ParseTextToString(ElemInfo *elist, ElemInfo *startp, ElemInfo *endp,
 			} else {
 				tptr = (char *)eptr->edata;
 			}
-
 			if (eptr == end) {
 				tend = (char *)(eptr->edata + end_pos + 1);
 				tchar = *tend;
@@ -3413,7 +3414,7 @@ char *ParseTextToPrettyString(HTMLWidget hw, ElemInfo *elist,
 					spaces = 0;
 				lead_spaces = spaces;
 				for (i = 0; i < spaces; i++)
-					strcpy_or_grow(&line_buf, &l_slen, 
+					strcpy_or_grow(&line_buf, &l_slen,
 						       &l_blen, " ");
 			}
 			newline = 0;
@@ -3639,7 +3640,7 @@ int DocumentWidth(HTMLWidget hw, MarkInfo *list)
 	int pcnt, lcnt;
 	char *ptr;
 
-	/* Loop through object list looking at the plain, preformatted text */
+	/* Loop through object list looking at any plain, preformatted text */
 	while (mptr) {
 		/* All text blocks between the starting and ending
 		 * plain and pre text markers are plain text blocks.
@@ -3667,7 +3668,7 @@ int DocumentWidth(HTMLWidget hw, MarkInfo *list)
 			} else {
 				listing_text++;
 			}
-			lcnt = 	pcnt = 0;
+			lcnt = pcnt = 0;
 		}
 		/* If this is a plain text block, add to line length.
 		 * Find the Max of all line lengths.

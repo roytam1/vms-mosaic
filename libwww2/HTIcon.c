@@ -9,6 +9,7 @@
 ** Note: This routine guarantee's to return something!
 ** 
 */
+
 #include "../config.h"
 #include "HTFile.h"
 #include "HTAtom.h"
@@ -28,7 +29,7 @@ static struct typemap type_map[] = {
   {"video",       "internal-gopher-movie"},
   {"directory",   "internal-gopher-menu"},
   {"unknown",     "internal-gopher-unknown"},
-  {"EOFEOF",      "EOFEOF"}
+  {NULL,	  NULL}
 };
 
 char *HTgeticonname(HTFormat format, char *defaultformat)
@@ -39,16 +40,15 @@ char *HTgeticonname(HTFormat format, char *defaultformat)
   
   if (format) {
       strcpy(subtype, format->name);
-      ptr = strchr(subtype, '/');
-      if (ptr) 
+      if (ptr = strchr(subtype, '/'))
           *ptr = '\0';
-   } else {
+  } else {
       subtype[0] = '\0';
   }
   
   ptr = NULL;
   
-  for (count = 0; strcmp(type_map[count].image, "EOFEOF"); count++) {
+  for (count = 0; type_map[count].format; count++) {
       if (!strcmp(type_map[count].format, subtype))
           return type_map[count].image;
       if (!strcmp(type_map[count].format, defaultformat))

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2002, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -82,7 +82,9 @@ typedef enum {
 	DIV_ALIGN_NONE,
 	DIV_ALIGN_LEFT,
 	DIV_ALIGN_CENTER,
-	DIV_ALIGN_RIGHT
+	DIV_ALIGN_RIGHT,
+	DIV_TABLE_LEFT,
+	DIV_TABLE_RIGHT,
 } DivAlignType;
 
 typedef int (*visitTestProc)(Widget, char*);
@@ -212,6 +214,19 @@ typedef enum {
 	HALIGN_RIGHT
 } AlignType;
 
+typedef enum {
+	NOT_RAN = 0,
+	RUNNING,
+	RAN
+} AnimRunState;
+
+typedef enum {
+	INT_NO = 0,
+	INT_YES,
+	INT_NOIMAGE,
+	INT_BLANK
+} InternalImageType;
+
 typedef struct image_rec {
         char *src;
 	char *alt_text;		/* Alternative text */
@@ -231,9 +246,9 @@ typedef struct image_rec {
         AreaInfo *area;
 	int ismap;
 	FormInfo *fptr;
-	int internal;
+	InternalImageType internal;
 	int delayed;
-	int urldelayed;
+	Boolean urldelayed;
 	int fetched;
 	int cached;
 	int num_colors;
@@ -246,32 +261,32 @@ typedef struct image_rec {
 	Pixmap image;
 	Pixmap clip;
 	int cw_only;
-	char *text;		/* Special ISMAP Form NAME text */
-	int is_bg_image;	/* Is it the background image? */
-	struct anim_rec *anim_info; /* Animation stuff */
-	int delay;		/* Image display time */
-	int disposal;		/* GIF image disposal */
-	int iterations;		/* Animation cycles */
-	int x;			/* x and y offsets for animations */
+	char *text;		 /* Special ISMAP Form NAME text */
+	int is_bg_image;	 /* Is it the background image? */
+	struct anim_rec *anim_info;  /* Animation stuff */
+	int delay;		 /* Image display time */
+	int disposal;		 /* GIF image disposal */
+	int iterations;		 /* Animation cycles */
+	int x;			 /* x and y offsets for animations */
 	int y;
-	int awidth;		/* Animation screen size */
+	int awidth;		 /* Animation screen size */
 	int aheight;
-	int running;		/* 1 = running, 2 = ran, 0 = not started */
-	Pixmap anim_image;	/* Current animation Pixmap */
-	Pixmap bg_image;	/* Saved background Pixmap for animation */
-	int bg_visible;		/* Is the background fully within view? */
-	int has_anim_image;	/* 0 = None, -1 = empty, 1 = in use */
-	struct image_rec *last;	/* Last image of animation */	
+	AnimRunState running;	 /* not started, running or ran */
+	Pixmap anim_image;	 /* Current animation Pixmap */
+	Pixmap bg_image;	 /* Saved background Pixmap for animation */
+	int bg_visible;		 /* Is the background fully within view? */
+	int has_anim_image;	 /* 0 = None, -1 = empty, 1 = in use */
+	struct image_rec *last;	 /* Last image of animation */
 	struct image_rec *prev;
-	struct image_rec *next;	/* Linked list of animation images */
+	struct image_rec *next;	 /* Linked list of animation images */
 	int aligned;
-	XtIntervalId timer;	/* Animation timer id */
-	unsigned char *alpha;	/* Alpha channel */
-	unsigned char *alpha_image_data; /* Alpha background image data */
-	int saved_x;		/* Current Eleminfo x,y of image with alpha */
+	XtIntervalId timer;	 /* Animation timer id */
+	unsigned char *alpha;	 /* Alpha channel */
+	unsigned char *alpha_image_data;  /* Alpha background image data */
+	int saved_x;		 /* Current Eleminfo x,y of image with alpha */
 	int saved_y;
-	unsigned char *rgb;	/* Used by ImageQuantize callback */
-	XColor *ori_colrs;	/* Original colors for Alpha channel use */
+	unsigned char *rgb;	 /* Used by ImageQuantize callback */
+	XColor *ori_colrs;	 /* Original colors for Alpha channel use */
 	int ori_num_colors;
 } ImageInfo;
 
@@ -369,9 +384,9 @@ typedef struct _RowList {
         int low_cur_line_num;
 } RowList;
 
-typedef struct {
-        unsigned int halign;
-        unsigned int valign;
+typedef struct _ColElemInfo {
+        AlignType halign;
+        AlignType valign;
         int rel_width;
 	int abs_width;
 	int prop_width;
@@ -394,7 +409,8 @@ typedef enum {
 	GROUPS,
 	ROWS,
 	COLS,
-	ALL
+	ALL,
+	BORDERS
 } RulesType;
 
 typedef struct _TableRec {
@@ -409,7 +425,7 @@ typedef struct _TableRec {
 	int num_row;
 	MarkInfo *caption_start_mark;
 	MarkInfo *caption_end_mark;
-	int captionAlignment;
+	AlignType captionAlignment;
 	int captionIsLegend;
 	MarkInfo *tb_start_mark;
 	MarkInfo *tb_end_mark;
@@ -541,6 +557,7 @@ typedef struct font_rec {
 	CurFontFamily family;
 	unsigned long color;
 	Boolean color_ch;
+	MarkInfo *mark;
         struct font_rec *next;
 } FontRec;
 
@@ -579,30 +596,30 @@ typedef enum {
  */
 
 typedef struct frame_rec {
-	int		frame_type;	/* FRAMESET_TYPE, FRAME_TYPE */
-	FrameScrolling	frame_scroll_type; /* Frame scrolling */
-	int             frame_border;   /* Add a border to the frames? */
-        int		frame_x;        /* Computed frame x-position */
-        int		frame_y;        /* Computed frame y-position */
-        Dimension	frame_width;    /* Computed frame width */
-        Dimension	frame_height;   /* Computed frame height */
-	Dimension       frame_size_s;	/* Saved frame size */
-	FrameSize       frame_size_type; /* Horizontal frame size spec */
-        String   	frame_src;      /* Source document */
-        String   	frame_name;     /* Internal frame name */
+	int		frame_type;	      /* FRAMESET_TYPE, FRAME_TYPE */
+	FrameScrolling	frame_scroll_type;    /* Frame scrolling */
+	int             frame_border;         /* Add a border to the frames? */
+        int		frame_x;              /* Computed frame x-position */
+        int		frame_y;              /* Computed frame y-position */
+        Dimension	frame_width;          /* Computed frame width */
+        Dimension	frame_height;         /* Computed frame height */
+	Dimension       frame_size_s;	      /* Saved frame size */
+	FrameSize       frame_size_type;      /* Horizontal frame size spec */
+        String   	frame_src;            /* Source document */
+        String   	frame_name;           /* Internal frame name */
         Dimension	frame_margin_width;   /* Frame margin width */
         Dimension	frame_margin_height;  /* Frame margin height */
-        Boolean  	frame_resize;   /* May we resize this frame? */
-	struct frame_rec *frame_parent_frameset; /* Parent frameset, if any */
-        struct frame_rec *frame_next;   /* Next frame child, if any */
-        struct frame_rec *frame_children; /* List of frames */
-        FramesetLayout  frame_layout;	/* Frameset layout policy */
+        Boolean  	frame_resize;         /* May we resize this frame? */
+	struct frame_rec *frame_parent_frameset;  /* Parent frameset, if any */
+        struct frame_rec *frame_next;         /* Next frame child, if any */
+        struct frame_rec *frame_children;     /* List of frames */
+        FramesetLayout  frame_layout;	      /* Frameset layout policy */
 	/* IFRAME stuff */
 	Widget		iframe;
         Boolean		seeable;
 	Boolean 	mapped;
-	Boolean		aligned;	/* Is it left/right aligned? */
-	Boolean		cw_only;	/* Compute size only? */
+	Boolean		aligned;	      /* Is it left/right aligned? */
+	Boolean		cw_only;	      /* Compute size only? */
 } FrameInfo;
 
 /*
@@ -691,9 +708,9 @@ typedef struct {
 #define	WbNcharSet		"charSet"
 #define	WbNtitleText		"titleText"
 #define	WbNanchorUnderlines	"anchorUnderlines"
-#define	WbNvisitedAnchorUnderlines	 "visitedAnchorUnderlines"
-#define	WbNdashedAnchorUnderlines	 "dashedAnchorUnderlines"
-#define	WbNdashVisitedAnchorUnderlines   "dashVisitedAnchorUnderlines"
+#define	WbNvisitedAnchorUnderlines	"visitedAnchorUnderlines"
+#define	WbNdashedAnchorUnderlines	"dashedAnchorUnderlines"
+#define	WbNdashVisitedAnchorUnderlines  "dashVisitedAnchorUnderlines"
 #define	WbNanchorColor		"anchorColor"
 #define	WbNvisitedAnchorColor	"visitedAnchorColor"
 #define	WbNactiveAnchorFG	"activeAnchorFG"
@@ -731,7 +748,7 @@ typedef struct {
 #define WbNimageQuantizeCallback "imageQuantizeCallback"
 #define WbNgetUrlDataCB		"getUrlDataCB"
 
-#define	WbNpercentVerticalSpace "percentVerticalSpace"
+#define	WbNpercentVerticalSpace  "percentVerticalSpace"
 #define WbNpointerMotionCallback "pointerMotionCallback"
 #define WbNview			 "view"
 #define WbNverticalScrollBar	 "verticalScrollBar"
@@ -752,6 +769,7 @@ typedef struct {
 #define WbNscrollBars		 "scrollBars"
 #define WbNmultiImage		 "multiImage"
 #define WbNmultiLoadCallback	 "multiLoadCallback"
+#define WbNredrawCallback	 "redrawCallback"
 /*
  * New resource classes
  */
@@ -763,9 +781,9 @@ typedef struct {
 #define	WbCCharSet		"CharSet"
 #define	WbCTitleText		"TitleText"
 #define	WbCAnchorUnderlines	"AnchorUnderlines"
-#define	WbCVisitedAnchorUnderlines	 "VisitedAnchorUnderlines"
-#define	WbCDashedAnchorUnderlines	 "DashedAnchorUnderlines"
-#define	WbCDashVisitedAnchorUnderlines   "DashVisitedAnchorUnderlines"
+#define	WbCVisitedAnchorUnderlines	"VisitedAnchorUnderlines"
+#define	WbCDashedAnchorUnderlines	"DashedAnchorUnderlines"
+#define	WbCDashVisitedAnchorUnderlines  "DashVisitedAnchorUnderlines"
 #define	WbCAnchorColor		"AnchorColor"
 #define	WbCVisitedAnchorColor	"VisitedAnchorColor"
 #define	WbCActiveAnchorFG	"ActiveAnchorFG"
@@ -799,7 +817,7 @@ typedef struct {
 #define WbCImageQuantizeCallback "ImageQuantizeCallback"
 #define WbCGetUrlDataCB		"GetUrlDataCB"
 
-#define	WbCPercentVerticalSpace "PercentVerticalSpace"
+#define	WbCPercentVerticalSpace  "PercentVerticalSpace"
 #define WbCPointerMotionCallback "PointerMotionCallback"
 #define WbCVerticalScrollOnRight "VerticalScrollOnRight"
 #define WbCHorizontalScrollOnTop "HorizontalScrollOnTop"
@@ -816,7 +834,6 @@ typedef struct {
 #define WbCFontFamily            "FontFamily"
 #define WbCBlinkingText          "BlinkingText"
 #define WbCBlinkTime             "BlinkTime"
-#define WbCFrameCallback	 "FrameCallback"
 #define WbCFrameSupport		 "FrameSupport"
 #define WbCIsFrame		 "IsFrame"
 #define WbCScrollBars		 "ScrollBars"

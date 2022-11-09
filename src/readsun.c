@@ -53,7 +53,7 @@ typedef unsigned char byte;
 			  + (((unsigned long)(*(((byte *)(PTR))+2)))<< 8)      \
 			  + (                 *(((byte *)(PTR))+3)      ) )
 
-struct rheader {
+typedef struct rheader_rec {
   unsigned char magic[4];    /* Magic number */
   unsigned char width[4];    /* Width of image in pixels */
   unsigned char height[4];   /* Height of image in pixels */
@@ -62,7 +62,7 @@ struct rheader {
   unsigned char type[4];     /* Format of file */
   unsigned char maptype[4];  /* Type of colormap */
   unsigned char maplen[4];   /* Length of colormap in bytes */
-};
+} Rheader;
 
 /* Following the header is the colormap (unless maplen is zero) then
  * the image.  Each row of the image is rounded to 2 bytes.
@@ -90,7 +90,7 @@ struct rheader {
 #define RESC 128   /* run-length encoding escape character */
 
 
-static void babble(struct rheader *header)
+static void babble(Rheader *header)
 {
   fprintf(stderr, "sunLoad: Image is");
   switch (memToVal(header->type, 4)) {
@@ -193,7 +193,7 @@ static Boolean sunread(FILE *fp, byte *buf, unsigned int len, unsigned int enc)
 
 static byte *sunLoad(FILE *fp, int *w, int *h, Boolean *cmap, XColor *colrs)
 {
-  struct rheader  header;
+  Rheader	  header;
   unsigned int    mapsize, depth, enc, pixlen;
   unsigned int    linelen;   /* Length of raster line in bytes */
   unsigned int    fill;      /* # of fill bytes per raster line */
@@ -203,8 +203,8 @@ static byte *sunLoad(FILE *fp, int *w, int *h, Boolean *cmap, XColor *colrs)
   byte           *map, *mapred, *mapgreen, *mapblue;
   byte           *image, *lineptr;
 
-  switch (fread((void *)&header, 1, sizeof(struct rheader), fp)) {
-    case sizeof(struct rheader):
+  switch (fread((void *)&header, 1, sizeof(Rheader), fp)) {
+    case sizeof(Rheader):
       if (memToVal(header.magic, 4) != RMAGICNUMBER)
          return(NULL);
 #ifndef DISABLE_TRACE
@@ -408,12 +408,15 @@ static byte *sunLoad(FILE *fp, int *w, int *h, Boolean *cmap, XColor *colrs)
 
 unsigned char *ReadSUN(FILE *fp, int *width, int *height, XColor *colrs)
 {
-  unsigned char *image, *newimage;
+  unsigned char *image;
   Boolean cmap;
 
   image = sunLoad(fp, width, height, &cmap, colrs);
 
-  if (!cmap) {
+  /* If no color map, go make one */
+  if (!cmap && image) {
+     unsigned char *newimage;
+
      newimage = QuantizeImage(image, *width, *height, 256, 1, colrs, 0);
      free(image);
      return(newimage);

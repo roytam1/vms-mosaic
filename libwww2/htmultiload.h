@@ -19,6 +19,7 @@ typedef struct multi_rec {
 	int socket;
 	void *handle;		/* SSL Handle */
 	int length;		/* Loaded length */
+	char *host;		/* Keepalive host */
 	struct multi_rec *next;
 } MultiInfo;
 

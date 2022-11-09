@@ -5,9 +5,10 @@
    
    Author: Arthur Secret, CERN.  Public domain.
    
-   part of libWWW
+   Part of libWWW
    
  */
+
 #ifndef HTBTREE_H
 #define HTBTREE_H
 
@@ -26,9 +27,9 @@ typedef struct _HTBTree_element {
 typedef int (*HTComparer) (void *a, void *b);
 
 typedef struct _HTBTree_top {
-    HTComparer                  compare;
-    struct _HTBTree_element    *top;
-    int				count;
+    HTComparer      compare;
+    HTBTElement    *top;
+    int		    count;
 } HTBTree;
 
 /*

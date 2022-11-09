@@ -75,7 +75,7 @@ syslibs = -lc
 #### BSD/386
 # xinc = -I/usr/X11/include
 
-xinc = -I/usr/include/X11/Xm -I/usr/include/X11
+xinc = -I/usr/include/X11/Xm -I/usr/include/X11 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/libxml2 -I/usr/include/libxml2/libxml
 
 #### X library locations.
 # xlibs = -lXm_s -lXmu -lXt_s -lX11_s
@@ -97,7 +97,7 @@ xinc = -I/usr/include/X11/Xm -I/usr/include/X11
 #### For Linux -- You must set "LD_LIBRARY_PATH" to include the path to
 ####   your X libs, or some may not be found by the loader. Check the
 ####   loader with "ldd Mosaic" after you build.
-xlibs = -L/usr/X11R6/lib -lXext -lXpm -lXm -lXmu -lXt -lX11 -lICE -lSM
+xlibs = -L/usr/X11R6/lib -lXext -lXpm -lXm -lXmu -lXt -lX11 -lICE -lSM -lglib-2.0
 static_motif_xlibs = -L/usr/X11R6/lib -lXext -lXpm /usr/X11R6/lib/libXm.a -lXmu -lXt -lX11 -lICE -lSM
 static_xlibs = /usr/X11R6/lib/libXpm.a /usr/X11R6/lib/libXm.a /usr/X11R6/lib/libXmu.a /usr/X11R6/lib/libXt.a /usr/X11R6/lib/libXext.a /usr/X11R6/lib/libX11.a /usr/X11R6/lib/libSM.a /usr/X11R6/lib/libICE.a
 #### For BSD/386:
@@ -236,23 +236,23 @@ CFLAGS = -g $(sysconfigflags) $(prereleaseflags)
 PURIFY = purify
 QUANTIFY = quantify
 
-default: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src
+default: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src
 	@echo \*\*\* Welcome to NCSA Mosaic.
-purifyd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-purifyd
+purifyd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-purifyd
 	@echo \*\*\* Welcome to Purify'd NCSA Mosaic.
-quantifyd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-quantifyd
+quantifyd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-quantifyd
 	@echo \*\*\* Welcome to Quantify'd NCSA Mosaic.
-staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static
+staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static
 	@echo \*\*\* Welcome to NCSA Mosaic linked static.
-static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static-motif
+static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static-motif
 	@echo \*\*\* Welcome to NCSA Mosaic linked static for motif.
-p_staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static-purifyd
+p_staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static-purifyd
 	@echo \*\*\* Welcome to Purify'd NCSA Mosaic linked static.
-p_static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static-motif-purifyd
+p_static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static-motif-purifyd
 	@echo \*\*\* Welcome to Purify'd NCSA Mosaic linked static for motif.
-q_staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static-quantifyd
+q_staticd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static-quantifyd
 	@echo \*\*\* Welcome to Quantify'd NCSA Mosaic linked static.
-q_static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue src-static-motif-quantifyd
+q_static_motifd: $(dtmdirs) libwww2 libXmx libhtmlw libnut libliteclue libcroco src-static-motif-quantifyd
 	@echo \*\*\* Welcome to Quantify'd NCSA Mosaic linked static for motif.
 
 libXmx::
@@ -274,6 +274,10 @@ libnut::
 libliteclue::
 	@echo --- Building libliteclue
 	cd libliteclue; $(MAKE) CC=$(CC) RANLIB=$(RANLIB) CFLAGS="$(CFLAGS) $(xinc)"
+
+libcroco::
+	@echo --- Building libcroco
+	cd libcroco; $(MAKE) CC=$(CC) RANLIB=$(RANLIB) CFLAGS="$(CFLAGS) $(xinc)"
 
 src::
 	@echo --- Building src

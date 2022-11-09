@@ -36,7 +36,6 @@ void HTCompressedFileToFile (char *fnam, int compressed)
   char *znam, *cmd;
 #ifdef VMS
   char *cund, *cp, *cnam;
-  int  nund;
 #endif /* VMS, BSN */
 
 #ifndef DISABLE_TRACE
@@ -74,14 +73,12 @@ void HTCompressedFileToFile (char *fnam, int compressed)
   if (cnam < cp)
       cnam = cp;
   if (cund = strchr(cnam, '.')) {
-      nund = -1;
       if (compressed == COMPRESSED_BIGZ) {
           sprintf(znam, "%s_Z", fnam);
       } else {
           sprintf(znam, "%s-gz", fnam);
       }
   } else {
-      nund = -1;
       if (compressed == COMPRESSED_BIGZ) {
           sprintf(znam, "%s._Z", fnam);
       } else {
@@ -182,19 +179,6 @@ void HTCompressedFileToFile (char *fnam, int compressed)
               znam, cmd);
 #endif
   
-#ifdef VMS
-  if (nund != -1) {
-      char retBuf[BUFSIZ];
-
-      znam[strlen(fnam)] = '\0';
-      if (my_move(znam, fnam, retBuf, BUFSIZ, 1) != SYS_SUCCESS) {
-	  sprintf(retBuf,
-	     "Unable to rename uncompressed data file;\nresults may be in error.\n%s",
-	     retBuf);
-	  application_user_feedback(retBuf);
-      }
-  }
-#endif /* BSN, modified by PGE */
   free(cmd);
   free(znam);
 
@@ -206,7 +190,7 @@ void HTCompressedHText (HText *text, int compressed, int plain)
 {
   char *fnam;
   FILE *fp;
-  int rv, size_of_data;
+  unsigned int rv, size_of_data;
   
 #ifndef DISABLE_TRACE
   if (www2Trace)
@@ -222,7 +206,7 @@ void HTCompressedHText (HText *text, int compressed, int plain)
    * indeed working... */
   size_of_data = HText_getTextLength(text) - 1;
 
-  if (size_of_data == 0) {
+  if (!size_of_data) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
           fprintf(stderr, "[HTCompressedHText] size_of_data 0; punting\n");
@@ -233,8 +217,12 @@ void HTCompressedHText (HText *text, int compressed, int plain)
   fnam = mo_tmpnam(NULL);
 #ifdef VMS
   /* Open file for efficient writes, VaxC RMS defaults are pitiful. PGE */
-  fp = fopen(fnam, "w", "shr = nil", "rop = WBH", "mbf = 4",
+  fp = fopen(fnam, "w", "shr = nil", "rop = wbh", "mbf = 4",
+#if !defined(VAXC) && !defined(__GNUC__)
+             "mbc = 32", "deq = 16", "alq = 32", "fop = tef,sqo");
+#else
              "mbc = 32", "deq = 16", "alq = 32", "fop = tef");
+#endif
 #else
   fp = fopen(fnam, "w");
 #endif /* VMS, GEC for PGE */
@@ -251,14 +239,14 @@ void HTCompressedHText (HText *text, int compressed, int plain)
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
-      fprintf(stderr, "[HTCompressedHText] Going to write %d bytes.\n",
+      fprintf(stderr, "[HTCompressedHText] Going to write %u bytes.\n",
               size_of_data);
 #endif
   rv = fwrite(HText_getText(text), sizeof(char), size_of_data, fp);
   if (rv != size_of_data) {
 #ifndef DISABLE_TRACE
       if (www2Trace)
-          fprintf(stderr, "Only wrote %d bytes\n", rv);
+          fprintf(stderr, "Only wrote %u bytes\n", rv);
 #endif
       application_user_feedback(
           "Unable to write compressed data to disk;\nresults may be in error.");

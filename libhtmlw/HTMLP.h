@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -87,7 +87,6 @@ typedef struct _HTMLClassRec {
 	HTMLClassPart		html_class;
 } HTMLClassRec;
 
-
 extern HTMLClassRec htmlClassRec;
 
 #define MARGIN_DEFAULT		20
@@ -116,7 +115,7 @@ typedef struct dtype_rec {
 	int save_indent_level;
         struct dtype_rec *next;
 } DescRec;
- 
+
 /*
  * To allow arbitrary nesting of alignment changes
  */
@@ -125,17 +124,29 @@ typedef struct align_rec {
         struct align_rec *next;
 } AlignRec;
 
+typedef enum {
+	FLOAT_CLEAR = -1,
+	FLOAT_IMAGE = 1,
+	FLOAT_TABLE
+} FloatType;
+
 /*
  * To allow arbitrary nesting of alignment changes
  */
 typedef struct float_rec {
-	int type;		/* 1 is image, 2 is table */
+	FloatType type;
 	int marg;
 	int y;
 	int table_extra;	/* Size of extra space after table */
 	int image_extra;	/* Space before right floating image */
         struct float_rec *next;
 } FloatRec;
+
+typedef enum {
+	LF_MIDDLE = 0,		/* In the middle of a line */
+	LF_LEFT,		/* At left margin */
+	LF_BLANK		/* At left margin after a blank line */
+} LFStateType;
 
 /* A struc to maintain current HTML formatting context */
 typedef struct _PhotoComposeContext {
@@ -159,26 +170,26 @@ typedef struct _PhotoComposeContext {
 				 * baseline.  If baseline changes then adjust
 				 * the element's y and cur_line_height and
 				 * the y or height of each element on line */
-	int cur_line_height;
-	int element_id;    	/* Unique number */
-	int is_bol;      	/* At begin of line if 1
-				 * Right after list bullet if 2 */
-	char have_space_after;  /* Word has a space after */
+	int		cur_line_height;
+	int		element_id;    	   /* Unique number */
+	int		is_bol;      	   /* At begin of line if 1
+					    * Right after list bullet if 2 */
+	char		have_space_after;  /* Word has a space after */
 	XFontStruct     *cur_font;
 	int	        cur_font_size;
 	int	        cur_font_base;
 	CurFontFamily   cur_font_family;
 	CurFontType     cur_font_type;
-	MarkInfo *anchor_tag_ptr;  /* Anchor info */
-	int max_width_return;	 /* Compute the MaxWidth of hyper text
-				  * to adjust scrollbar.
-				  * Initial value is WidthOfViewablePart */
-	int pf_lf_state; 	 /* Linefeed state */
-	int preformat;		 /* In <PRE>? */
-	DivAlignType	div;	 /* Current horizontal alignment */
-	AlignType	valign;	 /* Current vertical alignment */
-	unsigned long	fg;	 /* Current foreground */
-	unsigned long	bg;	 /* Current background */
+	MarkInfo	*anchor_tag_ptr;   /* Anchor info */
+	int		max_width_return;  /* Compute the MaxWidth of hyper text
+					    * to adjust scrollbar. Initial value
+					    * is WidthOfViewablePart */
+	LFStateType	pf_lf_state; 	/* Linefeed state */
+	int		preformat;	/* In <PRE>? */
+	DivAlignType	div;	 	/* Current horizontal alignment */
+	AlignType	valign;		/* Current vertical alignment */
+	unsigned long	fg;	 	/* Current foreground */
+	unsigned long	bg;	 	/* Current background */
 	unsigned long	cur_font_color;
 	int		underline_number;
 	int		in_underlined;
@@ -227,10 +238,12 @@ typedef struct _PhotoComposeContext {
 	int		max_line_ascent;
 	int		para_y;		/* Starting x of paragraph */
 	Boolean		noformat;	/* Are we formatting? */
+	Boolean		nolinefeeds;	/* Are we skipping LFs in popfont? */
 	int		sub_or_sup;	/* Is it subscript or superscript? */
 	char		*basetarget;	/* Target set by <BASE> */
 	char		*mark_title;	/* Mark title */
 	char		*span_title;	/* Span title */
+	MarkInfo	*cur_mark;	/* Anchor info */
 } PhotoComposeContext;
 
 /* New fields for the HTML widget */
@@ -274,7 +287,7 @@ typedef struct _HTMLPart {
 	Pixmap			bgmap_SAVE;
 	Pixmap			bgclip_SAVE;
         int                     bg_height;
-        int                     bg_width; 
+        int                     bg_width;
 	ImageInfo		*bg_pic_data;
 
         Pixel                   foreground_SAVE;
@@ -283,10 +296,10 @@ typedef struct _HTMLPart {
 	Pixel			activeAnchor_fg_SAVE;
 	Pixel			activeAnchor_bg_SAVE;
 	Pixel			top_color_SAVE;
-	Pixel			bottom_color_SAVE;    
+	Pixel			bottom_color_SAVE;
         Pixel                   background_SAVE;
         Pixel                   formbuttonbackground;
-    
+
 	int			num_anchor_underlines;
 	int			num_visitedAnchor_underlines;
 	Boolean			dashed_anchor_lines;
@@ -330,9 +343,11 @@ typedef struct _HTMLPart {
 	FrameScrolling		scroll_bars;
 	Boolean			multi_image_load;
 	XtCallbackList		multi_load_callback;
+	XtCallbackList		redraw_callback;
 
 	/* Private */
 	Dimension		max_pre_width;
+	Boolean			has_preformat_width;
 	Dimension		view_width;
 	Dimension		view_height;
 	int			doc_width;

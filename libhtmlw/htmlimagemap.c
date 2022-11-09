@@ -116,13 +116,13 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
 		    count++;
 	    }
 	} else if ((y1 == y2) && (y == y1)) {
-	    /* 
+	    /*
 	     * Edge is horizontal, see if test point on line and force
 	     * match.  Otherwise endpoint test for the adjacent lines will
 	     * determine crossings.
 	     */
 	    if (((x >= x1) && (x <= x2)) || ((x <= x1) && (x >= x2))) {
-		count = 1;		/* force successfull match */
+		count = 1;		/* Force successfull match */
 		break;
 	    }
 	}
@@ -138,7 +138,7 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
 
 #ifndef DISABLE_TRACE
     if (htmlwTrace)
-        fprintf(stderr, "polygon cross count = %d", count);
+        fprintf(stderr, "polygon cross count = %d\n", count);
 #endif
     /*
      * Now we have the count, determine if we are inside the polygon.
@@ -148,7 +148,7 @@ static int check_polygon(CoordInfo *coords, int intx, int inty)
 	return 1;
 
     return 0;
-} 
+}
 
 /********************************************************************/
 MapInfo *FindMap(HTMLWidget hw, char *mapname)
@@ -175,7 +175,7 @@ AreaInfo *GetMapArea(MapInfo *map, int x, int y)
 {
     AreaInfo *area = map->areaList;
     int found = 0;
-    int min_x, max_x, min_y, max_y; 
+    int min_x, max_x, min_y, max_y;
     float dx, dy;
     CoordInfo *coord, *coord2;
 

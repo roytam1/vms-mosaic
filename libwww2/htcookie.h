@@ -40,13 +40,11 @@ typedef enum { FLAG_ACCEPT_ALWAYS,
                FLAG_INVCHECK_LOOSE
 } cookie_domain_flags;
 
-struct _domain_entry {
-    char       *domain;  /* Domain for which these cookies are valid */
-    behaviour_t	bv;
-    invcheck_type invcheck_bv;
-    HTList     *cookie_list;
-};
-
-typedef struct _domain_entry domain_entry;
+typedef struct _domain_entry {
+    char          *domain;  /* Domain for which these cookies are valid */
+    behaviour_t	   bv;
+    invcheck_type  invcheck_bv;
+    HTList        *cookie_list;
+} domain_entry;
 
 #endif  /* HTCOOKIES_H */

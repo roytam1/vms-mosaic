@@ -3,7 +3,7 @@
  * Version 3.2.1 [May97]
  *
  * Copyright (C) 1997 - G.Dauphin
- * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006 -
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2008 -
  * The VMS Mosaic Project
  */
 
@@ -34,6 +34,7 @@ typedef enum _MarkType {
 	M_DESC_TEXT,
 	M_DEFINE,
 	M_DOCTYPE,
+	M_EMBED,
 	M_EMPHASIZED,
 	M_FIGURE,
 	M_FIXED,
@@ -55,6 +56,7 @@ typedef enum _MarkType {
 	M_NOBR,
 	M_NOINDEX,		/* Non-standard Atomz tag */
 	M_NOSCRIPT,
+	M_OBJECT,
 	M_OPTGROUP,
 	M_OPTION,
 	M_PARAM,
@@ -146,6 +148,7 @@ typedef enum _MarkType {
 #define	MT_DESC_LIST	"dl"
 #define	MT_DESC_TITLE	"dt"
 #define MT_DOCTYPE	"!DOCTYPE"
+#define MT_EMBED	"embed"
 #define MT_EMPHASIZED	"em"
 #define MT_FIELDSET	"fieldset"
 #define MT_FIGURE	"fig"
@@ -184,6 +187,7 @@ typedef enum _MarkType {
 #define MT_NOFRAMES	"noframes"
 #define MT_NOSCRIPT	"noscript"
 #define	MT_NUM_LIST	"ol"
+#define MT_OBJECT	"object"
 #define MT_OPTGROUP	"optgroup"
 #define MT_OPTION	"option"
 #define	MT_PARAGRAPH	"p"

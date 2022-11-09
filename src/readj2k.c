@@ -49,7 +49,7 @@ extern int reportBugs;
 /*
  * Error callback
  */
-void error_callback(const char *msg, void *client_data) {
+static void error_callback(const char *msg, void *client_data) {
 #ifndef DISABLE_TRACE
 	if (srcTrace || reportBugs ||
 	    get_pref_boolean(eJPEG2000_ERROR_MESSAGES))
@@ -63,7 +63,7 @@ void error_callback(const char *msg, void *client_data) {
 /*
  * Warning callback
  */
-void warning_callback(const char *msg, void *client_data) {
+static void warning_callback(const char *msg, void *client_data) {
 #ifndef DISABLE_TRACE
 	if (srcTrace || reportBugs ||
 	    get_pref_boolean(eJPEG2000_ERROR_MESSAGES))
@@ -77,7 +77,7 @@ void warning_callback(const char *msg, void *client_data) {
 /*
  * Debug callback
  */
-void info_callback(const char *msg, void *client_data) {
+static void info_callback(const char *msg, void *client_data) {
 #ifndef DISABLE_TRACE
 	if (srcTrace)
 		fprintf(stderr, "Information reading JPEG 2000 image: %s", msg);
@@ -102,7 +102,7 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 	unsigned char *src = NULL;
 	unsigned char *data = NULL;
 	unsigned char *ptr, *tmp;
-	int file_length, w, wr, h, hr, i;
+	int file_length, w, wr, h, hr, i, size;
 
 	/* Configure the event callbacks */
 	memset(&event_mgr, 0, sizeof(opj_event_mgr_t));
@@ -144,8 +144,7 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 		cio = opj_cio_open((opj_common_ptr)dinfo, src, file_length);
 
 		/* Decode the stream and fill the image structure */
-		image = opj_decode(dinfo, cio);
-		if (!image) {
+		if (!(image = opj_decode(dinfo, cio))) {
 #ifndef DISABLE_TRACE
 			if (srcTrace || reportBugs)
 				fprintf(stderr,
@@ -171,8 +170,7 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 
 		cio = opj_cio_open((opj_common_ptr)dinfo, src, file_length);
 
-		image = opj_decode(dinfo, cio);
-		if (!image) {
+		if (!(image = opj_decode(dinfo, cio))) {
 #ifndef DISABLE_TRACE
 			if (srcTrace || reportBugs)
 				fprintf(stderr,
@@ -218,14 +216,15 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 	/* ------------- */
 
 	w = image->comps[0].w;
-	wr = int_ceildivpow2(image->comps[0].w, image->comps[0].factor);
+	wr = int_ceildivpow2(w, image->comps[0].factor);
 	h = image->comps[0].h;
-	hr = int_ceildivpow2(image->comps[0].h, image->comps[0].factor);
+	hr = int_ceildivpow2(h, image->comps[0].factor);
 
 	*width = wr;
 	*height = hr;
+	size = wr * hr;
 
-	if (!(data = (unsigned char *)malloc(wr * hr * image->numcomps))) {
+	if (!(data = (unsigned char *)malloc(size * image->numcomps))) {
 #ifndef DISABLE_TRACE
 		if (srcTrace || reportBugs)
 			fprintf(stderr, "ReadJ2K Error: malloc failure!\n");
@@ -236,13 +235,13 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 	if (image->numcomps == 3) {
 		/* RGB */
 		if (w != wr) {
-			for (i = 0; i < wr * hr; i++) {
+			for (i = 0; i < size; i++) {
 			    *ptr++ = image->comps[0].data[i / wr * w + i % wr];
 			    *ptr++ = image->comps[1].data[i / wr * w + i % wr];
 			    *ptr++ = image->comps[2].data[i / wr * w + i % wr];
 			}
 		} else {
-			for (i = 0; i < wr * hr; i++) {
+			for (i = 0; i < size; i++) {
 			    *ptr++ = image->comps[0].data[i];
 			    *ptr++ = image->comps[1].data[i];
 			    *ptr++ = image->comps[2].data[i];
@@ -258,10 +257,10 @@ unsigned char *ReadJ2K(FILE *fp, int *width, int *height, XColor *colrs,
 	} else if (image->numcomps == 1) {
 		/* Greyscale */
 		if (w != wr) {
-			for (i = 0; i < wr * hr; i++)
+			for (i = 0; i < size; i++)
 			    *ptr++ = image->comps[0].data[i / wr * w + i % wr];
 		} else {
-			for (i = 0; i < wr * hr; i++)
+			for (i = 0; i < size; i++)
 			    *ptr++ = image->comps[0].data[i];
 		}
 		for (i = 0; i < 256; i++) {

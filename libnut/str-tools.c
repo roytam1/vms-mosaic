@@ -52,9 +52,12 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
+#ifndef DEBUG_TEST
 #include "../config.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #if defined(MULTINET) && defined(__DECC) && (__VMS_VER >= 70000000)
@@ -66,7 +69,7 @@
 #include <ctype.h>
 #endif
 
-#ifndef DEBUG
+#ifndef DEBUG_TEST
 
 /* Use builtin strdup when appropriate -- code duplicated in tcp.h. */
 /* DEC C V5.2 string.h has for VMS V7.0, GEC */
@@ -136,6 +139,15 @@ int main()
 	printf("src[%s]\n", bob);
 	newstr = my_chop(bob);
 	printf("chopped[%s]\n\n", newstr);
+
+        printf("strcasecmp of two empty = %d\n", my_strcasecmp("", ""));
+        printf("strcasecmp 1st empty = %d\n", my_strcasecmp("", "A"));
+        printf("strcasecmp 2nd empty = %d\n", my_strcasecmp("A", ""));
+
+        printf("strncasecmp of two empty = %d\n", my_strncasecmp("", "", 2));
+        printf("strncasecmp 1st empty = %d\n", my_strncasecmp("", "A", 2));
+        printf("strncasecmp 2nd empty = %d\n", my_strncasecmp("A", "", 2));
+        printf("strncasecmp with size 0 = %d\n", my_strncasecmp("A", "B", 0));
 
 	exit(0);
 }
@@ -418,7 +430,7 @@ int my_strcasecmp(char *str1, char *str2)
   int i, min, offset1, offset2;
   int length1, length2;
 
-  if (!str1 || !str2 || !*str1 || !*str2)
+  if (!str1 || !str2)
       return 1;
 
   /* Find shortest string to make sure we don't go past null */
@@ -452,7 +464,7 @@ int my_strncasecmp(char *str1, char *str2, int n)
   int i, offset1, offset2, length1, length2;
   int min = n;
 
-  if (!str1 || !str2 || !*str1 || !*str2 || !n)
+  if (!str1 || !str2)
       return 1;
 
   if ((length1 = strlen(str1)) < min)

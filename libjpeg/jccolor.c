@@ -88,6 +88,9 @@ rgb_ycc_start (j_compress_ptr cinfo)
   my_cconvert_ptr cconvert = (my_cconvert_ptr) cinfo->cconvert;
   INT32 * rgb_ycc_tab;
   INT32 i;
+#ifdef VAXC	/* Work around compiler bug */
+  double half = 0.5;
+#endif
 
   /* Allocate and fill in the conversion tables. */
   cconvert->rgb_ycc_tab = rgb_ycc_tab = (INT32 *)
@@ -104,7 +107,11 @@ rgb_ycc_start (j_compress_ptr cinfo)
      * This ensures that the maximum output will round to MAXJSAMPLE
      * not MAXJSAMPLE+1, and thus that we don't have to range-limit.
      */
+#ifdef VAXC
+    rgb_ycc_tab[i+B_CB_OFF] = FIX(half) * i    + CBCR_OFFSET + ONE_HALF-1;
+#else
     rgb_ycc_tab[i+B_CB_OFF] = FIX(0.50000) * i    + CBCR_OFFSET + ONE_HALF-1;
+#endif
 /*  B=>Cb and R=>Cr tables are the same
     rgb_ycc_tab[i+R_CR_OFF] = FIX(0.50000) * i    + CBCR_OFFSET + ONE_HALF-1;
 */

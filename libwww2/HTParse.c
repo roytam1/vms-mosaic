@@ -10,14 +10,14 @@
 
 #define HEX_ESCAPE '%'
 
-struct struct_parts {
+typedef struct struct_parts {
     char *access;
     char *host;
     char *absolute;
     char *relative;
     char *search;	/* Normally part of path */
     char *anchor;
-};
+} NameParts;
 
 #ifndef DISABLE_TRACE
 extern int www2Trace;
@@ -40,7 +40,7 @@ static char *strchr_or_end(char *string, int ch)
 **
 ** On exit,
 **	Return value points to first non-white character, or to 0 if none.
-**	All trailing white space is OVERWRITTEN with zero.
+**	All trailing white space is NULLed.
 */
 char *HTStrip(char *s)
 {
@@ -71,17 +71,13 @@ char *HTStrip(char *s)
 **	host, anchor and access may be nonzero if they were specified.
 **	Any which are nonzero point to zero terminated strings.
 */
-PRIVATE void scan(char *name, struct struct_parts *parts)
+PRIVATE void scan(char *name, NameParts *parts)
 {
     char *after_access = name;
     char *p;
 
-    parts->access = NULL;
-    parts->host = NULL;
-    parts->absolute = NULL;
-    parts->relative = NULL;
-    parts->search = NULL;	/* Normally not used - kw */
-    parts->anchor = NULL;
+    parts->access = parts->host = parts->absolute = parts->relative = NULL;
+    parts->search = parts->anchor = NULL;
     /*
     **  Scan left-to-right for a scheme (access).
     */
@@ -183,7 +179,7 @@ char *HTParse(char *aName, char *relatedName, int wanted)
     char *result, *name, *access, *p;
     char *rel = NULL;
     char *return_value = NULL;
-    struct struct_parts given, related;
+    NameParts given, related;
     
     /*
      * Make working copies of input strings to cut up:
@@ -202,12 +198,8 @@ char *HTParse(char *aName, char *relatedName, int wanted)
 	/*
 	 * Inherit nothing!
 	 */
-	related.access = NULL;
-	related.host = NULL;
-	related.absolute = NULL;
-	related.relative = NULL;
-	related.search = NULL;
-	related.anchor = NULL;
+	related.access = related.host = related.absolute = NULL;
+	related.relative = related.search = related.anchor = NULL;
     } else {
 	rel = strdup(relatedName);
 	len += strlen(relatedName);
@@ -237,11 +229,8 @@ char *HTParse(char *aName, char *relatedName, int wanted)
     /* If different access methods, inherit nothing. */
     if (given.access && related.access &&
 	strcmp(given.access, related.access)) {
-	related.host = NULL;
-	related.absolute = NULL;
-	related.relative = NULL;
-	related.search = NULL;
-	related.anchor = NULL;
+	related.host = related.absolute = related.relative = NULL;
+	related.search = related.anchor = NULL;
     }
     if (wanted & PARSE_HOST) {
         if (given.host || related.host) {
@@ -327,11 +316,9 @@ char *HTParse(char *aName, char *relatedName, int wanted)
     }
 
     /* If different hosts, inherit no path. */
-    if (given.host && related.host && strcmp(given.host, related.host)) {
-	related.absolute = NULL;
-	related.relative = NULL;
-	related.anchor = NULL;
-    }
+    if (given.host && related.host && strcmp(given.host, related.host))
+	related.absolute = related.relative = related.anchor = NULL;
+
     /*
     **  Handle the path.
     */
@@ -383,7 +370,8 @@ char *HTParse(char *aName, char *relatedName, int wanted)
 	    strcat(result, given.relative);	/* What we've got */
 	} else if (related.relative) {
 	    strcat(result, related.relative);
-	} else if (strcmp(result, "about:") && strcmp(result, "cookiejar:")) {
+	} else if (strcmp(result, "about:") && strcmp(result, "cookiejar:") &&
+		   strcmp(result, "mailto:")) {
 	    /* No inheritance */
 	    strcat(result, "/");
 	}
@@ -601,7 +589,7 @@ PUBLIC char from_hex (char c)
 	   0;
 }
 
-PUBLIC char *HTUnEscape (char * str)
+PUBLIC char *HTUnEscape (char *str)
 {
     char *p = str;
     char *q = str;

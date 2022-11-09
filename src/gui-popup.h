@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2008 - The VMS Mosaic Project */
 
 #ifndef __POPUP_H__
 #define __POPUP_H__
@@ -88,13 +88,13 @@ typedef enum _w_class {
 enum { I_Save, I_ViewExternal, I_ViewInternal, I_Reload,
        M_ImageData, M_LinkData, M_FileData };
 
-typedef struct act_struct {
+typedef struct act_struct_rec {
   int act_code;
   ElemInfo *eptr;
   void *str;
 } act_struct;
 
-typedef struct PopupItem {
+typedef struct PopupItem_rec {
   /* The top half must be filled in if this is to appear in the popup */
   w_class class;	   /* This is a button, separator, label, cascade */
   unsigned int types;      /* For which widget elements this button is to 
@@ -105,7 +105,7 @@ typedef struct PopupItem {
   char *label;
 
   /* These are needed for a button class */
-  struct act_struct acst;  /* Identifies the action */
+  act_struct acst;	   /* Identifies the action */
   void (*cbfp)();	   /* Callback function takes act_struct as data */
 
   /* These are optional */
@@ -114,7 +114,7 @@ typedef struct PopupItem {
   char *accel;
 
   /* This is needed for a cascade class */
-  struct PopupItem *sub_items;	/* NULL if this isn't a pull_right */
+  struct PopupItem_rec *sub_items;  /* NULL if this isn't a pull_right */
 
   /* This is for internal use */
   Widget w;

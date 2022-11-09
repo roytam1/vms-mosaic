@@ -219,8 +219,10 @@ PUBLIC char HTGetCharacter (void)
 */
 PUBLIC int HTOutputBinary (int input, FILE *output)
 {
+  int status;
+
   do {
-      int status = NETREAD(input, input_buffer, INPUT_BUFFER_SIZE);
+      status = NETREAD(input, input_buffer, INPUT_BUFFER_SIZE);
 
       if (status <= 0) {
           if (!status) 
@@ -527,8 +529,7 @@ PUBLIC int HTCopy (int file_number,
       if (HTMIME_header_done(sink))
 	  hdr_done = 1;
   } else {
-      hdr_len = 0;
-      is_mime = 0;
+      hdr_len = is_mime = 0;
   }
 
   /* Push binary from socket down sink */
@@ -675,10 +676,8 @@ PUBLIC void HTFileCopy (FILE *fp, HTStream *sink)
     for (;;) {
 	status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
 	if (!status) {  /* EOF or error */
-	    if (!ferror(fp))
-		break;
 #ifndef DISABLE_TRACE
-	    if (www2Trace)
+	    if (www2Trace && ferror(fp))
 		fprintf(stderr,
 		        "HTFormat: Read error, read returns %d\n", ferror(fp));
 #endif
@@ -699,10 +698,8 @@ PUBLIC void HTFileCopyToText (FILE *fp,	HText *text)
   for (;;) {
       status = fread(input_buffer, 1, INPUT_BUFFER_SIZE, fp);
       if (!status) {  /* EOF or error */
-          if (!ferror(fp))
-	      break;
 #ifndef DISABLE_TRACE
-          if (www2Trace)
+          if (www2Trace && ferror(fp))
 	      fprintf(stderr,
 		      "HTFormat: Read error, read returns %d\n", ferror(fp));
 #endif

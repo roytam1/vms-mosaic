@@ -1,0 +1,12 @@
+# News server authentication file
+#
+# This file should be located in your sys$login directory under the filename:
+#   .newsauth
+#
+# This file consists of lines that begin with a # (comment), blank lines,
+# or lines that specify a server, password and username.
+#
+# Examples:
+
+news.server1 password1 username1
+news.server2 password2 username2

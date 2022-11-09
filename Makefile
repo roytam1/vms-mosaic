@@ -8,7 +8,7 @@
 ## and a cast of probably two or three people
 ##
 
-CKVERS=27ck9
+CKVERS=4_3
 
 all: dev_$(DEV_ARCH)
 

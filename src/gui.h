@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -69,7 +69,7 @@ mo_window *mo_next_window(mo_window *);
 mo_window *mo_fetch_window_by_id(int);
 char *mo_assemble_help_url(char *);
 mo_status mo_redisplay_window(mo_window *);
-mo_status mo_set_current_cached_win(mo_window *);
+void mo_set_current_cached_win(mo_window *);
 mo_status mo_delete_window(mo_window *);
 mo_window *mo_duplicate_window(mo_window *);
 mo_window *mo_open_another_window(mo_window *, char *, char *, char *);
@@ -91,5 +91,7 @@ void mo_switch_mode(mo_window *);
 void mo_flush_passwd_cache(mo_window *);
 void pub_anchor_ltd(char *);
 void mo_delete_frames(mo_window *);
+
+extern void mo_tool_state(mo_toolbar *t, int state, int index);
 
 #endif

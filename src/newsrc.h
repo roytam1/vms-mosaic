@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2008 - The VMS Mosaic Project */
 
 #ifndef NEWSRC_H
 #define NEWSRC_H
@@ -93,7 +93,6 @@ newsgroup_t *nextgroup (newsgroup_t *);
 
 int newsrc_flush (void);
 int newsrc_init (char *);
-void newsrc_initflush (void);
 int newsrc_kill (void);
 
 void rereadseq (newsgroup_t *);

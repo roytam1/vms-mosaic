@@ -101,7 +101,7 @@ Initial
  * Added rounded support - 6-Apr-2006
  */
 
-/* Copyright (C) 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #define NO_FONT_SET 1
 
@@ -804,13 +804,14 @@ static Boolean setValues(Widget _current, Widget _request, Widget _new,
 /* ----------------- Event handlers ------------------------*/
 
 
-/* At this point the help may be popup 
-*/
-static void timeout_event(XtPointer client_data, XtIntervalId *id)
-{
 #define OFFSET_X 4	
 #define OFFSET_Y 4
 #define BorderPix 2
+/* 
+ * At this point the help may be popup
+ */
+static void timeout_event(XtPointer client_data, XtIntervalId *id)
+{
 	liteClueContext *obj = (liteClueContext *) client_data;
 	XcgLiteClueWidget cw = obj->cw;
 	Position x, y, abs_x, abs_y, w_height;
@@ -942,16 +943,16 @@ static void timeout_event(XtPointer client_data, XtIntervalId *id)
 						   ATTR(popdownDelay),
 						   popdownBalloon,
 						   (XtPointer)cw);
+}
 #undef OFFSET_X
 #undef OFFSET_Y
-}
 
 /*
  * Pointer enters watched widget, set a timer at which time it will
  * popup the help
  */
 static void Enter_event(Widget w, XtPointer client_data, XEvent *xevent,
-			Boolean *continue_to_dispatch )
+			Boolean *continue_to_dispatch)
 {
 	liteClueContext *obj = (liteClueContext *) client_data;
 	XcgLiteClueWidget cw = obj->cw;

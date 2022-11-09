@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #ifndef __XMXP_H__
 #define __XMXP_H__
@@ -89,7 +89,6 @@
 #ifdef __DECC
 #include <stdlib.h>
 #endif /* DECC, GEC for MPJZ and PGE */
-#include <assert.h>
 
 /* Main Xmx include (also X11 includes and Xm.h). */
 #include "Xmx.h"

@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007, 2008
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -105,51 +107,50 @@ extern int srcTrace;
 /* ------------------------- Personal Annotations ------------------------- */
 
 /*
-  This file contains support for personal annotations (pans).
-
-  We have a directory called ~/.mosaic-personal-annotations (by default).
-  In this directory is a file called LOG.
-
-  The LOG file consists of the following:
-
-  ncsa-mosaic-personal-annotation-log-format-1     [cookie]
-  Personal                                         [name of log]
-  url # # # #                                      [first word is url,
-                                                    subsequent words are
-                                                    numbers of annotations
-                                                    matching this url]
-  [1-line sequence for single document repeated as necessary]
-  ...
-
-  Thus, a given document can have 0 or more annotation ID's associated
-  with it.  Each annotation is named pan-#.html and is stored in
-  the same directory as LOG.
-
-  Annotations are formatted like this:
-
-  <ncsa-annotation-format-1>                        [cookie]
-  <title>This is the title.</title>                 [title]
-  <h2>This is the title, again.</h2>                [line skipped; expected 
-                                                     to be title]
-  <address>This is the author.</address>            [author]
-  <address>This is the date.</address>              [date of annotation/
-                                                     modification]
-  _______________________                           [ignored separator]
-  <pre>                                             [line skipped; expected
-                                                     to be pre]
-  [arbitrary text]                                  [until end of message]
-
-  So long as the annotation remains in this format, you will be
-  able to operate on it later with the 'Edit This Annotation' option
-  in the VMS Mosaic menubar.  Else, it will just be another document.
+ * This file contains support for personal annotations (pans).
+ *
+ * We have a directory called ~/.mosaic-personal-annotations (by default).
+ * In this directory is a file called LOG.
+ *
+ * The LOG file consists of the following:
+ *
+ * ncsa-mosaic-personal-annotation-log-format-1     [cookie]
+ * Personal                                         [name of log]
+ * url # # # #                                      [first word is url,
+ *                                                   subsequent words are
+ *                                                   numbers of annotations
+ *                                                   matching this url]
+ * [1-line sequence for single document repeated as necessary]
+ * ...
+ *
+ * Thus, a given document can have 0 or more annotation ID's associated
+ * with it.  Each annotation is named pan-#.html and is stored in
+ * the same directory as LOG.
+ *
+ * Annotations are formatted like this:
+ *
+ * <ncsa-annotation-format-1>                        [cookie]
+ * <title>This is the title.</title>                 [title]
+ * <h2>This is the title, again.</h2>                [line skipped; expected 
+ *                                                    to be title]
+ * <address>This is the author.</address>            [author]
+ * <address>This is the date.</address>              [date of annotation/
+ *                                                    modification]
+ * _______________________                           [ignored separator]
+ * <pre>                                             [line skipped; expected
+ *                                                    to be pre]
+ * [arbitrary text]                                  [until end of message]
+ *
+ * So long as the annotation remains in this format, you will be
+ * able to operate on it later with the 'Edit This Annotation' option
+ * in the VMS Mosaic menubar.  Else, it will just be another document.
  */
 
 /* ------------------------------------------------------------------------ */
 /* --------------------------- GLOBAL PAN LIST ---------------------------- */
 /* ------------------------------------------------------------------------ */
 
-#define NCSA_PAN_LOG_FORMAT_COOKIE_ONE \
-    "ncsa-mosaic-personal-annotation-log-format-1"
+#define PAN_LOG_FORMAT_COOKIE_ONE "ncsa-mosaic-personal-annotation-log-format-1"
 #define PAN_LOG_FILENAME "LOG"
 #define PAN_ANNOTATION_PREFIX "PAN-"
 
@@ -165,14 +166,14 @@ static char *home;
 static char home[128];
 #endif /* VMS, BSN */
 
-typedef struct entry {
+typedef struct entry_rec {
   char *href;
   int num_pans;
   int an[MAX_PANS_PER_HREF];
-  struct entry *next;
+  struct entry_rec *next;
 } entry;
 
-typedef struct bucket {
+typedef struct bucket_rec {
   entry *head;
   int count;
 } bucket;
@@ -332,8 +333,8 @@ static void mo_read_pan_file (char *filename)
       goto screwed_with_file;
   
   /* See if it's our format. */
-  if (strncmp(line, NCSA_PAN_LOG_FORMAT_COOKIE_ONE,
-              strlen(NCSA_PAN_LOG_FORMAT_COOKIE_ONE)))
+  if (strncmp(line, PAN_LOG_FORMAT_COOKIE_ONE,
+	      strlen(PAN_LOG_FORMAT_COOKIE_ONE)))
       goto screwed_with_file;
   
   /* Go fetch the name on the next line. */
@@ -386,7 +387,7 @@ static mo_status mo_init_pan (void)
   /* Initialize the pan structs. */
   for (i = 0; i < HASHSIZE; i++) {
       hash_table[i].count = 0;
-      hash_table[i].head = 0;
+      hash_table[i].head = NULL;
   }
   return mo_succeed;
 }
@@ -437,11 +438,8 @@ static void ensure_pan_directory_exists (void)
 
 mo_status mo_is_editable_pan (char *text)
 {
-  if (!text)
-      return mo_fail;
-
-  if (!strncmp(text, NCSA_ANNOTATION_FORMAT_ONE,
-               strlen(NCSA_ANNOTATION_FORMAT_ONE))) {
+  if (text && !strncmp(text, NCSA_ANNOTATION_FORMAT_ONE,
+		       strlen(NCSA_ANNOTATION_FORMAT_ONE))) {
       return mo_succeed;
   } else {
       return mo_fail;
@@ -449,10 +447,11 @@ mo_status mo_is_editable_pan (char *text)
 }
 
 /* First, call mo_init_pan() to set up internal hash table.
- * Then, snarf a value for home.
- * Then, snarf a value for the log file.
- * Then, read the log file and load up the hash table
- *   by calling mo_read_pan_file. */
+ * Then snarf a value for home.
+ * Then snarf a value for the log file.
+ * Then read the log file and load up the hash table
+ *   by calling mo_read_pan_file.
+ */
 mo_status mo_setup_pan_list (void)
 {
   char *default_directory = get_pref_string(ePRIVATE_ANNOTATION_DIRECTORY);
@@ -517,7 +516,7 @@ mo_status mo_write_pan_list (void)
   if (!(fp = fopen(cached_global_pan_fname, "w")))
       return mo_fail;
 
-  fprintf(fp, "%s\n%s\n", NCSA_PAN_LOG_FORMAT_COOKIE_ONE, "Personal");
+  fprintf(fp, "%s\n%s\n", PAN_LOG_FORMAT_COOKIE_ONE, "Personal");
   
   for (i = 0; i < HASHSIZE; i++) {
       for (l = hash_table[i].head; l; l = l->next) {
@@ -579,9 +578,9 @@ mo_status mo_new_pan (char *url, char *title, char *author, char *text)
   int id = ++max_pan_id;
 
   if (!title || !*title)
-      title = strdup("Annotation with no title");
+      title = "Annotation with no title";
   if (!author || !*author)
-      author = strdup("No author name");
+      author = "No author name";
 
   /* Create a new entry if we have to. */
   if (!l)
@@ -654,9 +653,9 @@ mo_status mo_delete_pan (int id)
 mo_status mo_modify_pan (int id, char *title, char *author, char *text)
 {
   if (!title || !*title)
-      title = strdup("Annotation with no title");
+      title = "Annotation with no title";
   if (!author || !*author)
-      author = strdup("No author name");
+      author = "No author name";
 
   mo_write_pan(id, title, author, text);
   return mo_succeed;
@@ -664,7 +663,8 @@ mo_status mo_modify_pan (int id, char *title, char *author, char *text)
 
 /* s1 is the existing string (or NULL for a new string)
  * s2 is the string to append
- * (s1 is assumed free'able, s2 not) */
+ * (s1 is assumed free'able, s2 not)
+ */
 static char *smart_append (char *s1, char *s2)
 {
   if (!s1) {

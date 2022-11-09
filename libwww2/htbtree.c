@@ -10,7 +10,7 @@
 **	1-Jan-07:  Added HTBTree_add_new routine.  GEC
 */
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "HTUtils.h"
 #include "HTBTree.h"
@@ -28,7 +28,7 @@ PRIVATE Boolean add_only_new = False;
 PUBLIC HTBTree *HTBTree_new (HTComparer comp)
     /*********************************************************
     ** This function returns an HTBTree with memory allocated 
-    ** for it when given a mean to compare things
+    ** for it.  It is given a means to compare things.
     */
 {
     HTBTree *tree = (HTBTree *)calloc(1, sizeof(HTBTree));
@@ -42,7 +42,7 @@ PUBLIC HTBTree *HTBTree_new (HTComparer comp)
 
 PRIVATE void HTBTElement_free (HTBTElement *element)
     /**********************************************************
-    ** This void will free the memory allocated for a sub tree
+    ** This will free the memory allocated for a sub tree
     */
 {
     if (element) {
@@ -57,7 +57,7 @@ PRIVATE void HTBTElement_free (HTBTElement *element)
 
 PUBLIC void HTBTree_free (HTBTree *tree)
     /**************************************************************
-    ** This void will free the memory allocated for the whole tree
+    ** This will free the memory allocated for the whole tree
     */
 {
     if (tree) {
@@ -69,7 +69,7 @@ PUBLIC void HTBTree_free (HTBTree *tree)
 
 PRIVATE void HTBTElementAndObject_free (HTBTElement *element)
     /**********************************************************
-    ** This void will free the memory allocated for a sub tree
+    ** This will free the memory allocated for a sub tree
     */
 {
     if (element) {     /* Just in case nothing was in the tree anyway */
@@ -85,7 +85,7 @@ PRIVATE void HTBTElementAndObject_free (HTBTElement *element)
 
 PUBLIC void HTBTreeAndObject_free (HTBTree *tree)
     /**************************************************************
-    ** This void will free the memory allocated for the whole tree
+    ** This will free the memory allocated for the whole tree
     */
 {
     if (tree) {
@@ -112,11 +112,10 @@ PRIVATE void *HTBTree_subsearch (HTBTree *tree, HTBTElement *cur, void *object)
     int res;
 
     while (cur) {
-	res = tree->compare(object, cur->object);
-
-	if (res == 0) {
+	if (!(res = tree->compare(object, cur->object)))
 	    return cur->object;
-	} else if (res < 0) {
+
+	if (res < 0) {
 	    cur = cur->left;
 	} else {
 	    cur = cur->right;
@@ -135,11 +134,10 @@ PUBLIC void *HTBTree_search (HTBTree *tree, void *object)
     int res;
 
     while (cur) {
-	res = tree->compare(object, cur->object);
-
-	if (res == 0) {
+	if (!(res = tree->compare(object, cur->object)))
 	    return cur->object;
-	} else if (res < 0) {
+
+	if (res < 0) {
 	    cur = cur->left;
 	} else {
 	    cur = cur->right;
@@ -158,11 +156,10 @@ PRIVATE HTBTElement *HTBTree_ele_search (HTBTree *tree, void *object)
     int res;
 
     while (cur) {
-	res = tree->compare(object, cur->object);
-
-	if (res == 0) {
+	if (!(res = tree->compare(object, cur->object)))
 	    return cur;
-	} else if (res < 0) {
+
+	if (res < 0) {
 	    cur = cur->left;
 	} else {
 	    cur = cur->right;
@@ -545,7 +542,8 @@ PUBLIC void HTBTree_add (HTBTree *tree, void *object)
 PUBLIC void HTBTree_add_new (HTBTree *tree, void *object)
     /*********************************************************
     ** This function adds an element to the tree only if it
-    ** is not already in the tree.
+    ** is not already in the tree, otherwise the object is
+    ** freed by HTBTree_add().
     */
 {
     add_only_new = True;

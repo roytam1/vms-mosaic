@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2011
  * The VMS Mosaic Project
  */
 
@@ -143,14 +143,14 @@
 #endif
 #ifndef fileno
 #define fileno	decc$fileno
-#endif /* DEC C V5.5 made an undocumented change to the prefixing, GEC */
-#endif /* Some non-ANSI routines need a prefix */
-#endif /* VMS, BSN */
+#endif  /* DEC C V5.5 made an undocumented change to the prefixing, GEC */
+#endif  /* Some non-ANSI routines need a prefix */
+#endif  /* VMS, BSN */
 
 #if defined(VMS) && !defined(__DECC)  /* VAXC only */
 #if !defined(__CADDR_T) && !defined(CADDR_T) && !defined(__SOCKET_TYPEDEFS)
 typedef char *caddr_t;
-#endif /* Do if tcp.h not included previously, GEC */
+#endif  /* Do if tcp.h not included previously, GEC */
 #ifndef __CADDR_T
 #define __CADDR_T 1   /* DECwindows xresource.h wants __CADDR_T, PGE */
 #endif
@@ -186,8 +186,8 @@ typedef enum {
 /* -------------------------------- MACROS -------------------------------- */
 /* ------------------------------------------------------------------------ */
 
-#define MO_VERSION_STRING "4.2"
-#define MO_VERSION_STRING2 "4_2"  /* For file names */
+#define MO_VERSION_STRING "4.3"
+#define MO_VERSION_STRING2 "4_3"  /* For file names */
 #define MO_GO_NCSA_COUNT 0  /* Not the VMS style, AV */
 
 #define MO_HELP_ON_VERSION_DOCUMENT \
@@ -287,7 +287,7 @@ typedef enum {
 #define DOCUMENTS_MENU_SPECFILE "/usr/local/lib/mosaic/documents.menu"
 #else
 #define DOCUMENTS_MENU_SPECFILE "DECW$System_Defaults:documents.menu"
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 #endif
 
 #ifndef GLOBAL_EXTENSION_MAP
@@ -295,7 +295,7 @@ typedef enum {
 #define GLOBAL_EXTENSION_MAP "/usr/local/lib/mosaic/mime.types"
 #else
 #define GLOBAL_EXTENSION_MAP "Mosaic_Mailcap_Dir:MIME.Types"
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 #endif
 
 #ifndef GLOBAL_TYPE_MAP
@@ -303,25 +303,26 @@ typedef enum {
 #define GLOBAL_TYPE_MAP "/usr/local/lib/mosaic/mailcap"
 #else
 #define GLOBAL_TYPE_MAP "Mosaic_Mailcap_Dir:mailcap."
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 #endif
 
 //#ifdef VMS
 #ifndef MAIL_PREFIX_DEFAULT
 #define MAIL_PREFIX_DEFAULT ""
-#endif /* Mail prefix for VMS MAIL */
+#endif  /* Mail prefix for VMS MAIL */
+
 #ifndef IDENT_VER
 #define IDENT_VER ""
 #endif
 
 #ifndef PRINT_DEFAULT
 #define PRINT_DEFAULT "Print/Name=\"Mosaic print\"/Notify/Identify/Delete"
-#endif /* Default print command for VMS */
+#endif  /* Default print command for VMS */
 
 #ifndef EDITOR_DEFAULT
 #define EDITOR_DEFAULT "Edit"
-#endif /* Editor command for source editing */
-//#endif /* VMS, BSN, GEC */
+#endif  /* Editor command for source editing */
+//#endif  /* VMS, BSN, GEC */
 
 #ifndef VMS
 #if defined(bsdi)
@@ -367,10 +368,10 @@ typedef enum {
 #if defined (SCO)
 #if defined (_SCO_DS)
 #define MO_MACHINE_TYPE "SCO OpenServer 5"
-#else /* _SCO_DS */
+#else  /* _SCO_DS */
 #define MO_MACHINE_TYPE "SCO Unix"
-#endif /* _SCO_DS */
-#endif /* SCO */
+#endif  /* _SCO_DS */
+#endif  /* SCO */
 #else
 #if defined(vax)
 #define MO_MACHINE_TYPE "OpenVMS VAX"
@@ -384,7 +385,7 @@ typedef enum {
 #if !defined(vax) && !defined(__alpha) && !defined(__ia64)
 #define MO_MACHINE_TYPE "OpenVMS"
 #endif
-#endif /* VMS, BSN, GEC */
+#endif  /* VMS, BSN, GEC */
 
 #ifndef MO_MACHINE_TYPE
 #define MO_MACHINE_TYPE "Unknown Platform"
@@ -438,16 +439,23 @@ extern char *strdup();
 #define moMODE_NEWS   0x0004
 #define moMODE_ALL    0x0007
 
+/* Annotation types */
+typedef enum {
+  mo_annotation_public = 0,
+  mo_annotation_workgroup,
+  mo_annotation_private
+} mo_annot_type;
 
-/* mo_window contains everything related to a single Document View
+/*
+ * mo_window contains everything related to a single Document View
  * window, including subwindow details.
  */
-typedef struct mo_window {
+typedef struct mo_window_rec {
   int id;
   Widget base;
   int mode;
-    
-  /* Subwindows. */
+
+  /* Subwindows */
   Widget source_win;
   Widget save_win;
   Widget upload_win;
@@ -464,13 +472,12 @@ typedef struct mo_window {
   Widget open_local_win;
   Widget hotlist_win;
   Widget techsupport_win;
-  Widget news_win;           /* News Post/Followup*/
+  Widget news_win;           /* News Post/Followup */
   Widget news_fsb_win;
   Widget news_sub_win;       /* News Subscribe Window */
   Widget annotate_win;
   Widget src_search_win;     /* Source window document search */
   Widget search_win;         /* Internal document search */
-  Widget searchindex_win;    /* Network index search */
   Widget cci_win;	     /* Common client interface control window */
   Widget mailto_win;
   Widget mailto_form_win;
@@ -485,13 +492,13 @@ typedef struct mo_window {
   Widget session_menu;
   Widget *session_items;
   int num_session_items;
-    
+
 #ifdef HAVE_AUDIO_ANNOTATIONS
   Widget audio_annotate_win;
 #endif
 
   /* USER INTERFACE BITS 'n PIECES */
-  struct toolbar tools[BTN_COUNT];
+  mo_toolbar tools[BTN_COUNT];
 
   Widget slab[7];
   int slabpart[8];
@@ -510,32 +517,24 @@ typedef struct mo_window {
   int has_toolbar;
   int toolbardetached;
   int toolbarorientation;
-    
+
   Widget meter, meter_frame;
   int meter_level, meter_width, meter_height;
   Pixel meter_fg, meter_bg, meter_font_fg, meter_font_bg;
   char *meter_text;
 
-  Widget searchindex_button;   /* Pushbutton, says "Search Index" */
-  Widget searchindex_win_label, searchindex_win_text;
-  Widget searchindex_win_searchbut;
-
-  Widget home_button;
-
-  int last_width;
-
-  struct mo_node *history;
-  struct mo_node *current_node;
+  struct mo_node_rec *history;
+  struct mo_node_rec *current_node;
   int reloading;
 
   char *target_anchor;
 
-  /* Document source window. */
+  /* Document source window */
   Widget source_text;
   Widget source_url_text;
   Widget source_date_text;
   XmxMenuRecord *format_optmenu;
-  int save_format; /* Starts at 0 */
+  int save_format;  /* Starts at 0 */
 
   Widget open_text;
 
@@ -568,16 +567,18 @@ typedef struct mo_window {
   Widget print_duplex_toggle_save;
   Widget print_duplex_toggle_print;
   Widget print_duplex_toggle_mail;
+  Widget print_tumbled_toggle_print;
+  Widget print_landscape_toggle_print;
   Widget print_url_only;
   Widget print_doc_only;
-    
+
   Widget history_list;
 
   Widget hotlist_list;
   Widget hotlist_label;
   Widget save_hotlist_win;
   Widget load_hotlist_win;
-  struct mo_hotlist *current_hotlist;
+  struct mo_hotlist_rec *current_hotlist;
   union mo_hot_item *hot_cut_buffer;
 
   Widget techsupport_text;
@@ -592,7 +593,7 @@ typedef struct mo_window {
   Widget mailto_fromfield;
   Widget mailto_tofield;
   Widget mailto_subfield;
-  
+
   Widget mailto_form_text;
   Widget mailto_form_fromfield;
   Widget mailto_form_tofield;
@@ -668,7 +669,7 @@ typedef struct mo_window {
   Widget subgroup;
   Widget unsubgroup;
 
-  struct mo_window *next;
+  struct mo_window_rec *next;
 
 #ifdef GRPAN_PASSWD
   Widget passwd_label;
@@ -676,22 +677,22 @@ typedef struct mo_window {
   Widget passwd_toggle;
 #endif
   XmxMenuRecord *pubpri_menu;
-  int pubpri;        /* One of mo_annotation_[public, private] */
+  mo_annot_type pubpri;
   XmxMenuRecord *audio_pubpri_menu;
-  int audio_pubpri;  /* One of mo_annotation_[public, private] */
+  mo_annot_type audio_pubpri;
 
   int agent_state;
   Boolean have_focus;
 
   char *image_file;
 
-  struct mo_window *frames;
-  struct mo_window *next_frame;
+  struct mo_window_rec *frames;
+  struct mo_window_rec *next_frame;
   int is_frame;
   Boolean new_node;
-  struct mo_window *frame;
-  struct mo_window *parent;
-  struct mo_window *do_frame;
+  struct mo_window_rec *frame;
+  struct mo_window_rec *parent;
+  struct mo_window_rec *do_frame;
   char *frametext;
   char *frametexthead;
   char *frameurl;
@@ -714,7 +715,7 @@ typedef struct mo_window {
  * mo_node will never be effective across multiple mo_window's;
  * each window has its own linear history list.
  */
-typedef struct mo_node {
+typedef struct mo_node_rec {
   char *title;
   char *url;
   char *last_modified;
@@ -729,7 +730,7 @@ typedef struct mo_node {
   int position;
 
   /* The type of annotation this is (if any) */
-  int annotation_type;
+  mo_annot_type annotation_type;
 
   /* This is returned from HTMLPositionToId. */
   int docid;
@@ -759,20 +760,20 @@ typedef struct mo_node {
   char *ftp_type;
 
   /* Frame info */
-  struct mo_frame *frames;
+  struct mo_frame_rec *frames;
 
-  struct mo_node *previous;
-  struct mo_node *next;
+  struct mo_node_rec *previous;
+  struct mo_node_rec *next;
 } mo_node;
 
-typedef struct mo_frame {
+typedef struct mo_frame_rec {
   char *url;
   int docid;
   void *cached_widgets;
   Widget scrolled_win;
   int level;
   int num;
-  struct mo_frame *next;
+  struct mo_frame_rec *next;
 } mo_frame;
 
 /* ------------------------------------------------------------------------ */
@@ -783,12 +784,6 @@ typedef enum {
   mo_fail = 0,
   mo_succeed
 } mo_status;
-
-typedef enum {
-  mo_annotation_public = 0,
-  mo_annotation_workgroup,
-  mo_annotation_private
-} mo_pubpri_token;
 
 
 /* ---------------------------- A few globals ----------------------------- */
@@ -836,7 +831,6 @@ typedef enum {
   mo_audio_annotate,
 #endif
   mo_annotate_edit, mo_annotate_delete,
-  mo_checkout, mo_checkin,
   mo_fancy_selections,
   mo_default_underlines, mo_l1_underlines, mo_l2_underlines, mo_l3_underlines,
   mo_no_underlines, mo_binary_transfer,
@@ -851,9 +845,10 @@ typedef enum {
   mo_news_fmt0, mo_news_fmt1, mo_news_index, mo_news_list,
   mo_news_groups, mo_news_flush, mo_news_flushgroup,
   mo_news_grp0, mo_news_grp1, mo_news_grp2,
-  mo_news_art0, mo_news_art1, mo_use_flush,
+  mo_news_art0, mo_news_art1,
   mo_news_sub, mo_news_unsub, mo_news_sub_anchor, mo_news_unsub_anchor,
   mo_news_mread, mo_news_mread_anchor, mo_news_munread, mo_news_maunread,
+  mo_news_server,
 
   /* Other stuff */
   mo_re_init, mo_delay_image_loads, mo_table_support, mo_expand_images_current,

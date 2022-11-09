@@ -13,12 +13,6 @@
 #include "HTAlert.h"
 
 
-PUBLIC void HTAlert (WWW_CONST char *Msg)
-{
-  mo_gui_notify_progress(Msg);
-  return;
-}
-
 PUBLIC char *HTPrompt (WWW_CONST char *Msg, WWW_CONST char *deflt)
 {
   char *Tmp = prompt_for_string(Msg);

@@ -985,7 +985,8 @@ static void Classification(unsigned char *image, unsigned int size, int alpha)
   if (srcTrace && Quantize_Found_Alpha) {
     fprintf(stderr, "[QUANTIZE] Found Alpha Channel\n");
     if (!Quantize_Found_NZero_Alpha)
-      fprintf(stderr, "[QUANTIZE] Alpha Channel is all zero\n");
+      fprintf(stderr,
+              "[QUANTIZE] Alpha Channel is all 0 (or only 0 and 255)\n");
   }
 #endif
 }

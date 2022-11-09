@@ -8,8 +8,10 @@
 ! HP SSL support on 27-Nov-2003 by George Cook
 ! DXm library added on 8-Feb-2006 by George Cook
 ! Tiff support added on 5-Jul-2006 by George Cook
+! G Float for VAX and IEEE float for Alpha on 18-Nov-2007 by George Cook
+! SVG image support added on 18-Aug-2008 by George Cook
 !
-! Copyright (C) 2003, 2005, 2006, 2007 - The VMS Mosaic Project
+! Copyright (C) 2003, 2005, 2006, 2007, 2008 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -32,6 +34,28 @@ LIBWAISQ =
 .ELSE
 LIBWAIS = [-.FREEWAIS-0_5.IR.$(WORK)]LIBWAIS.OLB
 LIBWAISQ = $(LIBWAIS)/Lib
+.ENDIF
+
+.IFDEF NOSVG
+LIBRSVG =
+LIBGDKPIXBUF =
+LIBEXPAT =
+LIBFONTCONFIG =
+LIBFREETYPE =
+LIBPANGO =
+.ELSE
+LIBRSVG = [-.LIBRSVG.$(WORK)]LIBRSVG.OLB
+LIBGDKPIXBUF = [-.LIBGDK-PIXBUF.$(WORK)]LIBGDK-PIXBUF.OLB
+LIBEXPAT = [-.LIBEXPAT.$(WORK)]LIBEXPAT.OLB
+LIBFONTCONFIG = [-.LIBFONTCONFIG.$(WORK)]LIBFONTCONFIG.OLB
+LIBFREETYPE = [-.LIBFREETYPE.$(WORK)]LIBFREETYPE.OLB
+LIBPANGO = [-.LIBPANGO.$(WORK)]LIBPANGO.OLB
+.ENDIF
+
+.IFDEF NOTIFF
+LIBTIFF =
+.ELSE
+LIBTIFF = [-.LIBTIFF.$(WORK)]LIBTIFF.OLB
 .ENDIF
 
 .IFDEF NOSSL
@@ -64,11 +88,21 @@ CQUALC=/DECC/Prefix=(All,Except=(Getpwuid,Ioctl))
 .ENDIF
 .ENDIF
 .ELSE	! VAX C
-VAXC_RTL = SYS$Library:VaxCRTL.Exe/Share
+VAXC_RTL = Sys$Share:VAXCRTLG.exe/Share
 .IFDEF DECCVAXC
 CQUALC=/VAXC
 .ELSE
 CQUALC=
+.ENDIF
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
 .ENDIF
 .ENDIF
 
@@ -170,6 +204,13 @@ XEXT_LIB = SYS$Library:DECW$XExtLibShr.Exe/Share
 	@ Define LIBLITECLUE 'Topdir'LIBLITECLUE]
 	@ Define LIBVMS      'Topdir'LIBVMS]
 	@ Define LIBTIFF     'Topdir'LIBTIFF]
+	@ Define GLIB        'Topdir'GLIB]
+.IFDEF NOSVG
+.ELSE
+	@ Define LIBRSVG     'Topdir'LIBRSVG]
+	@ Define GDK-PIXBUF  'Topdir'LIBGDK-PIXBUF]
+	@ Define GOBJECT     'Topdir'GLIB.GOBJECT]
+.ENDIF
 .ENDIF
 .IFDEF PATHWAY
 	@ @[-.TWG]DEF
@@ -192,43 +233,41 @@ XEXT_LIB = SYS$Library:DECW$XExtLibShr.Exe/Share
 .IFDEF PATHWAY
 	@ Define DECC$User_Include 'F$Environment("Default")',LIBWWW2, -
 		LIBHTMLW,LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB, -
-		LIBLITECLUE
+		LIBRSVG,GDK-PIXBUF,LIBLITECLUE,GLIB
 .ELSE
 	@ Define DECC$User_Include 'F$Environment("Default")',LIBWWW2, -
 		LIBHTMLW,LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB, -
-		LIBLITECLUE,SYS
+		LIBRSVG,GDK-PIXBUF,LIBLITECLUE,SYS
 	@ Define DECC$SYSTEM_Include 'F$Environment("Default")',LIBWWW2, -
 		LIBHTMLW,LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB, -
-		LIBLITECLUE,SYS
+		LIBRSVG,GDK-PIXBUF,LIBLITECLUE,GLIB,SYS
 .ENDIF
 .ELSE	! VAX C or GNU C compilation
 .IFDEF PATHWAY
 	@ Define C$Include 'F$Environment("Default")',LIBWWW2,LIBHTMLW, -
-		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,LIBLITECLUE,ZLIB
+		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,LIBRSVG,
+		GDK-PIXBUF,LIBLITECLUE,GLIB
 .ELSE
 .IFDEF VAXC
 	@ Define C$Include 'F$Environment("Default")',LIBWWW2,LIBHTMLW, -
-		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,LIBLITECLUE,SYS
+		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,LIBRSVG, -
+		GDK-PIXBUF,LIBLITECLUE,GLIB,SYS
 	@ Define VAXC$Include 'F$Environment("Default")',LIBWWW2,LIBHTMLW, -
-		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,LIBLITECLUE,SYS
+		LIBXMX,LIBTIFF,LIBJPEG,LIBOPENJPEG,LIBPNG,ZLIB,LIBRSVG, -
+ 		GDK-PIXBUF,LIBLITECLUE,GLIB,SYS
 .ENDIF
 .ENDIF
 .ENDIF
 
-.IFDEF NOTIFF
 PROG_LIBS = [-.LIBHTMLW.$(WORK)]LIBHTMLW.OLB [-.LIBXMX.$(WORK)]LIBXMX.OLB \
   [-.LIBWWW2.$(WORK)]LIBWWW.OLB [-.LIBJPEG.$(WORK)]LIBJPEG.OLB \
   [-.LIBOPENJPEG.$(WORK)]LIBOPENJPEG.OLB [-.LIBNUT.$(WORK)]LIBNUT.OLB \
   [-.LIBPNG.$(WORK)]LIBPNG.OLB [-.ZLIB.$(WORK)]LIBZ.OLB \
-  [-.LIBLITECLUE.$(WORK)]LIBLITECLUE.OLB [-.LIBVMS.$(WORK)]LIBVMS.OLB $(LIBWAIS)
-.ELSE
-PROG_LIBS = [-.LIBHTMLW.$(WORK)]LIBHTMLW.OLB [-.LIBXMX.$(WORK)]LIBXMX.OLB \
-  [-.LIBWWW2.$(WORK)]LIBWWW.OLB [-.LIBJPEG.$(WORK)]LIBJPEG.OLB \
-  [-.LIBOPENJPEG.$(WORK)]LIBOPENJPEG.OLB [-.LIBNUT.$(WORK)]LIBNUT.OLB \
-  [-.LIBPNG.$(WORK)]LIBPNG.OLB [-.ZLIB.$(WORK)]LIBZ.OLB \
+  [-.LIBXML2.$(WORK)]LIBXML2.OLB [-.LIBCROCO.$(WORK)]LIBCROCO.OLB $(LIBRSVG) \
   [-.LIBLITECLUE.$(WORK)]LIBLITECLUE.OLB [-.LIBVMS.$(WORK)]LIBVMS.OLB \
-  [-.LIBTIFF.$(WORK)]LIBTIFF.OLB $(LIBWAIS)
-.ENDIF 
+  [-.GLIB.$(WORK)]GLIB.OLB [-.LIBINTL.$(WORK)]LIBINTL.OLB $(LIBTIFF) \
+  $(LIBGDKPIXBUF) $(LIBEXPAT) $(LIBFONTCONFIG) $(LIBFREETYPE) $(LIBPANGO) \
+  $(LIBWAIS)
 
 OBJS = Odir:accept.obj,Odir:annotate.obj,Odir:audan.obj,Odir:bla.obj,\
  Odir:ccibindings.obj,Odir:ccibindings2.obj,Odir:cciserver.obj,\
@@ -242,8 +281,9 @@ OBJS = Odir:accept.obj,Odir:annotate.obj,Odir:audan.obj,Odir:bla.obj,\
  Odir:newsrc.obj,Odir:pan.obj,Odir:picread.obj,Odir:pixmaps.obj,\
  Odir:prefs.obj,Odir:proxy-dialogs.obj,Odir:proxy-misc.obj,\
  Odir:quantize.obj,Odir:readbmp.obj,Odir:readj2k.obj,Odir:readjpeg.obj,\
- Odir:readpng.obj,Odir:readsun.obj,Odir:readtga.obj,Odir:readtiff.obj,\
- Odir:readxwd.obj,Odir:support.obj,Odir:xpmhash.obj,Odir:xpmread.obj
+ Odir:readpng.obj,Odir:readsun.obj,Odir:readsvg.obj,Odir:readtga.obj,\
+ Odir:readtiff.obj,Odir:readxwd.obj,Odir:support.obj,Odir:xpmhash.obj,\
+ Odir:xpmread.obj
 
 default : $(LIBTARGET) $(WDIR)libraries.opt $(NAME).exe_$(WORK)
 	@ Continue
@@ -252,6 +292,9 @@ $(NAME).exe_$(WORK) : $(LIBTARGET) $(PROG_LIBS) $(WDIR)libraries.opt
 .IFDEF NOLINK
 	@ Continue
 .ELSE
+.IFDEF VAXC
+    @ Define/User VAXCRTL Sys$Library:VAXC$EMPTY.EXE
+.ENDIF 
     LINK$(LOPTIONS)/Exe=$(NAME).exe_$(WORK) $(WDIR)libraries.opt/opt
     @ Write SYS$Output "Linking done.  Welcome to VMS Mosaic ''F$Edit("$(IDENT)","LOWERCASE")'"
 .ENDIF
@@ -264,17 +307,39 @@ $(WDIR)libraries.opt :
 	@ write libraries_file "[-.LIBHTMLW.$(WORK)]LIBHTMLW.OLB/Lib"
 	@ write libraries_file "[-.LIBXMX.$(WORK)]LIBXMX.OLB/Lib"
 	@ write libraries_file "[-.LIBWWW2.$(WORK)]LIBWWW.OLB/Lib"
+	@ write libraries_file "[-.LIBOPENJPEG.$(WORK)]LIBOPENJPEG.OLB/Lib"
 .IFDEF NOTIFF
 .ELSE
 	@ write libraries_file "[-.LIBTIFF.$(WORK)]LIBTIFF.OLB/Lib"
 .ENDIF
-	@ write libraries_file "[-.LIBJPEG.$(WORK)]LIBJPEG.OLB/Lib"
-	@ write libraries_file "[-.LIBOPENJPEG.$(WORK)]LIBOPENJPEG.OLB/Lib"
 	@ write libraries_file "[-.LIBNUT.$(WORK)]LIBNUT.OLB/Lib"
+.IFDEF NOSVG
+.ELSE
+      	@ write libraries_file "$(LIBRSVG)/Lib"
+      	@ write libraries_file "$(LIBGDKPIXBUF)/Lib"
+.ENDIF
+	@ write libraries_file "[-.LIBJPEG.$(WORK)]LIBJPEG.OLB/Lib"
 	@ write libraries_file "[-.LIBPNG.$(WORK)]LIBPNG.OLB/Lib"
+      	@ write libraries_file "[-.LIBCROCO.$(WORK)]LIBCROCO.OLB/Lib"
+      	@ write libraries_file "[-.LIBXML2.$(WORK)]LIBXML2.OLB/Lib"
+.IFDEF NOSVG
+.ELSE
+	@ write libraries_file "[-.LIBPANGO.$(WORK)]LIBPANGO.OLB/Lib"
+	@ write libraries_file "[-.LIBART.$(WORK)]LIBART.OLB/Lib"
+	@ write libraries_file "[-.GLIB.$(WORK)]GOBJECTLIB.OLB/Lib"
+.ENDIF
+      	@ write libraries_file "[-.GLIB.$(WORK)]GLIB.OLB/Lib"
+      	@ write libraries_file "[-.LIBINTL.$(WORK)]LIBINTL.OLB/Lib"
+.IFDEF NOSVG
+.ELSE
+	@ write libraries_file "$(LIBFONTCONFIG)/Lib"
+	@ write libraries_file "$(LIBFREETYPE)/Lib"
+	@ write libraries_file "$(LIBEXPAT)/Lib"
+.ENDIF
 	@ write libraries_file "[-.ZLIB.$(WORK)]LIBZ.OLB/Lib"
 	@ write libraries_file "[-.LIBLITECLUE.$(WORK)]LIBLITECLUE.OLB/Lib"
 	@ write libraries_file "[-.LIBVMS.$(WORK)]LIBVMS.OLB/Lib"
+
 .IFDEF NOWAIS
 .ELSE
       	@ write libraries_file "$(LIBWAISQ)"
@@ -301,6 +366,7 @@ $(WDIR)libraries.opt :
 	@ write libraries_file "$(XEXT_LIB)"
 	@ write libraries_file "$(VAXC_INET_LIB)"
 .IFDEF VAXC
+	@ write libraries_file "VAXCRTL/Share"
 	@ write libraries_file "$(VAXC_RTL)"
 .ENDIF
 	@ close libraries_file
@@ -489,10 +555,10 @@ Odir:pan.obj :           pan.c mosaic.h pan.h prefs.h prefs_defs.h toolbar.h\
 			 [-]config_$(WORK).h
 Odir:picread.obj :       picread.c gifread.h mosaic.h picread.h prefs.h\
                          prefs_defs.h readbmp.h readtga.h readtiff.h\
-			 readjpeg.h readpng.h readsun.h readxwd.h toolbar.h\
-			 xpmread.h [-.zlib]zconf.h [-.zlib]zlib.h\
+			 readjpeg.h readpng.h readsun.h readsvg.h readxwd.h\
+			 toolbar.h xpmread.h [-.zlib]zconf.h [-.zlib]zlib.h\
                          [-.libpng]png.h [-.libpng]pngconf.h [-.libxmx]xmx.h\
-                         [-]config.h [-]config_$(WORK).h
+                         [-]config.h [-]config_$(WORK).h [-]svg_$(WORK).h
 Odir:pixmaps.obj :       pixmaps.c mosaic.h pixmaps.h prefs.h prefs_defs.h\
 			 medcut.h toolbar.h xpm.h xpmread.h [-.libxmx]xmx.h\
                          [-]config.h [-]config_$(WORK).h [.pixmaps]icon_1.xpm\
@@ -527,6 +593,8 @@ Odir:readpng.obj :       readpng.c mosaic.h prefs.h prefs_defs.h readpng.h\
                          [-]config.h [-]config_$(WORK).h
 Odir:readsun.obj :	 readsun.c mosaic.h readsun.h quantize.h\
 			 [-]config.h [-]config_$(WORK).h
+Odir:readsvg.obj :	 readsvg.c mosaic.h readsvg.h quantize.h\
+			 [-]config.h [-]config_$(WORK).h [-]SVG_$(WORK).h
 Odir:readtga.obj :	 readtga.c mosaic.h readtga.h libtarga.h quantize.h\
 			 [-]config.h [-]config_$(WORK).h
 Odir:readtiff.obj :	 readtiff.c mosaic.h readtiff.h quantize.h\
@@ -540,7 +608,7 @@ Odir:xpmread.obj :       xpmread.c mosaic.h prefs.h prefs_defs.h toolbar.h\
 			 [-]config_$(WORK).h
 
 .c.obj :
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb :
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

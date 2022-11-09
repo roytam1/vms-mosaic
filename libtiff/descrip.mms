@@ -15,6 +15,16 @@ CC = GCC
 CC = CC
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .FIRST
         @ If F$Search("$(LIBTARGET)") .EQS. "" Then Library/Create $(LIBTARGET)
 	@ Define/NoLog Odir $(WDIR)
@@ -40,7 +50,7 @@ CQUAL = /DECC/INCLUDE=([-.ZLIB],[-.LIBJPEG])
 CQUAL = /VAXC/INCLUDE=([-.ZLIB],[-.LIBJPEG])
 .ELSE
 .IFDEF GNUC
-CQUAL = /INCLUDE=(GCC_Include,[-.ZLIB.],[-.LIBJPEG])
+CQUAL = /INCLUDE=(GCC_Include)
 .ELSE
 /INCLUDE=([-.ZLIB],[-.LIBJPEG])
 .ENDIF
@@ -97,7 +107,7 @@ $(LIBTARGET) : $(LIBTARGET)($(OBJS))
 	@ Write SYS$Output "Library libtiff.olb built."
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -141,7 +141,7 @@ void FreeMapList(MapInfo *map)
 		area = map->areaList;
 		while (area) {
 			nextarea = area->next;
-			coords = area->coordList;			
+			coords = area->coordList;
 			while (coords) {
 				nextcoords = coords->next;
 				free(coords);

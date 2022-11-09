@@ -8,6 +8,7 @@ $! and Tim Bell (tbell@netcom.com) for their help.
 $!
 $! Modified for VMS Mosaic 2.6 build, 5-Nov-1995, George Cook
 $! Modified for VMS Mosaic 2.7 GNU C build, 10-Sep-1996, George Cook
+$! Modified for VMS Mosaic 4.3 build, 17-Nove-2007, George Cook
 $!
 $ OPT = ""
 $ If (F$Locate("DECC=1", P1) .NE. F$Length(P1))
@@ -28,6 +29,13 @@ $  Then
 $    DoCompile := GCC/NoDebug/Optimize/Names=Upper
 $    OPT = ",GNU_CC:[000000]gcclib.olb/lib,Sys$Disk:[]makvms.opt/Option"
 $  EndIf
+$!
+$ If (F$Locate("ALPHA=1", P1) .NE. F$Length(P1))
+$  Then DoCompile = DoCompile + "/FLOAT=IEEE"
+$  Endif
+$ If (F$Locate("VAX=1", P1) .NE. F$Length(P1))
+$  Then DoCompile = DoCompile + "/G_FLOAT"
+$  Endif
 $!
 $ DoCompile jcapimin.c
 $ DoCompile jcapistd.c

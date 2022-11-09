@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -71,18 +71,18 @@ extern int srcTrace;
 #define BUFLEN 256
 #define BLANKS " \t\n"
 
-extern struct Proxy *proxy_list, *noproxy_list;
+extern Proxy *proxy_list, *noproxy_list;
 
-struct Proxy *ReadProxies(char *filename)
+Proxy *ReadProxies(char *filename)
 {
 	FILE *fp;
 	char buf[BUFLEN];
 	char *psb;
-	struct Proxy *head = NULL;
-	struct Proxy *cur = NULL;
-	struct Proxy *p;
-	struct ProxyDomain *pCurList;
-		
+	Proxy *head = NULL;
+	Proxy *cur = NULL;
+	Proxy *p;
+	ProxyDomain *pCurList;
+
 	if (!(fp = fopen(filename, "r"))) {
 #ifndef DISABLE_TRACE
 		if (srcTrace)
@@ -106,7 +106,7 @@ struct Proxy *ReadProxies(char *filename)
 		if (srcTrace)
 			fprintf(stderr, "Read proxy: %s\n", buf);
 #endif
-		p = (struct Proxy *)calloc(1, sizeof(struct Proxy));
+		p = (Proxy *)calloc(1, sizeof(Proxy));
 		
 		/** calloc zeros them
 		p->next = NULL;
@@ -180,15 +180,15 @@ struct Proxy *ReadProxies(char *filename)
 	return(head);
 }
 
-struct Proxy *ReadNoProxies(char *filename)
+Proxy *ReadNoProxies(char *filename)
 {
 	FILE *fp;
 	char buf[BUFLEN];
 	char *psb;
-	struct Proxy *head = NULL;
-	struct Proxy *cur = NULL;
-	struct Proxy *p;
-		
+	Proxy *head = NULL;
+	Proxy *cur = NULL;
+	Proxy *p;
+
 	if (!(fp = fopen(filename, "r")))
 		return NULL;
 
@@ -206,7 +206,7 @@ struct Proxy *ReadNoProxies(char *filename)
 		if (srcTrace) 
 			fprintf(stderr, "Read no proxy: %s\n", buf);
 #endif
-		p = (struct Proxy *)calloc(1, sizeof(struct Proxy));
+		p = (Proxy *)calloc(1, sizeof(Proxy));
 		
 		/*
 		** The proxy protocol, transport, and list
@@ -248,10 +248,9 @@ struct Proxy *ReadNoProxies(char *filename)
 	return(head);
 }
 
-struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
+ProxyDomain *AddProxyDomain(char *sbDomain, ProxyDomain **pdList)
 {
-	struct ProxyDomain *pNewDomain =
-		       (struct ProxyDomain *)malloc(sizeof(struct ProxyDomain));
+	ProxyDomain *pNewDomain = (ProxyDomain *)malloc(sizeof(ProxyDomain));
 
 	if (!pNewDomain)
 		return NULL;
@@ -262,7 +261,7 @@ struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
 		(*pdList)->next = NULL;
 		(*pdList)->prev = NULL;
 	} else {
-		struct ProxyDomain *p = *pdList;
+		ProxyDomain *p = *pdList;
 
 		while (p->next)
 			p = p->next;
@@ -273,7 +272,7 @@ struct ProxyDomain *AddProxyDomain(char *sbDomain, struct ProxyDomain **pdList)
 	return pNewDomain;
 }
 
-void DeleteProxyDomain(struct ProxyDomain *p)
+void DeleteProxyDomain(ProxyDomain *p)
 {
 	if (!p)
 		return;
@@ -298,7 +297,7 @@ void DeleteProxyDomain(struct ProxyDomain *p)
 int has_fallbacks(char *protocol)
 {
 	int protocol_len;
-	struct Proxy *ptr = proxy_list;
+	Proxy *ptr = proxy_list;
 
 	if (!proxy_list || !protocol || !*protocol)
 		return(0);
@@ -314,9 +313,9 @@ int has_fallbacks(char *protocol)
 	return(0);
 }
 
-struct Proxy *GetNoProxy(char *access, char *site)
+Proxy *GetNoProxy(char *access, char *site)
 {
-	struct Proxy *p = noproxy_list;
+	Proxy *p = noproxy_list;
 	char *port = NULL;
 	int portnum = -1;
 
@@ -348,7 +347,7 @@ struct Proxy *GetNoProxy(char *access, char *site)
 
 void ClearTempBongedProxies()
 {
-	struct Proxy *p = proxy_list;
+	Proxy *p = proxy_list;
 
 	while (p) {
 		if (p->alive == 2)
@@ -358,10 +357,10 @@ void ClearTempBongedProxies()
 	return;
 }
 
-struct Proxy *GetProxy(char *proxy, char *access, int fMatchEnd)
+Proxy *GetProxy(char *proxy, char *access, int fMatchEnd)
 {
-	struct Proxy *p = proxy_list;
-	struct ProxyDomain *pd;
+	Proxy *p = proxy_list;
+	ProxyDomain *pd;
 
 	if (!access || !proxy)
 		return NULL;

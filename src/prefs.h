@@ -362,6 +362,11 @@ typedef struct {
     int multiple_image_limit;
     Boolean jpeg2000_error_messages;
 
+  /* 4.3 */
+    char *news_authentication_file;
+    Boolean print_landscape;
+    Boolean print_duplex_tumbled;
+
 } AppData, *AppDataPtr;
 
 

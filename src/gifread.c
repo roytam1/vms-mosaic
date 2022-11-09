@@ -61,7 +61,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include <stdio.h>
@@ -391,7 +391,7 @@ static int ZeroDataBlock = FALSE;
 
 static int GetDataBlock(FILE *fd, unsigned char *buf)
 {
-	unsigned char count = 0;
+	unsigned char count = '\0';
 
 	if (!ReadOK(fd, &count, 1)) {
 #ifndef DISABLE_TRACE
@@ -400,9 +400,9 @@ static int GetDataBlock(FILE *fd, unsigned char *buf)
 #endif
 		return -1;
 	}
-	ZeroDataBlock = (count == 0);
+	ZeroDataBlock = !count;
 
-	if (count && (!ReadOK(fd, buf, count))) {
+	if (count && !ReadOK(fd, buf, count)) {
 #ifndef DISABLE_TRACE
 		if (srcTrace)
 			fprintf(stderr, "Error in reading DataBlock\n");
@@ -529,16 +529,15 @@ static int nextLWZ(FILE *fd)
 			return firstcode;
 	       }
 	       if (code == end_code) {
-		        int count;
 		        unsigned char buf[260];
 
 			if (ZeroDataBlock)
 				return -2;
 
-		        while ((count = GetDataBlock(fd, buf)) > 0)
+		        while ((i = GetDataBlock(fd, buf)) > 0)
 			       ;
 #ifndef DISABLE_TRACE
-		        if (count && srcTrace)
+		        if (i && srcTrace)
 				fprintf(stderr,
 				      "Missing EOD in data (common occurence)");
 #endif
@@ -553,9 +552,8 @@ static int nextLWZ(FILE *fd)
 	       }
 	       while (code >= clear_code) {
 		       *sp++ = table[1][code];
-		       if (code == table[0][code])
-			       return(code);
-		       if ((int)sp >= ((int)stack + sizeof(stack)))
+		       if ((code == table[0][code]) ||
+		          ((int)sp >= ((int)stack + sizeof(stack))))
 			       return(code);
 		       code = table[0][code];
 	       }
@@ -604,8 +602,7 @@ static unsigned char *ReadImage(FILE *fd, int len, int height, XColor *colrs,
 
 	initLWZ(c);
 
-	image = (unsigned char *)calloc(size, sizeof(char));
-	if (!image) {
+	if (!(image = (unsigned char *)calloc(size, sizeof(char)))) {
 #ifndef DISABLE_TRACE
 		if (srcTrace || reportBugs)
 			fprintf(stderr,
@@ -657,7 +654,7 @@ static unsigned char *ReadImage(FILE *fd, int len, int height, XColor *colrs,
 		dp = image;
 		for (i = 0; i < size; i++) {
 			if ((v = readLWZ(fd)) < 0)
-				goto fini;
+				break;
 			*dp++ = v;
 		}
 	}

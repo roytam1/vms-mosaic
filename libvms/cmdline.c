@@ -15,7 +15,7 @@
 **
 */
 
-/* Copyright (C) 2003, 2004, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2003, 2004, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "../src/mosaic.h"
@@ -334,27 +334,22 @@ unsigned long vms_mosaic_cmdline(int *argc_p, char ***argv_p)
     **  First, check to see if any of the regular options were specified.
     */
 
-    ptr = options;		/* Point to temporary buffer */
+    options[0] = '\0';
 
     /*
     **  Set color or monochrome resources
     */
-    if (cli$present(&cli_color) != CLI$_ABSENT) {
-	strncpy(ptr, " -color", 7);
-	ptr += 7;
-    }
-    if (cli$present(&cli_mono) != CLI$_ABSENT) {
-	strncpy(ptr, " -mono", 6);
-	ptr += 6;
-    }
+    if (cli$present(&cli_color) != CLI$_ABSENT)
+	strcat(options, " -color");
+
+    if (cli$present(&cli_mono) != CLI$_ABSENT)
+	strcat(options, " -mono");
 
     /*
     ** Do not use any defaults
     */
-    if (cli$present(&cli_defaults) == CLI$_NEGATED) {
-	strncpy(ptr, " -nd", 4);
-	ptr += 4;
-    }
+    if (cli$present(&cli_defaults) == CLI$_NEGATED)
+	strcat(options, " -nd");
 
     /*
     **  Set display
@@ -371,34 +366,26 @@ unsigned long vms_mosaic_cmdline(int *argc_p, char ***argv_p)
     /*
     **  Install color map
     */
-    if (cli$present(&cli_install) == CLI$_PRESENT) {
-	strncpy(ptr, " -install", 9);
-	ptr += 9;
-    }
+    if (cli$present(&cli_install) == CLI$_PRESENT)
+	strcat(options, " -install");
 
     /*
     **  Start as icon
     */
-    if (cli$present(&cli_iconic) == CLI$_PRESENT) {
-	strncpy(ptr, " -iconic", 8);
-	ptr += 8;
-    }
+    if (cli$present(&cli_iconic) == CLI$_PRESENT)
+	strcat(options, " -iconic");
 
     /*
     **  Set for remote control
     */
-    if (cli$present(&cli_remote) == CLI$_PRESENT) {
-	strncpy(ptr, " -mbx", 5);
-	ptr += 5;
-    }
+    if (cli$present(&cli_remote) == CLI$_PRESENT)
+	strcat(options, " -mbx");
 
     /*
     **  Use group mailbox
     */
-    if (cli$present(&cli_group) == CLI$_PRESENT) {
-	strncpy(ptr, " -mbx_grp", 9);
-	ptr += 9;
-    }
+    if (cli$present(&cli_group) == CLI$_PRESENT)
+	strcat(options, " -mbx_grp");
 
     /*
     **  Set mailbox name for remote control
@@ -415,18 +402,14 @@ unsigned long vms_mosaic_cmdline(int *argc_p, char ***argv_p)
     /*
     **  Delay image loading
     */
-    if (cli$present(&cli_delayimageloads) == CLI$_PRESENT) {
-	strncpy(ptr, " -dil", 5);
-	ptr += 5;
-    }
+    if (cli$present(&cli_delayimageloads) == CLI$_PRESENT)
+	strcat(options, " -dil");
 
     /*
     ** Do not use global history file
     */
-    if (cli$present(&cli_globalhistory) == CLI$_NEGATED) {
-	strncpy(ptr, " -ngh", 5);
-	ptr += 5;
-    }
+    if (cli$present(&cli_globalhistory) == CLI$_NEGATED)
+	strcat(options, " -ngh");
 
     /*
     **  Image cache size in Kilobytes
@@ -439,16 +422,12 @@ unsigned long vms_mosaic_cmdline(int *argc_p, char ***argv_p)
     */
     if (cli$present(&cli_kiosk) == CLI$_PRESENT) {
 	if (cli$present(&cli_kioskNoExit) != CLI$_ABSENT) {
-	    strncpy(ptr, " -kioskNoExit", 13);
-	    ptr += 13;
+	    strcat(options, " -kioskNoExit");
 	} else {
-	    strncpy(ptr, " -kiosk", 7);
-	    ptr += 7;
+	    strcat(options, " -kiosk");
 	}
-	if (cli$present(&cli_kioskPrint) != CLI$_ABSENT) {
-	    strncpy(ptr, " -kioskPrint", 12);
-	    ptr += 12;
-	}
+	if (cli$present(&cli_kioskPrint) != CLI$_ABSENT)
+	    strcat(options, " -kioskPrint");
     }
 
     /*
@@ -472,30 +451,22 @@ unsigned long vms_mosaic_cmdline(int *argc_p, char ***argv_p)
     /*
     **  Set synchronous mode
     */
-    if (cli$present(&cli_synchronous) == CLI$_PRESENT) {
-	strncpy(ptr, " -sync", 6);
-	ptr += 6;
-    }
+    if (cli$present(&cli_synchronous) == CLI$_PRESENT)
+	strcat(options, " -sync");
 
     /*
     **  Disable preferences
     */
-    if (cli$present(&cli_nopreferences) != CLI$_ABSENT) {
-	strncpy(ptr, " -nopref", 8);
-	ptr += 8;
-    }
+    if (cli$present(&cli_nopreferences) != CLI$_ABSENT)
+	strcat(options, " -nopref");
 
     /*
     **  Now copy the final options string to the_cmd_line.
     */
-    x = ptr - options;
-    if (x > 1) {
-	options[x] = '\0';
-      	len = strlen(the_cmd_line) + x + 1;
-	if (!(the_cmd_line = (char *) realloc(the_cmd_line, len)))
-	    return(SS$_INSFMEM);
-	strcat(the_cmd_line, options);
-    }
+    len = strlen(the_cmd_line) + strlen(options) + 1;
+    if (!(the_cmd_line = (char *) realloc(the_cmd_line, len)))
+	return(SS$_INSFMEM);
+    strcat(the_cmd_line, options);
 
     /*
     **  Now get the specified startup URL.

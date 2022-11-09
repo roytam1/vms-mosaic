@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -189,20 +189,20 @@ static int CollectSubmitInfo(FormInfo *fptr, char ***name_list,
 		cbdata.attribute_names[cnt] = wptr->name;
 		switch (wptr->type) {
 		    case W_TEXTFIELD:
-			val = XmTextFieldGetString(wptr->w);
-			if (val && *val)
-			    cbdata.attribute_values[cnt] = strdup(val);
-			if (val)
+			if (val = XmTextFieldGetString(wptr->w)) {
+			    if (*val)
+			        cbdata.attribute_values[cnt] = strdup(val);
 			    XtFree(val);
+			}
 			break;
 		    case W_TEXTAREA:
 			XtSetArg(arg[0], XmNworkWindow, &child);
 			XtGetValues(wptr->w, arg, 1);
-			val = XmTextGetString(child);
-			if (val && *val)
-			    cbdata.attribute_values[cnt] = strdup(val);
-			if (val)
+			if (val = XmTextGetString(child)) {
+			    if (*val)
+			        cbdata.attribute_values[cnt] = strdup(val);
 			    XtFree(val);
+			}
 			break;
 		    case W_PASSWORD:
 			if (wptr->password && *wptr->password)
@@ -223,7 +223,7 @@ static int CollectSubmitInfo(FormInfo *fptr, char ***name_list,
 			XtSetArg(arg[1], XmNselectedItems, &str_list);
 			XtGetValues(child, arg, 2);
 
-			if (list_cnt == 0) {
+			if (!list_cnt) {
 			    cnt--;
 			    cbdata.attribute_count--;
 			} else {  /* list_cnt >= 1 */
@@ -278,13 +278,14 @@ static int CollectSubmitInfo(FormInfo *fptr, char ***name_list,
 			val = NULL;
 			XmStringGetLtoR(label, XmSTRING_DEFAULT_CHARSET, &val);
 			XmStringFree(label);
-			if (val && *val) {
-			    mval = MapOptionReturn(val, wptr->mapping);
-			    if (mval && *mval)
-			        cbdata.attribute_values[cnt] = strdup(mval);
-			}
-			if (val)
+			if (val) {
+			    if (*val) {
+			        mval = MapOptionReturn(val, wptr->mapping);
+			        if (mval && *mval)
+			            cbdata.attribute_values[cnt] = strdup(mval);
+			    }
 			    XtFree(val);
+			}
 			break;
 		    }
 		    case W_CHECKBOX:
@@ -661,10 +662,11 @@ void CBPasswordModify(Widget w, XtPointer client_data, XtPointer call_data)
 
 /*
  * RETURN was hit in a textfield in a form.
- * If this is the only textfield in this form, submit the form.
  */
 void CBActivateField(Widget w, XtPointer client_data, XtPointer call_data)
 {
+#ifdef ONLY_ONE_FIELD
+	/* If this is the only textfield in this form, submit the form. */
 	FormInfo *fptr = (FormInfo *)client_data;
 	HTMLWidget hw;
 	WidgetInfo *wptr;
@@ -700,6 +702,7 @@ void CBActivateField(Widget w, XtPointer client_data, XtPointer call_data)
 			wptr = wptr->next;
 		}
 	}
+
 	/*
 	 * Count the textfields in this form.
 	 */
@@ -713,6 +716,10 @@ void CBActivateField(Widget w, XtPointer client_data, XtPointer call_data)
 	 */
 	if (cnt == 1)
 		CBSubmitForm(w, client_data, call_data);
+#else
+	if (client_data)
+		CBSubmitForm(w, client_data, call_data);
+#endif
 }
 
 void CBResetForm(Widget w, XtPointer client_data, XtPointer call_data)
@@ -1096,7 +1103,7 @@ char *ComposeCommaList(char **list, int cnt)
 		tptr = (char *)(buf + len);
 		while (option && *option) {
 			if ((*option == '\\') || (*option == ',') ||
-				(*option == '\'')) {
+			    (*option == '\'')) {
 				*tptr++ = '\\';
 				*tptr++ = *option;
 				len += 2;
@@ -1115,8 +1122,7 @@ char *ComposeCommaList(char **list, int cnt)
 		}
 		*tptr = '\0';
 	}
-	tbuf = (char *)malloc(len + 1);
-	if (!tbuf)
+	if (!(tbuf = (char *)malloc(len + 1)))
 		goto failed;
 	strcpy(tbuf, buf);
 	free(buf);
@@ -1161,6 +1167,9 @@ static void UnMuckTextAreaValue(char *value)
                         tptr++;
                 }
         }
+	/* Remove final Linefeed */
+	if (*--tptr == '\n')
+		*tptr = '\0';
 }
 
 static char *MapOptionReturn(char *val, char **mapping)
@@ -1302,7 +1311,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				  XtParseTranslationTable(button_translations));
 			if (!hw->html.focus_follows_mouse) {
-			      XtOverrideTranslations(w, 
+			      XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			      XtOverrideTranslations(w, XtParseTranslationTable(
 				      "<Btn1Down>: Arm() traversal_current()"));
@@ -1359,7 +1368,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				  XtParseTranslationTable(button_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -1385,6 +1394,23 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtSetArg(arg[argcnt], XmNy, y);
 			argcnt++;
 			if (btext) {
+				char *tmp = ParseMarkTag(text, MT_INPUT,
+							 "ISBUTTON");
+
+				/* Unescape BUTTON text */
+				if (tmp) {
+					free(tmp);
+					tmp = btext;
+					while (*tmp) {
+						if (*tmp == '\\') {
+							*tmp = '\0';
+							strcat(btext,
+							       (char *)(++tmp));
+						} else {
+							tmp++;
+						}
+					}
+				}
 				label = XmStringCreateSimple(btext);
 				free(btext);
 			} else {
@@ -1397,7 +1423,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				  XtParseTranslationTable(button_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -1438,7 +1464,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				  XtParseTranslationTable(button_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -1476,7 +1502,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				  XtParseTranslationTable(button_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -1685,9 +1711,9 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 				w = XmCreateOptionMenu(hw->html.view,
 						      widget_name, arg, argcnt);
 				if (!hw->html.focus_follows_mouse) {
-				    XtOverrideTranslations(w, 
+				    XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
-				    XtOverrideTranslations(pulldown, 
+				    XtOverrideTranslations(pulldown,
 				      XtParseTranslationTable(traversal_table));
 				}
                                 argcnt = 0;
@@ -1783,7 +1809,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 						 argcnt);
 				ChildWidget = w;
 				if (!hw->html.focus_follows_mouse)
-				    XtOverrideTranslations(w, 
+				    XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
                                 XtManageChild(w);
 				w = scroll;
@@ -1852,7 +1878,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				XtParseTranslationTable(text_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
   /*
    * The proper order here is XtSetMappedWhenManaged, XtManageChild.  But a bug
@@ -1974,7 +2000,7 @@ WidgetInfo *MakeWidget(HTMLWidget hw, char *text,
 			XtOverrideTranslations(w,
 				XtParseTranslationTable(text_translations));
 			if (!hw->html.focus_follows_mouse)
-				XtOverrideTranslations(w, 
+				XtOverrideTranslations(w,
 				      XtParseTranslationTable(traversal_table));
 			XtSetMappedWhenManaged(w, False);
 			XtManageChild(w);
@@ -2130,7 +2156,7 @@ void WidgetPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 	height = widget_data->height + pcc->cur_font->descent;
 	baseline = widget_data->height / 2 + pcc->cur_font->ascent / 2;
 
-	if (!pcc->cw_only) { 
+	if (!pcc->cw_only) {
 	        ElemInfo *eptr;
 
 		/* Implicit label */
@@ -2147,7 +2173,7 @@ void WidgetPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 		AdjustBaseLine(eptr, pcc);
 		eptr->widget_data = widget_data;
 		widget_data->eptr = eptr;
-	} else {                   
+	} else {
 		if (pcc->computed_min_x < (width + pcc->eoffsetx +
 					   pcc->left_margin + extra))
                 	pcc->computed_min_x = width + pcc->eoffsetx +
@@ -2158,14 +2184,14 @@ void WidgetPlace(HTMLWidget hw, MarkInfo *mptr, PhotoComposeContext *pcc)
 					      extra_after;
 		if ((pcc->x + width + extra_after) > pcc->computed_max_x)
                 	pcc->computed_max_x = pcc->x + width + extra_after;
-                if (pcc->cur_line_height < height)           
-			pcc->cur_line_height = height;        
+                if (pcc->cur_line_height < height)
+			pcc->cur_line_height = height;
 		HTMLFreeWidgetInfo(widget_data);
         }
 	pcc->x += width + extra_after;
 	pcc->have_space_after = 0;
         pcc->is_bol = False;
-	pcc->pf_lf_state = 0;
+	pcc->pf_lf_state = LF_MIDDLE;
 	if (pcc->cw_only && pcc->nobr)
 		pcc->nobr_x += width + extra_after;
 }
@@ -2272,7 +2298,7 @@ void HTMLCacheWidgetInfo(void *ptr)
 			    }
 			    case W_PASSWORD:
 				if (wptr->password) {
-					wptr->cached_text = 
+					wptr->cached_text =
 							 strdup(wptr->password);
 				} else {
 					wptr->cached_text = NULL;
@@ -2316,7 +2342,7 @@ void HTMLFreeWidgetInfo(void *ptr)
 			 * mapped at the time it is destroyed.
 			 * So I move the invisible widget to -1000,-1000
 			 * before destroying it, to avoid a visible flash.
-			 */     
+			 */
 			if (tptr->mapped)
 				XtMoveWidget(tptr->w, -1000, -1000);
 			if (tptr->type == W_OPTIONMENU) {
@@ -2377,14 +2403,14 @@ void HTMLFreeFormInfo(void *ptr)
 
 void traversal_forward(Widget w, XEvent *event, String *params,
 		       Cardinal *num_params)
-{ 
+{
   HTMLTraverseTabGroups(w, XmTRAVERSE_NEXT_TAB_GROUP);
 }
 
 
 void traversal_back(Widget w, XEvent *event, String *params,
 		    Cardinal *num_params)
-{ 
+{
   HTMLTraverseTabGroups(w, XmTRAVERSE_PREV_TAB_GROUP);
 }
 
@@ -2460,7 +2486,7 @@ void HTMLTraverseTabGroups(Widget w, int how)
   top = (Widget) hw;
   while (!XtIsTopLevelShell(top))
       top = XtParent(top);
-  
+
   /* Get the saved one */
   lptr = hw->html.widget_focus;
 
@@ -2566,7 +2592,7 @@ void HTMLTraverseTabGroups(Widget w, int how)
 
     case XmTRAVERSE_CURRENT:
       lptr = hw->html.widget_list;
-      
+
       /* Check parent to allow for text areas (lptr->w would be scroll) */
       while (lptr) {
 	  if ((lptr->w == w) || (lptr->w == XtParent(w)))

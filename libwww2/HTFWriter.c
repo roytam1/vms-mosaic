@@ -138,10 +138,9 @@ PRIVATE int system_VMS (char *args)
   fcname = mo_tmpnam(NULL);
   strcat(fcname, ".COM");
 
-  fpc = fopen(fcname, "w");
-  if (!fpc) {
-      fprintf(stderr,
-            "\nVMS scratch file open error: %s\n", strerror(errno, vaxc$errno));
+  if (!(fpc = fopen(fcname, "w"))) {
+      fprintf(stderr, "\nVMS scratch file open error: %s\n",
+	      strerror(errno, vaxc$errno));
       return(0);
   }
   argsi = strdup(args);
@@ -159,17 +158,10 @@ PRIVATE int system_VMS (char *args)
   while (cp = strstr(argsi, " ; "))
       *++cp = '\n';
 
-  fprintf(fpc, "$ Set NoVerify\n");
-  fprintf(fpc, "$ On Warning Then GoTo Error\n");
-  fprintf(fpc, "$ Excode=1\n");
+  fprintf(fpc, "$ Set NoVerify\n$ On Warning Then GoTo Error\n$ Excode=1\n");
   fprintf(fpc, "%s", argsi);
-  fprintf(fpc, "$End:\n");
-  fprintf(fpc, "$ Delete$$/NoConfirm/NoLog %s;\n", fcname);
-  fprintf(fpc, "$Exit Excode\n");
-  fprintf(fpc, "$Error:\n");
-  fprintf(fpc, "$ Excode=$status\n");
-  fprintf(fpc, "$ Set Noon\n");
-  fprintf(fpc, "$ GoTo End\n");
+  fprintf(fpc, "$End:\n$ Delete$$/NoConfirm/NoLog %s;\n$Exit Excode\n", fcname);
+  fprintf(fpc, "$Error:\n$ Excode=$status\n$ Set Noon\n$ GoTo End\n");
   fclose(fpc);
 
   sprintf(cmd, "@%s", fcname);
@@ -194,7 +186,7 @@ PRIVATE int system_VMS (char *args)
   return (status);
 }
 
-#endif /* VMS, BSN, GEC */
+#endif  /* VMS, BSN, GEC */
 
 /*	Character handling
 **	------------------
@@ -217,7 +209,7 @@ PRIVATE void HTFWriter_put_character (HTStream *me, char c)
 **	---------------
 **
 **	Strings must be smaller than this buffer size.
-*/         
+*/
 PRIVATE void HTFWriter_put_string (HTStream *me, WWW_CONST char *s)
 {
   if (me->write_error)
@@ -253,6 +245,7 @@ static char *supportedTypes[] = {
         "image/x-png",
         "image/jp2",
 	"image/x-jpeg2000",
+	"image/svg+xml",
         "image/tiff",
         "image/x-tiff",
         "image/targa",
@@ -304,8 +297,10 @@ PRIVATE void HTFWriter_free (HTStream *me)
 {
   HText *text;
   char *tmp;
+#ifndef VMS
   static char *envbuf1 = NULL;
   static char *envbuf2 = NULL;
+#endif
 
   if (me->interrupted) {
       free(me->fnam);
@@ -317,7 +312,7 @@ PRIVATE void HTFWriter_free (HTStream *me)
       unlink(me->fnam);
 #else
       remove(me->fnam);
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
       HTProgress("Insufficient temporary disk space; could not transfer data.");
       free(me->fnam);
       free(me);
@@ -390,7 +385,7 @@ PRIVATE void HTFWriter_free (HTStream *me)
 	  }
 	  HTProgress("Spawning external viewer.");
 
-#ifndef VMS   /* PGE, Skip setting environment variable for VMS */
+#ifndef VMS  /* PGE, Skip setting environment variable for VMS */
 	  /*
 	   * Have to dance around putenv since it makes "envbuf*" part
 	   * of the actual environment string...*sigh* What a mess!
@@ -415,7 +410,7 @@ PRIVATE void HTFWriter_free (HTStream *me)
 	      sprintf(envbuf1, "MOSAIC_CURRENT_URL=%s", currentURL);
 	      putenv(envbuf1);
 	  }
-#endif   /* VMS, PGE */
+#endif  /* VMS, PGE */
 
 #ifndef VMS
 	  system(me->end_command);
@@ -428,7 +423,7 @@ PRIVATE void HTFWriter_free (HTStream *me)
 	  free(tmp);
 #endif
 
-#ifndef VMS   /* PGE, Skip setting environment variable for VMS */
+#ifndef VMS  /* PGE, Skip setting environment variable for VMS */
 	  if (envbuf1) {
 	      envbuf2 = (char *)malloc(strlen("MOSAIC_CURRENT_URL=") + 2);
 	      sprintf(envbuf2, "MOSAIC_CURRENT_URL=");
@@ -446,7 +441,7 @@ PRIVATE void HTFWriter_free (HTStream *me)
 	      sprintf(envbuf1, "MOSAIC_CURRENT_URL=");
 	      putenv(envbuf1);
 	  }
-#endif   /* VMS, PGE */
+#endif  /* VMS, PGE */
       } else {
           /* Internal reference, aka HDF file.  Just close output file. */
       }
@@ -520,13 +515,13 @@ PRIVATE void HTFWriter_handle_interrupt (HTStream *me)
   unlink(me->fnam);
 #else
   remove(me->fnam);
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 
 #ifndef DISABLE_TRACE
   if (www2Trace)
       fprintf(stderr, "*** HTFWriter interrupted; killed '%s'\n", me->fnam);
 #endif
-  
+
  outtahere:
   me->interrupted = 1;
   return;
@@ -537,14 +532,14 @@ PRIVATE void HTFWriter_handle_interrupt (HTStream *me)
 **	-----------------------
 */
 PRIVATE WWW_CONST HTStreamClass HTFWriter =  /* As opposed to print, etc. */
-{		
+{
 	"FileWriter",
 	HTFWriter_free,
 	HTFWriter_end_document,
 	HTFWriter_put_character, 	HTFWriter_put_string,
 	HTFWriter_write,
         HTFWriter_handle_interrupt
-}; 
+};
 
 
 /*	Take action using a system command
@@ -576,7 +571,7 @@ PUBLIC HTStream *HTSaveAndExecute (HTPresentation *pres,
   }
 #endif
 
-  me->isa = &HTFWriter;  
+  me->isa = &HTFWriter;
   /** calloc zeros
   me->interrupted = 0;
   me->write_error = 0;
@@ -594,17 +589,17 @@ PUBLIC HTStream *HTSaveAndExecute (HTPresentation *pres,
       fprintf(stderr, "[HTSaveAndExecute] me->compressed is '%d'\n",
               me->compressed);
 #endif
-  
+
   /* Save the file under a suitably suffixed name */
   if (!force_dump_to_file) {
       WWW_CONST char *suffix = HTFileSuffix(pres->rep);
-      
+
       me->fnam = mo_tmpnam(anchor->address);
       if (suffix) {
 	  /* mo_tmpnam returns a little extra room */
    	  if (strlen(suffix) > 10) {
               char *freeme = me->fnam;
-         
+
               me->fnam = (char *)malloc(strlen(me->fnam) + strlen(suffix) + 8);
               strcpy(me->fnam, freeme);
  	      free(freeme);
@@ -630,11 +625,19 @@ PUBLIC HTStream *HTSaveAndExecute (HTPresentation *pres,
       char alq[64];
 
       sprintf(alq, "alq = %d", (loading_length + 511) / 512);
-      me->fp = fopen(me->fnam, "w", "shr = get", "rop = WBH", "mbf = 4",
-                     "mbc = 32", "deq = 16", alq, "fop=tef");
+      me->fp = fopen(me->fnam, "w", "shr = get", "rop = wbh", "mbf = 4",
+#if !defined(VAXC) && !defined(__GNUC__)
+                     "mbc = 32", "deq = 16", alq, "fop=cbt,tef,sqo", "ctx=stm");
+#else
+                     "mbc = 32", "deq = 16", alq, "fop=cbt,tef", "ctx=stm");
+#endif
   } else {
-      me->fp = fopen(me->fnam, "w", "shr = get", "rop = WBH", "mbf = 4",
-                     "mbc = 32", "deq = 16", "fop = tef");
+      me->fp = fopen(me->fnam, "w", "shr = get", "rop = wbh", "mbf = 4",
+#if !defined(VAXC) && !defined(__GNUC__)
+                     "mbc = 32", "deq = 16", "fop = tef,sqo", "ctx=stm");
+#else
+                     "mbc = 32", "deq = 16", "fop = tef", "ctx=stm");
+#endif
   }
 #else
   me->fp = fopen(me->fnam, "w");
@@ -659,18 +662,18 @@ PUBLIC HTStream *HTSaveAndExecute (HTPresentation *pres,
               /* Make command to process file */
               char *command = (char *)malloc(sizeof(char) *
 			   (strlen(pres->command) + 10 + 3 * strlen(me->fnam)));
-              
+
               /* Cute.  pres->command will be something like "xv %s"; me->fnam
                * gets filled in as many times as appropriate.  */
               sprintf(command, pres->command, me->fnam, me->fnam, me->fnam);
-              
+
               me->end_command = (char *)malloc(sizeof(char) *
 				     (strlen(command) + 32 + strlen(me->fnam)));
 #ifndef VMS
               sprintf(me->end_command, "(%s ; /bin/rm -f %s) &",
 #else
               sprintf(me->end_command, "$ %s\n$ErrEnd:\n$ Delete$$ %s;\n&",
-#endif /* VMS, BSN, GEC */
+#endif  /* VMS, BSN, GEC */
                       command, me->fnam);
               free(command);
           } else {
@@ -683,7 +686,7 @@ PUBLIC HTStream *HTSaveAndExecute (HTPresentation *pres,
                       me->fnam, pres->command, me->fnam);
 #else
               HTProgress("Too bad, you entered a part not ported to VMS.");
-#endif /* VMS, not ported, BSN */
+#endif  /* VMS, not ported, BSN */
           }
       } else {
           /* Overload me->end_command to be what we should write out as text

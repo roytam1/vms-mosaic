@@ -1,0 +1,292 @@
+2005-11-29  Behdad Esfahbod  <behdad@gnome.org>
+
+	* === Released 1.10.2 ===
+
+	* NEWS: Updated.
+
+	* configure.in: Version 1.10.2
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/opentyp/pango-ot-buffer.c: Fix typo in docs.
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/fonts.c pango/pango-attributes.c pango/pango-context.c
+	pango/pango-glyph-item.c pango/pango-layout.c
+	pango/pango-script.c pango/pango-utils.c pango/pangofc-font.c
+	pango/pangoft2-fontmap.c pango/opentype/pango-ot-buffer.c
+	pango/opentype/pango-ot-ruleset.c: Added "Since:" tags to all
+	interfaces added after Pango 1.0. (#319116, Brian Cameron)
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/Makefile.am: Link libpangoxft with -lm. (#318210)
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/querymodules.c: Free used memory. (#316467, Steve Grubb)
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* modules/hangul/hangul-fc.c (hangul_engine_shape): Fix incorrect
+	bounds check. (#316469, Steve Grubb)  Moreover, increase max_jamos
+	eight at a time instead of three.
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	Protect against possible division by zeros. (#316468, Steve Grubb)
+
+	* pango/pango-context.c (update_metrics_from_items),
+	pango/pango-fontset.c (pango_fontset_real_get_metrics): If count is
+	zero, do not alter approximate_{char,digit}_width.
+
+	* pango/opentype/disasm.c: Err on invalid DeltaFormat.
+
+2005-11-23  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/fonts.c (pango_font_description_get_absolute_size): Remove
+	excess "the" in docs. (#319175, Masao Mutoh)
+
+2005-11-22  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pangoxft-font.c (_pango_xft_font_get_mini_font): Load a font
+	suitable for viewing English text when creating mini font for hex
+	boxes. (#312477)
+
+2005-11-21  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pangofc-fontmap.c (get_scaled_size): Return double instead of
+	int. (#321891, Sebastien Bacher)
+
+2005-11-21  Behdad Esfahbod  <behdad@gnome.org>
+
+	* examples/GLASS.utf8: Make the Kermit notice a "no warranty" clause,
+	to comply with LPGL.
+
+	* examples/HELLO.utf8: Add a few Arabic non-spacing marks to the
+	example.  Put the line with Pango in Greek-Japanese back in.
+
+2005-11-17  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pango-renderer.c: Documentation improvements. (#321731)
+
+2005-11-17  Matthias Clasen  <mclasen@redhat.com>
+
+	* modules/hangul/tables-jamos.i: const correctness
+	fixes found by Arjan van de Ven and gcc.
+
+2005-11-17  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pangofc-fontmap.c (fontset_hash_key_equal): Compare language
+	too.  (#318168)
+
+2005-11-17  Behdad Esfahbod  <behdad@gnome.org>
+
+	* docs/tmpl/coverage-maps.sgml docs/tmpl/fonts.sgml
+	docs/tmpl/glyphs.sgml docs/tmpl/layout.sgml
+	docs/tmpl/main.sgml docs/tmpl/scripts.sgml
+	docs/tmpl/tab-stops.sgml docs/tmpl/text-attributes.sgml
+	pango/break.c pango/fonts.c pango/pango-fontset.c
+	pango/pango-layout.c pango/pango-script.c pango/pango-utils.c
+	pango/pangofc-decoder.c pango/pangofc-decoder.h
+	pango/pangofc-font.c pango/pangofc-font.h
+	pango/pangoxft-font.c: More documentation improvements.
+
+2005-11-17  Behdad Esfahbod  <behdad@gnome.org>
+
+	Part of #101079:
+
+	* pango/opentype/ftxopen.c (Load_Lookup): In extension subtables,
+	offset is relative to the extension subtable, not the original
+	table. (Greg Aumann)
+
+	* pango/opentype/ftxgpos.c (Load_BaseArray): When reading BaseAnchor,
+	skip offsets that are zero.  Works around bug in Doulos SIL Regular.
+
+2005-11-16  Behdad Esfahbod  <behdad@gnome.org>
+
+	* docs/pango_markup.sgml docs/tmpl/coverage-maps.sgml
+	docs/tmpl/engines.sgml docs/tmpl/fonts.sgml
+	docs/tmpl/freetype-fonts.sgml docs/tmpl/glyphs.sgml
+	docs/tmpl/layout.sgml docs/tmpl/main.sgml
+	docs/tmpl/modules.sgml docs/tmpl/opentype.sgml
+	docs/tmpl/pango-engine-lang.sgml
+	docs/tmpl/pango-engine-shape.sgml
+	docs/tmpl/pango-renderer.sgml docs/tmpl/pangocairo.sgml
+	docs/tmpl/pangofc-decoder.sgml docs/tmpl/pangofc-font.sgml
+	docs/tmpl/pangofc-fontmap.sgml docs/tmpl/scripts.sgml
+	docs/tmpl/tab-stops.sgml docs/tmpl/text-attributes.sgml
+	docs/tmpl/win32-fonts.sgml docs/tmpl/x-fonts.sgml
+	docs/tmpl/xft-fonts.sgml pango/break.c pango/ellipsize.c
+	pango/fonts.c pango/pango-attributes.c pango/pango-color.c
+	pango/pango-context.c pango/pango-coverage.c
+	pango/pango-fontmap.c pango/pango-glyph-item.c
+	pango/pango-layout.c pango/pango-markup.c pango/pango-tabs.c
+	pango/pango-types.h pango/pango-utils.c
+	pango/pangoft2-render.c pango/pangox.c pango/pangoxft-render.c:
+	Various documentation improvements.
+
+2005-11-15  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pango-types.h: Added % to PANGO_DIRECTION_LTR in doc comments.
+
+2005-11-15  Behdad Esfahbod  <behdad@gnome.org>
+
+	* examples/GLASS.utf8: Added redistribution permission.
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	* modules/khmer/khmer/khmer-fc.c: Fixed bug in khmer module state
+	table. (#320569, Jens Herden)
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	Updated Tibetan shaper from Pema Geyleg. (#313513)
+
+	* examples/tibetan.utf: Added.
+
+	* examples/Makefile.am (EXTRA_DIST): tibetan.utf added.
+
+	* modules/tibetan/tibetan-fc.c: Updated Tibetan shaper that is
+	rewritten from scratch. Supports the number pre-combining mark,
+	illegal sequence detection, etc.
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	* examples/GLASS.utf8: Added.  The infamous "I Can Eat Glass" in
+	vairous languages.  Adopted from
+	http://www.columbia.edu/kermit/utf8.html#glass
+
+	* examples/Makefile.am (EXTRA_DIST): GLASS.utf8 added.
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/pangocairo-fcfont.c: Respect fontconfig reassignment of
+	pixelsize. (#317121, Funda Wang)
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	* examples/Makefile.am: Add X_CFLAGS to INCLUDES.  We normally are
+	picking them up from XFT_CFLAGS, but we don't require Xft any more
+	for X11. (#320576)
+
+2005-11-14  Behdad Esfahbod  <behdad@gnome.org>
+
+	* pango/modules.c (pango_module_load), pango/querymodules.c: Pass
+	G_MODULE_BIND_LAZY to g_module_open.  (Pointed by John Rice)
+
+2005-10-03  Owen Taylor  <otaylor@redhat.com>
+
+	* === Released 1.10.1 ===
+
+	* NEWS: Updated.
+
+	* configure.in: Version 1.10.1
+
+2005-09-09  Owen Taylor  <otaylor@redhat.com>
+
+ 	* pango/pangocairo-render.c (pango_cairo_show_glyph_string): unset
+ 	all part colors, since when drawing just a glyph string, 
+ 	prepare_run() isn't called. (#315599, Choe Hwanjin)
+ 
+ 	* pango/pango-renderer.c (pango_renderer_draw_layout_line): NULL
+ 	out renderer->priv->line_state.
+	
+005-09-22  Tor Lillqvist  <tml@novell.com>
+
+	* pango/pangocairo-win32font.c (_pango_cairo_win32_font_new): Move
+	the calculation of dpi and size earlier. Use the size variable
+	instad of isize when looking for a matching cached font. Isize was
+	supposed to be the same as size anyway. (Actually it was the same
+	only when LOGPIXELSY equalled 96 (which often is the default
+	value), see below.)
+
+	* pango/pangocairo-win32fontmap.c (pango_cairo_win32_font_map_init): 
+	Set dpi to the LOGPIXELSY value instead of hardcoding 96.
+
+	* pango/Makefile.am (libpangocairo_1_0_la_LIBADD): Need WIN32_LIBS
+	now.
+
+2005-09-14  Tor Lillqvist  <tml@novell.com>
+
+	* pango/pangocairo-win32font.c: Use identical glyph extents
+	cacheing as in pangocairo-fcfont.c. Huge performance improvement.
+
+	* README.win32: Update.
+
+2005-09-14  Tor Lillqvist  <tml@novell.com>
+
+	* pango/pangocairo-win32font.c (struct _PangoCairoWin32Font): Have
+	a list of metrics by language instead of just one metrics.
+
+	(pango_cairo_win32_font_get_scaled_font): Use the name cwfont
+	instead of cffont.
+
+	(free_metrics_info, pango_cairo_win32_font_finalize): Free the
+	metrics by language list.
+
+	(create_metrics_for_context): New helper function. Approximate the
+	character and digit widths correctly. (#314114)
+
+	(pango_cairo_win32_font_get_metrics): Use the list of metrics by
+	language. Call create_metrics_for_context() to measure metrics.
+	
+	(_pango_cairo_win32_font_new): Keep the PangoWin32Font objects in
+	the PangoWin32Face::cached_fonts, like the pangowin32 backend
+	does. 
+
+	PangoWin32Face::cached_fonts isn't really a proper cache. It's a
+	list with unbound length, one PangoWin32Font per size. Once there
+	is cacheing in cairo this can be dropped presumably? What does the
+	pangofc backend do? There are too many levels of cacheing going
+	on: we have the stuff in pangowin32-fontcache.c (unused now with
+	cairo), the PangoWin32FontMap::freed_fonts cache, and the
+	PangoWin32::cached_fonts list.
+
+	* pango/pangowin32-fontmap.c (pango_win32_fontmap_cache_remove,
+	pango_win32_fontmap_cache_clear): Use GQueue API instead of
+	manipulating pointers manually.
+
+	* pango/pangowin32-private.h
+	* pango/pangowin32.c: Move PangoWin32MetricsInfo to the private
+	header file, as also pangocairo-win32font.c uses it.
+	
+2005-09-13  Tor Lillqvist  <tml@novell.com>
+
+	* modules/basic/basic-win32.c: Drop unused font_cache variable and
+	the call to pango_win32_font_map_for_display() used in its
+	initialization, which caused an extra instance of
+	PangoWin32FontMap to be created, and fonts enumerated an extra
+	time.
+
+2005-09-12  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* pango/pango-attributes.c: (pango_attr_list_splice): Fixed typo
+	(#316054).
+
+2005-09-11  Matthias Clasen  <mclasen@redhat.com>
+
+	* pango/pangocairo-fontmap.c (free_context_info): Use g_free()
+	to free g_new()-allocated data, otherwise the GLib memory profiler
+	becomes very unhappy.
+
+2005-08-26  Behdad Esfahbod  <pango@behdad.org>
+
+	* pango/break.c: Protect against future line-break type additions in
+	glib Unicode module.
+
+2005-08-25  Tor Lillqvist  <tml@novell.com>
+
+	* pango/Makefile.am: Use pangocairo.def when linking libpangocairo
+	on Windows, instead of relying on GNU ld auto-exporting all public
+	symbols.
+
+	* pango/pangocairo.def: Add missing entries. (#314420, Kazuki
+	Iwamoto)
+
+2005-08-24  Owen Taylor  <otaylor@redhat.com>
+
+	* pango/pangocairo-render.c (draw_error_underline): convert
+	from Pango units to doubles, fix some coordinate space problems
+	that had previously been fixed in GTK+. (#313015, Luis Villa)

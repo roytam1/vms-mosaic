@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -144,14 +144,12 @@ char *saveFileName = NULL;
 
 /* Bare minimum. */
 struct _HText {
-    char *expandedAddress;
-    char *simpleAddress;
     /* This is what we should parse and display; it is *not* safe to free. */
     char *htmlSrc;
     /* This is what we should free. */
     char *htmlSrcHead;
-    int srcalloc;    /* Amount of space allocated */
-    int srclen;      /* Amount of space used */
+    unsigned int srcalloc;    /* Amount of space allocated */
+    unsigned int srclen;      /* Amount of space used */
 };
 
 /* Mosaic does NOT use either the anchor or style sheet systems of libwww2. */
@@ -236,7 +234,7 @@ static char *hack_htmlsrc(void)
   
   if (HTMainText->srclen > 30) {
       char *loc;
-      int len;
+      unsigned int len;
       int count = 0;
 
       /* Remove any nulls, but give up if is garbage */
@@ -491,8 +489,6 @@ HText *HText_new(void)
   HText *htObj = (HText *)calloc(1, sizeof(HText));
 
   /** calloc zeros
-  htObj->expandedAddress = NULL;
-  htObj->simpleAddress = NULL;
   htObj->htmlSrc = NULL;
   htObj->htmlSrcHead = NULL;
   htObj->srcalloc = 0;
@@ -544,16 +540,18 @@ void HText_clearOutForNewContents(HText *text)
   HText_doAbort(text);
 }
 
-static void new_chunk(HText *text)
+static void new_chunk(HText *text, int len)
 {
+  if (len < MO_BUFFER_SIZE)
+      len = MO_BUFFER_SIZE;
+
   if (!text->srcalloc) {
-      text->htmlSrc = (char *)malloc(MO_BUFFER_SIZE);
+      text->htmlSrc = (char *)malloc(len);
       *text->htmlSrc = '\0';
   } else {
-      text->htmlSrc = (char *)realloc(text->htmlSrc,
-				      text->srcalloc + MO_BUFFER_SIZE);
+      text->htmlSrc = (char *)realloc(text->htmlSrc, text->srcalloc + len);
   }
-  text->srcalloc += MO_BUFFER_SIZE;
+  text->srcalloc += len;
 
   return;
 }
@@ -564,7 +562,7 @@ void HText_appendCharacter(HText *text, char ch)
       return;
 
   if (text->srcalloc < text->srclen + 1)
-      new_chunk(text);
+      new_chunk(text, 1);
 
   text->htmlSrc[text->srclen++] = ch;
 
@@ -573,15 +571,15 @@ void HText_appendCharacter(HText *text, char ch)
 
 void HText_appendText(HText *text, char *str)
 {
-  int len;
+  unsigned int len;
 
   if (!str || !text)
       return;
 
   len = strlen(str);
 
-  while (text->srcalloc < text->srclen + len + 1)
-      new_chunk(text);
+  if (text->srcalloc < text->srclen + len + 1)
+      new_chunk(text, len);
 
   memcpy(text->htmlSrc + text->srclen, str, len);
 
@@ -596,8 +594,8 @@ void HText_appendBlock(HText *text, char *data, int len)
   if (!data || !text)
       return;
   
-  while (text->srcalloc < text->srclen + len + 1)
-      new_chunk(text);
+  if (text->srcalloc < text->srclen + len + 1)
+      new_chunk(text, len);
 
   memcpy(text->htmlSrc + text->srclen, data, len);
 
@@ -630,7 +628,7 @@ char *HText_getText(HText *me)
   }
 }
 
-int HText_getTextLength(HText *me)
+unsigned int HText_getTextLength(HText *me)
 {
   if (me) {
       return me->srclen;
@@ -660,7 +658,7 @@ static char *fileOrServer(char *url)
 #undef stat
     struct stat buf;
 #define stat decc$stat
-#endif /* VMS MultiNet work around, GEC */
+#endif  /* VMS MultiNet work around, GEC */
     char *xurl;
     static int init = 0;
     static char *defproto;
@@ -1088,7 +1086,7 @@ char *mo_get_html_return(char **texthead)
  * Returns True if converted any newlines. */
 Boolean mo_convert_newlines_to_spaces(char *str)
 {
-  int i;
+  unsigned int i;
   char *tptr = str;
   Boolean converted = False;
 
@@ -1169,11 +1167,11 @@ char *mo_unescape_spaces(char *txt)
 {
     char *new, *p;
 
-    if (txt) {
-	p = new = malloc(strlen(txt) + 1);
-    } else {
+    if (!txt)
 	return NULL;
-    }
+
+    p = new = malloc(strlen(txt) + 1);
+
     while (*txt) {
         if ((*txt == '%') && (*(txt + 1) == '2') && (*(txt + 2) == '0')) {
              *p++ = ' ';

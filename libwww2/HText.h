@@ -27,7 +27,7 @@ extern HText *HText_new();
 **
 **      These are used by a parser to build the text in an object.
 **      HText_beginAppend must be called, then any combination of other
-**      append calls, then HText_endAppend.  This allows optimised
+**      append calls, then HText_endAppend.  This allows optimized
 **      handling using buffers and caches which are flushed at the end.
 */
 extern void HText_beginAppend(HText *text);
@@ -59,6 +59,6 @@ extern void HText_beginAnchor(HText *text, char *anc);
 extern void HText_endAnchor(HText *text);
 
 extern char *HText_getText(HText *me);
-extern int HText_getTextLength(HText *me);
+extern unsigned int HText_getTextLength(HText *me);
 
 #endif  /* HTEXT_H */

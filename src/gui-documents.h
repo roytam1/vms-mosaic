@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2008 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -63,8 +63,8 @@
 #ifndef __GUIDOCUMENTS_H__
 #define __GUIDOCUMENTS_H__
 
-void mo_back_impossible (mo_window *win);
-void mo_forward_impossible (mo_window *win);
+void mo_back_possible (mo_window *win, Boolean set);
+void mo_forward_possible (mo_window *win, Boolean set);
 mo_status mo_set_win_current_node (mo_window *, mo_node *);
 mo_status mo_reload_window_text (mo_window *, int);
 mo_status mo_reload_frame_text (mo_window *, mo_window *);

@@ -1,6 +1,7 @@
 ! MMS description file for LIBPNG
 ! Mosaic version 2.6 20-Feb-1996, George Cook
 ! Mosaic version 2.7 10-May-1997, George Cook
+! Mosaic version 4.3 18-Nov-2007, George Cook
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -41,10 +42,20 @@ CQUAL = /DECC/INCLUDE=[-.ZLIB]
 CQUAL = /VAXC/PRECISION=SINGLE/INCLUDE=[-.ZLIB]
 .ELSE
 .IFDEF GNUC
-CQUAL = /INCLUDE=(GCC_Include,[-.ZLIB.])
+CQUAL = /INCLUDE=(GCC_Include)
 .ELSE
 CQUAL = /PRECISION=SINGLE/INCLUDE=[-.ZLIB]
 .ENDIF
+.ENDIF
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
 .ENDIF
 .ENDIF
 
@@ -58,16 +69,16 @@ CC_DEFS = $(CQUAL)
 OBJS = Odir:png.obj, Odir:pngget.obj, Odir:pngrutil.obj, Odir:pngtrans.obj,\
    Odir:pngwutil.obj, Odir:pngread.obj, Odir:pngmem.obj, Odir:pngwrite.obj,\
    Odir:pngrtran.obj, Odir:pngwtran.obj, Odir:pngrio.obj, Odir:pngerror.obj,\
-   Odir:pngwio.obj, Odir:pngpread.obj , Odir:pngset.obj
+   Odir:pngwio.obj, Odir:pngpread.obj, Odir:pngset.obj
 
 
-CFLAGS= $(CC_DEFS)
+CFLAGS = $(CC_DEFS)
 
 $(LIBTARGET) : $(LIBTARGET)($(OBJS))
 	@ Write SYS$Output "Library libpng.olb built."
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

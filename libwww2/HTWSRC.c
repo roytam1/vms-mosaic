@@ -37,31 +37,31 @@ struct _HTStructured {
 /*	Here are the parameters which can be specified in a source file
 */
 PRIVATE WWW_CONST char *par_name[] = {
-	"version", 
+	"version",
 	"ip-address",
 #define PAR_IP_NAME 2
-	"ip-name", 
+	"ip-name",
 #define PAR_TCP_PORT 3
-	"tcp-port", 
+	"tcp-port",
 #define PAR_DATABASE_NAME 4
 	"database-name",
 #define PAR_COST 5
-	"cost", 
+	"cost",
 #define PAR_COST_UNIT 6
-	"cost-unit", 
+	"cost-unit",
 #define PAR_FREE 7
-	"free",	
+	"free",
 #define PAR_MAINTAINER 8
-	"maintainer", 	
+	"maintainer",
 #define PAR_DESCRIPTION 9
 	"description",
-	"keyword-list", 	
+	"keyword-list",
 	"source",
 #define PAR_UNKNOWN 12
 	"unknown",
 	0,				/* Terminate list */
 #define PAR_COUNT 13
-} ;
+};
 
 
 enum tokenstate { beginning, before_tag, colon, before_value,
@@ -111,7 +111,7 @@ PRIVATE void WSRCParser_put_character (HTStream *me, char c)
         if (c == '(')
 	    me->state = before_tag;
 	break;
-	
+
     case before_tag:
         if (c == ')') {
 	    me->state = done;
@@ -146,7 +146,7 @@ PRIVATE void WSRCParser_put_character (HTStream *me, char c)
 	    me->param[me->param_count++] = c;
 	}
 	break;
-	
+
     case before_value:
         if (c == ')') {
 	    me->state = done;
@@ -169,7 +169,6 @@ PRIVATE void WSRCParser_put_character (HTStream *me, char c)
 	    me->param[me->param_count] = '\0';
 	    StrAllocCopy(me->par_value[me->param_number], me->param);
 	    me->state = before_tag;
-	} else if (me->param_count < PARAM_MAX) {
 	    me->param[me->param_count++] = c;
 	}
 	break;
@@ -184,7 +183,7 @@ PRIVATE void WSRCParser_put_character (HTStream *me, char c)
         if (me->param_count < PARAM_MAX)
 	    me->param[me->param_count++] = c;
 	break;
-	
+
     case quoted_value:
         if (c == '"') {
 	    me->param[me->param_count] = '\0';
@@ -205,7 +204,7 @@ PRIVATE void WSRCParser_put_character (HTStream *me, char c)
 	    me->param[me->param_count++] = c;
 	me->state = quoted_value;
 	break;
-	
+
     case done:				/* Ignore anything after EOF */
 	return;
   }
@@ -248,14 +247,14 @@ PRIVATE void WSRC_gen_html (HTStream *me, BOOL source_file)
 	PUTS(shortname);
 	PUTS(source_file ? " WAIS source file" : " index");
 	END(HTML_TITLE);
-    
+
 	START(HTML_H1);
 	PUTS(shortname);
 	PUTS(source_file ? " description" : " index");
 	END(HTML_H1);
     }
     START(HTML_DL);		/* Definition list of details */
-    
+
     if (source_file) {
 	START(HTML_DT);
 	PUTS("Access links");
@@ -266,31 +265,31 @@ PRIVATE void WSRC_gen_html (HTStream *me, BOOL source_file)
 
 	    www_database = HTEscape(me->par_value[PAR_DATABASE_NAME]);
 	    sprintf(WSRC_address, "wais://%s:%s/%s",
-		me->par_value[PAR_IP_NAME],
-		me->par_value[PAR_TCP_PORT] ? me->par_value[PAR_TCP_PORT]
-			: "210",
-		www_database);
-	
+		    me->par_value[PAR_IP_NAME],
+		    me->par_value[PAR_TCP_PORT] ? me->par_value[PAR_TCP_PORT]
+						: "210",
+		    www_database);
+
             PUTS("<A HREF=\"");
             PUTS(WSRC_address);
 	    PUTS("\">Direct access</A> or ");
-	    
+
 	    sprintf(WSRC_address, "http://www.ncsa.uiuc.edu:8001/%s:%s/%s",
 		    me->par_value[PAR_IP_NAME],
 		    me->par_value[PAR_TCP_PORT] ? me->par_value[PAR_TCP_PORT]
-		            : "210",
+		    				: "210",
 		    www_database);
             PUTS("<A HREF=\"");
             PUTS(WSRC_address);
 	    PUTS("\">through NCSA gateway</A>");
-	    
+
 	    free(www_database);
 	} else {
 	    give_parameter(me, PAR_IP_NAME);
 	    give_parameter(me, PAR_IP_NAME);
 	}
     }  /* End if source_file */
-    
+
     if (me->par_value[PAR_MAINTAINER]) {
 	START(HTML_DT);
 	PUTS("Maintainer");
@@ -310,7 +309,7 @@ PRIVATE void WSRC_gen_html (HTStream *me, BOOL source_file)
     }
     (*me->target->isa->end_document)(me->target);
     (*me->target->isa->free)(me->target);
-    
+
     return;
 }
 
@@ -377,7 +376,7 @@ static HTStreamClass WSRCParserClass = {
 **		--------------------------------------
 */
 PUBLIC HTStream *HTWSRCConvert (HTPresentation *pres,
-				HTParentAnchor *anchor,	
+				HTParentAnchor *anchor,
 				HTStream *sink,
         			HTFormat format_in,
         			int compressed)

@@ -2,7 +2,7 @@
 ! George E. Cook, WVNET, 12-May-1996
 ! Mosaic 2.7-4
 !
-! Copyright (C) 2007 - The VMS Mosaic Project
+! Copyright (C) 2007, 2008 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -37,13 +37,23 @@ CQUALC=
 .ENDIF
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .IFDEF DEBUG
 CFLAGS = $(CQUALC)/NoOpt/Debug
 .ELSE
 CFLAGS = $(CQUALC)
 .ENDIF
 
-OBJECTS =  Odir:cmdline.obj Odir:mosaic_cld.obj
+OBJECTS =  Odir:cmdline.obj Odir:vms_utils.obj Odir:mosaic_cld.obj
 
 .FIRST
         @ If F$Search("$(LIBTARGET)") .EQS. "" Then Library/Create $(LIBTARGET)
@@ -89,6 +99,7 @@ $(LIBTARGET) : $(LIBTARGET)($(OBJECTS))
 
 Odir:cmdline.obj    : cmdline.c cmdline.h [-.src]mosaic.h [-]config.h \
 		      [-]config_$(WORK).h [-]ssl_$(WORK).h
+Odir:vms_utils.obj  : vms_utils.c vms_utils.h [-]config.h
 Odir:mosaic_cld.obj : mosaic_cld.cld
 
 mosaic.rnh          : mosaic.help
@@ -98,7 +109,7 @@ mosaic.rnh          : mosaic.help
 	@ Write SYS$Output "Mosaic help file created."
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

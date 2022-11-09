@@ -443,7 +443,7 @@ unsigned char *ReadPNG(Widget hw, FILE *infile, int *width, int *height,
 	png_set_expand(png_ptr);
 
 	/* Force RGBA even if no Alpha */
-        if (!(info_ptr->color_type & PNG_COLOR_MASK_ALPHA))
+        if (!has_alpha)
 	    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
 
 	if (info_ptr->bit_depth == 16)

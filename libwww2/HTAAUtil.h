@@ -1,4 +1,4 @@
-/*                            Utilities for the Authorization parts of libwww
+/*                          Utilities for the Authorization parts of libwww
 
              COMMON PARTS OF AUTHORIZATION MODULE TO BOTH SERVER AND BROWSER
                                              
@@ -91,6 +91,7 @@ typedef enum {
     HTAA_KERBEROS_V5,
     HTAA_MD5,
     HTAA_DOMAIN,
+    HTAA_NNTP_AUTHINFO,
     HTAA_MAX_SCHEMES, /* THIS MUST ALWAYS BE LAST! Number of schemes */
     HTAA_LOGIN        /* No, this must always be last because it's an FTP hack*/
 } HTAAScheme;

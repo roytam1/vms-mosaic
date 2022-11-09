@@ -19,8 +19,7 @@
 **		- FM					1997-08-02
 **
 **  TO DO: (roughly in order of decreasing priority)
-      * Persistent cookies are still experimental.  Presently cookies
-        lose many pieces of information that distinguish
+      * Presently cookies lose many pieces of information that distinguish
         version 1 from version 0 cookies.  There is no easy way around
         that with the current cookie file format.  Ports are currently
         not stored persistently at all which is clearly wrong.
@@ -50,7 +49,7 @@
 	secure communication protocols that become standarized.
 */
 
-/* Copyright (C) 1999, 2000, 2003, 2004, 2005, 2006, 2007
+/* Copyright (C) 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -161,7 +160,7 @@ PRIVATE HTBTree *domain_btree = NULL;
 PRIVATE HTList *cookie_list = NULL;
 PRIVATE int total_cookies = 0;
 
-struct _cookie {
+typedef struct _cookie {
     char *lynxID;   /* Lynx cookie identifier */
     char *name;     /* Name of this cookie */
     char *value;    /* Value of this cookie */
@@ -176,9 +175,7 @@ struct _cookie {
     int flags;	    /* Various flags */
     time_t expires; /* The time when this cookie expires */
     BOOL quoted;    /* Was a value quoted in the Set-Cookie header? */
-};
-
-typedef struct _cookie cookie;
+} cookie;
 
 #define COOKIE_FLAG_SECURE 1	   /* If set, cookie requires secure links */
 #define COOKIE_FLAG_DISCARD 2	   /* If set, expire at end of session */
@@ -307,7 +304,7 @@ PRIVATE void user_message (WWW_CONST char *message, WWW_CONST char *argument)
 
     HTProgress(temp);
 
-    FREE(temp);
+    free(temp);
     return;
 }
 
@@ -330,9 +327,9 @@ PRIVATE void user_message (WWW_CONST char *message, WWW_CONST char *argument)
  */
 PRIVATE time_t LYmktime (char *string, BOOL absolute)
 {
-    char *s = string;
     time_t clock2;
     int day, month, year, hour, minutes, seconds;
+    char *s = string;
     char *start;
     char temp[8];
 
@@ -607,6 +604,13 @@ PRIVATE int is_url (char *filename)
     if ((*cp == ':') || (*cp == '/'))
 	return(0);
 
+#ifndef NEED_IT_ALL
+    if (compare_type(cp, "http:", 5)) {
+	return(HTTP_URL_TYPE);
+    } else if (compare_type(cp, "https:", 6)) {
+	return(HTTPS_URL_TYPE);
+    }
+#else
     switch (TOLOWER(*cp)) {
 	case 'c':
 	    if (compare_type(cp, "cookiejar:", 11))
@@ -710,6 +714,7 @@ PRIVATE int is_url (char *filename)
 		}
 	    }
     }
+#endif
     return(0);
 }
 
@@ -737,7 +742,7 @@ PRIVATE void LYEntify (char **str, BOOL isTITLE)
 	p = q + 1;
     }
     /*
-     *	Count the left-angle-brackets, if needed. - FM
+     *	Count the left and right angle-brackets, if needed. - FM
      */
     if (isTITLE == TRUE) {
 	p = *str;
@@ -745,11 +750,6 @@ PRIVATE void LYEntify (char **str, BOOL isTITLE)
 	    lts++;
 	    p = q + 1;
 	}
-    }
-    /*
-     *	Count the right-angle-brackets, if needed. - FM
-     */
-    if (isTITLE == TRUE) {
 	p = *str;
 	while (*p && (q = strchr(p, '>'))) {
 	    gts++;
@@ -765,7 +765,7 @@ PRIVATE void LYEntify (char **str, BOOL isTITLE)
      *	Allocate space and convert. - FM
      */
     q = (char *)malloc(strlen(*str) + (4 * amps) + (3 * lts) + (3 * gts) + 1);
-    if ((cp = q) == NULL)
+    if (!(cp = q))
 	outofmem(__FILE__, "LYEntify");
     for (p = *str; *p; p++) {
 	if (*p == '&') {
@@ -774,16 +774,18 @@ PRIVATE void LYEntify (char **str, BOOL isTITLE)
 	    *q++ = 'm';
 	    *q++ = 'p';
 	    *q++ = ';';
-	} else if (isTITLE && *p == '<') {
-	    *q++ = '&';
-	    *q++ = 'l';
-	    *q++ = 't';
-	    *q++ = ';';
-	} else if (isTITLE && *p == '>') {
-	    *q++ = '&';
-	    *q++ = 'g';
-	    *q++ = 't';
-	    *q++ = ';';
+	} else if (isTITLE) {
+	    if (*p == '<') {
+	        *q++ = '&';
+	        *q++ = 'l';
+	        *q++ = 't';
+	        *q++ = ';';
+	    } else if (*p == '>') {
+	        *q++ = '&';
+	        *q++ = 'g';
+	        *q++ = 't';
+	        *q++ = ';';
+	    }
 	} else {
 	    *q++ = *p;
 	}
@@ -907,7 +909,7 @@ PRIVATE BOOL HTConfirmCookie (void *dp,	WWW_CONST char *server,
 	ch = XmxDoFourButtons(current_win->base, app_context,
 		           "VMS Mosaic: Cookie Confirmation", message, "Accept",
 		           "Reject", "Accept Always", "Never Accept", width);
-	XmxSetButtonClueText(NULL, NULL, NULL, NULL, NULL);
+	XmxClearButtonClueText();
     } else {
 	ch = 3;
     }
@@ -1059,8 +1061,7 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
      *  is already listed.
      */
     sdomain.domain = co->domain;
-    de = (domain_entry *)HTBTree_search(domain_btree, &sdomain);
-    if (de) {
+    if (de = (domain_entry *)HTBTree_search(domain_btree, &sdomain)) {
 	cookie_list = de->cookie_list;
     } else {
         cookie_list = NULL;
@@ -1090,11 +1091,10 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 	        if (cookieTrace)
 	            fprintf(stderr,
-	                "store_cookie: Rejecting because '%s' is not a prefix of '%s'.\n",
-		        co->path, path);
+			   "store_cookie: Reject: '%s' not a prefix of '%s'.\n",
+		           co->path, path);
 #endif
-	        freeCookie(co);
-	        return;
+		goto free_return;
 	}
     }
     /*
@@ -1109,11 +1109,10 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 	    if (cookieTrace)
 	        fprintf(stderr,
-		        "store_cookie: Rejecting because '%s' has no dot.\n",
+			"store_cookie: Reject because '%s' has no dot.\n",
 		        hostname);
 #endif
-	    freeCookie(co);
-	    return;
+	    goto free_return;
 	}
 	/*
 	 *  Section 4.3.2, condition 2: The value for the Domain attribute
@@ -1128,8 +1127,7 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 	        fprintf(stderr, "store_cookie: Rejecting domain '%s'.\n",
 			co->domain);
 #endif
-	    freeCookie(co);
-	    return;
+	    goto free_return;
 	}
 	ptr = strchr(co->domain + 1, '.');
 	if (!ptr || !ptr[1]) {
@@ -1138,8 +1136,7 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 	        fprintf(stderr, "store_cookie: Rejecting domain '%s'.\n",
 			co->domain);
 #endif
-	    freeCookie(co);
-	    return;
+	    goto free_return;
 	}
 	/*
 	 *  Section 4.3.2, condition 3: The value for the request-host does
@@ -1149,11 +1146,10 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 	    if (cookieTrace)
 	        fprintf(stderr,
-		        "store_cookie: Rejecting domain '%s' for host '%s'.\n",
+		        "store_cookie: Reject domain '%s' for host '%s'.\n",
 		        co->domain, hostname);
 #endif
-	    freeCookie(co);
-	    return;
+	    goto free_return;
 	}
 	/*
 	 *  Section 4.3.2, condition 4: The request-host is an HDN (not IP
@@ -1180,11 +1176,10 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 		    if (cookieTrace)
 		        fprintf(stderr,
-			 "store_cookie: Rejecting domain '%s' for host '%s'.\n",
-			 co->domain, hostname);
+			    "store_cookie: Reject domain '%s' for host '%s'.\n",
+			    co->domain, hostname);
 #endif
-		    freeCookie(co);
-		    return;
+		    goto free_return;
 	    }
 	}
     }
@@ -1207,12 +1202,11 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 		if (cookieTrace)
 		    fprintf(stderr,
-			 "store_cookie: Rejecting domain '%s' for host '%s'.\n",
-			 co->domain, hostname);
+			    "store_cookie: Reject domain '%s' for host '%s'.\n",
+			    co->domain, hostname);
 #endif
-		freeCookie(co);
 		free(msg);
-		return;
+		goto free_return;
 	    }
 	    free(msg);
 	}
@@ -1224,12 +1218,11 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 #ifndef DISABLE_TRACE
 		if (cookieTrace)
 		    fprintf(stderr,
-			"store_cookie: Rejecting '%s', not a prefix of '%s'.\n",
-		        co->path, path);
+			   "store_cookie: Reject '%s', not a prefix of '%s'.\n",
+		           co->path, path);
 #endif
-		freeCookie(co);
 		free(msg);
-		return;
+		goto free_return;
 	    }
 	    free(msg);
 	}
@@ -1238,8 +1231,7 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 	/*
 	 *  Domain not found; add a new entry for this domain.
 	 */
-	de = (domain_entry *)calloc(1, sizeof(domain_entry));
-	if (!de)
+	if (!(de = (domain_entry *)calloc(1, sizeof(domain_entry))))
 	    outofmem(__FILE__, "store_cookie");
 	de->bv = QUERY_USER;
         de->invcheck_bv = DEFAULT_INVCHECK_TYPE;  /* Should this go here? */
@@ -1288,64 +1280,68 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
              If multiple cookies satisfy the criteria above, they are ordered
              in the Cookie header such that those with more specific Path
              attributes precede those with less specific.  Ordering with
-	     respect to other attributes (e.g., Domain) is unspecified.
+	     respect to other attributes (e.g. Domain) is unspecified.
 
              */
 	    pos++;
 	}
 	hl = next;
     }
+
     /*
      *	Don't bother to add the cookie if it's already expired.
      */
-    if ((co->flags & COOKIE_FLAG_EXPIRES_SET) && co->expires <= now) {
-	freeCookie(co);
-	co = NULL;
+    if ((co->flags & COOKIE_FLAG_EXPIRES_SET) && co->expires <= now)
+	goto free_return;
+
     /*
      *	Don't add the cookie if we're over the domain's limit. - FM
      */
-    } else if (HTList_count(cookie_list) > CDLimit) {
+    if (HTList_count(cookie_list) > CDLimit) {
 #ifndef DISABLE_TRACE
 	if (cookieTrace || reportBugs)
 	    fprintf(stderr,
 		    "Domain's cookie limit exceeded!  Rejecting cookie.\n");
 #endif
-	freeCookie(co);
-	co = NULL;
+	goto free_return;
+    }
+
     /*
      *	Don't add the cookie if we're over the total cookie limit. - FM
      */
-    } else if (total_cookies > MaxCookies) {
+    if (total_cookies > MaxCookies) {
 #ifndef DISABLE_TRACE
 	if (cookieTrace || reportBugs)
-	    fprintf(stderr,"Total cookie limit exceeded!  Rejecting cookie.\n");
+	    fprintf(stderr, "Total cookie limit exceeded! Rejecting cookie.\n");
 #endif
-	freeCookie(co);
-	co = NULL;
-        /*
-         * Don't add the cookie if the value is NULL. - BJP
-         */
-        /*
-         * Presence of value is now needed (indicated normally by '='),
-         * but it can now be an empty string.
-         * - kw 1999-06-24
-         */
-    } else if (!co->value) {  /* Should not happen - kw */
+	goto free_return;
+    }
+
+    /*
+     * Don't add the cookie if the value is NULL. - BJP
+     */
+    /*
+     * Presence of value is now needed (indicated normally by '='),
+     * but it can now be an empty string.
+     * - kw 1999-06-24
+     */
+    if (!co->value) {  /* Should not happen - kw */
 #ifndef DISABLE_TRACE
 	if (cookieTrace || reportBugs)
-	    fprintf(stderr,
-        	    "store_cookie: Value is NULL!  Not storing cookie.\n");
+	    fprintf(stderr, "store_cookie: Value is NULL! Rejecting cookie.\n");
 #endif
-        freeCookie(co);
-        co = NULL;
+	goto free_return;
+    }
+
     /*
      *	If it's a replacement for a cookie that had not expired,
      *	and never allow has not been set, add it again without
      *	confirmation. - FM
      */
-    } else if ((Replacement == TRUE && de) && de->bv != REJECT_ALWAYS) {
+    if ((Replacement == TRUE && de) && de->bv != REJECT_ALWAYS) {
 	HTList_insertObjectAt(cookie_list, co, pos);
 	total_cookies++;
+	return;
     /*
      *	Get confirmation if we need it, and add cookie
      *	if confirmed or 'allow' is set to always. - FM
@@ -1357,12 +1353,13 @@ PRIVATE void store_cookie (cookie *co, WWW_CONST char *hostname,
 	       HTConfirmCookie(de, hostname, co->name, co->value)) {
 	HTList_insertObjectAt(cookie_list, co, pos);
 	total_cookies++;
-    } else {
-	freeCookie(co);
-	co = NULL;
+	return;
     }
-}
 
+ free_return:
+    freeCookie(co);
+    return;
+}
 /*
 **  Scan a domain's cookie_list for any cookies we should
 **  include in a Cookie: request header. - AK & FM
@@ -1748,8 +1745,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 
 		if (value_len > 4096)
 		    value_len = 4096;
-		value = (char *)malloc(value_len + 1);
-		if (!value)
+		if (!(value = (char *)malloc(value_len + 1)))
 		    outofmem(__FILE__, "ProcessSetCookies");
 		LYstrncpy(value, value_start, value_len);
 	    }
@@ -1825,6 +1821,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 		     *	Don't process a repeat domain. - FM
 		     */
 		    !(cur_cookie->flags & COOKIE_FLAG_DOMAIN_SET)) {
+		    int cat = 0;
 
 		    length -= strlen(cur_cookie->domain);
 		    /*
@@ -1847,17 +1844,16 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 #ifndef DISABLE_TRACE
 				if (cookieTrace)
  				    fprintf(stderr,
-	                               "PSetCookies: Adding lead dot for domain value '%s'\n",
-				       value);
+	                             "PSetCookies: Add lead . to domain '%s'\n",
+				     value);
 #endif
 				StrAllocCopy(cur_cookie->domain, ".");
-				StrAllocCat(cur_cookie->domain, value);
-			    } else {
-				StrAllocCopy(cur_cookie->domain, value);
+				cat = 1;
 			    }
-			} else {
-			    StrAllocCopy(cur_cookie->domain, value);
 			}
+		    }
+		    if (cat) {
+			StrAllocCat(cur_cookie->domain, value);
 		    } else {
 			StrAllocCopy(cur_cookie->domain, value);
 		    }
@@ -1940,7 +1936,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 			cur_cookie->expires = time(NULL) + temp;
 #ifndef DISABLE_TRACE
 		        if (cookieTrace)
-			    fprintf(stderr, "HTSetCookie: expires %ld, %s",
+			    fprintf(stderr, "PSetCookies: expires %ld, %s",
 				    (long) cur_cookie->expires,
 				    ctime(&cur_cookie->expires));
 #endif
@@ -1965,7 +1961,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 			cur_cookie->expires = LYmktime(value, FALSE);
 #ifndef DISABLE_TRACE
 			if ((cur_cookie->expires > 0) && cookieTrace)
-			    fprintf(stderr, "HTSetCookie: expires %ld, %s",
+			    fprintf(stderr, "PSetCookies: expires %ld, %s",
 				    (long) cur_cookie->expires,
 				    ctime(&cur_cookie->expires));
 #endif
@@ -2002,8 +1998,8 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 				cur_cookie->value ? cur_cookie->value :
 						    "[no value]");
 		        fprintf(stderr, invalidport ?
-			     "                     due to excessive length!\n" :
-			     "                     due to invalid port!\n");
+			        "                     due to too long!\n" :
+			        "                     due to invalid port!\n");
 		    }
 #endif
 		    if (invalidport)
@@ -2055,7 +2051,6 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 	}
 #endif
 	freeCookie(cur_cookie);
-	cur_cookie = NULL;
     } else if (cur_cookie) {                    /* Invalid port */
 #ifndef DISABLE_TRACE
 	if (cookieTrace || reportBugs) {
@@ -2066,9 +2061,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
             fprintf(stderr, "                     due to invalid port!\n");
 	}
 #endif
-        NumCookies--;
         freeCookie(cur_cookie);
-        cur_cookie = NULL;
     }
     /*
      *	Process the Set-Cookie header, if no non-zero-length Set-Cookie2
@@ -2262,8 +2255,7 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 
 		if (value_len > 4096)
 		    value_len = 4096;
-		value = (char *)malloc(value_len + 1);
-		if (!value)
+		if (!(value = (char *)malloc(value_len + 1)))
 		    outofmem(__FILE__, "ProcessSetCookies");
 		LYstrncpy(value, value_start, value_len);
 	    }
@@ -2326,8 +2318,8 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 #ifndef DISABLE_TRACE
 			if (cookieTrace)
 			    fprintf(stderr,
-			       "PSetCookies: Rejecting commentURL value '%s'\n",
-			       cur_cookie->commentURL);
+			          "PSetCookies: Reject commentURL value '%s'\n",
+			          cur_cookie->commentURL);
 #endif
 			FREE(cur_cookie->commentURL);
 		    }
@@ -2339,6 +2331,8 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 		     *	Don't process a repeat domain. - FM
 		     */
 		    !(cur_cookie->flags & COOKIE_FLAG_DOMAIN_SET)) {
+		    int cat = 0;
+
 		    length -= strlen(cur_cookie->domain);
 		    /*
 		     *	If the value does not have a lead dot,
@@ -2360,17 +2354,16 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 #ifndef DISABLE_TRACE
 				if (cookieTrace)
 				    fprintf(stderr,
-	                               "PSetCookies: Adding lead dot for domain value '%s'\n",
-				       value);
+	                             "PSetCookies: Add lead . to domain '%s'\n",
+				     value);
 #endif
 				StrAllocCopy(cur_cookie->domain, ".");
-				StrAllocCat(cur_cookie->domain, value);
-			    } else {
-				StrAllocCopy(cur_cookie->domain, value);
+				cat = 1;
 			    }
-			} else {
-			    StrAllocCopy(cur_cookie->domain, value);
 			}
+		    }
+		    if (cat) {
+			StrAllocCat(cur_cookie->domain, value);
 		    } else {
 			StrAllocCopy(cur_cookie->domain, value);
 		    }
@@ -2498,11 +2491,10 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 				cur_cookie->value ? cur_cookie->value :
 						    "[no value]");
 		        fprintf(stderr,
-			     "                     due to excessive length!\n");
+			        "                     due to too long!\n");
 		    }
 #endif
 		    freeCookie(cur_cookie);
-		    cur_cookie = NULL;
 		}
 		/*
 		 *  Start a new cookie. - FM
@@ -2548,7 +2540,6 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 	}
 #endif
 	freeCookie(cur_cookie);
-	cur_cookie = NULL;
     }
     /*
      *	OK, now we can actually store any cookies
@@ -2579,7 +2570,6 @@ PRIVATE void ProcessSetCookies (WWW_CONST char *SetCookie,
 	store_cookie(co, hostname, path);
     }
     HTList_delete(CombinedCookies);
-    CombinedCookies = NULL;
 
     return;
 }
@@ -2644,17 +2634,12 @@ PUBLIC void HTSetCookie (WWW_CONST char *SetCookie,
     }
 #endif
     /*
-     *	We're done if HTSetCookies is off or we have bad headers. - FM
+     *	Process the header(s) unless HTSetCookies is off or we have
+     *  bad headers.
      */
-    if (HTSetCookies == FALSE || BadHeaders == TRUE) {
-	FREE(hostname);
-	FREE(path);
-	return;
-    }
-    /*
-     *	Process the header(s).
-     */
-    ProcessSetCookies(SetCookie, SetCookie2, address, hostname, path, port);
+    if (HTSetCookies == TRUE && BadHeaders == FALSE)
+	ProcessSetCookies(SetCookie, SetCookie2, address, hostname, path, port);
+
     FREE(hostname);
     FREE(path);
     return;
@@ -2730,8 +2715,7 @@ PUBLIC char *HTCookie (WWW_CONST char *hostname,
 
 PRIVATE char *create_cookie_filename(char *fname)
 {
-    char *home_ptr, *path;
-    char home[256];
+    char *home, *path;
 #ifndef VMS
     struct passwd *pwdent;
 #endif
@@ -2739,18 +2723,16 @@ PRIVATE char *create_cookie_filename(char *fname)
     /*
      * Try the HOME environment variable, then the password file
      */
-    if (!(home_ptr = getenv("HOME"))) {
+    if (!(home = getenv("HOME"))) {
 #ifndef VMS
         if (!(pwdent = getpwuid(getuid()))) {
             return(strdup(fname));
         } else {
-            strcpy(home, pwdent->pw_dir);
+            home = pwdent->pw_dir;
         }
 #else
 	return(strdup(fname));
 #endif
-    } else {
-        strcpy(home, home_ptr);
     }
     
     path = (char *)malloc(strlen(home) + strlen(fname) + 2);
@@ -2830,7 +2812,7 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	    buf[i] = '\0';
 	}
 	/*
-	 * Tokenise the cookie line into its component parts -
+	 * Tokenize the cookie line into its component parts -
 	 * this only works for Netscape style cookie files at the
 	 * moment.  It may be worth investigating an alternative
 	 * format because the Netscape format isn't all
@@ -2847,7 +2829,7 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	 */
 #ifndef DISABLE_TRACE
 	if (cookieTrace)
-	    fprintf(stderr, "LoadCookies: tokenising %s\n", buf);
+	    fprintf(stderr, "LoadCookies: tokenizing %s\n", buf);
 #endif
 	tok_ptr = buf;
 	tok_out = LYstrsep(&tok_ptr, "\t");
@@ -2950,7 +2932,7 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	fprintf(stderr, "LoadCookies: reading permissions from %s\n", permfile);
 #endif
     /*
-     *  Ensure that the domain list exists.
+     * Ensure that the domain list exists.
      */
     if (!domain_btree) {
 	domain_btree = HTBTree_new((HTComparer) compare_cookie_domains);
@@ -2971,11 +2953,11 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	    buf[i] = '\0';
 	}
 	/*
-	 * Tokenise the permission line into its component parts.
+	 * Tokenize the permission line into its component parts.
 	 */
 #ifndef DISABLE_TRACE
 	if (cookieTrace)
-	    fprintf(stderr, "LoadCookies: tokenising %s\n", buf);
+	    fprintf(stderr, "LoadCookies: tokenizing %s\n", buf);
 #endif
 	tok_ptr = buf;
 	tok_out = LYstrsep(&tok_ptr, "\t");
@@ -3028,8 +3010,7 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 		} else {
 #ifndef DISABLE_TRACE
 		    if (cookieTrace || reportBugs)
-		        fprintf(stderr,
-				"Unknown ssl permission: %s\n", value);
+		        fprintf(stderr,	"Unknown ssl permission: %s\n", value);
 #endif
 		}
 	    }
@@ -3043,8 +3024,7 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	    /*
 	     *	Domain not found; add a new entry for this domain.
 	     */
-	    de = (domain_entry *)calloc(1, sizeof(domain_entry));
-	    if (!de)
+	    if (!(de = (domain_entry *)calloc(1, sizeof(domain_entry))))
 		outofmem(__FILE__, "store_cookie");
 	    de->bv = QUERY_USER;
             de->invcheck_bv = DEFAULT_INVCHECK_TYPE;  /* Should this go here? */
@@ -3052,17 +3032,14 @@ PUBLIC void HTLoadCookies (char *cookie_file, char *perm_file)
 	    StrAllocCopy(de->domain, domain);
 	    HTBTree_add(domain_btree, de);
 	}
-	if (de) {
-	    if (*value == '1') {
-		de->bv = ACCEPT_ALWAYS;
-	    } else if (*value == '2') {
-		de->bv = REJECT_ALWAYS;
-	    } else {
+	if (*value == '1') {
+	    de->bv = ACCEPT_ALWAYS;
+	} else if (*value == '2') {
+	    de->bv = REJECT_ALWAYS;
 #ifndef DISABLE_TRACE
-		if (cookieTrace || reportBugs)
-		    fprintf(stderr, "Unknown cookie permission: %s\n", value);
+	} else if (cookieTrace || reportBugs) {
+	    fprintf(stderr, "Unknown cookie permission: %s\n", value);
 #endif
-	    }
 	}
     }
     fclose(cookie_handle);
@@ -3080,40 +3057,37 @@ PUBLIC void HTStoreCookies (char *cookie_file, char *perm_file)
     time_t now = time(NULL);
     char *cookfile = create_cookie_filename(cookie_file);
     char *permfile = create_cookie_filename(perm_file);
+#ifdef VMS
+    int backups = get_pref_boolean(eBACKUP_FILES);
+    int versions = get_pref_int(eBACKUPFILEVERSIONS);
+#endif
 
 #ifndef DISABLE_TRACE
     if (cookieTrace)
         fprintf(stderr, "StoreCookies: save cookies to %s\n", cookfile);
 #endif
 #ifdef VMS
-    if (file_exists(cookfile)) {
-        if (get_pref_boolean(eBACKUP_FILES)) {
-	    char *tf;
-	    char retBuf[BUFSIZ];
+    if (backups && file_exists(cookfile)) {
+	char *tf = (char *)malloc(strlen(cookfile) + strlen("_backup") + 5);
+	char retBuf[BUFSIZ];
 
-	    tf = (char *)malloc(strlen(cookfile) + strlen("_backup") + 5);
-	    sprintf(tf, "%s_backup", cookfile);
-	    if (my_copy(cookfile, tf, retBuf, BUFSIZ - 1,
-		        get_pref_int(eBACKUPFILEVERSIONS)) != SYS_SUCCESS)
-	        fprintf(stderr, "%s\n", retBuf);
-	    free(tf);
-        }
+	sprintf(tf, "%s_backup", cookfile);
+	if (my_copy(cookfile, tf, retBuf, BUFSIZ - 1, versions) != SYS_SUCCESS)
+	    fprintf(stderr, "%s\n", retBuf);
+	free(tf);
     }
     remove(cookfile);
     cookie_handle = fopen(cookfile, "w", "shr = nil", "rop = WBH", "mbf = 4",
 			  "mbc = 32", "deq = 8", "fop = tef");
-    if (file_exists(permfile)) {
-        if (get_pref_boolean(eBACKUP_FILES)) {
-	    char *tf;
-	    char retBuf[BUFSIZ];
 
-	    tf = (char *)malloc(strlen(permfile) + strlen("_backup") + 5);
-	    sprintf(tf, "%s_backup", permfile);
-	    if (my_copy(permfile, tf, retBuf, BUFSIZ - 1,
-		        get_pref_int(eBACKUPFILEVERSIONS)) != SYS_SUCCESS)
-	        fprintf(stderr, "%s\n", retBuf);
-	    free(tf);
-        }
+    if (backups && file_exists(permfile)) {
+	char *tf = (char *)malloc(strlen(permfile) + strlen("_backup") + 5);
+	char retBuf[BUFSIZ];
+
+	sprintf(tf, "%s_backup", permfile);
+	if (my_copy(permfile, tf, retBuf, BUFSIZ - 1, versions) != SYS_SUCCESS)
+	    fprintf(stderr, "%s\n", retBuf);
+	free(tf);
     }
     remove(permfile);
     perm_handle = fopen(permfile, "w", "shr = nil", "rop = WBH", "mbf = 4",
@@ -3327,176 +3301,175 @@ PRIVATE int HTHandleCookies (WWW_CONST char *arg,
 	 *  Find the domain in the domain_btree structure. - FM
 	 */
 	sdomain.domain = domain;
-	de = HTBTree_search(domain_btree, &sdomain);
-	if (de) {
+	if (de = HTBTree_search(domain_btree, &sdomain)) {
+	    /*
+	     *  We found the domain.  Check
+	     *  whether a lynxID is present. - FM
+	     */
+	    if (lynxID) {
 		/*
-		 *  We found the domain.  Check
-		 *  whether a lynxID is present. - FM
+		 * Seek and delete the cookie with this lynxID
+		 * in the domain's cookie list. - FM
 		 */
-		if (lynxID) {
-		    /*
-		     *	Seek and delete the cookie with this lynxID
-		     *	in the domain's cookie list. - FM
-		     */
-		    for (cl = de->cookie_list; cl; cl = cl->next) {
-			if (!(co = (cookie *)cl->object))
-			    /*
-			     *	First object is always empty. - FM
-			     */
-			    continue;
-			if (!strcmp(lynxID, co->lynxID)) {
-			    /*
-			     *	We found the cookie.
-			     *	Delete it if confirmed. - FM
-			     */
-			    if (!HTConfirm(DELETE_COOKIE_CONFIRMATION)) {
-				FREE(lynxID);
-				break;
-			    }
-			    HTList_removeObject(de->cookie_list, co);
-			    freeCookie(co);
-			    co = NULL;
-			    total_cookies--;
-			    if ((de->bv == QUERY_USER &&
-				 HTList_isEmpty(de->cookie_list)) &&
-				HTConfirm(DELETE_EMPTY_DOMAIN_CONFIRMATION)) {
-				/*
-				 *  No more cookies in this domain, no
-				 *  default accept/reject choice was set
-				 *  by the user, and got confirmation on
-				 *  deleting the domain, so do it. - FM
-				 */
-				HTList_delete(de->cookie_list);
-				de->cookie_list = NULL;
-				HTBTree_delete(domain_btree, de);
-				FREE(de->domain);
-				FREE(de);
-				HTProgress(DOMAIN_EATEN);
-			    } else {
-				HTProgress(COOKIE_EATEN);
-			    }
+		for (cl = de->cookie_list; cl; cl = cl->next) {
+		    if (!(co = (cookie *)cl->object))
+			/*
+		 	 * First object is always empty. - FM
+			 */
+			continue;
+		    if (!strcmp(lynxID, co->lynxID)) {
+			/*
+			 *	We found the cookie.
+			 *	Delete it if confirmed. - FM
+			 */
+			if (!HTConfirm(DELETE_COOKIE_CONFIRMATION)) {
+			    FREE(lynxID);
 			    break;
 			}
-		    }
-		} else {
-		    char *message;
-
-		    /*
-		     *	Prompt whether to delete all of the cookies in
-		     *	this domain, or the domain if no cookies in it,
-		     *	or to change its 'allow' setting, or to cancel,
-		     *	and then act on the user's response. - FM
-		     */
-		    if (HTList_isEmpty(de->cookie_list)) {
-			message =
-			  "Delete domain; set allow Always, Prompt or Never; or Cancel?";
-			XmxSetButtonClueText("Delete domain",
-				     "Always accept cookies for this domain",
-				     "Prompt to accept cookies for this domain",
-				     "Never accept cookies for this domain",
-				     "Dismiss this menu");
-		    } else {
-			message =
-			  "Delete domain's cookies; set allow Always, Prompt or Never; or Cancel?";
-			XmxSetButtonClueText("Delete domains's cookies",
-				     "Always accept cookies for this domain",
-				     "Prompt to accept cookies for this domain",
-				     "Never accept cookies for this domain",
-				     "Dismiss this menu");
-		    }
-		    ch = XmxDoFiveButtons(current_win->base, app_context,
-				       "VMS Mosaic: Cookie Domain Modification",
-				       message, "Delete", "Always", "Prompt",
-				       "Never", "Cancel", 520);
-		    XmxSetButtonClueText(NULL, NULL, NULL, NULL, NULL);
-
-		    switch(ch) {
-			case 2:
+			HTList_removeObject(de->cookie_list, co);
+			freeCookie(co);
+			co = NULL;
+			total_cookies--;
+			if ((de->bv == QUERY_USER &&
+			    HTList_isEmpty(de->cookie_list)) &&
+			    HTConfirm(DELETE_EMPTY_DOMAIN_CONFIRMATION)) {
 			    /*
-			     *  Set to accept all cookies
-			     *  from this domain. - FM
+			     *  No more cookies in this domain, no
+			     *  default accept/reject choice was set
+			     *  by the user, and got confirmation on
+			     *  deleting the domain, so do it. - FM
 			     */
-			    de->bv = ACCEPT_ALWAYS;
-			    user_message(ALWAYS_ALLOWING_COOKIES, de->domain);
-			    break;
-			case 5:
-			    /*
-			     *  Cancelled. - FM
-			     */
-			    HTProgress(CANCELLED);
-			    break;
-			case 1:
-			    if (HTList_isEmpty(de->cookie_list)) {
-				/*
-				 *  We had an empty domain, so we
-				 *  were asked to delete it. - FM
-				 */
-				HTList_delete(de->cookie_list);
-				de->cookie_list = NULL;
-				HTBTree_delete(domain_btree, de);
-				FREE(de->domain);
-				FREE(de);
-				HTProgress(DOMAIN_EATEN);
-				break;
-			    }
- Delete_all_cookies_in_domain:
-			    /*
-			     *  Delete all cookies in this domain. - FM
-			     */
-			    cl = de->cookie_list;
-			    while (cl) {
-				next = cl->next;
-				co = cl->object;
-				if (co) {
-				    HTList_removeObject(de->cookie_list, co);
-				    freeCookie(co);
-				    co = NULL;
-				    total_cookies--;
-				}
-				cl = next;
-			    }
-			    HTProgress(DOMAIN_COOKIES_EATEN);
-			    /*
-			     *  If a default accept/reject
-			     *  choice is set, we're done. - FM
-			     */
-			    if (de->bv != QUERY_USER)
-				break;
-			    /*
-			     *  Check whether to delete
-			     *  the empty domain. - FM
-			     */
-			    if (HTConfirm(DELETE_EMPTY_DOMAIN_CONFIRMATION)) {
-				HTList_delete(de->cookie_list);
-				de->cookie_list = NULL;
-				HTBTree_delete(domain_btree, de);
-				FREE(de->domain);
-				FREE(de);
-				HTProgress(DOMAIN_EATEN);
-			    }
-			    break;
-			case 3:
-			    /*
-			     *  Set to prompt for cookie acceptence
-			     *  from this domain. - FM
-			     */
-			    de->bv = QUERY_USER;
-			    user_message(PROMTING_TO_ALLOW_COOKIES, de->domain);
-			    break;
-			case 4:
-			    /*
-			     *  Set to reject all cookies
-			     *  from this domain. - FM
-			     */
-			    de->bv = REJECT_ALWAYS;
-			    user_message(NEVER_ALLOWING_COOKIES, de->domain);
-			    if (!HTList_isEmpty(de->cookie_list) &&
-				HTConfirm(DELETE_ALL_COOKIES_IN_DOMAIN))
-				goto Delete_all_cookies_in_domain;
-			    break;
-			default:;
+			    HTList_delete(de->cookie_list);
+			    de->cookie_list = NULL;
+			    HTBTree_delete(domain_btree, de);
+			    FREE(de->domain);
+			    FREE(de);
+			    HTProgress(DOMAIN_EATEN);
+			} else {
+			    HTProgress(COOKIE_EATEN);
+			}
+			break;
 		    }
 		}
+	    } else {
+		char *message;
+
+		/*
+		 * Prompt whether to delete all of the cookies in
+		 * this domain, or the domain if no cookies in it,
+		 * or to change its 'allow' setting, or to cancel,
+		 * and then act on the user's response. - FM
+		 */
+		if (HTList_isEmpty(de->cookie_list)) {
+		    message =
+		      "Delete domain; set allow Always, Prompt or Never; or Cancel?";
+		    XmxSetButtonClueText("Delete domain",
+				     "Always accept cookies for this domain",
+				     "Prompt to accept cookies for this domain",
+				     "Never accept cookies for this domain",
+				     "Dismiss this menu");
+		} else {
+		    message =
+		      "Delete domain's cookies; set allow Always, Prompt or Never; or Cancel?";
+		    XmxSetButtonClueText("Delete domains's cookies",
+				     "Always accept cookies for this domain",
+				     "Prompt to accept cookies for this domain",
+				     "Never accept cookies for this domain",
+				     "Dismiss this menu");
+		}
+		ch = XmxDoFiveButtons(current_win->base, app_context,
+				      "VMS Mosaic: Cookie Domain Modification",
+				      message, "Delete", "Always", "Prompt",
+				      "Never", "Cancel", 520);
+		XmxClearButtonClueText();
+
+		switch(ch) {
+		    case 2:
+			/*
+			 *  Set to accept all cookies
+			 *  from this domain. - FM
+			 */
+			de->bv = ACCEPT_ALWAYS;
+			user_message(ALWAYS_ALLOWING_COOKIES, de->domain);
+			break;
+		    case 5:
+			/*
+			 *  Cancelled. - FM
+			 */
+			HTProgress(CANCELLED);
+			break;
+		    case 1:
+			if (HTList_isEmpty(de->cookie_list)) {
+			    /*
+			     *  We had an empty domain, so we
+			     *  were asked to delete it. - FM
+			     */
+			    HTList_delete(de->cookie_list);
+			    de->cookie_list = NULL;
+			    HTBTree_delete(domain_btree, de);
+			    FREE(de->domain);
+			    FREE(de);
+			    HTProgress(DOMAIN_EATEN);
+			    break;
+			}
+ Delete_all_cookies_in_domain:
+			/*
+			 *  Delete all cookies in this domain. - FM
+			 */
+			cl = de->cookie_list;
+			while (cl) {
+			    next = cl->next;
+			    co = cl->object;
+			    if (co) {
+				HTList_removeObject(de->cookie_list, co);
+				freeCookie(co);
+				co = NULL;
+				total_cookies--;
+			    }
+			    cl = next;
+			}
+			HTProgress(DOMAIN_COOKIES_EATEN);
+			/*
+			 *  If a default accept/reject
+			 *  choice is set, we're done. - FM
+			 */
+			if (de->bv != QUERY_USER)
+			    break;
+			/*
+			 *  Check whether to delete
+			 *  the empty domain. - FM
+			 */
+			if (HTConfirm(DELETE_EMPTY_DOMAIN_CONFIRMATION)) {
+			    HTList_delete(de->cookie_list);
+			    de->cookie_list = NULL;
+			    HTBTree_delete(domain_btree, de);
+			    FREE(de->domain);
+			    FREE(de);
+			    HTProgress(DOMAIN_EATEN);
+			}
+			break;
+		    case 3:
+			/*
+			 *  Set to prompt for cookie acceptence
+			 *  from this domain. - FM
+			 */
+			de->bv = QUERY_USER;
+			user_message(PROMTING_TO_ALLOW_COOKIES, de->domain);
+			break;
+		    case 4:
+			/*
+			 *  Set to reject all cookies
+			 *  from this domain. - FM
+			 */
+			de->bv = REJECT_ALWAYS;
+			user_message(NEVER_ALLOWING_COOKIES, de->domain);
+			if (!HTList_isEmpty(de->cookie_list) &&
+			    HTConfirm(DELETE_ALL_COOKIES_IN_DOMAIN))
+			    goto Delete_all_cookies_in_domain;
+			break;
+		    default:;
+		}
+	    }
 	}
 	if (!HTBTree_next(domain_btree, NULL))
 	    HTProgress(ALL_COOKIES_EATEN);

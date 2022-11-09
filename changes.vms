@@ -835,3 +835,50 @@ From VMS 4.1 to VMS 4.2
  o Removed PARAMS and ARGSn macros from LIBWWW2
  o Various bug and memory leak fixes
  o Various source reformating and cleanups
+
+From VMS 4.2 to VMS 4.3
+...............
+
+ o Added support for intermixed font tags (e.g. <BIG><I></BIG></I>)
+ o Added support for SVG images
+ O Added News menu option to change the NNTP news server
+ o Added support for NNTP server authentication
+ o Added support for images in <EMBED> and <OBJECT> tags
+ o Added support for MIME type "image/svg+xml"
+ o Updated gopher support with multiple improvements (including proper
+   hURL and itemtype i and 3 support) and security fixes from Mosaic-CK 
+ o Fixed problem with multiple image loading not working with some images
+ o Fixed problem with multiple image loading ignoring the Delay Image
+   Loading settings
+ o Fixed problem with multiple image loading crashing due to "no
+   content" images
+ o Fixed crash caused by resizing pages with frames or loading delayed
+   images 
+ o Added limited support for multiple image loading socket keep alive
+ o Fixed formatting problems with news article listings
+ o Fixed problems with percentage WIDTH and HEIGHT in <IMG> tags
+ o Fixed problem with WIDTH in <HR> tags inside tables
+ o Changed so that Return submits forms with multiple text fields
+ o Changed to use default font instead of Times for invalid FACE
+   in <FONT> tags
+ o Changed to display correct site in FTP Send dialog title
+ o Changed to escape "&<>" characters in news article subjects when
+   displaying articles
+ o Changed to ignore UTF-8 encoded LRM and RLM
+ O Changed to ignore UTF-8 encoding in tags and page titles
+ o Changed to no longer attempt to display uuencode or base64 files in
+   news articles as images; instead display links to the decoded files.
+ o Changed to unescape <BUTTON> text
+ o Improved support for RULES=ALL in <TABLE> tags
+ o Added support for Unicode &# escape sequences for fraction slash,
+   small black square and left and right arrows
+ o Added limited support for Unicode &# escape sequence "box drawing
+   light up and right"
+ o Changed to set SQO (sequential access only) on temporary output files
+ o Changed to set CBT (contiguous-best-try) on preallocated temporary
+   output files
+ o Changed the LIBNUT strcasecmp routines to properly handle empty strings
+ o Upgraded LIBOPENJPEG to version 1.3.0
+ o Upgraded PNG library to version 1.0.28
+ o Various bug, memory leak and performance fixes
+ o Various source reformating and cleanups

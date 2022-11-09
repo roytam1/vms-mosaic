@@ -52,8 +52,8 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004, 2005, 2006, 2007
- * The VMS Mosaic Project
+/* Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+ * 2011 The VMS Mosaic Project
  */
 
 #include "../config.h"
@@ -69,6 +69,7 @@
 #include "gui-popup.h"  /* For callback struct definition */
 #include "gui-dialogs.h"
 #include "gui-news.h"
+#include "newsrc.h"
 #ifdef CCI
 #include "cci.h"
 #include "cciBindings.h"
@@ -158,7 +159,7 @@ static XmxCallback(exit_confirm_cb)
   if (XmxExtractToken((int)client_data)) {
       mo_exit();
   } else {
-      XtUnmanageChild(w);
+      XmxUnmanageCallbackWidget();
   }
   return;
 }
@@ -356,7 +357,7 @@ static XmxCallback(clear_history_confirm_cb)
       while (next = mo_next_window(next))
           mo_redisplay_window(next);
   }
-  XtDestroyWidget(w);
+  XmxDestroyCallbackWidget();
 }
 
 /* ----------------------- mo_do_delete_annotation ------------------------ */
@@ -398,7 +399,7 @@ static XmxCallback(delete_annotation_confirm_cb)
       XmxExtractToken((int)client_data))
       mo_do_delete_annotation(win);
 #endif
-  XtDestroyWidget(w);
+  XmxDestroyCallbackWidget();
 }
 
 
@@ -604,11 +605,11 @@ XmxCallback(menubar_cb)
 #endif
 
     case mo_proxy:
-      ShowProxyDialog(win);
+      ShowProxyDialog(win, True);
       break;
 
     case mo_no_proxy:
-      ShowNoProxyDialog(win);
+      ShowProxyDialog(win, False);
       break;
 
     case mo_home_document:
@@ -682,6 +683,7 @@ XmxCallback(menubar_cb)
       mo_access_document(win, ENCYCLOPEDIA_SEARCH_DEFAULT);
       break;
 
+#ifdef STILL_AT_NCSA
     case mo_mosaic_manual:
 #ifdef CCI
       if (cci_event) MoCCISendEventOutput(HELP_MANUAL);
@@ -690,6 +692,7 @@ XmxCallback(menubar_cb)
 	 "http://www.ncsa.uiuc.edu/SDG/Software/Mosaic/Docs/UserGuide/XMosaic.0.html",
          NULL, NULL);
       break;
+#endif
 
     case mo_cookie_manager:
 #ifdef CCI
@@ -728,7 +731,7 @@ XmxCallback(menubar_cb)
 			   "Are you sure you want to clear the global history?",
 			   "VMS Mosaic: Clear Global History",
 			   clear_history_confirm_cb, 1, 0);
-      XtManageChild(Xmx_w);
+      XmxManageXmxWidget();
       break;
 
     case mo_hotlist_postit:
@@ -1119,22 +1122,25 @@ XmxCallback(menubar_cb)
 			    NULL, NULL);
       break;
 
+#ifdef STILL_AT_NCSA
     case mo_help_onversion:
 #ifdef CCI
       if (cci_event) MoCCISendEventOutput(HELP_ON_VERSION);
 #endif
       mo_open_another_window(win, MO_HELP_ON_VERSION_DOCUMENT, NULL, NULL);
       break;
+#endif
 
     case mo_help_vmsmosaic:
 #ifdef CCI
       if (cci_event) MoCCISendEventOutput(HELP_ON_VMS_VERSION);
 #endif
       mo_open_another_window(win,
-		             "http://vaxa.wvnet.edu/vmswww/vms_mosaic.html",
+		             "http://wvnvms.wvnet.edu/vmswww/vms_mosaic.html",
 			     NULL, NULL);
       break;
 
+#ifdef STILL_AT_NCSA
     case mo_help_faq:
 #ifdef CCI
       if (cci_event) MoCCISendEventOutput(HELP_ON_FAQ);
@@ -1142,6 +1148,7 @@ XmxCallback(menubar_cb)
       mo_open_another_window(win, mo_assemble_help_url("mosaic-faq.html"), 
                              NULL, NULL);
       break;
+#endif
 
     case mo_help_html:
 #ifdef CCI
@@ -1226,9 +1233,26 @@ XmxCallback(menubar_cb)
       gui_news_flush(win);
       break;
 
+    case mo_news_server:
+      {
+	  char *host;
+
+	  if (host = prompt_for_string("Enter news server host name:")) {
+	      HTSetNewsHost(host);
+	      newsrc_kill();
+	      newsrc_init(host);
+	      XtFree(host);
+	      /* Refresh group list */
+	      gui_news_list(win);
+	  }
+      } 
+      break;
+
+    /** Unused
     case mo_news_flushgroup:
       gui_news_flushgroup(win);
       break;
+     **/
 
     case mo_news_sub_anchor:
       if (NewsGroupS) {
@@ -1370,8 +1394,8 @@ XmxCallback(menubar_cb)
       mo_handle_ftpmkdir(win);
       break;
 
+#ifdef TAGNBAG
     /* Tag and Bag */
-    /*
     case mo_tag_current:
       mo_tagnbag_current(win);
       break;
@@ -1379,7 +1403,7 @@ XmxCallback(menubar_cb)
     case mo_tag_url:
       mo_tagnbag_url(win);
       break;
-    */
+#endif
 
     case mo_links_window:
       mo_post_links_window(win);
@@ -1433,7 +1457,7 @@ XmxCallback(menubar_cb)
 			     "Are you sure you want to delete this annotation?",
 			     "VMS Mosaic: Delete Annotation",
 			     delete_annotation_confirm_cb, 1, 0);
-          XtManageChild(Xmx_w);
+          XmxManageXmxWidget();
       } else {
           mo_do_delete_annotation(win);
       }
@@ -1586,11 +1610,14 @@ extern XmxOptionMenuStruct *pubpri_opts;
 
 #ifndef DISABLE_TRACE
 
+static char *TooMany1 = "Tried to allocate too many option menu items!\n\n";
+static char *TooMany2 = "Tried to allocate too many menu items!\n\n";
+
 #define DEF_MENUBAR(nameStr, mnemonicStr, cb, cbData, subMenu) \
 { \
   if (menuCnt >= maxMenuCnt) { \
-      if (srcTrace) \
-	 fprintf(stderr, "Tried to allocate too many option menu items!\n\n"); \
+      if (reportBugs) \
+	 fprintf(stderr, TooMany1); \
       exit(1); \
   } \
   if ((nameStr) && *(nameStr)) \
@@ -1605,8 +1632,8 @@ extern XmxOptionMenuStruct *pubpri_opts;
 #define DEFINE_OPTIONS(nameStr, optData, optState) \
 { \
   if (menuCnt >= maxMenuCnt) { \
-      if (srcTrace) \
-	  fprintf(stderr,"Tried to allocate too many menu items!\n\n"); \
+      if (reportBugs) \
+	  fprintf(stderr, TooMany2); \
       exit(1); \
   } \
   if ((nameStr) && *(nameStr)) \
@@ -1900,18 +1927,18 @@ void mo_init_menubar(void)
   /* Help Menu */
   ALLOC_MENUBAR(help_menuspec, 12)
   DEF_MENUBAR("Using", "U", menubar_cb, mo_help_about, NULL)
-  /*
+#ifdef STILL_AT_NCSA
   DEF_MENUBAR("Manual", "M", menubar_cb, mo_mosaic_manual, NULL)
-   */
+#endif
   SPACER()
-  /*
+#ifdef STILL_AT_NCSA
   DEF_MENUBAR("Help on Version 2.7b6", "V", menubar_cb, mo_help_onversion, NULL)
-   */
+#endif
   DEF_MENUBAR("Help on VMS Mosaic", "V", menubar_cb, mo_help_vmsmosaic, NULL)
   DEF_MENUBAR("On Window", "W", menubar_cb, mo_help_onwindow, NULL)
-  /*
-  DEF_MENUBAR("On FAQ", "F",menubar_cb,mo_help_faq, NULL)
-   */
+#ifdef STILL_AT_NCSA
+  DEF_MENUBAR("On FAQ", "F", menubar_cb, mo_help_faq, NULL)
+#endif
   SPACER()
   DEF_MENUBAR("On HTML", "H", menubar_cb, mo_help_html, NULL)
   DEF_MENUBAR("On URLs", "O", menubar_cb, mo_help_url, NULL)
@@ -1941,7 +1968,7 @@ void mo_init_menubar(void)
   NULL_MENUBAR()
 
   /* News Menu */
-  ALLOC_MENUBAR(news_menuspec, 27)
+  ALLOC_MENUBAR(news_menuspec, 28)
   DEF_MENUBAR("Next", "N", menubar_cb, mo_news_next, NULL)
   DEF_MENUBAR("Prev", "P", menubar_cb, mo_news_prev, NULL)
   DEF_MENUBAR("Next Thread", "t", menubar_cb, mo_news_nextt, NULL)
@@ -1956,7 +1983,7 @@ void mo_init_menubar(void)
   DEF_MENUBAR("Unsubscribe Group", "u", menubar_cb, mo_news_unsub, NULL)
   SPACER()
   DEF_MENUBAR("<Show All Groups", "A", menubar_cb, mo_news_grp0, NULL)
-  DEF_MENUBAR("<Show Unread Subscribed Groups", "S",menubar_cb,mo_news_grp1,NULL)
+  DEF_MENUBAR("<Show Unread Subscribed Groups","S",menubar_cb,mo_news_grp1,NULL)
   DEF_MENUBAR("<Show All Subscribed Groups", "R", menubar_cb, mo_news_grp2,NULL)
   SPACER()
   DEF_MENUBAR("<Show All Articles", "l", menubar_cb, mo_news_art0, NULL)
@@ -1968,6 +1995,7 @@ void mo_init_menubar(void)
   SPACER()
   DEF_MENUBAR("Flush News Data", "F", menubar_cb, mo_news_flush, NULL)
   DEF_MENUBAR("Thread Style", "T", NULL, 0, newsfmt_menuspec)
+  DEF_MENUBAR("Change Server", "C", menubar_cb, mo_news_server, NULL)
   NULL_MENUBAR()
 
   /* The Menubar */
@@ -1975,7 +2003,7 @@ void mo_init_menubar(void)
   DEF_MENUBAR("File", "F", NULL, 0, file_menuspec)
   DEF_MENUBAR("Options", "O", NULL, 0, opts_menuspec)
   DEF_MENUBAR("Navigate", "N", NULL, 0, navi_menuspec)
-  DEF_MENUBAR("Annotate", "A", NULL ,0, anno_menuspec)
+  DEF_MENUBAR("Annotate", "A", NULL, 0, anno_menuspec)
   DEF_MENUBAR("News", "w", NULL, 0, news_menuspec)
   DEF_MENUBAR("Help", "H", NULL, 0, help_menuspec)
   /* Dummy submenus for Documents and Debug */
@@ -2267,7 +2295,6 @@ XmxMenuRecord *mo_make_document_view_menubar(Widget form)
   }
 #endif
 
-  Xmx_n = 0;
   toBeReturned = XmxRMakeMenubar(form, simple ? simple_menuspec : menuspec,
 				 tearoff);
   if (kiosk)

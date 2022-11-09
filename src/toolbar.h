@@ -1,11 +1,11 @@
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 /* Toolbar Stuff */
 
-struct toolbar {
+typedef struct mo_toolbar_rec {
     Widget w;
     int gray;
-};
+} mo_toolbar;
 
 #define BTN_PREV 0
 #define BTN_NEXT 1
@@ -19,7 +19,7 @@ struct toolbar {
 /* Array size */
 #define BTN_COUNT 25
 
-struct tool {
+typedef struct mo_tool_rec {
     char *text;            /* Button text */
     char *long_text;       /* Long button text */
     char *label;           /* Tracker label */
@@ -28,7 +28,5 @@ struct tool {
     Pixmap *greyimage;     /* The greyed icon or NULL */
     int toolset;           /* Tool set it belongs too (0=always on) */
     int kioskok;           /* Allowed in kiosk mode */
-};
-
-extern void mo_tool_state(struct toolbar *t, int state, int index);
+} mo_tool;
 

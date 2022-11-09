@@ -125,6 +125,7 @@ static Suffix Suffixes[] = {
       {".pgm",    "image/x-portable-graymap", "binary", 1.0},
       {".ppm",    "image/x-portable-pixmap", "binary", 1.0},
       {".rgb",    "image/x-rgb", "binary", 1.0},
+      {".svg",    "image/svg+xml", "binary", 1.0},
       {".xbm",    "image/x-xbitmap", "binary", 1.0},
       {".xpm",    "image/x-xpixmap", "binary", 1.0},
       {".xwd",    "image/x-xwindowdump", "binary", 1.0},
@@ -281,6 +282,7 @@ PUBLIC void HTFormatInit (void)
       HTSetPresentation("image/x-portable-pixmap", "xv %s", 1.0, 3.0, 0.1);
       HTSetPresentation("image/x-rgb", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/rgb", "xv %s", 1.0, 3.0, 0.0);
+      HTSetPresentation("image/svg+xml", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/x-xpm", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/x-xbm", "xv %s", 1.0, 3.0, 0.0);
       HTSetPresentation("image/x-xbitmap", "xv %s", 1.0, 3.0, 0.0);

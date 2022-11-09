@@ -1,7 +1,8 @@
 ! MMS description file for libopenjpeg
 ! George E. Cook, WVNET, 29-May-2007
-! Mosaic 4.2
+! Mosaic 4.3
 ! libopenjpeg 1.2 on 19-Jun-2007
+! libopenjpeg 1.3 on 25-feb-2008
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -36,6 +37,16 @@ CQUALC=/DECC/Prefix=ALL
 CQUALC=/VAXC
 .ELSE
 CQUALC=
+.ENDIF
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
 .ENDIF
 .ENDIF
 
@@ -81,7 +92,7 @@ Odir:tcd.obj      : tcd.c tcd.h opj_includes.h openjpeg.h
 Odir:tgt.obj      : tgt.c tgt.h opj_includes.h openjpeg.h
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

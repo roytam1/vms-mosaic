@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #ifndef __XMX_H__
 #define __XMX_H__
@@ -192,6 +192,10 @@ typedef struct _XmxMenuRecord {
   void name(Widget w, XtPointer client_data, XtPointer call_data)
 #define XmxCallbackPrototype(name)                                            \
   extern void name(Widget, XtPointer, XtPointer)
+#define XmxDestroyCallbackWidget()					      \
+  XtDestroyWidget(w)
+#define XmxUnmanageCallbackWidget()					      \
+  XtUnmanageChild(w)
 
 /* Event handler functions and prototypes. */
 #define XmxEventHandler(name)						      \
@@ -199,10 +203,13 @@ typedef struct _XmxMenuRecord {
 #define XmxEventHandlerPrototype(name) 				              \
   extern void name(Widget, XtPointer, XEvent *, Boolean *)
 
-/* Shortcut for XtAppInitialize --- of dubious value. */
-#define XmxInit()							      \
-  XtAppInitialize(&app_context, "XmxApplication", NULL, 0, &argc, argv,       \
-                  NULL, Xmx_wargs, Xmx_n);
+/* Shortcuts to hide Xmx variables. */
+#define XmxCreatePopupShell(name, class, parent)			      \
+  XtCreatePopupShell((name), (class), (parent), Xmx_wargs, Xmx_n)
+#define XmxManageXmxWidget()						      \
+  XtManageChild(Xmx_w)
+#define XmxResetArgs()							      \
+  Xmx_n = 0
 
 /* ------------------------------ PROTOTYPES ------------------------------ */
 
@@ -327,6 +334,7 @@ extern int XmxDoFiveButtons (Widget parent, XtAppContext app, String, String,
 
 extern Widget XmxInitClue (Widget, Boolean);
 extern void XmxSetButtonClueText (String, String, String, String, String);
+extern void XmxClearButtonClueText (void);
 extern void XmxSetButtonClue (String, String, String, String, String);
 extern void XmxClearButtonClue (String, String, String, String, String);
 extern void XmxAddClue (Widget, String);

@@ -40,6 +40,16 @@ CFLAGS= /PRECISION=SINGLE/NoDebug/Optimize
 OPT= ,Sys$Disk:[]MAKVMS.OPT/Option
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 # Put here the object file name for the correct system-dependent memory
 # manager file.  For Unix this is usually jmemnobs.o, but you may want
 # to use jmemansi.o or jmemname.o if you have limited swap space.
@@ -162,7 +172,7 @@ jconfig.h : jconfig.vms
 	@- Copy jconfig.vms jconfig.h
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

@@ -11,9 +11,8 @@
 #include "tcp.h"
 #include <stdio.h>
 
-char adbuf[1024];
-
 #ifndef DISABLE_TRACE
+char adbuf[1024];
 extern int httpTrace;
 extern int www2Trace;
 #endif
@@ -50,7 +49,7 @@ PRIVATE void flush (HTStream *me)
 	if (status < 0) {
 #ifndef DISABLE_TRACE
 	    if (www2Trace)
-		fprintf(stderr, "HTWrite: Error on socket output stream!!!\n");
+		fprintf(stderr, "HTWrite: Error on socket output stream!\n");
 #endif
 	    return;
 	}
@@ -115,8 +114,7 @@ PRIVATE void HTWriter_write (HTStream *me, WWW_CONST char *s, int l)
 	if (status < 0) {
 #ifndef DISABLE_TRACE
 	    if (www2Trace)
-		fprintf(stderr,
-	    	        "HTWriter_write: Error on socket output stream!!!\n");
+		fprintf(stderr, "HTWriter_write: Error on socket output!\n");
 #endif
 	    return;
 	}
@@ -160,7 +158,7 @@ PRIVATE WWW_CONST HTStreamClass HTWriter = {
 	HTWriter_put_character, 	HTWriter_put_string,
 	HTWriter_write,
         HTWriter_handle_interrupt
-}; 
+};
 
 
 /*	Subclass-specific Methods
@@ -172,7 +170,7 @@ PUBLIC HTStream *HTWriter_new (int soc)
 
     if (!me)
 	outofmem(__FILE__, "HTWriter_new");
-    me->isa = &HTWriter;       
+    me->isa = &HTWriter;
     me->soc = soc;
     me->write_pointer = me->buffer;
     return me;

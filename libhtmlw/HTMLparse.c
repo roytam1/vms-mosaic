@@ -55,7 +55,7 @@
 
 /* Copyright (C) 1997 - G.Dauphin
  *
- * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009
  * The VMS Mosaic Project
  */
 
@@ -132,7 +132,7 @@ static MarkInfo *mlist;
 static MarkInfo *currentmark;
 static charset_is_UTF8 = 0;
 static int in_plain_text = 0;
- 
+
 #if (defined(VMS) && (__DECC_VER >= 50790004))
 #pragma message disable(INTCONSTTRUNC)
 #endif
@@ -723,6 +723,15 @@ static char ExpandEscape(char *esc, char **endp, char **new)
 				/* Much Greater Than */
 				*new = ">>";
 				break;
+			    case 9492:
+				/* Box drawings light up and right */
+				/* Used in forms, so don't use Symbol font. */
+				val = '^';
+				break;
+			    case 9642:
+				/* Black small square */
+				*new = "MOSAIC BLOCK";
+				break;
 			    case 9650:
 				/* Up pointing triangle */
 				*new = "SYM 221";
@@ -954,7 +963,7 @@ static void trace_utf8(char *ptr)
 			(unsigned char)*ptr, (unsigned char)*(ptr + 1),
 			(unsigned char)*(ptr + 2));
 #endif
-	return; 
+	return;
 }
 
 static char *clean_text(char *txt, int expand, int is_white)
@@ -1021,13 +1030,13 @@ static char *clean_text(char *txt, int expand, int is_white)
 		    } else if ((c2 >= 0xB1) && (c2 <= 0xBF)) {
 			do_symbol = GreekLower[c2 - 0xB1];
 		    }
-		    if (do_symbol > 0) {
+		    if ((do_symbol > 0) && expand) {
 			*ptr = '\0';
 			newtext = expand_escapes(strdup(txt), expand, is_white);
 			text_mark(newtext, is_white);
 			free(newtext);
 			txt = ptr2 = ptr += 2;
-			remalloc_txt = 1; 
+			remalloc_txt = 1;
 			symbol_marks(do_symbol);
 		    } else {
 			trace_utf8(ptr);
@@ -1051,7 +1060,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 		    } else if (c2 == 0x96) {
 			do_symbol = 'v';
 		    }
-		    if (do_symbol > 0) {
+		    if ((do_symbol > 0) && expand) {
 			*ptr = '\0';
 			newtext = expand_escapes(strdup(txt), expand, is_white);
 			text_mark(newtext, is_white);
@@ -1443,7 +1452,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 		      default:
 			do_symbol = -1;
 		    }
-		    if (do_symbol > 0) {
+		    if ((do_symbol > 0) && expand) {
 			*ptr = '\0';
 			newtext = expand_escapes(strdup(txt), expand, is_white);
 			text_mark(newtext, is_white);
@@ -1451,7 +1460,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 			txt = ptr2 = ptr += 3;
 			remalloc_txt = 1;
 			symbol_marks(do_symbol);
-		    } else if (do_symbol < 0) {
+		    } else if (do_symbol < 0 || ((do_symbol > 0) && !expand)) {
 			trace_utf8(ptr);
 			ptr += 3;
 			*ptr2++ = '?';
@@ -1576,7 +1585,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 				ptr += 2;
 				while (*ptr && ((*ptr == ' ') || 
 				       (*ptr == '\n') || (*ptr == '-')))
-					ptr++;      /* Skip spaces and LFs */ 
+					ptr++;      /* Skip spaces and LFs */
 				if (*ptr == '>') {  /* Completed end comment */
 					*endp = ptr;
 					mark->is_end = 1;
@@ -1658,14 +1667,14 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 	 * block, as well as determine its type.
 	 */
 	if (*text == '/') {
-		mark->is_end = 1;
-		if ((*(text + 1) == '\n') || (*(text + 1) == ' ')) {
-			mark->type = ParseMarkType((char *)(text + 2));
-		} else {
-			mark->type = ParseMarkType((char *)(text + 1));
-		}
-		mark->start = mark->text = NULL;
-		FreeMarkText(text);
+	    mark->is_end = 1;
+	    if ((*(text + 1) == '\n') || (*(text + 1) == ' ')) {
+		mark->type = ParseMarkType((char *)(text + 2));
+	    } else {
+		mark->type = ParseMarkType((char *)(text + 1));
+	    }
+	    mark->start = mark->text = NULL;
+	    FreeMarkText(text);
 	} else {
 	    mark->is_end = 0;
 	    mark->type = ParseMarkType(text);
@@ -1701,7 +1710,18 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 			    cptr = ParseMarkTag(mark->start, MT_BASEFONT,
 						"color");
 			break;
+		    case M_EMBED:
+		    case M_OBJECT:
 		    case M_IMAGE:
+			if ((mark->type == M_OBJECT) &&
+			    (tptr = ParseMarkTag(mark->start, MT_IMAGE,
+						 "TYPE"))) {
+				if (strncmp(tptr, "image", 5)) {
+					free(tptr);
+					break;
+				}
+				free(tptr);
+			}
 		        if (hw->html.multi_image_load &&
 			    (tptr = ParseMarkTag(mark->start,
 						 MT_IMAGE, "src"))) {
@@ -1730,14 +1750,6 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 			if (hw->html.body_colors && (Vclass != TrueColor))
 			    cptr = ParseMarkTag(mark->start, MT_TABLE_ROW,
 						"bgcolor");
-			break;
-		    case M_TEXTAREA:
-			currentmark = AddObj(&mlist, currentmark, mark);
-			/* Create <XMP> to keep markup as text */
-			mark = GetMarkRec();
-			mark->type = M_PLAIN_TEXT;
-			mark->start = GetMarkText("XMP TEXTAREA=1");
-			/* GetMarkRec zeros the rest of the structure */
 			break;
 		    case M_META:
 			tptr = ParseMarkTag(mark->start, MT_META, "http-equiv");
@@ -1858,7 +1870,7 @@ static MarkInfo *get_mark(HTMLWidget hw, char *start, char **endp)
 					/* Missing the y */
 					area->shape = -1;
 					free(tptr);
-						break;
+					break;
 				    }
 				}
 				/* Mark the end of the polygon coords */
@@ -1965,7 +1977,7 @@ static char *get_plain_text(HTMLWidget hw, char *start, char **endp,
 			char *ep;
 
 			/* We think we found a mark.  If it is the end of
-			 * plain text, break out
+			 * plain text, break out.
 			 */
 			if (mp = get_mark(hw, ptr, &ep)) {
 				if (((mp->type == M_PLAIN_TEXT) ||
@@ -2008,7 +2020,7 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 	char *end = str;
 	char *text, *tptr;
 	MarkInfo *mark = NULL_ANCHOR_PTR;  /* Dummy to start */
-	int is_white = 0;		/* Is white text? */
+	int is_white = 0;		   /* Is white text? */
 
 	if (!str)
 		return(NULL);
@@ -2042,23 +2054,18 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 				tptr = strdup(text);
 				CHECK_OUT_OF_MEM(tptr);
 				text = tptr;
+				hw->html.has_preformat_width = 1;
 				break;
 			    case M_PLAIN_TEXT:
-			    case M_LISTING_TEXT: {
-				int ta = 0;
-
-				/* Special XMP tag for TEXTAREA */ 
-				if ((mark->type == M_PLAIN_TEXT) &&
-				    (tptr = ParseMarkTag(mark->start,
-							 MT_PLAIN_TEXT,
-							 "textarea"))) {
-					ta = 1;
-					free(tptr);
-				}
+			    case M_LISTING_TEXT:
 				is_white = 0;
-				text = get_plain_text(hw, start, &end, ta);
+				text = get_plain_text(hw, start, &end, 0);
+				hw->html.has_preformat_width = 1;
 				break;
-			    }
+			    case M_TEXTAREA:
+				is_white = 0;
+				text = get_plain_text(hw, start, &end, 1);
+				break;
 			    case M_SCRIPT:
 				/* Skip over script */
 				text = NULL;
@@ -2081,6 +2088,9 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 					end++;
 				}
 				break;
+			    case M_PREFORMAT:
+				hw->html.has_preformat_width = 1;
+				/* Fall thru */
 			    default:
 				text = get_text(start, &end, &is_white);
 			}
@@ -2089,7 +2099,7 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 		}
 		/* If text is OK, create a text mark */
 		if (text) {
-			text_mark(text, is_white);
+	  		text_mark(text, is_white);
 			free(text);
 		}
 		/* end is on '<' or '\0' */
@@ -2115,15 +2125,15 @@ MarkInfo *HTMLParse(HTMLWidget hw, char *str, char *charset)
 		currentmark = AddObj(&mlist, currentmark, mark);
 		start = (char *)(end + 1);
 		/* start is a pointer after the '>' character */
-		if (mark && (mark->type == M_PLAIN_FILE || 
-		    mark->type == M_PLAIN_TEXT || mark->type == M_PREFORMAT ||
-		    mark->type == M_LISTING_TEXT) && (!mark->is_end)) {
+
+		if (!mark->is_end && (*start == '\n') &&
+		    (mark->type == M_PLAIN_FILE || mark->type == M_PLAIN_TEXT ||
+		     mark->type == M_PREFORMAT ||
+		     mark->type == M_LISTING_TEXT || mark->type == M_TEXTAREA))
 		        /* A linefeed immediately after a <PLAINTEXT>, <XMP>,
-			 * <PRE> or <LISTING> mark is to be ignored.
+			 * <PRE>, <LISTING> or <TEXTAREA> mark is to be ignored.
 		         */
-			if (*start == '\n')
-				start++;
-		} 
+			start++;
 	}
 	return(mlist);
 }
@@ -2221,8 +2231,11 @@ static MarkType ParseMarkType(char *str)
 		}
 		break;
 	    case 'e':
-		if (caseless_equal(str, MT_EMPHASIZED))
+		if (caseless_equal(str, MT_EMPHASIZED)) {
 		    type = M_EMPHASIZED;
+		} else if (caseless_equal(str, MT_EMBED)) {
+		    type = M_EMBED;
+		}
 		break;
 	    case 'f':
 		if (caseless_equal(str, MT_FONT)) {
@@ -2340,6 +2353,8 @@ static MarkType ParseMarkType(char *str)
 		    type = M_OPTGROUP;
 		} else if (caseless_equal(str, MT_NUM_LIST)) {   /* <OL> */
 		    type = M_NUM_LIST;
+		} else if (caseless_equal(str, MT_OBJECT)) {
+		    type = M_OBJECT;
 		}
 		break;
 	    case 'p':

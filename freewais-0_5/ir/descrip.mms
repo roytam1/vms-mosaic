@@ -19,15 +19,25 @@ CC = CC
 
 .IFDEF DECC
 .IFDEF MULTINET
-CQUALC=/DECC/Prefix=ANSI
+CQUALC = /DECC/Prefix=ANSI
 .ELSE
-CQUALC=/DECC/Prefix=ALL
+CQUALC = /DECC/Prefix=ALL
 .ENDIF
 .ELSE
 .IFDEF DECCVAXC
-CQUALC=/VAXC
+CQUALC = /VAXC
 .ELSE
-CQUALC=
+CQUALC = 
+.ENDIF
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
 .ENDIF
 .ENDIF
 
@@ -86,7 +96,7 @@ Odir:ztype1.obj   : ztype1.c ztype1.h cdialect.h zutil.h cutil.h panic.h
 Odir:zutil.obj    : zutil.c zutil.h cdialect.h cutil.h
 
 .c.obj
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

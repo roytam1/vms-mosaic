@@ -38,6 +38,16 @@ CQUALC=
 .ENDIF
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .IFDEF DEBUG
 CFLAGS = $(CQUALC)/NoOpt/Debug
 .ELSE
@@ -61,7 +71,7 @@ Odir:liteclue.obj  : liteclue.c [-]config.h [-]config_$(WORK).h liteclue.h \
 		     litecluep.h
 
 .c.obj :
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

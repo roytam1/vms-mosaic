@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2004, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2004, 2005, 2006, 2007, 2008, 2011 - The VMS Mosaic Project */
 
 #include "../config.h"
 #include "../libwww2/HTNews.h"   /* Includes tcp.h so must be done early, GEC */
@@ -91,10 +91,6 @@
 /* Made it 1024 just in case */
 static char url[1024];
 
-void gui_news_post_subgroupwin(mo_window *win) 
-{
-
-}
 
 void gui_news_updateprefs(mo_window *win)
 {
@@ -166,6 +162,7 @@ void gui_news_flush(mo_window *win)
   mo_gui_notify_progress("");
 }
 
+/* Unused **************
 void gui_news_flushgroup(mo_window *win)
 {
   if (NewsGroupS) {
@@ -179,6 +176,7 @@ void gui_news_flushgroup(mo_window *win)
       mo_gui_notify_progress("");
   }
 }
+ ***********************/
 
 void gui_news_list(mo_window *win)
 {
@@ -204,47 +202,47 @@ void gui_news_showGroups(mo_window *win)
 
 void gui_news_showReadGroups(mo_window *win)
 {
-  HTSetNewsConfig(-1, -1, 0, 1, -1, -1, -1, -1); 
+  HTSetNewsConfig(-1, -1, 0, 1, -1, -1, -1, -1);
   gui_news_updateprefs(win);
   mo_load_window_text(win, "news:*", NULL);
 }
 
 void gui_news_showAllArticles(mo_window *win)
 {
-  char *buf;
+  char *buf, *group;
 
-  HTSetNewsConfig(-1, 1, -1, -1, -1, -1, -1, -1); 
+  HTSetNewsConfig(-1, 1, -1, -1, -1, -1, -1, -1);
   gui_news_updateprefs(win);
 
   if (NewsGroupS) {
-      buf = (char *) malloc(strlen(NewsGroupS->name) + 6);
-      sprintf(buf, "news:%s", NewsGroupS->name);
+      group = NewsGroupS->name;
   } else if (NewsGroup) {
-      buf = (char *) malloc(strlen(NewsGroup) + 6);
-      sprintf(buf, "news:%s", NewsGroup);
+      group = NewsGroup;
   } else {
       return;
   }
+  buf = (char *) malloc(strlen(group) + 6);
+  sprintf(buf, "news:%s", group);
   mo_load_window_text(win, buf, NULL);
   free(buf);
 }
 
 void gui_news_showArticles(mo_window *win)
 {
-  char *buf;
+  char *buf, *group;
 
-  HTSetNewsConfig(-1, 0, -1, -1, -1, -1, -1, -1); 
+  HTSetNewsConfig(-1, 0, -1, -1, -1, -1, -1, -1);
   gui_news_updateprefs(win);
 
   if (NewsGroup) {
-      buf = (char *) malloc(strlen(NewsGroup) + 6);
-      sprintf(buf, "news:%s", NewsGroup);
-  } else if (NewsGroupS) { 
-      buf = (char *) malloc(strlen(NewsGroupS->name) + 6);
-      sprintf(buf, "news:%s", NewsGroupS->name);
+      group = NewsGroup;
+  } else if (NewsGroupS) {
+      group = NewsGroupS->name;
   } else {
       return;
   }
+  buf = (char *) malloc(strlen(group) + 6);
+  sprintf(buf, "news:%s", group);
   mo_load_window_text(win, buf, NULL);
   free(buf);
 }
@@ -292,19 +290,13 @@ void gui_news_markArticleUnread(mo_window *win)
       return;
   markunread(NewsGroupS, CurrentArt->num);
   buf = (char *) malloc(strlen("Article  marked unread") +
-			strlen(CurrentArt->ID) + 1);
+			strlen(CurrentArt->ID) + strlen(NewsGroup) + 1);
   sprintf(buf, "Article %s marked unread", CurrentArt->ID);
   mo_gui_notify_progress(buf);
 
-  buf = (char *) realloc(buf, strlen(NewsGroup) + 6);
   sprintf(buf, "news:%s", NewsGroup);
   mo_load_window_text(win, buf, NULL);
   free(buf);
-}
-
-void gui_news_initflush(mo_window *win)
-{
-  newsrc_initflush();
 }
 
 void gui_news_index(mo_window *win)
@@ -312,7 +304,7 @@ void gui_news_index(mo_window *win)
   newsrc_flush();
   strcpy(url, win->current_node->url);
   news_index(url);
-  if (*url) 
+  if (*url)
       mo_load_window_text(win, url, NULL);
 }
 
@@ -360,7 +352,7 @@ static XmxCallback(include_fsb_cb)
       return;
 
   XtUnmanageChild(win->news_fsb_win);
-  
+
   XmStringGetLtoR(((XmFileSelectionBoxCallbackStruct *)call_data)->value,
                   XmSTRING_DEFAULT_CHARSET, &fname);
   pathEval(efname, fname);
@@ -395,12 +387,12 @@ static XmxCallback(include_fsb_cb)
 #endif /* VMS, GEC */
       return;
   }
-  
+
   while (1) {
       status = fgets(line, MO_LINE_LENGTH, fp);
       if (!status || !*line)
-          goto done;
-      
+          break;
+
       XmTextInsert(win->news_text,
                    pos = XmTextGetInsertionPosition(win->news_text), line);
       /* Move insertion position to past this line to avoid inserting the
@@ -408,7 +400,6 @@ static XmxCallback(include_fsb_cb)
       XmTextSetInsertionPosition(win->news_text, pos + strlen(line));
   }
 
- done:
   fclose(fp);
   return;
 }
@@ -420,13 +411,12 @@ static XmxCallback(news_win_cb)
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
 
   switch (XmxExtractToken((int)client_data)) {
-    case 0: {  /* POST */
+    case 0: {  /* Post */
 	char *msg, *subj, *group, *from;
 
         XtUnmanageChild(win->news_win);
 
-        msg = XmxTextGetString(win->news_text);
-        if (!msg)
+        if (!(msg = XmxTextGetString(win->news_text)))
             return;
 	if (!*msg) {
 	    XtFree(msg);
@@ -443,7 +433,7 @@ static XmxCallback(news_win_cb)
         XtFree(group);
         XtFree(subj);
     }
-    case 1:  /* DISMISS */
+    case 1:  /* Dismiss */
         XtUnmanageChild(win->news_win);
 	/* Since we're going to re-use this in different configs
 	 * we'll destroy it */
@@ -452,11 +442,11 @@ static XmxCallback(news_win_cb)
         win->news_fsb_win = NULL;
         /* Do nothing. */
         break;
-    case 2:  /* HELP */
+    case 2:  /* Help */
         mo_open_another_window(win, mo_assemble_help_url("help-on-news.html"),
 			       NULL, NULL);
         break;
-    case 3:  /* INSERT FILE */
+    case 3:  /* Insert file */
 	if (!win->news_fsb_win) {
 	    win->news_fsb_win = XmxMakeFileSBDialog(win->news_win,
 					    "VMS Mosaic: Include File for News",
@@ -467,25 +457,23 @@ static XmxCallback(news_win_cb)
 	}
 	XmxManageRemanage(win->news_fsb_win);
 	break;
-    case 4:  /* QUOTE */
+    case 4:  /* Quote */
 	break;
   }
   return;
 }
 
-
 static XmxCallback(follow_win_cb)
 {
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-  char *msg, *subj, *group, *from, *line;
-  int pos;
 
   switch (XmxExtractToken((int)client_data)) {
-    case 0:  /* POST */
+    case 0: {  /* Post */
+	char *msg, *subj, *group, *from;
+
         XtUnmanageChild(win->news_win);
 
-        msg = XmxTextGetString(win->news_text);
-        if (!msg)
+        if (!(msg = XmxTextGetString(win->news_text)))
             return;
 	if (!*msg) {
 	    XtFree(msg);
@@ -495,14 +483,14 @@ static XmxCallback(follow_win_cb)
         subj = XmxTextGetString(win->news_text_subj);
         group = XmxTextGetString(win->news_text_group);
 
-        NNTPpost(from, subj, win->newsfollow_ref, group, msg); 
+        NNTPpost(from, subj, win->newsfollow_ref, group, msg);
 
         XtFree(msg);
         XtFree(from);
         XtFree(group);
         XtFree(subj);
-
-    case 1:  /* DISMISS */
+    }
+    case 1:  /* Dismiss */
         if (win->newsfollow_ref)
 	    free(win->newsfollow_ref);
         if (win->newsfollow_grp)
@@ -522,11 +510,11 @@ static XmxCallback(follow_win_cb)
         win->news_fsb_win = NULL;
         /* Do nothing. */
         break;
-    case 2:  /* HELP */
+    case 2:  /* Help */
         mo_open_another_window(win, mo_assemble_help_url("help-on-news.html"),
 			       NULL, NULL);
         break;
-    case 3:  /* INSERT FILE */
+    case 3:  /* Insert file */
 	if (!win->news_fsb_win) {
 	    win->news_fsb_win = XmxMakeFileSBDialog(win->news_win,
 		 			    "VMS Mosaic: Include File for News",
@@ -537,13 +525,15 @@ static XmxCallback(follow_win_cb)
 	}
 	XmxManageRemanage(win->news_fsb_win);
 	break;
-    case 4:  /* QUOTE */
-	line = malloc(strlen(win->newsfollow_from) + 30);
+    case 4: {  /* Quote */
+	char *line = malloc(strlen(win->newsfollow_from) + 30);
+	int pos;
+
 	sprintf(line, "%s writes:\n\n", win->newsfollow_from);
 
 	XmTextInsert(win->news_text,
 		     pos = XmTextGetInsertionPosition(win->news_text), line);
-	/* Move insertion position to past this line to avoid 
+	/* Move insertion position to past this line to avoid
 	 * inserting the lines in reverse order */
 	XmTextSetInsertionPosition(win->news_text, pos + strlen(line));
 	free(line);
@@ -553,79 +543,31 @@ static XmxCallback(follow_win_cb)
 		XmTextInsert(win->news_text,
 			     pos = XmTextGetInsertionPosition(win->news_text),
 			     line);
-		/* Move insertion position to past this line to avoid 
+		/* Move insertion position to past this line to avoid
 		 * inserting the lines in reverse order */
 		XmTextSetInsertionPosition(win->news_text, pos + strlen(line));
 	    } while (line = NNTPgetquoteline(NULL));
 	}
         break;
+    }
   }
   return;
 }
 
-mo_status mo_post_news_win(mo_window *win)
-{
-    return mo_post_generic_news_win(win, 0); 
-}
-
-mo_status mo_post_follow_win(mo_window *win)
-{
-    char *s;
-
-    if (strncmp("news:", win->current_node->url, 5))
-        return mo_fail;  /* Fix me */
-    if (!strncmp("news:*", win->current_node->url, 6))
-        return mo_fail;
-    if (NNTPgetarthdrs(&(win->current_node->url)[5], 
-		       &win->newsfollow_ref, 
-		       &win->newsfollow_grp, 
-		       &win->newsfollow_subj, 
-		       &win->newsfollow_from) != 1)
-       return mo_fail;
-    
-    /* Add an Re: if needed */
-    if (my_strncasecmp("Re: ", win->newsfollow_subj, 4)) {
-	s = malloc(strlen(win->newsfollow_subj) + 5);    /* this sucks -bjs */
-	sprintf(s, "Re: %s", win->newsfollow_subj);
-	free(win->newsfollow_subj);
-	win->newsfollow_subj = s;
-    }
-
-    /* Add this article to ref */
-    win->newsfollow_artid = malloc(strlen(win->current_node->url));
-    strcpy(win->newsfollow_artid, &(win->current_node->url)[5]);
-
-    if (!win->newsfollow_ref) {
-	win->newsfollow_ref = malloc(strlen(win->current_node->url));
-	sprintf(win->newsfollow_ref, "<%s>", &(win->current_node->url)[5]);
-    } else {
-	s = malloc(strlen(win->newsfollow_ref) +
-		   strlen(win->current_node->url));
-	sprintf(s, "%s <%s>", win->newsfollow_ref,
-	        &(win->current_node->url)[5]);
-	free(win->newsfollow_ref);
-	win->newsfollow_ref = s;
-    }
-    return mo_post_generic_news_win(win, 1); 
-}
-
-mo_status mo_post_generic_news_win(mo_window *win, int follow)
+static mo_status mo_post_generic_news_win(mo_window *win, int follow)
 {
   if (!win->news_win) {
-      char namestr[1024], tmp[1024];
+      char namestr[1024];
       Widget dialog_frame, dialog_sep, buttons_form;
       Widget news_form, yap_label, f_label, s_label, g_label;
-      FILE *fp;
       long pos;
 
-      sprintf(namestr, "%s <%s>",
-              get_pref_string(eDEFAULT_AUTHOR_NAME),
+      sprintf(namestr, "%s <%s>", get_pref_string(eDEFAULT_AUTHOR_NAME),
               get_pref_string(eDEFAULT_AUTHOR_EMAIL));
 
       /* Create it for the first time. */
       XmxSetUniqid(win->id);
 
-      Xmx_n = 0;
       win->news_win = XmxMakeFormDialog(win->base, "VMS Mosaic: News");
       dialog_frame = XmxMakeFrame(win->news_win, XmxShadowOut);
 
@@ -675,7 +617,7 @@ mo_status mo_post_generic_news_win(mo_window *win, int follow)
 #else
       XmxSetArg(XmNwordWrap, False);
       XmxSetArg(XmNscrollHorizontal, True);
-#endif /* VMS, GEC */
+#endif  /* VMS, GEC */
       win->news_text = XmxMakeScrolledText(news_form);
 
       dialog_sep = XmxMakeHorizontalSeparator(news_form);
@@ -754,10 +696,14 @@ mo_status mo_post_generic_news_win(mo_window *win, int follow)
 
       /* Tack signature on the end if it exists - code from Martin Hamilton */
       if (get_pref_string(eSIGNATURE)) {
+	  FILE *fp;
+
           XmxTextSetString(win->news_text, "\n\n");
           /* Leave a gap... */
           XmTextSetInsertionPosition(win->news_text, 2);
           if (fp = fopen(get_pref_string(eSIGNATURE), "r")) {
+	      char tmp[1024];
+
               while(fgets(tmp, sizeof(tmp) - 1, fp)) {
                   XmTextInsert(win->news_text,
                                pos = XmTextGetInsertionPosition(win->news_text),
@@ -783,4 +729,48 @@ mo_status mo_post_generic_news_win(mo_window *win, int follow)
   XmxManageRemanage(win->news_win);
 
   return mo_succeed;
+}
+
+mo_status mo_post_news_win(mo_window *win)
+{
+    return mo_post_generic_news_win(win, 0);
+}
+
+mo_status mo_post_follow_win(mo_window *win)
+{
+    char *s;
+
+    if (strncmp("news:", win->current_node->url, 5))
+        return mo_fail;  /* Fix me */
+    if (!strncmp("news:*", win->current_node->url, 6))
+        return mo_fail;
+    if (NNTPgetarthdrs(&(win->current_node->url)[5],
+		       &win->newsfollow_ref, &win->newsfollow_grp,
+		       &win->newsfollow_subj, &win->newsfollow_from) != 1)
+	return mo_fail;
+
+    /* Add an Re: if needed */
+    if (my_strncasecmp("Re: ", win->newsfollow_subj, 4)) {
+	s = malloc(strlen(win->newsfollow_subj) + 5);    /* this sucks -bjs */
+	sprintf(s, "Re: %s", win->newsfollow_subj);
+	free(win->newsfollow_subj);
+	win->newsfollow_subj = s;
+    }
+
+    /* Add this article to ref */
+    win->newsfollow_artid = malloc(strlen(win->current_node->url));
+    strcpy(win->newsfollow_artid, &(win->current_node->url)[5]);
+
+    if (!win->newsfollow_ref) {
+	win->newsfollow_ref = malloc(strlen(win->current_node->url));
+	sprintf(win->newsfollow_ref, "<%s>", &(win->current_node->url)[5]);
+    } else {
+	s = malloc(strlen(win->newsfollow_ref) +
+		   strlen(win->current_node->url));
+	sprintf(s, "%s <%s>", win->newsfollow_ref,
+	        &(win->current_node->url)[5]);
+	free(win->newsfollow_ref);
+	win->newsfollow_ref = s;
+    }
+    return mo_post_generic_news_win(win, 1);
 }

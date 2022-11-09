@@ -3,7 +3,7 @@
  * Purpose:	to parse Hypertext widget contents into appropriate PostScript
  *
  * Author:	Ameet A. Raval & Frans van Hoesel & Andrew Ford
- *		(aar@gfdl.gov & hoesel@chem.rug.nl). 
+ *		(aar@gfdl.gov & hoesel@chem.rug.nl).
  *
  * Institution: for Ameet A. Raval:
  *			Geophysical Fluid Dynamics Laboratory,
@@ -23,7 +23,7 @@
  *			Montpelier, Bristol, BS6 5HR, GB
  *			E-mail: andrew@icarus.demon.co.uk
  *
- * Date:		1 aug 1993 
+ * Date:		1 aug 1993
  * Modification:	8 nov 1993
  *				o added support for bold/italics courier
  *				o removed unused or no longer needed stuff
@@ -53,8 +53,8 @@
  * WE MAKE NO REPRESENTATIONS ABOUT THE SUITABILITY OF THIS SOFTWARE FOR
  * ANY PURPOSE.  IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED
  * WARRANTY.  WE SHALL NOT BE LIABLE FOR ANY DAMAGES SUFFERED BY THE
- * USERS OF THIS SOFTWARE. 
- * 
+ * USERS OF THIS SOFTWARE.
+ *
  *		Pieces of code are taken from xvps by kind
  *		permission of John Bradley.
  *
@@ -130,7 +130,7 @@ extern char *ident_ver;
 	for (i = 0; i < n; i++)				\
 		PSprintf("%s\n", txt[i]) ; 		\
 }
-	
+
 /* For regular-font, bold-font, italic-font, fixed-font */
 typedef enum { RF, BF, IF, FF, FB, FI, BI } PS_fontstyle;
 
@@ -169,7 +169,16 @@ typedef struct {
 static PAGE_DIMENS_T page_dimens;
 static PAGE_DIMENS_T a4_page_dimens = {
     297 * MM,
-    210 * MM, 
+    210 * MM,
+     20 * MM,
+     20 * MM,
+     20 * MM,
+     20 * MM
+};
+
+static PAGE_DIMENS_T a4_land_page_dimens = {
+    210 * MM,
+    297 * MM,
      20 * MM,
      20 * MM,
      20 * MM,
@@ -185,10 +194,21 @@ static PAGE_DIMENS_T us_letter_page_dimens = {
     0.9 * INCH
 };
 
+static PAGE_DIMENS_T us_letter_land_page_dimens = {
+    8.5 * INCH,		/* page_height */
+    11  * INCH,		/* page_width */
+    0.9 * INCH,		/* top_margin */
+    0.7 * INCH,
+    0.9 * INCH,
+    0.9 * INCH
+};
+
 /* Globals to get button value in print dialog */
-int HTML_Print_Headers = 1;	/* Flag whether page headers enabled */
-int HTML_Print_Footers = 1;	/* Flag whether footnote printing enabled */
-int HTML_Print_Duplex  = 1;	/* Flag whether to print duplex */
+int HTML_Print_Headers = 1;	   /* Flag whether page headers enabled */
+int HTML_Print_Footers = 1;	   /* Flag whether footnote printing enabled */
+int HTML_Print_Duplex  = 1;	   /* Flag whether to print duplex */
+int HTML_Print_Duplex_Tumble = 1;  /* Flag whether to print duplex tumbled */
+int HTML_Print_Landscape = 1;	   /* Flag whether to print landscape */
 
 /* Paper format (currently either A4 or letter).  This should be generalized. */
 int HTML_Print_Paper_Size_A4 = USLETTER;
@@ -262,7 +282,7 @@ static int PSprintf(char *format, ...)
     }
     va_start(args, format);
     len = vsprintf(PS_string + PS_len, format, args);
-    /* This is a hack to make it work on systems where vsprintf(s,...)
+    /* This is a hack to make it work on systems where vsprintf(s, ...)
      * returns s, instead of the len.
      */
     if ((len != EOF) && len)
@@ -307,9 +327,9 @@ static int PShex(unsigned char val, int flush)
 /*
  * PSfont - change font
  *
- * Change local font in buf to "font"
+ * Change local font in buf to "font".
  * fontfamily indicates if the overall style is times, helvetica, century
- * schoolbook or lucida.
+ * schoolbook, lucida or symbol.
  *
  */
 static void PSfont(SetType set, CurFontFamily fontfamily,
@@ -339,7 +359,7 @@ static void PSfont(SetType set, CurFontFamily fontfamily,
     /* Font sizes as set in HTMLFONT.C
      */
     static int fontsizes[5][7][18] = {
-#ifdef VMS /* VMS doesn't have some sizes (e.g. 20 fixed (i.e., courier)) */
+#ifdef VMS  /* VMS doesn't have some sizes (e.g. 20 fixed (i.e., courier)) */
      /* times font sizes (no 20 italic) */
      {
        {10, 10, 10, 10, 18, 17, 14, 12, 10, 8, 10, 10, 8, 10, 10, 10, 10, 10},
@@ -370,7 +390,7 @@ static void PSfont(SetType set, CurFontFamily fontfamily,
        {24, 24, 24, 24, 34, 25, 24, 18, 18, 17, 24, 18, 18, 24, 24, 18, 18, 24},
        {34, 34, 34, 34, 34, 34, 25, 24, 18, 18, 34, 24, 18, 34, 34, 24, 24, 34}
      },
-     /* lucida sizes (all but 20 fixed)*/
+     /* lucida sizes (all but 20 fixed) */
      {
        {10, 10, 10, 10, 18, 17, 14, 12, 10, 8, 10, 10, 8, 10, 10, 10, 10, 10},
        {14, 14, 14, 14, 20, 18, 14, 12, 10, 8, 14, 12, 10, 14, 14, 12, 12, 14},
@@ -597,10 +617,10 @@ static void PSshowpage(void)
  * conventions.
  *
  */
-static void PSnewpage(void) 
+static void PSnewpage(void)
 {
     PS_curr_page++;
-    
+
     /* The PostScript reference Manual states that the Page: Tag
      * should have a label and an ordinal; otherwise programs like
      * psutils fail    -gustaf
@@ -617,7 +637,7 @@ static void PSnewpage(void)
  * PSinit_latin1 - handle ISO encoding
  *
  * Print out initializing PostScript text for ISO Latin1 font encoding.
- * This code is copied from the Idraw program (from Stanford's InterViews 
+ * This code is copied from the Idraw program (from Stanford's InterViews
  * package), courtesy of Steinar Kjaernsr|d, steinar@ifi.uio.no
  *
  */
@@ -675,7 +695,7 @@ static void PSinit_latin1(void)
  * Does the initialization per html document
  *
  */
-static void PSinit(void) 
+static void PSinit(void)
 {
     PS_size = PS_len = PS_offset = PS_hexi = 0;
     PS_start_y = 0;
@@ -722,7 +742,7 @@ static void PSinit(void)
  *	title	title of document
  *	date	date modified/printed
  */
-static void PSheader(char *title, int font, char *url, char *time_str) 
+static void PSheader(char *title, int font, char *url, char *time_str)
 {
     int free_title = 0;
     char time_buf[40];
@@ -767,7 +787,7 @@ static void PSheader(char *title, int font, char *url, char *time_str)
 	};
 
 #if !defined(VMS) || defined (__alpha)
-    strftime(time_buf, sizeof(time_buf), 
+    strftime(time_buf, sizeof(time_buf),
 	     "Printed %a %b %e %T %Y", localtime(&clock));
 #else
     sprintf(time_buf, "Printed %s", asctime(localtime(&clock)));
@@ -782,7 +802,11 @@ static void PSheader(char *title, int font, char *url, char *time_str)
     PSprintf("%%%%         Frans van Hoesel, Andrew Ford and George Cook\n");
 
     if (!title) {
+#ifdef __GNUC__
+	title = (char *)strdup("Untitled");
+#else
 	title = strdup("Untitled");
+#endif
 	free_title = 1;
     }
 
@@ -839,11 +863,16 @@ static void PSheader(char *title, int font, char *url, char *time_str)
     PSprintf("/title (%.64s) D\n", title);
     PSprintf("/date (%s) D\n", time_str);
     if (HTML_Print_Duplex)
-        PSprintf("<</Duplex true>> setpagedevice");
+        PSprintf("<</Duplex true>> setpagedevice\n");
+    if (HTML_Print_Duplex_Tumble)
+        PSprintf("<</Tumble true>> setpagedevice\n");
+    if (HTML_Print_Landscape)
+	PSprintf("<</PageSize [%.0f %.0f]>> setpagedevice\n",
+		 page_dimens.page_width, page_dimens.page_height);
     PSconst_out(txt);
-    
+
     /* Output the newpage definition. */
-    
+
     PSprintf("/NP {");
     if (HTML_Print_Headers) {
 	PSprintf("gsave 0.4 setlinewidth\n");
@@ -859,7 +888,7 @@ static void PSheader(char *title, int font, char *url, char *time_str)
 		 page_dimens.bot_margin + page_dimens.text_height + 6, title);
 	PSprintf("  nstr cvs dup stringwidth pop pgno stringwidth pop add\n");
 	PSprintf("  %.2f E sub %.2f M pgno S S\n",
-		 page_dimens.left_margin + page_dimens.text_width, 
+		 page_dimens.left_margin + page_dimens.text_width,
 		 page_dimens.bot_margin + page_dimens.text_height + 6);
 	PSprintf("  BF 10 SF %.2f %.2f M (%.64s) S\n",
 		 page_dimens.left_margin, page_dimens.bot_margin - 12, url);
@@ -868,11 +897,11 @@ static void PSheader(char *title, int font, char *url, char *time_str)
 		 page_dimens.bot_margin - 12);
     }
     PSprintf("  %.2f %.2f translate %.5f %.5f scale } D\n",
-	     page_dimens.left_margin, 
+	     page_dimens.left_margin,
 	     page_dimens.bot_margin + page_dimens.text_height,
 	     Points_Pixel, Points_Pixel);
     PSinit_latin1();
-    
+
     PSprintf("%%%%EndProlog\n");
 
     if (free_title)
@@ -899,10 +928,10 @@ static void PStrailer(void)
  * PSmoveto - move to new x,y location
  *
  * If the Y value does not fit on the current page, begin a new page
- * (I think in the current implementation, this never happens)
+ * (I think in the current implementation, this never happens).
  *
  */
-static void PSmoveto(int x, int y) 
+static void PSmoveto(int x, int y)
 {
     if (y > (PS_start_y + Pixels_Page)) {
 	PS_start_y = y;
@@ -938,7 +967,7 @@ static void PSmove_offset(int offset)
  * and a text element with the same anchorHRef.  In this case say that the
  * element doesn't have a footnote so as to avoid duplicate footnotes.
  */
-static int has_footnote(struct ele_rec *el)
+static int has_footnote(ElemInfo *el)
 {
     int	rc = 0;
     char *anchorHRef;
@@ -950,7 +979,7 @@ static int has_footnote(struct ele_rec *el)
 
     /* Ignore internal anchors */
     if (anchorHRef && (*anchorHRef != '#')) {
-	struct ele_rec *next;
+	ElemInfo *next;
 
 	switch (el->type) {
 	    case E_TEXT:
@@ -984,7 +1013,7 @@ static int has_footnote(struct ele_rec *el)
  */
 static void PSfootnote(char *href, double height)
 {
-    PSprintf("gsave 0 %.2f R RF %d SF (%d) S grestore\n", 
+    PSprintf("gsave 0 %.2f R RF %d SF (%d) S grestore\n",
 	     height, footnote_ptsize, cur_ftn_no++);
 
     if (n_saved_ftns == ftn_array_size) {
@@ -1014,20 +1043,19 @@ static void PSfootnote(char *href, double height)
  * If Underline is non-zero, the text is underlined.
  *
  */
-static void PStext(HTMLWidget hw, struct ele_rec *eptr, String s)
+static void PStext(HTMLWidget hw, ElemInfo *eptr, String s)
 {
     String s2, stmp;
     unsigned char ch;
     int underline = eptr->underline_number;
-			  
+
     /* Set font */
     PSfont(SET, eptr->font_family, eptr->font_type, eptr->font_size);
     PSmove_offset(eptr->baseline);
 
     /* Allocate a string long enough to hold the original string with
      * every character stored as an octal escape (worst case scenario). */
-    s2 = (String) malloc(strlen(s) * 4 + 1);
-    if (!s2) {
+    if (!(s2 = (String) malloc(strlen(s) * 4 + 1))) {
 #ifndef DISABLE_TRACE
 	if (htmlwTrace)
 	    fprintf(stderr, "PStext malloc failed\n");
@@ -1064,10 +1092,10 @@ static void PStext(HTMLWidget hw, struct ele_rec *eptr, String s)
  * PSbullet - output a bullet
  *
  * The bullet is normally filled, except for a bullet with an indent level
- * of two.  The size of the higher level bullets is just somewhat smaller
+ * of two.  The size of the higher level bullets is just somewhat smaller.
  *
  */
-static void PSbullet(HTMLWidget hw, struct ele_rec *eptr)
+static void PSbullet(HTMLWidget hw, ElemInfo *eptr)
 {
     int	width = eptr->font->max_bounds.lbearing +
 	        eptr->font->max_bounds.rbearing;
@@ -1078,7 +1106,7 @@ static void PSbullet(HTMLWidget hw, struct ele_rec *eptr)
 
     if (size < 1.1)
 	size = 1.1;
-    if (level > 4) 
+    if (level > 4)
 	size /= 1.33333;
 
     /* The next line is a hack to get a good position of the
@@ -1122,7 +1150,7 @@ static void PSbullet(HTMLWidget hw, struct ele_rec *eptr)
  * PShrule - draw a horizontal line with the given width
  *
  */
-static void PShrule(struct ele_rec *eptr)
+static void PShrule(ElemInfo *eptr)
 {
     int width = eptr->width + (eptr->width * 0.025);
 
@@ -1141,7 +1169,7 @@ static void PShrule(struct ele_rec *eptr)
  * Currently does nothing
  *
  */
-static void PStable(struct ele_rec *eptr)
+static void PStable(ElemInfo *eptr)
 {
 #if 0
     struct _TableRec *tptr = eptr->table_data;
@@ -1170,7 +1198,7 @@ static void PStable(struct ele_rec *eptr)
  *	4	password
  *	5	option menu
  */
-static void PSwidget(struct ele_rec *eptr)
+static void PSwidget(ElemInfo *eptr)
 {
     char **Info = NULL;
     char *Txt;
@@ -1237,16 +1265,16 @@ static void PSwidget(struct ele_rec *eptr)
 			      NULL);
 		if (Txt && *Txt) {
 		    Info = (char **)calloc(NrRows, sizeof(char *));
-		    i = -1; 
+		    i = -1;
 		    Start = Txt;
 
 		    while (++i < NrRows) {
 			End = Start;
 			Col = 0;
-			while (*End && *End != '\n') { 
+			while (*End && *End != '\n') {
 			    End++;
 			    if (++Col == NrCols)
-				break; 
+				break;
 			}
 			if (Col == 0)
 			    break;
@@ -1398,7 +1426,7 @@ static void PSwidget(struct ele_rec *eptr)
 	w += IMAGE_DEFAULT_BORDER;
 
     /*  Move currentpoint to right of widget */
-    PSprintf("grestore %d 0 R\n", w); 
+    PSprintf("grestore %d 0 R\n", w);
 }
 
 
@@ -1408,7 +1436,7 @@ static void PSwidget(struct ele_rec *eptr)
  * Does the run-length encoding.  This is done to reduce the file size and
  * therefore the time to send the file to the printer.  You get longer
  * processing time instead.
- * 
+ *
  * rle is encoded as such:
  *  <count> <value>			# 'run' of count+1 equal pixels
  *  <count | 0x80> <count+1 data bytes>	# count+1 non-equal pixels
@@ -1416,9 +1444,9 @@ static void PSwidget(struct ele_rec *eptr)
  *
  * Returns length of the rleline vector
  *
-*/ 
+ */
 static int PSrle_encode(unsigned char *scanline, unsigned char *rleline,
-			int wide) 
+			int wide)
 {
     int i, j;
     int blocklen = 0;
@@ -1442,7 +1470,7 @@ static int PSrle_encode(unsigned char *scanline, unsigned char *rleline,
 	    block[blocklen++] = pix;
 	    isrun = 1;
 	} else if (isrun) {
-	    if (pix == block[blocklen - 1]) { 
+	    if (pix == block[blocklen - 1]) {
 		/*  case 1:  isrun, prev == cur */
 		block[blocklen++] = pix;
 	    } else {
@@ -1460,7 +1488,7 @@ static int PSrle_encode(unsigned char *scanline, unsigned char *rleline,
 		    block[blocklen++] = pix;
 		}
 	    }
-	} else { 
+	} else {
 	    /* Not a run */
 	    if (pix == block[blocklen - 1]) {
 		/* case 3: non-run, prev == cur */
@@ -1482,7 +1510,7 @@ static int PSrle_encode(unsigned char *scanline, unsigned char *rleline,
 		block[blocklen++] = pix;
 	    }
 	}
-	
+
 	/* Max block length.  Flush */
 	if (blocklen == 128) {
 	    if (isrun) {
@@ -1513,15 +1541,15 @@ static int PSrle_encode(unsigned char *scanline, unsigned char *rleline,
 
 
 /*
- * PScolor_image - created postscript colorimage operator 
+ * PScolor_image - created postscript colorimage operator
  *
  * Spits out code that checks if the PostScript device in question
  * knows about the 'colorimage' operator.  If it doesn't, it defines
  * 'colorimage' in terms of image (i.e., generates a greyscale image
- * from RGB data)
+ * from RGB data).
  *
  */
-static void PScolor_image(void) 
+static void PScolor_image(void)
 {
     static char *txt[] = {
 	"% define 'colorimage' if it isn't defined",
@@ -1549,7 +1577,7 @@ static void PScolor_image(void)
 	"	} bind def\n",
 	/* Utility procedure for colorimage operator.
 	 * This procedure takes two procedures off the
-	 * stack and merges them into a single procedure
+	 * stack and merges them into a single procedure.
 	 */
 	"	/mergeprocs { % def",
 	"	  dup length",
@@ -1573,14 +1601,14 @@ static void PScolor_image(void)
 	colorimage_defined = 1;
     }
 }
- 
+
 
 /*
  * PScolormap - write colormap
  *
  * Spits out code for the colormap of the following image.
  * If !color, it spits out a mono-ized graymap.
- * 
+ *
  */
 static void PScolormap(int color, int nc, XColor *cmap)
 {
@@ -1608,9 +1636,9 @@ static void PScolormap(int color, int nc, XColor *cmap)
 
 /*
  * PSrle_cmapimage - define rlecmapimage operator
- * 
+ *
  */
-static void PSrle_cmapimage(int color) 
+static void PSrle_cmapimage(int color)
 {
     static char *txt[] = {
 	/* rlecmapimage expects to have 'w h bits matrix' on stack */
@@ -1659,7 +1687,7 @@ static void PSrle_cmapimage(int color)
     };
 
     PSconst_out(txt);
-    if (color) { 
+    if (color) {
 	PSconst_out(txt_color);
     } else {
 	PSconst_out(txt_gray);
@@ -1675,7 +1703,7 @@ static void PSrle_cmapimage(int color)
  * 'flipbw', then 0=white, 1=black.  Returns '0' if everythings fine,
  * 'EOF' if writing failed.
  *
-*/
+ */
 static int PSwrite_bw(unsigned char *pic, int w, int h, int flipbw)
 {
     int	i, j;
@@ -1683,7 +1711,7 @@ static int PSwrite_bw(unsigned char *pic, int w, int h, int flipbw)
     unsigned char outbyte = 0;
     unsigned char bitnum = 0;
     unsigned char bit;
-    
+
     for (i = 0; (i < h) && (err != EOF); i++) {
 	for (j = 0; (j < w) && (err != EOF); j++) {
 	    bit = *pic++;
@@ -1704,7 +1732,7 @@ static int PSwrite_bw(unsigned char *pic, int w, int h, int flipbw)
 	}
     }
     err = PShex('\0', True);	/*  Flush the hex buffer if needed */
-    
+
     return err;
 }
 
@@ -1728,9 +1756,9 @@ static int PSwrite_bw(unsigned char *pic, int w, int h, int flipbw)
  * rectangle is shown.
  * If anchor is set, a black border is shown around the image.
  * Positioning is not exactly that of Mosaic's screen, but close enough.
- * 
-*/
-static void PSimage(struct ele_rec *eptr)
+ *
+ */
+static void PSimage(ElemInfo *eptr)
 {
     ImageInfo *img = eptr->pic_data;
     unsigned char *imgp = img->image_data;
@@ -1746,21 +1774,21 @@ static void PSimage(struct ele_rec *eptr)
     PSmove_offset(0);
 
     if ((eptr->anchor_tag_ptr->anc_href || img->has_border) &&
-	eptr->bwidth && (!img->internal || (img->internal == 2))) {
+	eptr->bwidth && (!img->internal || (img->internal == INT_NOIMAGE))) {
 	anchor = 1;
 	/*
-	 *  Draw an outline by drawing a slightly larger black square
-	 *  below the actual image
+	 * Draw an outline by drawing a slightly larger black square
+	 * below the actual image
 	 */
 	PSprintf("gsave currentpoint %d sub translate ", h);
 	PSprintf("0 -2 translate %d %d scale\n", w + 4, h + 4);
 	PSprintf("SQ fill\ngrestore\n");
 	extra = 4;
     }
-	
+
     if (!imgp) {
-	/*  Image was not available... do something instead
-	 *  Draw an empty square for example
+	/* Image was not available... do something instead.
+	 * Draw an empty square for example.
 	 */
 	PSprintf("gsave currentpoint %d sub translate", h);
 	if (anchor) {
@@ -1770,7 +1798,7 @@ static void PSimage(struct ele_rec *eptr)
 	}
 	PSprintf(" %d %d scale\n", w, h);
 	PSprintf("0.9 setgray SQ fill\ngrestore\n");
-	/*  Move currentpoint just right of image */
+	/* Move currentpoint just right of image */
 	PSprintf("%d 0 R\n", w + extra);
 	return;
     }
@@ -1782,13 +1810,13 @@ static void PSimage(struct ele_rec *eptr)
 	ncolors = img->num_colors;
     }
 
-    /*  This is a hack to see if the image is Black & White, 
-     *  Greyscale or 8 bit color.
-     *  Assume it's bw if it has only the foreground and background colors.
-     *  Assume it's greyscale if all the colors are grey.
+    /* This is a hack to see if the image is Black & White,
+     * Greyscale or 8 bit color.
+     * Assume it's bw if it has only the foreground and background colors.
+     * Assume it's greyscale if all the colors are grey.
      */
     colorps = 0;
-    if (img->internal ||
+    if ((img->internal != INT_NO) ||
 	((ncolors == 2) &&
 	 ((Is_bg(colrs, 0) && Is_fg(colrs, 1)) ||
 	  (Is_fg(colrs, 0) && Is_bg(colrs, 1)))) ||
@@ -1809,19 +1837,19 @@ static void PSimage(struct ele_rec *eptr)
 	    }
 	}
     }
-	
-    /*  If we're using color, make sure 'colorimage' is defined.
-     *  'colorimage' is a Postscript LanguageLevel 2 operator. */
+
+    /* If we're using color, make sure 'colorimage' is defined.
+     * 'colorimage' is a Postscript LanguageLevel 2 operator. */
     if (colorps)
 	PScolor_image();
-	
-    /*  Build a temporary dictionary */
+
+    /* Build a temporary dictionary */
     PSprintf("20 dict begin\n\n");
 
-    /*  Define string to hold a scanline's worth of data */
+    /* Define string to hold a scanline's worth of data */
     PSprintf("/pix %d string def\n\n", slen);
-    
-    /*  Position and scaling */
+
+    /* Position and scaling */
     PSprintf("gsave currentpoint %d sub translate", h);
     if (anchor || eptr->pic_data->has_border) {
 	PSprintf(" 2 0 translate");
@@ -1829,29 +1857,29 @@ static void PSimage(struct ele_rec *eptr)
 	PSprintf(" 0 2 translate");
     }
     PSprintf(" %d %d scale\n", w, h);
-    
+
     if (colortype == F_BWDITHER) {
-	/*  1-bit dither code uses 'image' */
+	/* 1-bit dither code uses 'image' */
 	int flipbw = 0;
-	
-	/*  Set if color #0 is 'white' */
+
+	/* Set if color #0 is 'white' */
 	if (!img->internal && ((ncolors == 2 &&
 	     MONO(colrs[0].red, colrs[0].green, colrs[0].blue) >
 	     MONO(colrs[1].red, colrs[1].green, colrs[1].blue)) ||
-	    (ncolors == 1 && 
+	    (ncolors == 1 &&
 	     MONO(colrs[0].red, colrs[0].green, colrs[0].blue) >
 	     MONO(127, 127, 127))))
-	    flipbw = 1; 
-	
-	/*  Dimensions of data */
+	    flipbw = 1;
+
+	/* Dimensions of data */
 	PSprintf("%d %d %d\n", w, h, bits);
-	
-	/*  Mapping matrix */
+
+	/* Mapping matrix */
 	PSprintf("[%d 0 0 %d 0 %d]\n\n", w, -h, h);
 
 	PSprintf("{currentfile pix readhexstring pop}\nimage\n");
 
-	/*  Write the actual image data */
+	/* Write the actual image data */
 	if (img->internal) {
 	    /* Must first convert the image data if it is an internal image */
 	    /* Code adapted from XPM stuff in PICREAD.C */
@@ -1887,22 +1915,22 @@ static void PSimage(struct ele_rec *eptr)
 	    err = PSwrite_bw(imgp, w, h, flipbw);
 	}
     } else {
-	/*  All other formats */
+	/* All other formats */
 	unsigned char *rleline = (unsigned char *) NULL;
 	int rlen;
-	
+
 	PScolormap(colorps, ncolors, colrs);
 	PSrle_cmapimage(colorps);
 
-	/*  Dimensions of data */
+	/* Dimensions of data */
 	PSprintf("%d %d %d\n", w, h, bits);
-	/*  Mapping matrix */
+	/* Mapping matrix */
 	PSprintf("[%d 0 0 %d 0 %d]\nrlecmapimage\n", w, -h, h);
-	
+
 	if (!(rleline = (unsigned char *) malloc(w * 2))) {
 #ifndef DISABLE_TRACE
 	    if (htmlwTrace)
-		fprintf(stderr, "failed to malloc space for rleline\n");
+		fprintf(stderr, "Failed to malloc space for rleline\n");
 #endif
 	    return;
 	}
@@ -1912,16 +1940,16 @@ static void PSimage(struct ele_rec *eptr)
 	    imgp += w;
 	    for (j = 0; (j < rlen) && (err != EOF); j++)
 		err = PShex(rleline[j], False);
-	    err = PShex('\0', True);	/*  Flush the hex buffer */
+	    err = PShex('\0', True);	/* Flush the hex buffer */
 	}
 	free(rleline);
     }
-	
-    /*  Stop using temporary dictionary */
+
+    /* Stop using temporary dictionary */
     PSprintf("end\ngrestore\n");
-	
-    /*  Move currentpoint just right of image */
-    PSprintf("%d 0 R\n", w + extra); 
+
+    /* Move currentpoint just right of image */
+    PSprintf("%d 0 R\n", w + extra);
     if (HTML_Print_Footers && has_footnote(eptr)) {
 	PSmove_offset(0);
 	PSfootnote(eptr->anchor_tag_ptr->anc_href, 2.0);
@@ -1958,57 +1986,54 @@ static void PSimage(struct ele_rec *eptr)
  *	2: new century schoolbook
  *	3: lucida
  */
-String ParseTextToPSString(HTMLWidget	  hw, 
-			   struct ele_rec *elist,
-			   struct ele_rec *startp,
-			   struct ele_rec *endp,
-			   int		  start_pos, 
-			   int		  end_pos,
-			   int		  space_width,
-			   int		  lmargin,
-			   int		  fontfamily,
-			   char   	  *url,
-			   char	   	  *time_str)
+String ParseTextToPSString(HTMLWidget hw,
+			   ElemInfo  *elist,
+			   ElemInfo  *startp,
+			   ElemInfo  *endp,
+			   int	      start_pos,
+			   int	      end_pos,
+			   int	      space_width,
+			   int	      lmargin,
+			   int	      fontfamily,
+			   char      *url,
+			   char	     *time_str)
 {
     double pagewidth;
-    struct ele_rec *eptr, *ptr, *tmpptr;
-    struct ele_rec *prev, *start, *end;
-    struct ele_rec *next_line;
-    unsigned long fg_pixel, bg_pixel;    
-    int	xpos, ypos, epos, height;
-    int	prev_y, skipped_cr;
+    ElemInfo *eptr, *ptr, *tmpptr, *prev, *start, *end, *next_line;
+    unsigned long fg_pixel, bg_pixel;
+    int	xpos, ypos, epos, height, prev_y, skipped_cr;
     int	footnotes_this_line, reserved_space;
     int	footnotes_this_page = 0;
     int	newline = 1;
     int	newpage = 1;
     CurFontType	pftype;
     Display *dsp = hw->html.dsp;
- 	
+    Colormap cmap;
+ 
     if (!startp || !hw->html.first_formatted_line)
 	return(NULL);
     /*
      * Get the foreground and background colors so we can check later
      * for black&white documents
      */
-    XtVaGetValues(hw->html.view, 
+    XtVaGetValues(hw->html.view,
 #ifdef MOTIF
 		  XtNforeground, &fg_pixel,
 #endif
-		  XtNbackground, &bg_pixel, 
+		  XtNbackground, &bg_pixel,
 		  NULL);
 #ifndef MOTIF
-    XtVaGetValues((Widget)hw, 
+    XtVaGetValues((Widget)hw,
 		  XtNforeground, &fg_pixel,
 		  NULL);
-#endif	
+#endif
     fg_color.pixel = fg_pixel;
     bg_color.pixel = bg_pixel;
-    XQueryColor(dsp, installed_colormap ? installed_cmap :
-		     DefaultColormap(dsp, DefaultScreen(dsp)),
-		&fg_color);
-    XQueryColor(dsp, installed_colormap ? installed_cmap :
-		     DefaultColormap(dsp, DefaultScreen(dsp)),
-		&bg_color);
+    cmap = installed_colormap ? installed_cmap :
+	   DefaultColormap(dsp, DefaultScreen(dsp));
+
+    XQueryColor(dsp, cmap, &fg_color);
+    XQueryColor(dsp, cmap, &bg_color);
 #if 0
     /*  This piece of code is needed if the user selects a portion
      *  of the document with the mouse.
@@ -2025,13 +2050,21 @@ String ParseTextToPSString(HTMLWidget	  hw,
 	end = endp;
     }
 #endif
-	
+
     /* Setup page size according to user preference. */
 
-    if (HTML_Print_Paper_Size_A4) {
-	page_dimens = a4_page_dimens;
+    if (HTML_Print_Landscape) {
+	if (HTML_Print_Paper_Size_A4) {
+	    page_dimens = a4_land_page_dimens;
+	} else {
+	    page_dimens = us_letter_land_page_dimens;
+ 	}
     } else {
-	page_dimens = us_letter_page_dimens;
+	if (HTML_Print_Paper_Size_A4) {
+	    page_dimens = a4_page_dimens;
+	} else {
+	    page_dimens = us_letter_page_dimens;
+ 	}
     }
     page_dimens.text_height = page_dimens.page_height -
 			      page_dimens.top_margin - page_dimens.bot_margin;
@@ -2052,10 +2085,10 @@ String ParseTextToPSString(HTMLWidget	  hw,
      * wide), but I guess that the hw->html.doc_width includes some
      * left and right margins, so it seems to work in practice.
      */
-    if (pagewidth * Points_Pixel > page_dimens.text_width) 
+    if (pagewidth * Points_Pixel > page_dimens.text_width)
 	Points_Pixel = page_dimens.text_width / pagewidth;
-    Pixels_Page = (int) (page_dimens.text_height / Points_Pixel);		
-	
+    Pixels_Page = (int) (page_dimens.text_height / Points_Pixel);
+
     PSinit();
     PSheader(hw->html.title, fontfamily, url, time_str);
     /* Must set it initially so resets will work */
@@ -2071,8 +2104,7 @@ String ParseTextToPSString(HTMLWidget	  hw,
 	eptr->line_next = next_line->line_next;
 	next_line->line_next = eptr;
     }
-    eptr = next_line;
-    if (eptr) {
+    if (eptr = next_line) {
 	next_line = eptr->line_next;
     } else {
 	next_line = NULL;
@@ -2201,7 +2233,7 @@ String ParseTextToPSString(HTMLWidget	  hw,
 			}
 		} else if ((pftype != ITALIC_FONT) &&
 			   (pftype != ADDRESS_FONT) &&
-			   (pftype != BOLD_FONT)) { 
+			   (pftype != BOLD_FONT)) {
 			xpos -= (.05 * xpos);
 		}
 		break;
@@ -2359,7 +2391,7 @@ String ParseTextToPSString(HTMLWidget	  hw,
 	    PStext(hw, eptr, (String)eptr->edata);
 	    break;
 
-	case E_BULLET: 
+	case E_BULLET:
 	    PSbullet(hw, eptr);
 	    break;
 
@@ -2375,7 +2407,7 @@ String ParseTextToPSString(HTMLWidget	  hw,
 	    PSimage(eptr);
 	    break;
 
-	case E_LINEFEED: 
+	case E_LINEFEED:
 	    if (next_line->line_next) {
 		newline = 1;
 		next_line = next_line->line_next;

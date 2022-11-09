@@ -1,0 +1,163 @@
+Version 2.7.x
+
+- Filters
+- Hugely improved text support
+- GTK+ theme engine
+- Masks
+- Path markers
+- Mozilla plugin
+- Patterns
+- Standalone viewer
+- Decent <image> support
+- Numerous bug fixes
+
+== gnome-2-6 branch ==
+
+Version 2.6.x
+
+- A slew of bug fixes
+
+Version 2.5.x
+
+- A slew of bug fixes
+
+Version 2.4.0
+
+- gdk-pixbuf loader fix
+- support for title and desc elements
+
+Version 2.3.0
+
+- Support Paths inside of <defs> and use them in <use/> statements
+- Vastly improved CSS support (libcroco and builtin)
+- LibCroco CSS support
+- Improved support for Gimp plugin
+
+== gnome-2-2 branch ==
+
+Version 2.2.5
+
+- Gimp Import/Load plugin
+- Bugfixes
+
+Version 2.2.4
+
+- Few bugfixes
+
+Version 2.2.3
+
+- All sorts of build and installation fixes
+- "Bugfix" for a regression in GTK+'s pixbuf-io loader scheme
+
+Version 2.2.2
+
+- Handle SVGZ files (Gzipped SVG)
+- Handle objectBoundingBox coordinates on gradients
+- API extensions
+- Various bugfixes and crash fixes
+
+Version 2.2.1
+
+- Better CSS style handling
+- Fix for a crasher exploited by Sodipodi. Improved gradient handling
+- RSVG allows you to specify the JPEG quality
+- Handles Kontour's conicalGradients to some extent
+
+Version 2.2.0
+
+- Better CSS style handling
+- Works in "international" locales (non-C locales) in a threadsafe manner
+- Handle rounded rects
+- Add manpage
+- Handle "ex" units better
+
+Version 2.1.5
+
+- Missed files in tarball added. 
+
+Version 2.1.4
+
+- Fixed memory leak
+
+- Better handling of display and visibility styles.
+
+Version 2.1.3
+
+- Better font handling (stretch, style, variant, weight supported, inherited)
+
+Version 2.1.2
+
+- Fixed crash with non-utf8 characters.
+
+Version 2.1.1
+
+- Better ellipse rendering
+
+- New functions to set rendering DPI
+
+- Better handling of SVGs colors, gradients and images
+
+- support dashes
+
+- Includes a new gdk-pixbuf svg loader
+
+- Includes a new gimp svg loader
+
+- Now installs a binary that can rasterize svgs.
+
+Version 2.1.0
+
+- New co-maintainer Dom Lachowicz
+
+- Added new svg based gtk+ engine
+
+- Handles SVGs a lot better. Especially with regards to units.
+
+Version 2.0.1
+
+- Fixed misrender of the ScalableGorilla trashcan.
+
+Version 2.0.0
+
+- Fixed crash when trying to open empty files (Anders)
+
+Version 1.1.6
+
+- Fix division by zero crashes when scaling an .svg without dimensions (Darin)
+
+Version 1.1.5
+
+- Add another new function for use in Nautilus icons (Alex Larsson)
+
+Version 1.1.4
+
+- Add new function for auto-scaling svg for use in Nautilus icons (Alex Larsson)
+- Fix xml parsing to read much faster and work around libxml bug (Michael Meeks)
+- Add back handling for .svg file without width and height (Darin)
+- Improved internal error handling (Darin)
+
+Version 1.1.3
+
+- Fix major storage leaks (Anders)
+
+Version 1.1.2
+
+- Use the new intersector (Alex)
+
+Version 1.1.1
+
+- Ported to Gnome 2 (Ramiro, Darin)
+- Ported to Pango instead of using FreeType directly (Darin)
+- Replace FILE-based API with data pushing API (Jonathan)
+
+- Use pkgconfig rather than config scripts or .m4 files (Ramiro)
+- Use stuff from libart rather than having our own copies (Darin)
+- Move art_render_mask into libart (Darin)
+- Use locale-independent functions for parsing the XML files,
+  not <ctype.h>, which is locale dependent (Darin)
+- Other misc. API cleanups (Jonathan).
+- Fix NULL-dereference bugs in gradient code (Darin)
+- Fix handling of empty .svg files (Darin)
+- Measures strings propertly taking affine into account (Darin)
+- Fix empty struct portability problem (Darin)
+- Other build fixes (Owen, Jacob, Anders)

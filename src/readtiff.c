@@ -1,4 +1,4 @@
-/* Copyright (C) 2006 - The VMS Mosaic Project */
+/* Copyright (C) 2006, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -22,7 +22,7 @@ unsigned char *ReadTIFF(FILE *infile, char *filename, int *width, int *height,
 	TIFF *tif;
 	unsigned char *image = NULL;
 	unsigned int *raster;
-	int w, h;
+	int w, h, size;
 	static int err_msgs;
 	static int init = 0;
 
@@ -40,16 +40,17 @@ unsigned char *ReadTIFF(FILE *infile, char *filename, int *width, int *height,
 		TIFFSetErrorHandler(NULL);
 		TIFFSetWarningHandler(NULL);
 	}
-	tif = TIFFFdOpen(fileno(infile), filename, "r");
-	if (!tif)
+
+	if (!(tif = TIFFFdOpen(fileno(infile), filename, "r")))
 		return NULL;
+
 	TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &w);
 	TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &h);
 	*width = w;
 	*height = h;
+	size = w * h;
 
-	raster = (unsigned int *) _TIFFmalloc(w * h * 4);
-	if (!raster)
+	if (!(raster = (unsigned int *) _TIFFmalloc(size * 4)))
 		goto Error;
 
 	if (!TIFFReadRGBAImageOriented(tif, w, h, raster,
@@ -66,7 +67,6 @@ unsigned char *ReadTIFF(FILE *infile, char *filename, int *width, int *height,
 	if (Quantize_Found_Alpha) {
 		unsigned char *a;
 		unsigned char *ptr = (unsigned char *)raster;
-		int size = w * h;
 		int i;
 
 		*alpha = a = malloc(size);

@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2006 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2006, 2008 - The VMS Mosaic Project */
 
 /* 
  * Created: Wed Apr 10 17:41:00 CDT 1996
@@ -60,18 +60,26 @@
  *
  */
 
-struct EditInfo {
+typedef struct _InfoFields {
+	Widget proxy_text;
+	Widget addr_text;
+	Widget port_text;
+	Widget alive;
+	Widget domain_text;
+	Widget trans_menu;
+} InfoFields;
+
+typedef struct _EditInfo {
 	int fProxy;      /* Is this a Proxy List Dialog? */
 	int type;        /* Is this an Edit or an Add ? */
 	int domaintype;  /* Is this an Edit or an Add ? */
 	char *help_file;
 	Widget scrolled; 
 	Widget translation; 
-	struct Proxy *editing;
-	struct InfoFields *IF;
-	struct ProxyDomain *editingDomain;
-	struct Proxy *proxy_list;
-};
+	Proxy *editing;
+	InfoFields *IF;
+	ProxyDomain *editingDomain;
+	Proxy *proxy_list;
+} EditInfo;
 
-void ShowNoProxyDialog(mo_window *);
-void ShowProxyDialog(mo_window *);
+void ShowProxyDialog(mo_window *win, Boolean proxy);

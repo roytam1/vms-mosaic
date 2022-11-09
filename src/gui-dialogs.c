@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2011
  * The VMS Mosaic Project
  */
 
@@ -77,6 +77,7 @@
 #include <Xm/ScrollBar.h>
 #include <Xm/FileSB.h>
 #include <Xm/Protocols.h>
+#include <Xm/XmosP.h>
 
 #ifdef VMS
 #include <errno.h>
@@ -97,6 +98,8 @@ extern int HTML_Print_Headers;
 extern int HTML_Print_Footers;
 extern int HTML_Print_Paper_Size_A4;
 extern int HTML_Print_Duplex;
+extern int HTML_Print_Duplex_Tumble;
+extern int HTML_Print_Landscape;
 
 extern int is_uncompressed;
 
@@ -107,7 +110,7 @@ extern int sys_nerr;
 #ifndef linux
 extern char *sys_errlist[];
 #endif
-#endif /* VMS, GEC */
+#endif  /* VMS, GEC */
 
 extern int errno;
 #define __MAX_HOME_LEN__ 256
@@ -121,23 +124,28 @@ extern int cci_docommand;
 
 XmxOptionMenuStruct *format_opts;
 
+typedef enum _print_type {
+    MAIL,
+    PRINT,
+    SAVE
+} print_type;
 
 #ifdef VMS
 static void VMS_ErrorDialog(char *fname, mo_window *win)
 {
-  char str[1024];
+    char str[1024];
 
-  sprintf(str, "Unable to save document to file %s\nError: %s",
-          fname, strerror(errno, vaxc$errno));
-  XmxMakeErrorDialog(win->base, str, "Save Error");
+    sprintf(str, "Unable to save document to file %s\nError: %s",
+            fname, strerror(errno, vaxc$errno));
+    XmxMakeErrorDialog(win->base, str, "Save Error");
 }
 
 static void Saved_it(char *text, int len)
 {
-  char line[128];
+    char line[128];
 
-  sprintf(line, "Saved %d bytes of data.", len);
-  mo_gui_notify_progress(line);
+    sprintf(line, "Saved %d bytes of data.", len);
+    mo_gui_notify_progress(line);
 }
 
 /*
@@ -157,71 +165,43 @@ static void Saved_it(char *text, int len)
 #endif /* VMS, BSN, GEC */
 
 
-static XmxCallback(save_print_header_cb)
+static XmxCallback(print_header_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    Widget wid;
 
-    set_pref_boolean(ePRINT_BANNERS,
-		     XmToggleButtonGetState(win->print_header_toggle_save));
+    switch (XmxExtractToken((int)client_data)) {
+	case MAIL:
+	    wid = win->print_header_toggle_mail;
+	    break;
+	case PRINT:
+	    wid = win->print_header_toggle_print;
+	    break;
+	case SAVE:
+	    wid = win->print_header_toggle_save;
+	    break;
+    }
+    set_pref_boolean(ePRINT_BANNERS, XmToggleButtonGetState(wid));
     return;
 }
 
-static XmxCallback(mail_print_header_cb)
+static XmxCallback(print_footer_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    Widget wid;
 
-    set_pref_boolean(ePRINT_BANNERS,
-		     XmToggleButtonGetState(win->print_header_toggle_mail));
-    return;
-}
-
-static XmxCallback(print_print_header_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-    set_pref_boolean(ePRINT_BANNERS,
-		     XmToggleButtonGetState(win->print_header_toggle_print));
-    return;
-}
-
-static XmxCallback(save_print_footer_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-    set_pref_boolean(ePRINT_FOOTNOTES,
-		     XmToggleButtonGetState(win->print_footer_toggle_save));
-    return;
-}
-
-static XmxCallback(mail_print_footer_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-    set_pref_boolean(ePRINT_FOOTNOTES,
-		     XmToggleButtonGetState(win->print_footer_toggle_mail));
-    return;
-}
-
-static XmxCallback(print_print_footer_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-    set_pref_boolean(ePRINT_FOOTNOTES,
-		     XmToggleButtonGetState(win->print_footer_toggle_print));
-    return;
-}
-
-static XmxCallback(save_print_size_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-    int us_size = !XmToggleButtonGetState(win->print_us_toggle_save);
-
-    XmxSetToggleButton(win->print_a4_toggle_save,
-		       !XmToggleButtonGetState(win->print_a4_toggle_save));
-    XmxSetToggleButton(win->print_us_toggle_save, us_size);
-
-    set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
-
+    switch (XmxExtractToken((int)client_data)) {
+	case MAIL:
+	    wid = win->print_footer_toggle_mail;
+	    break;
+	case PRINT:
+	    wid = win->print_footer_toggle_print;
+	    break;
+	case SAVE:
+	    wid = win->print_footer_toggle_save;
+	    break;
+    }
+    set_pref_boolean(ePRINT_FOOTNOTES, XmToggleButtonGetState(wid));
     return;
 }
 
@@ -236,61 +216,88 @@ static XmxCallback(print_url_cb)
     return;
 }
 
-static XmxCallback(mail_print_size_cb)
+
+static XmxCallback(print_size_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-    int us_size = !XmToggleButtonGetState(win->print_us_toggle_mail);
+    Widget us_wid, a4_wid;
+    int us_size;
 
-    XmxSetToggleButton(win->print_a4_toggle_mail,
-		       !XmToggleButtonGetState(win->print_a4_toggle_mail));
-    XmxSetToggleButton(win->print_us_toggle_mail, us_size);
+    switch (XmxExtractToken((int)client_data)) {
+	case MAIL:
+	    us_wid = win->print_us_toggle_mail;
+	    a4_wid = win->print_a4_toggle_mail;
+	    break;
+	case PRINT:
+	    us_wid = win->print_us_toggle_print;
+	    a4_wid = win->print_a4_toggle_print;
+	    break;
+	case SAVE:
+	    us_wid = win->print_us_toggle_save;
+	    a4_wid = win->print_a4_toggle_save;
+	    break;
+    }
+    us_size = !XmToggleButtonGetState(us_wid);
+    XmxSetToggleButton(a4_wid, !us_size);
+    XmxSetToggleButton(us_wid, us_size);
 
     set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
-
     return;
 }
 
-static XmxCallback(print_print_size_cb)
+static XmxCallback(print_duplex_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-    int us_size = !XmToggleButtonGetState(win->print_us_toggle_print);
+    Widget wid;
 
-    XmxSetToggleButton(win->print_a4_toggle_print,
-		       !XmToggleButtonGetState(win->print_a4_toggle_print));
-    XmxSetToggleButton(win->print_us_toggle_print, us_size);
-
-    set_pref_boolean(ePRINT_PAPER_SIZE_US, us_size);
-
+    switch (XmxExtractToken((int)client_data)) {
+	case MAIL:
+	    wid = win->print_duplex_toggle_mail;
+	    break;
+	case PRINT:
+	    wid = win->print_duplex_toggle_print;
+	    break;
+	case SAVE:
+	    wid = win->print_duplex_toggle_save;
+	    break;
+    }
+    set_pref_boolean(ePRINT_DUPLEX, XmToggleButtonGetState(wid));
     return;
 }
 
-static XmxCallback(save_print_duplex_cb)
+static XmxCallback(print_landscape_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    Widget wid;
 
-    set_pref_boolean(ePRINT_DUPLEX,
-		     XmToggleButtonGetState(win->print_duplex_toggle_save));
+    switch (XmxExtractToken((int)client_data)) {
+	case PRINT:
+	    wid = win->print_landscape_toggle_print;
+	    break;
+	case MAIL:
+	case SAVE:
+	    break;
+    }
+    set_pref_boolean(ePRINT_LANDSCAPE, XmToggleButtonGetState(wid));
     return;
 }
 
-static XmxCallback(mail_print_duplex_cb)
+static XmxCallback(print_tumbled_cb)
 {
     mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
+    Widget wid;
 
-    set_pref_boolean(ePRINT_DUPLEX,
-		     XmToggleButtonGetState(win->print_duplex_toggle_mail));
+    switch (XmxExtractToken((int)client_data)) {
+	case PRINT:
+	    wid = win->print_tumbled_toggle_print;
+	    break;
+	case MAIL:
+	case SAVE:
+	    break;
+    }
+    set_pref_boolean(ePRINT_DUPLEX_TUMBLED, XmToggleButtonGetState(wid));
     return;
 }
-
-static XmxCallback(print_print_duplex_cb)
-{
-    mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-
-    set_pref_boolean(ePRINT_DUPLEX,
-		     XmToggleButtonGetState(win->print_duplex_toggle_print));
-    return;
-}
-
 
 /* ------------------------------------------------------------------------ */
 /* ----------------------------- SAVE WINDOW ------------------------------ */
@@ -466,39 +473,39 @@ static XmxCallback(save_win_cb)
 
 static void format_sensitive(mo_window *win, int format)
 {
-	Arg args[2];
+    Arg args[2];
   
-	if (format == mo_postscript) {
-		/* Postscript */
-		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+    if (format == mo_postscript) {
+	/* Postscript */
+	int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
 
-                XmxSetToggleButton(win->print_header_toggle_save,
-				   get_pref_boolean(ePRINT_BANNERS));
-                XmxSetToggleButton(win->print_footer_toggle_save,
-				   get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_save, !us_size);
-                XmxSetToggleButton(win->print_us_toggle_save, us_size);
-                XmxSetToggleButton(win->print_duplex_toggle_save,
-				   get_pref_boolean(ePRINT_DUPLEX));
+	XmxSetToggleButton(win->print_header_toggle_save,
+			   get_pref_boolean(ePRINT_BANNERS));
+	XmxSetToggleButton(win->print_footer_toggle_save,
+			   get_pref_boolean(ePRINT_FOOTNOTES));
+	XmxSetToggleButton(win->print_a4_toggle_save, !us_size);
+	XmxSetToggleButton(win->print_us_toggle_save, us_size);
+	XmxSetToggleButton(win->print_duplex_toggle_save,
+			   get_pref_boolean(ePRINT_DUPLEX));
 
-		XtSetArg(args[0], XmNsensitive, TRUE);
-	} else {
-		/* Plain, formatted or HTML */
-		XmxSetToggleButton(win->print_header_toggle_save, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_save, XmxNotSet);
-		XmxSetToggleButton(win->print_a4_toggle_save, XmxNotSet);
-		XmxSetToggleButton(win->print_us_toggle_save, XmxNotSet);
-		XmxSetToggleButton(win->print_duplex_toggle_save, XmxNotSet);
+	XtSetArg(args[0], XmNsensitive, TRUE);
+    } else {
+	/* Plain, formatted or HTML */
+	XmxSetToggleButton(win->print_header_toggle_save, XmxNotSet);
+	XmxSetToggleButton(win->print_footer_toggle_save, XmxNotSet);
+	XmxSetToggleButton(win->print_a4_toggle_save, XmxNotSet);
+	XmxSetToggleButton(win->print_us_toggle_save, XmxNotSet);
+	XmxSetToggleButton(win->print_duplex_toggle_save, XmxNotSet);
 
-		XtSetArg(args[0], XmNsensitive, FALSE);
-	}
-	XtSetValues(win->print_header_toggle_save, args, 1);
-	XtSetValues(win->print_footer_toggle_save, args, 1);
-	XtSetValues(win->print_a4_toggle_save, args, 1);
-	XtSetValues(win->print_us_toggle_save, args, 1);
-	XtSetValues(win->print_duplex_toggle_save, args, 1);
+	XtSetArg(args[0], XmNsensitive, FALSE);
+    }
+    XtSetValues(win->print_header_toggle_save, args, 1);
+    XtSetValues(win->print_footer_toggle_save, args, 1);
+    XtSetValues(win->print_a4_toggle_save, args, 1);
+    XtSetValues(win->print_us_toggle_save, args, 1);
+    XtSetValues(win->print_duplex_toggle_save, args, 1);
 
-	return;
+    return;
 }
 
 
@@ -536,6 +543,7 @@ mo_status mo_post_save_window(mo_window *win)
 
   XmxSetUniqid(win->id);
   if (!win->save_win) {
+      int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
       Widget frame, workarea, format_label, paper_size_toggle_box;
       char *mode;
       int i;
@@ -551,28 +559,26 @@ mo_status mo_post_save_window(mo_window *win)
       workarea = XmxMakeForm(frame);
 
       win->print_header_toggle_save = XmxMakeToggleButton(workarea,
-			 	    "Include Banners", save_print_header_cb, 0);
+			 	      "Include Banners", print_header_cb, SAVE);
       XmxSetToggleButton(win->print_header_toggle_save,
 			 get_pref_boolean(ePRINT_BANNERS));
       win->print_footer_toggle_save = XmxMakeToggleButton(workarea,
-			 	  "Include Footnotes", save_print_footer_cb, 0);
+			 	    "Include Footnotes", print_footer_cb, SAVE);
       XmxSetToggleButton(win->print_footer_toggle_save,
 			 get_pref_boolean(ePRINT_FOOTNOTES));
       
       paper_size_toggle_box = XmxMakeRadioBox(workarea);
       win->print_a4_toggle_save = XmxMakeToggleButton(paper_size_toggle_box,
 						      "A4 Paper Size",
-						      save_print_size_cb, 0);
+						      print_size_cb, SAVE);
       win->print_us_toggle_save = XmxMakeToggleButton(paper_size_toggle_box,
 						      "US Letter Paper Size",
-						      save_print_size_cb, 0);
-      XmxSetToggleButton(win->print_a4_toggle_save,
-			 !get_pref_boolean(ePRINT_PAPER_SIZE_US));
-      XmxSetToggleButton(win->print_us_toggle_save,
-			 get_pref_boolean(ePRINT_PAPER_SIZE_US));      
+						      print_size_cb, SAVE);
+      XmxSetToggleButton(win->print_a4_toggle_save, !us_size);
+      XmxSetToggleButton(win->print_us_toggle_save, us_size);
 
       win->print_duplex_toggle_save = XmxMakeToggleButton(workarea,
-				    "Duplex printing", save_print_duplex_cb, 0);
+					 "Print Duplex", print_duplex_cb, SAVE);
       XmxSetToggleButton(win->print_duplex_toggle_save,
 			 get_pref_boolean(ePRINT_DUPLEX));
 
@@ -625,8 +631,8 @@ mo_status mo_post_save_window(mo_window *win)
          XmATTACH_NONE, NULL, NULL, NULL, NULL);
       XmxSetConstraints
         (win->format_optmenu->base, XmATTACH_FORM, XmATTACH_NONE, 
-         XmATTACH_WIDGET,
-         XmATTACH_FORM, NULL, NULL, format_label, NULL);
+         XmATTACH_WIDGET, XmATTACH_FORM,
+	 NULL, NULL, format_label, NULL);
       XmxSetArg(XmNtopOffset, 15);
       XmxSetConstraints
          (win->print_header_toggle_save, XmATTACH_WIDGET, XmATTACH_NONE,
@@ -891,66 +897,66 @@ static XmxCallback(savebinary_win_cb)
 
 static mo_status mo_post_savebinary_window(mo_window *win)
 {
-	XmString sfn, fbfn;
-	char fileBuf[2048];
-	char *fileBoxFileName;
+    XmString sfn, fbfn;
+    char fileBuf[2048];
+    char *fileBoxFileName;
 
-	XmxSetUniqid(win->id);
-	if (!win->savebinary_win) {
-		XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
-		win->savebinary_win = XmxMakeFileSBDialog(win->base,
-				   "VMS Mosaic: Save Binary File To Local Disk",
-				   "Name for binary file on local disk:",
-				   savebinary_win_cb, 0);
-		XmxAddCallback(win->savebinary_win,
-			       XmNcancelCallback, savebinary_cancel_cb, 0);
-	} else {
-		XmFileSelectionDoSearch(win->savebinary_win, NULL);
-	}
+    XmxSetUniqid(win->id);
+    if (!win->savebinary_win) {
+	XmxSetArg(XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL);
+	win->savebinary_win = XmxMakeFileSBDialog(win->base,
+			"VMS Mosaic: Save Binary File To Local Disk",
+			"Name for binary file on local disk:                  ",
+			savebinary_win_cb, 0);
+	XmxAddCallback(win->savebinary_win, XmNcancelCallback,
+		       savebinary_cancel_cb, 0);
+    } else {
+	XmFileSelectionDoSearch(win->savebinary_win, NULL);
+    }
 
-	/* Save File now goes to a specific filename */
-	XtVaGetValues(win->savebinary_win,
-		      XmNdirSpec, &fbfn,
-		      NULL);
-	if (!XmStringGetLtoR(fbfn, XmSTRING_DEFAULT_CHARSET,&fileBoxFileName)) {
+    /* Save File now goes to a specific filename */
+    XtVaGetValues(win->savebinary_win,
+		  XmNdirSpec, &fbfn,
+		  NULL);
+    if (!XmStringGetLtoR(fbfn, XmSTRING_DEFAULT_CHARSET,&fileBoxFileName)) {
 #ifndef DISABLE_TRACE
-		if (srcTrace || reportBugs)
-			fprintf(stderr, "Internal Error In Save Binary\n");
+	if (srcTrace || reportBugs)
+	    fprintf(stderr, "Internal Error In Save Binary\n");
 #endif
-		return mo_fail;
+	return mo_fail;
+    }
+    XmStringFree(fbfn);
+    if (*fileBoxFileName && saveFileName && *saveFileName) {
+	/* No need to check for NULL as we know url exists */
+	char *sptr = getFileName(saveFileName);
+	char *ptr;
+
+	/* There is a "." in it */
+	if (is_uncompressed && (ptr = strrchr(sptr, '.'))) {
+	    char *ptr2;
+
+	    if (!strncmp(ptr, ".Z", 2) || !strncmp(ptr, ".gz", 3)) {
+		/* Get rid of it! */
+		*ptr = '\0';
+	    } else if ((ptr2 = strrchr(ptr, '-')) &&
+		       !my_strcasecmp(ptr2, "-gz")) {
+		*ptr2 = '\0';
+	    } else if (!strncmp(ptr, ".tgz", 4)) {
+		*(ptr + 2) = 'a';
+		*(ptr + 3) = 'r';
+	    }
 	}
-	XmStringFree(fbfn);
-	if (*fileBoxFileName && saveFileName && *saveFileName) {
-		/* No need to check for NULL as we know url exists */
-		char *sptr = getFileName(saveFileName);
-		char *ptr;
+	sprintf(fileBuf, "%s%s", fileBoxFileName, sptr);
+	sfn = XmStringCreateLtoR(fileBuf, XmSTRING_DEFAULT_CHARSET);
+	XtVaSetValues(win->savebinary_win,
+		      XmNdirSpec, sfn,
+		      NULL);
+	XmStringFree(sfn);
+    }
+    XtFree(fileBoxFileName);
+    XmxManageRemanage(win->savebinary_win);
 
-		/* There is a "." in it */
-		if (is_uncompressed && (ptr = strrchr(sptr, '.'))) {
-			char *ptr2;
-
-			if (!strncmp(ptr, ".Z", 2) || !strncmp(ptr, ".gz", 3)) {
-				/* Get rid of it! */
-				*ptr = '\0';
-			} else if ((ptr2 = strrchr(ptr, '-')) &&
-				   !my_strcasecmp(ptr2, "-gz")) {
-				*ptr2 = '\0';
-			} else if (!strncmp(ptr, ".tgz", 4)) {
-				*(ptr + 2) = 'a';
-				*(ptr + 3) = 'r';
-			}
-		}
-		sprintf(fileBuf, "%s%s", fileBoxFileName, sptr);
-		sfn = XmStringCreateLtoR(fileBuf, XmSTRING_DEFAULT_CHARSET);
-		XtVaSetValues(win->savebinary_win,
-			      XmNdirSpec, sfn,
-			      NULL);
-		XmStringFree(sfn);
-	}
-	XtFree(fileBoxFileName);
-	XmxManageRemanage(win->savebinary_win);
-
-	return mo_succeed;
+    return mo_succeed;
 }
 
 void rename_binary_file(char *fnam)
@@ -1196,41 +1202,40 @@ static XmxCallback(mail_win_cb)
   return;
 }
 
-
 static void mail_sensitive(mo_window *win, int format)
 {
-	Arg args[2];
+    Arg args[2];
 
-	if (format == mo_postscript) {
-		/* Postscript */
-		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+    if (format == mo_postscript) {
+	/* Postscript */
+	int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
 
-                XmxSetToggleButton(win->print_header_toggle_mail,
-				   get_pref_boolean(ePRINT_BANNERS));
-                XmxSetToggleButton(win->print_footer_toggle_mail,
-				   get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_mail, !us_size);
-                XmxSetToggleButton(win->print_us_toggle_mail, us_size);
-                XmxSetToggleButton(win->print_duplex_toggle_mail,
-				   get_pref_boolean(ePRINT_DUPLEX));
+	XmxSetToggleButton(win->print_header_toggle_mail,
+			   get_pref_boolean(ePRINT_BANNERS));
+        XmxSetToggleButton(win->print_footer_toggle_mail,
+			   get_pref_boolean(ePRINT_FOOTNOTES));
+        XmxSetToggleButton(win->print_a4_toggle_mail, !us_size);
+        XmxSetToggleButton(win->print_us_toggle_mail, us_size);
+        XmxSetToggleButton(win->print_duplex_toggle_mail,
+			   get_pref_boolean(ePRINT_DUPLEX));
 
-		XtSetArg(args[0], XmNsensitive, TRUE);
-	} else {
-		XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
-                XmxSetToggleButton(win->print_duplex_toggle_mail, XmxNotSet);
+	XtSetArg(args[0], XmNsensitive, TRUE);
+    } else {
+	XmxSetToggleButton(win->print_header_toggle_mail, XmxNotSet);
+	XmxSetToggleButton(win->print_footer_toggle_mail, XmxNotSet);
+	XmxSetToggleButton(win->print_a4_toggle_mail, XmxNotSet);
+	XmxSetToggleButton(win->print_us_toggle_mail, XmxNotSet);
+	XmxSetToggleButton(win->print_duplex_toggle_mail, XmxNotSet);
 
-		XtSetArg(args[0], XmNsensitive, FALSE);
-	}
-	XtSetValues(win->print_header_toggle_mail, args, 1);
-	XtSetValues(win->print_footer_toggle_mail, args, 1);
-        XtSetValues(win->print_a4_toggle_mail, args, 1);
-        XtSetValues(win->print_us_toggle_mail, args, 1);
-        XtSetValues(win->print_duplex_toggle_mail, args, 1);
+	XtSetArg(args[0], XmNsensitive, FALSE);
+    }
+    XtSetValues(win->print_header_toggle_mail, args, 1);
+    XtSetValues(win->print_footer_toggle_mail, args, 1);
+    XtSetValues(win->print_a4_toggle_mail, args, 1);
+    XtSetValues(win->print_us_toggle_mail, args, 1);
+    XtSetValues(win->print_duplex_toggle_mail, args, 1);
 
-	return;
+    return;
 }
 
 static XmxCallback(mail_fmtmenu_cb)
@@ -1298,28 +1303,28 @@ mo_status mo_post_mail_window(mo_window *win)
         workarea = XmxMakeForm(frame);
         
         win->print_header_toggle_mail = XmxMakeToggleButton(workarea,
-        			    "Include Banners", mail_print_header_cb, 0);
+        			      "Include Banners", print_header_cb, MAIL);
         XmxSetToggleButton(win->print_header_toggle_mail,
 			   get_pref_boolean(ePRINT_BANNERS));
 
         win->print_footer_toggle_mail = XmxMakeToggleButton(workarea,
-        			  "Include Footnotes", mail_print_footer_cb, 0);
+        			    "Include Footnotes", print_footer_cb, MAIL);
         XmxSetToggleButton(win->print_footer_toggle_mail,
 			   get_pref_boolean(ePRINT_FOOTNOTES));
 
 	paper_size_toggle_box = XmxMakeRadioBox(workarea);
 	win->print_a4_toggle_mail = XmxMakeToggleButton(paper_size_toggle_box,
 							"A4 Paper Size",
-							mail_print_size_cb, 0);
+							print_size_cb, MAIL);
 	win->print_us_toggle_mail = XmxMakeToggleButton(paper_size_toggle_box,
 							"US Letter Paper Size",
-							mail_print_size_cb, 0);
+							print_size_cb, MAIL);
 	XmxSetToggleButton(win->print_a4_toggle_mail, !us_size);
 	XmxSetToggleButton(win->print_us_toggle_mail, us_size);
 
         win->print_duplex_toggle_mail = XmxMakeToggleButton(workarea,
-				    "Duplex Printing", mail_print_duplex_cb, 0);
-        XmxSetToggleButton(win->print_duplex_toggle_mail,
+				         "Print Duplex", print_duplex_cb, MAIL);
+	XmxSetToggleButton(win->print_duplex_toggle_mail,
 			   get_pref_boolean(ePRINT_DUPLEX));
 
         format_label = XmxMakeLabel(workarea, "Format for document:");
@@ -1488,11 +1493,14 @@ mo_status mo_print_window(mo_window *win, mo_format_token print_format,
 						win->print_a4_toggle_print);
       HTML_Print_Duplex = XmToggleButtonGetState(
 						win->print_duplex_toggle_print);
+      HTML_Print_Duplex_Tumble = XmToggleButtonGetState(
+					       win->print_tumbled_toggle_print);
+      HTML_Print_Landscape = XmToggleButtonGetState(
+					     win->print_landscape_toggle_print);
   }
 
 #ifndef VMS
-  fp = fopen(fnam, "w");
-  if (!fp)
+  if (!(fp = fopen(fnam, "w")))
       goto oops;
 #else
   /* Open for efficient writes, VaxC RMS defaults are pitiful. PGE */
@@ -1615,38 +1623,46 @@ static XmxCallback(print_win_cb)
 
 static void print_sensitive(mo_window *win, int format)
 {
-	Arg args[2];
+    Arg args[2];
   
-	if (format == mo_postscript) {
-		/* Postscript */
-		int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
+    if (format == mo_postscript) {
+	/* Postscript */
+	int us_size = get_pref_boolean(ePRINT_PAPER_SIZE_US);
 
-		XmxSetToggleButton(win->print_header_toggle_print,
-				   get_pref_boolean(ePRINT_BANNERS));
-		XmxSetToggleButton(win->print_footer_toggle_print,
-				   get_pref_boolean(ePRINT_FOOTNOTES));
-                XmxSetToggleButton(win->print_a4_toggle_print, !us_size);
-                XmxSetToggleButton(win->print_us_toggle_print, us_size);
-                XmxSetToggleButton(win->print_duplex_toggle_print,
-				   get_pref_boolean(ePRINT_DUPLEX));
+	XmxSetToggleButton(win->print_header_toggle_print,
+			   get_pref_boolean(ePRINT_BANNERS));
+	XmxSetToggleButton(win->print_footer_toggle_print,
+			   get_pref_boolean(ePRINT_FOOTNOTES));
+	XmxSetToggleButton(win->print_a4_toggle_print, !us_size);
+	XmxSetToggleButton(win->print_us_toggle_print, us_size);
+	XmxSetToggleButton(win->print_duplex_toggle_print,
+			   get_pref_boolean(ePRINT_DUPLEX));
+	XmxSetToggleButton(win->print_tumbled_toggle_print,
+			   get_pref_boolean(ePRINT_DUPLEX_TUMBLED));
+	XmxSetToggleButton(win->print_landscape_toggle_print,
+			   get_pref_boolean(ePRINT_LANDSCAPE));
 
-		XtSetArg(args[0], XmNsensitive, TRUE);
-	} else {
-		XmxSetToggleButton(win->print_header_toggle_print, XmxNotSet);
-		XmxSetToggleButton(win->print_footer_toggle_print, XmxNotSet);
-                XmxSetToggleButton(win->print_a4_toggle_print, XmxNotSet);
-                XmxSetToggleButton(win->print_us_toggle_print, XmxNotSet);
-                XmxSetToggleButton(win->print_duplex_toggle_print, XmxNotSet);
+	XtSetArg(args[0], XmNsensitive, TRUE);
+    } else {
+	XmxSetToggleButton(win->print_header_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_footer_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_a4_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_us_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_duplex_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_tumbled_toggle_print, XmxNotSet);
+	XmxSetToggleButton(win->print_landscape_toggle_print, XmxNotSet);
 
-		XtSetArg(args[0], XmNsensitive, FALSE);
-	}
-	XtSetValues(win->print_header_toggle_print, args, 1);
-	XtSetValues(win->print_footer_toggle_print, args, 1);
-        XtSetValues(win->print_a4_toggle_print, args, 1);
-        XtSetValues(win->print_us_toggle_print, args, 1);
-        XtSetValues(win->print_duplex_toggle_print, args, 1);
+	XtSetArg(args[0], XmNsensitive, FALSE);
+    }
+    XtSetValues(win->print_header_toggle_print, args, 1);
+    XtSetValues(win->print_footer_toggle_print, args, 1);
+    XtSetValues(win->print_a4_toggle_print, args, 1);
+    XtSetValues(win->print_us_toggle_print, args, 1);
+    XtSetValues(win->print_duplex_toggle_print, args, 1);
+    XtSetValues(win->print_tumbled_toggle_print, args, 1);
+    XtSetValues(win->print_landscape_toggle_print, args, 1);
 
-	return;
+    return;
 }
 
 
@@ -1680,9 +1696,8 @@ mo_status mo_post_print_window(mo_window *win)
 {
   if (!win->print_win) {
       Widget dialog_frame, dialog_sep, buttons_form;
-      Widget print_form, print_label;
-      Widget frame, workarea, format_label;
-      Widget paper_size_toggle_box;
+      Widget print_form, print_label, size_label, paper_size_toggle_box;
+      Widget frame, workarea, format_label, sframe, sworkarea;
       int i;
 
       /* Create it for the first time. */
@@ -1700,11 +1715,12 @@ mo_status mo_post_print_window(mo_window *win)
       print_form = XmxMakeForm(dialog_frame);
 
       print_label = XmxMakeLabel(print_form, "Print Command: ");
+
       XmxSetArg(XmNwidth, 400);
       if (get_pref_boolean(eKIOSK) && get_pref_boolean(eKIOSKPRINT))
 	  XmxSetArg (XmNsensitive, False);
-
       win->print_text = XmxMakeTextField(print_form);
+
       XmxTextSetString(win->print_text, get_pref(ePRINT_COMMAND));
 
       {
@@ -1715,29 +1731,40 @@ mo_status mo_post_print_window(mo_window *win)
         XmxSetArg(XmNmarginHeight, 5);
         frame = XmxMakeFrame(print_form, XmxShadowEtchedIn);
         workarea = XmxMakeForm(frame);
+        sframe = XmxMakeFrame(workarea, XmxShadowEtchedIn);
+        sworkarea = XmxMakeForm(sframe);
 
 	win->print_header_toggle_print = XmxMakeToggleButton(workarea,
-				   "Include Banners", print_print_header_cb, 0);
+				   "Include Banners", print_header_cb, PRINT);
 	XmxSetToggleButton(win->print_header_toggle_print,
 			   get_pref_boolean(ePRINT_BANNERS));
 
 	win->print_footer_toggle_print = XmxMakeToggleButton(workarea,
-				 "Include Footnotes", print_print_footer_cb, 0);
+				   "Include Footnotes", print_footer_cb, PRINT);
 	XmxSetToggleButton(win->print_footer_toggle_print,
 			   get_pref_boolean(ePRINT_FOOTNOTES));
 
-	paper_size_toggle_box = XmxMakeRadioBox(workarea);
+	paper_size_toggle_box = XmxMakeRadioBox(sworkarea);
+        size_label = XmxMakeLabel(sworkarea, "Paper Size");
 	win->print_a4_toggle_print = XmxMakeToggleButton(paper_size_toggle_box,
-				       "A4 Paper Size", print_print_size_cb, 0);
+				                    "A4", print_size_cb, PRINT);
 	win->print_us_toggle_print = XmxMakeToggleButton(paper_size_toggle_box,
-				"US Letter Paper Size", print_print_size_cb, 0);
+				             "US Letter", print_size_cb, PRINT);
 	XmxSetToggleButton(win->print_a4_toggle_print, !us_size);
 	XmxSetToggleButton(win->print_us_toggle_print, us_size);
 
 	win->print_duplex_toggle_print = XmxMakeToggleButton(workarea,
-				   "Duplex printing", print_print_duplex_cb, 0);
+				       "Print Duplex ", print_duplex_cb, PRINT);
 	XmxSetToggleButton(win->print_duplex_toggle_print,
 			   get_pref_boolean(ePRINT_DUPLEX));
+	win->print_tumbled_toggle_print = XmxMakeToggleButton(workarea,
+				            "Tumbled", print_tumbled_cb, PRINT);
+	XmxSetToggleButton(win->print_tumbled_toggle_print,
+			   get_pref_boolean(ePRINT_DUPLEX_TUMBLED));
+	win->print_landscape_toggle_print = XmxMakeToggleButton(workarea,
+				   "Landscape mode", print_landscape_cb, PRINT);
+	XmxSetToggleButton(win->print_landscape_toggle_print,
+			   get_pref_boolean(ePRINT_LANDSCAPE));
 
         format_label = XmxMakeLabel(workarea, "Format for document:");
 
@@ -1798,13 +1825,32 @@ mo_status mo_post_print_window(mo_window *win)
 	   XmATTACH_FORM, XmATTACH_NONE,
 	   win->print_header_toggle_print, NULL, NULL, NULL);
 	XmxSetConstraints
-	  (paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_NONE,
+	  (win->print_landscape_toggle_print, XmATTACH_WIDGET, XmATTACH_NONE,
 	   XmATTACH_FORM, XmATTACH_NONE,
 	   win->print_footer_toggle_print, NULL, NULL, NULL);
 	XmxSetConstraints
-	  (win->print_duplex_toggle_print, XmATTACH_WIDGET, XmATTACH_FORM,
+	  (win->print_duplex_toggle_print, XmATTACH_WIDGET, XmATTACH_NONE,
 	   XmATTACH_FORM, XmATTACH_NONE,
-	   paper_size_toggle_box, NULL, NULL, NULL);
+	   win->print_landscape_toggle_print, NULL, NULL, NULL);
+        XmxSetArg(XmNleftOffset, 20);
+	XmxSetConstraints
+	  (win->print_tumbled_toggle_print, XmATTACH_WIDGET, XmATTACH_FORM,
+	   XmATTACH_FORM, XmATTACH_NONE,
+	   win->print_duplex_toggle_print, NULL, NULL, NULL);
+
+	/* Size frame */
+        XmxSetArg(XmNtopOffset, 18);
+        XmxSetArg(XmNleftOffset, 25);
+	XmxSetConstraints
+	  (sframe, XmATTACH_WIDGET, XmATTACH_NONE, XmATTACH_WIDGET,
+	   XmATTACH_NONE, win->print_fmtmenu->base, NULL,
+	   win->print_footer_toggle_print, NULL);
+	XmxSetConstraints
+	  (size_label, XmATTACH_FORM, XmATTACH_NONE, XmATTACH_FORM,
+	   XmATTACH_FORM, sworkarea, NULL, NULL, NULL);
+	XmxSetConstraints
+	  (paper_size_toggle_box, XmATTACH_WIDGET, XmATTACH_FORM,
+	   XmATTACH_FORM, XmATTACH_NONE, size_label, NULL, NULL, NULL);
 
         print_sensitive(win, win->print_format);
       }
@@ -1863,7 +1909,6 @@ static void source_position(Widget source_view, int pos, int end)
   return;
 }
 
-
 mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 				  int caseless)
 {
@@ -1913,14 +1958,14 @@ mo_status mo_source_search_window(mo_window *win, char *str, int backward,
 		} else {  /* "Find Again" */
 			start = win->src_search_pos - str_len;
 			if (start < 0) {
-				if (win->src_search_pos) {
-					application_user_info_wait(
-					    "Sorry, no more matches in this document.");
-				} else {
-					application_user_info_wait(
-					     "Sorry, no matches in this document.");
-				}
-				return(mo_fail);
+			    if (win->src_search_pos) {
+				application_user_info_wait(
+				    "Sorry, no more matches in this document.");
+			    } else {
+				application_user_info_wait(
+				    "Sorry, no matches in this document.");
+			    }
+			    return(mo_fail);
 			}
 		}
 		my_str = strdup(win->current_node->text);
@@ -2410,8 +2455,9 @@ mo_status mo_post_search_window(mo_window *win)
       dialog_frame = XmxMakeFrame(win->search_win, XmxShadowOut);
 
       /* Constraints for base. */
-      XmxSetConstraints(dialog_frame, XmATTACH_FORM, XmATTACH_FORM, 
-         XmATTACH_FORM, XmATTACH_FORM, NULL, NULL, NULL, NULL);
+      XmxSetConstraints
+	(dialog_frame, XmATTACH_FORM, XmATTACH_FORM, XmATTACH_FORM,
+	 XmATTACH_FORM, NULL, NULL, NULL, NULL);
       
       /* Main form. */
       search_form = XmxMakeForm(dialog_frame);
@@ -2765,7 +2811,7 @@ mo_status mo_edit_source(mo_window *win)
 	if (!(e = (EditFile *) malloc(sizeof(EditFile)))) {
 #ifndef DISABLE_TRACE
 		if (reportBugs)
-			fprintf(stderr, "Out of Memory!\n");
+			fprintf(stderr, "Edit Source: Out of Memory!\n");
 #endif
 		return mo_fail;
 	}
@@ -2805,11 +2851,7 @@ mo_status mo_edit_source(mo_window *win)
 int pathEval(char *dest, char *src)
 {
 	int i;
-	char *sptr, *hptr;
-	char home[__MAX_HOME_LEN__];
-#ifndef VMS
-	struct passwd *pwdent;
-#endif
+	char *sptr, *home;
 
 	/*
 	 * There is no place to store the result...punt.
@@ -2837,23 +2879,22 @@ int pathEval(char *dest, char *src)
 	/*
 	 * Once here, we are gonna need to know what the expansion is...
 	 *
-	 * Try the HOME environment variable, then the password file, and
+	 * Try the HOME environment variable, then ask Motif, and
 	 * finally give up and use /tmp.
 	 */
-#ifndef VMS
-	if (!(hptr = getenv("HOME"))) {
-		if (!(pwdent = getpwuid(getuid()))) {
-			strcpy(home, "/tmp");
-		} else {
-			strcpy(home, pwdent->pw_dir);
-		}
-	} else {
-		strcpy(home, hptr);
-	}
+	if (!(home = getenv("HOME"))) {
+#ifdef MOTIF2_0
+		home = XmeGetHomeDirName();
 #else
-	hptr = getenv("HOME");
-	strcpy(home, hptr);
+		home = _XmOSGetHomeDirName();
 #endif
+#ifndef VMS
+		/* Returned zero length string if failed */
+		if (!*home)
+			home = "/tmp";
+#endif
+	}
+
 	sptr = src;
 	sptr++;
 	/*
@@ -2900,8 +2941,12 @@ int pathEval(char *dest, char *src)
 	if (i < 0) {
 		strcpy(dest, sptr);
 	} else {
-		home[i + 1] = '\0';
-		strcpy(dest, home);
+		/* Must not modify original home string */
+		char *hptr = strdup(home);
+
+		hptr[i + 1] = '\0';
+		strcpy(dest, hptr);
+		free(hptr);
 		strcat(dest, sptr);
 	}
 	return(1);

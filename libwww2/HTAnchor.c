@@ -7,7 +7,7 @@
 ** History
 **
 **         Nov 1990  Written in Objective-C for the NeXT browser (TBL)
-**	24-Oct-1991 (JFG), written in C, browser-independant 
+**	24-Oct-1991 (JFG), written in C, browser-independant
 **	21-Nov-1991 (JFG), first complete version
 **
 **	(c) Copyright CERN 1991 - See Copyright.html
@@ -38,7 +38,7 @@ PRIVATE HTList **adult_table = NULL;
 
 PRIVATE HTParentAnchor *HTParentAnchor_new (void)
 {
-  HTParentAnchor *newAnchor = 
+  HTParentAnchor *newAnchor =
 			   (HTParentAnchor *) calloc(1, sizeof(HTParentAnchor));
 
   newAnchor->parent = newAnchor;
@@ -58,7 +58,7 @@ PRIVATE HTChildAnchor *HTChildAnchor_new (void)
 **	t	points to the other.
 ** On exit,
 **	returns	YES if the strings are equivalent ignoring case
-**		NO if they differ in more than  their case.
+**		NO if they differ in more than their case.
 */
 PRIVATE BOOL equivalent (WWW_CONST char *s, WWW_CONST char *t)
 {
@@ -133,10 +133,10 @@ PUBLIC HTChildAnchor *HTAnchor_findChild (HTParentAnchor *parent,
 **	(Code originally in ParseHTML.h)
 */
 PUBLIC HTChildAnchor *HTAnchor_findChildAndLink (
-        HTParentAnchor *parent,    /* May not be 0 */
-        WWW_CONST char *tag,	   /* May be "" or 0 */
-        WWW_CONST char *href,      /* May be "" or 0 */
-        HTLinkType *ltype)	   /* May be 0 */
+        HTParentAnchor *parent,    /* May not be null */
+        WWW_CONST char *tag,	   /* May be "" or null */
+        WWW_CONST char *href,      /* May be "" or null */
+        HTLinkType *ltype)	   /* May be null */
 {
   HTChildAnchor *child = HTAnchor_findChild(parent, tag);
 
@@ -169,7 +169,7 @@ HTAnchor *HTAnchor_findAddress (WWW_CONST char *address)
    * then we create a child anchor within that document. */
   if (tag && *tag) {
     char *docAddress = HTParse(address, "", PARSE_ACCESS | PARSE_HOST |
-                               PARSE_PATH | PARSE_PUNCTUATION);
+					    PARSE_PATH | PARSE_PUNCTUATION);
     HTParentAnchor *foundParent =
       			    (HTParentAnchor *) HTAnchor_findAddress(docAddress);
     HTChildAnchor *foundAnchor = HTAnchor_findChild(foundParent, tag);
@@ -185,7 +185,7 @@ HTAnchor *HTAnchor_findAddress (WWW_CONST char *address)
 
     if (tag)
       free(tag);
-    
+
     /* Select list from hash table */
     for (p = address; *p; p++)
       hash = (hash * 3 + (*(unsigned char *)p)) % HASH_SIZE;
@@ -207,7 +207,7 @@ HTAnchor *HTAnchor_findAddress (WWW_CONST char *address)
         return (HTAnchor *) foundAnchor;
       }
     }
-    
+
     /* Node not found : create new anchor */
     foundAnchor = HTParentAnchor_new();
 #ifndef DISABLE_TRACE
@@ -332,7 +332,7 @@ HyperDoc *HTAnchor_document (HTParentAnchor *me)
   return me ? me->document : NULL;
 #else
   return me ? (HyperDoc *)me->document : (HyperDoc *)NULL;
-#endif /* VAXC, BSN */
+#endif  /* VAXC, BSN */
 }
 
 

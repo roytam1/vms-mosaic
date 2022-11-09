@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -71,9 +71,9 @@
 
 #define MAX_BUF_LEN 512  /* Length of buffers used for dialog message output */
 
-/* 
- * gui-ftp handles all of the gui bits of the FTP send, remove, and mkdir 
- * functionality.  All of the actual transfer stuff is in libwww2/HTFTP.c   
+/*
+ * gui-ftp handles all of the gui bits of the FTP send, remove, and mkdir
+ * functionality.  All of the actual transfer stuff is in libwww2/HTFTP.c
  */
 
 /*---------------------  mo_handle_ftpput ---------------------------------*/
@@ -92,8 +92,8 @@ mo_status mo_handle_ftpput(mo_window *win)
 		      "FTP Send requires you to be on a page with an FTP url.");
      return mo_fail;
  }
- return mo_succeed;  
-} 
+ return mo_succeed;
+}
 
 /* ---------------------- mo_post_ftpput_window ----------------------- */
 static XmxCallback(ftpput_win_cb)
@@ -105,7 +105,7 @@ static XmxCallback(ftpput_win_cb)
   Widget fsbList;
   XmStringTable selected_items;
   mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
-	
+
   XtUnmanageChild(win->ftpput_win);  /* Down with the box */
   fsbList = XmFileSelectionBoxGetChild(win->ftpput_win, XmDIALOG_LIST);
   XtVaGetValues(fsbList,
@@ -119,7 +119,7 @@ static XmxCallback(ftpput_win_cb)
       for (i = 0; i < count; i++) {
           XmStringGetLtoR(selected_items[i], XmSTRING_DEFAULT_CHARSET, &fname);
           pathEval(efname, fname);
-          XtFree(fname);                  
+          XtFree(fname);
 
           /* Make the url something HTFTPSend will understand */
           sprintf(tbuf, "%s&%s", win->ftp_site, efname);
@@ -147,7 +147,7 @@ static XmxCallback(ftpput_win_cb)
       XmStringGetLtoR(st, XmSTRING_DEFAULT_CHARSET, &fname);
       XmStringFree(st);
       pathEval(efname, fname);
-      XtFree(fname);                  
+      XtFree(fname);
       sprintf(tbuf, "%s&%s", win->ftp_site, efname);
 
       if ((ret = HTFTPSend(tbuf)) != HT_OK) {
@@ -162,7 +162,7 @@ static XmxCallback(ftpput_win_cb)
           mo_reload_window_text(win, 0);
       }
   }
-  
+
   /* Clear out the selections; we have to do this because the XmFSB has
    * no clue it is being used in extended selection mode. */
   XmListDeselectAllItems(fsbList);
@@ -187,11 +187,12 @@ mo_status mo_post_ftpput_window(mo_window *win)
 		               		    "Name of local file to send:",
 					    ftpput_win_cb, 0);
       /* Change the selection mode */
-      fsbList = XmFileSelectionBoxGetChild(win->ftpput_win, XmDIALOG_LIST); 
+      fsbList = XmFileSelectionBoxGetChild(win->ftpput_win, XmDIALOG_LIST);
       XtVaSetValues(fsbList,
 		    XmNselectionPolicy, XmEXTENDED_SELECT,
  		    NULL);
   } else {
+      XmxAdjustDialogTitle(win->ftpput_win, tbuf);
       XmFileSelectionDoSearch(win->ftpput_win, NULL);
   }
   XmxManageRemanage(win->ftpput_win);
@@ -202,7 +203,7 @@ mo_status mo_post_ftpput_window(mo_window *win)
 /*---------------------  mo_handle_ftpmkdir ---------------------------------*/
 mo_status mo_handle_ftpmkdir(mo_window *win)
 {
-  if (!win->current_node) 
+  if (!win->current_node)
       return mo_fail;
 
   /* Check to see if the url is somethin' like ftp://somewarez.31337.com */
@@ -318,13 +319,13 @@ mo_status mo_post_ftpmkdir_window(mo_window *win)
 	 XmATTACH_FORM, NULL, NULL, NULL, NULL);
   }
   XmxManageRemanage(win->ftpmkdir_win);
-  
+
   return mo_succeed;
 }
 
 
 /* ---------------------- mo_handle_ftpremove ----------------------- */
-static void mo_handle_ftpremove(mo_window *win, char *urlNsite) 
+static void mo_handle_ftpremove(mo_window *win, char *urlNsite)
 {
   int ret;
 
@@ -343,14 +344,14 @@ static void mo_handle_ftpremove(mo_window *win, char *urlNsite)
 /* Ftp callback for the right mouse button menu */
 XmxCallback(ftp_rmbm_cb)
 {
-  struct act_struct *acst = (struct act_struct *) client_data;
+  act_struct *acst = (act_struct *) client_data;
   extern mo_window *current_win;
- 
+
   switch (acst->act_code) {
       case mo_ftp_put:
           mo_handle_ftpput(current_win);
           break;
-    
+
       case mo_ftp_mkdir:
           mo_handle_ftpmkdir(current_win);
           break;

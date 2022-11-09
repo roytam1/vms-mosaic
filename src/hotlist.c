@@ -52,7 +52,9 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007, 2008
+ * The VMS Mosaic Project
+ */
 
 #include "../config.h"
 #include "mosaic.h"
@@ -120,7 +122,7 @@ static Boolean DisplayURLs;
           break;  \
   }
 
-typedef struct edit_or_insert_hot_info {
+typedef struct edit_or_insert_hot_info_rec {
   Widget title_text;
   int pos;
   Widget url_lab;
@@ -162,7 +164,7 @@ void mo_append_item_to_hotlist(mo_hotlist *list, mo_hot_item *node)
       /* Nothing yet. */
       list->nodelist = node;
       list->nodelist_last = node;
-      node->any.previous = 0;
+      node->any.previous = NULL;
       node->any.position = 1;
   } else {
       /* The new node becomes nodelist_last.
@@ -260,8 +262,8 @@ static void mo_insert_item_in_hotlist(mo_hotlist *list, mo_hot_item *node,
 	  /* Nothing yet. */
 	  list->nodelist = node;
 	  list->nodelist_last = node;
-	  node->any.next = 0;
-	  node->any.previous = 0;
+	  node->any.next = NULL;
+	  node->any.previous = NULL;
 	  node->any.position = 1;
       } else {
 	  mo_hot_item *item;
@@ -287,8 +289,7 @@ static void mo_insert_item_in_hotlist(mo_hotlist *list, mo_hot_item *node,
   mo_reinit_hotmenu();
 }
 
-/* Go Up The tree to check if a list is the ancestor of an item
- */
+/* Go Up The tree to check if a list is the ancestor of an item */
 static int mo_is_ancestor(mo_hotlist *list, mo_hotlist *item)
 {
   while (item && item != list)
@@ -625,24 +626,22 @@ static XmxCallback(edit_or_insert_hot_cb)
 			      	       title, url, posi,
 				       get_pref_boolean(eADD_HOTLIST_ADDS_RBM));
 	    XtFree(url);
-	} else {
-	    if (win->hot_cut_buffer &&
-		(win->hot_cut_buffer->type == mo_t_list) &&
-		!strcmp(title, win->hot_cut_buffer->any.name) &&
-		!mo_is_ancestor((mo_hotlist *)win->hot_cut_buffer,
-				win->current_hotlist)) {
-		mo_insert_item_in_hotlist(win->current_hotlist,
-					  (mo_hot_item *)mo_copy_hot_hier(
+	} else if (win->hot_cut_buffer &&
+		   (win->hot_cut_buffer->type == mo_t_list) &&
+		   !strcmp(title, win->hot_cut_buffer->any.name) &&
+		   !mo_is_ancestor((mo_hotlist *)win->hot_cut_buffer,
+				   win->current_hotlist)) {
+	    mo_insert_item_in_hotlist(win->current_hotlist,
+				      (mo_hot_item *)mo_copy_hot_hier(
 					     (mo_hotlist *)win->hot_cut_buffer),
-					  posi);
-		/* Now we've got to update all active hotlist_list's. */
-		mo_gui_add_hot_item(win->current_hotlist,
-				    win->current_hotlist->nodelist_last);
-	    } else {
-	        addOk = mo_add_item_to_hotlist(win->current_hotlist, mo_t_list,
+				      posi);
+	    /* Now we've got to update all active hotlist_list's. */
+	    mo_gui_add_hot_item(win->current_hotlist,
+				win->current_hotlist->nodelist_last);
+	} else {
+	    addOk = mo_add_item_to_hotlist(win->current_hotlist, mo_t_list,
 				       title, NULL, posi,
 				       get_pref_boolean(eADD_HOTLIST_ADDS_RBM));
-	    }
 	}
 	if (addOk == mo_succeed)
 	    mo_write_default_hotlist();
@@ -1351,6 +1350,7 @@ static XmxCallback(save_hot_cb)
   /* Make sure we start a new file like UNIX */
   remove(efname);
 #endif /* VMS, BSN */
+
   if (!(fp = fopen(efname, "w"))) {
 #ifndef VMS
       char *buf = my_strerror(errno);
@@ -1443,7 +1443,7 @@ static XmxCallback(load_hot_cb)
 	  mo_hotlist *list = (mo_hotlist *)malloc(sizeof(mo_hotlist));
 
 	  list->type = mo_t_list;
-	  list->nodelist = list->nodelist_last = 0;
+	  list->nodelist = list->nodelist_last = NULL;
 	  list->name = mo_read_new_hotlist(list, fp);
 	  if (!list->name)
 	      list->name = strdup("Unnamed");
@@ -1521,17 +1521,17 @@ static void delete_hot_from_list(mo_hotlist *list, mo_hot_item *hotnode,
 
 static XmxCallback(remove_confirm_cb)
 {
-  mo_window *win = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
   int position = XmxExtractToken((int)client_data);
 
   if (position) {
+      mo_window *wn = mo_fetch_window_by_id(XmxExtractUniqid((int)client_data));
       mo_hot_item *hotnode;
 
-      FindHotFromPos(hotnode, win->current_hotlist, position);
-      delete_hot_from_list(win->current_hotlist, hotnode, position);
-      URL_Include_Set(win, 0, 0);
+      FindHotFromPos(hotnode, wn->current_hotlist, position);
+      delete_hot_from_list(wn->current_hotlist, hotnode, position);
+      URL_Include_Set(wn, 0, 0);
   }
-  XtDestroyWidget(w);
+  XmxDestroyCallbackWidget();
 }
 
 static mo_status mo_delete_position_from_current_hotlist(mo_window *win,
@@ -1562,7 +1562,7 @@ static mo_status mo_delete_position_from_current_hotlist(mo_window *win,
 #endif
 			    remove_confirm_cb, position, 0);
       free(buff);
-      XtManageChild(Xmx_w);
+      XmxManageXmxWidget();
   } else {
       delete_hot_from_list(list, hotnode, position);
       URL_Include_Set(win, 0, 0);

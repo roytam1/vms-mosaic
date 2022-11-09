@@ -1,4 +1,4 @@
-/* Copyright (C) 1998, 1999, 2000, 2003, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2003, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -8,7 +8,9 @@
 
 #include "HTMLP.h"
 #include "HTMLfont.h"
+#include "HTMLPutil.h"
 #include "HTMLmiscdefs.h"
+#include "list.h"
 #include "../src/mosaic.h"
 
 extern mo_window *current_win;
@@ -49,6 +51,9 @@ static long courier_mo10 = 0;
 
 static int err_count;
 
+/* If set, PopFont doesn't dor mark matching */
+static int pop_saved = 0;
+
 void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	FontRec *FontStack = hw->html.fontstack;
@@ -59,7 +64,7 @@ void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 		FontStack = FontStack->next;
 		free((char *)fptr);
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) 
+		if (htmlwTrace || reportBugs)
 			fprintf(stderr, "Popping previous font stack!\n");
 #endif
 	}
@@ -73,6 +78,7 @@ void InitFontStack(HTMLWidget hw, PhotoComposeContext *pcc)
 	FontStack->color_ch = 0;
 	pcc->cur_font_color = FontStack->color = hw->manager.foreground;
 	pcc->cur_font_base = hw->html.font_base;
+	FontStack->mark = NULL;
 	FontStack->next = NULL;
 	hw->html.fontstack = FontStack;
 }
@@ -89,6 +95,7 @@ FontRec *PushFont(HTMLWidget hw, PhotoComposeContext *pcc)
 	fptr->family = pcc->cur_font_family;
 	fptr->color = pcc->cur_font_color;
 	fptr->color_ch = 0;
+	fptr->mark = pcc->cur_mark;
 	fptr->next = hw->html.fontstack;
 	hw->html.fontstack = fptr;
 	return(fptr);
@@ -97,50 +104,113 @@ FontRec *PushFont(HTMLWidget hw, PhotoComposeContext *pcc)
 XFontStruct *PopFont(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	FontRec *FontStack = hw->html.fontstack;
+	FontRec *next, *fptr;
 	XFontStruct *font;
 
 	/* Don't pop it if at the save limit */
 	if (hw->html.font_save_count >= hw->html.pushfont_count) {
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) 
+		if (htmlwTrace || reportBugs)
 			fprintf(stderr, "PopFont: at save count\n");
 #endif
 		return(pcc->cur_font);
 	}
-	if (FontStack->next) {
-		FontRec *fptr = FontStack;
 
-		hw->html.pushfont_count--;
-		FontStack = FontStack->next;
-		font = fptr->font;
-		pcc->cur_font_size = fptr->size;
-		pcc->cur_font_type = fptr->type;
-		pcc->cur_font_family = fptr->family;
-		if (fptr->color_ch)
-			pcc->fg = pcc->cur_font_color = fptr->color;
-		free((char *)fptr);
-		hw->html.fontstack = FontStack;
-	} else {
+	/* Check if anything on stack */
+	if (!FontStack->next) {
 #ifndef DISABLE_TRACE
-		if (htmlwTrace || reportBugs) 
+		if (htmlwTrace || reportBugs)
 			fprintf(stderr, "Popfont: empty font stack!\n");
 #endif
 		hw->html.pushfont_count = 0;
-		font = FontStack->font;
 		pcc->cur_font_size = FontStack->size;
 		pcc->cur_font_type = FontStack->type;
 		pcc->cur_font_family = FontStack->family;
 		if (FontStack->color_ch)
 			pcc->fg = pcc->cur_font_color = FontStack->color;
+		return(FontStack->font);
 	}
+	next = FontStack;
+	if ((next->mark->type != pcc->cur_mark->type) && !pop_saved) {
+		MarkType cur_type = pcc->cur_mark->type;
+		List marks = ListCreate();
+		MarkInfo *mptr;
+
+#ifndef DISABLE_TRACE
+		if (htmlwTrace || reportBugs)
+			fprintf(stderr, "PopFont: Mark type mismatch %d %d\n",
+				next->mark->type, cur_type);
+#endif
+		/* Pop fontstack back to matching mark (or end point)
+		 * and create mark list. */
+		while (next->next && (next->mark->type != cur_type) &&
+		       (hw->html.font_save_count < hw->html.pushfont_count)) {
+			ListAddEntry(marks, next->mark);
+			hw->html.pushfont_count--;
+			fptr = next;
+			next = next->next;
+			free((char *)fptr);
+		}
+		fptr = next;
+
+		if (!next->next || (next->mark->type != cur_type) ||
+		    (hw->html.font_save_count == hw->html.pushfont_count)) {
+			/* No match so, we just put it all back on */
+#ifndef DISABLE_TRACE
+			if (htmlwTrace || reportBugs)
+				fprintf(stderr,
+					"PopFont: Couldn't find match\n");
+#endif
+		} else {
+			/* Found it, so pop it off */
+			hw->html.pushfont_count--;
+			next = next->next;
+		}
+		pcc->cur_font_size = fptr->size;
+		pcc->cur_font_type = fptr->type;
+		pcc->cur_font_family = fptr->family;
+		if (fptr->color_ch)
+			pcc->fg = pcc->cur_font_color = fptr->color;
+		if (fptr != next)
+			free((char *)fptr);
+		hw->html.fontstack = next;
+
+		/* Trigger thru the mark list */
+		pcc->nolinefeeds = True;
+		mptr = (MarkInfo *)ListCurrent(marks);
+		while (mptr) {
+			TriggerMarkChanges(hw, &mptr, pcc);
+			mptr = (MarkInfo *)ListPrev(marks);
+		}
+		pcc->nolinefeeds = False;
+
+		/* Destroy the list */
+		ListDestroy(marks);
+		return(pcc->cur_font);
+	}
+
+	/* Just pop the top */
+	fptr = FontStack;
+	hw->html.pushfont_count--;
+	FontStack = FontStack->next;
+	font = fptr->font;
+	pcc->cur_font_size = fptr->size;
+	pcc->cur_font_type = fptr->type;
+	pcc->cur_font_family = fptr->family;
+	if (fptr->color_ch)
+		pcc->fg = pcc->cur_font_color = fptr->color;
+	free((char *)fptr);
+	hw->html.fontstack = FontStack;
 	return(font);
 }
 
 void PopFontSaved(HTMLWidget hw, PhotoComposeContext *pcc)
 {
 	if (hw->html.font_save_count != hw->html.pushfont_count) {
+		pop_saved = 1;
 		while (hw->html.font_save_count < hw->html.pushfont_count)
 			pcc->cur_font = PopFont(hw, pcc);
+		pop_saved = 0;
 		SetFontSize(hw, pcc, 0);
 	}
 }

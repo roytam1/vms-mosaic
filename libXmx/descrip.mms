@@ -4,7 +4,7 @@
 ! Motif 1.2 support added on 3-Jun-1994
 ! Mosaic 2.4 20-Aug-1994
 !
-! Copyright (C) 2006 - The VMS Mosaic Project
+! Copyright (C) 2006, 2007, 2008 - The VMS Mosaic Project
 !
 ! This description file is intended to be invoked by the top level
 ! description file.  It should not be invoked directly.
@@ -34,11 +34,21 @@ CQUALC=/DECC/Prefix=ANSI
 CQUALC=/DECC/Prefix=ALL
 .ENDIF
 .ENDIF
-.ELSE ! Not DEC C
+.ELSE
 .IFDEF DECCVAXC
 CQUALC=/VAXC
 .ELSE
 CQUALC=
+.ENDIF
+.ENDIF
+
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
 .ENDIF
 .ENDIF
 
@@ -61,12 +71,12 @@ OBJECTS = Odir:xmx.obj Odir:xmx2.obj
 $(LIBTARGET) : $(LIBTARGET)($(OBJECTS))
 	@ Write SYS$Output "Library libXmx.olb built."
 
-Odir:xmx.obj  : xmx.c [-]config.h [-]config_$(WORK).h xmx.h xmxp.h\
+Odir:xmx.obj  : xmx.c [-]config.h [-]config_$(WORK).h xmx.h xmxp.h \
 		[-.libliteclue]liteclue.h
 Odir:xmx2.obj : xmx2.c [-]config.h [-]config_$(WORK).h xmx.h xmxp.h
 
 .c.obj :
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

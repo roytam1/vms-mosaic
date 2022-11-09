@@ -5,7 +5,7 @@ LIBXMX_DIR = ../libXmx
 LIBXMX_INC = ../libXmx
 LIBPNG_DIR = ../libpng
 
-PROGRAM_LIBS = $(LIBWWW_DIR)/libwww.a $(LIBHTMLW_DIR)/libhtmlw.a $(LIBXMX_DIR)/libXmx.a $(LIBNUT_DIR)/libnut.a
+PROGRAM_LIBS = $(LIBWWW_DIR)/libwww.a $(LIBHTMLW_DIR)/libhtmlw.a $(LIBXMX_DIR)/libXmx.a $(LIBNUT_DIR)/libnut.a ../libcroco/libcroco.a
 LIBS = $(PROGRAM_LIBS) $(X_LIBS) $(PNG_LIBS) $(WAIS_LIBS) $(JPEG_LIBS) $(KRB_LIBS) $(MATH_LIB) $(SYS_LIBS)
 
 CFILES = main.c gui.c  gui-dialogs.c gui-menubar.c gui-documents.c gui-news.c\

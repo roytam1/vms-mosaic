@@ -57,14 +57,14 @@ PRIVATE char *hostname = NULL;		/* The name of this host */
 */
 #ifndef errno
 extern int errno;
-#endif /* errno */
+#endif
 
 #ifndef VMS
 #if !defined(linux) && !defined(__linux)
 extern char *sys_errlist[];		/* See man perror on cernvax */
 #endif
 extern int sys_nerr;
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 
 #if defined(VMS) && !defined(MULTINET) && !defined(WIN_TCP) && !defined(SOCKETSHR)
 /*
@@ -88,7 +88,12 @@ extern int sys_nerr;
 
 extern int vaxc$get_sdc(), sys$qiow();
 
-PUBLIC int ioctl(int d, int request, void *argp)  /* Needed by accept.c, GEC */
+#ifdef CCI
+/* Needed by accept.c, GEC */
+PUBLIC int ioctl(int d, int request, void *argp)
+#else
+PRIVATE int ioctl(int d, int request, void *argp)
+#endif
 {
   int sdc, status;
   unsigned short fun;
@@ -122,7 +127,7 @@ PUBLIC int ioctl(int d, int request, void *argp)  /* Needed by accept.c, GEC */
       p5 = (char *)&ioctl_desc;
       p6 = 0;
   }
-    
+
   ioctl_comm.command = request;
   ioctl_comm.addr = argp;
 
@@ -138,7 +143,7 @@ PUBLIC int ioctl(int d, int request, void *argp)  /* Needed by accept.c, GEC */
 
   return 0;
 }
-#endif /* VMS, UCX, BSN */
+#endif  /* VMS, UCX, BSN */
 
 /*	Report Internet Error
 **	---------------------
@@ -166,8 +171,8 @@ PUBLIC int HTInetStatus(char *where)
     if (www2Trace)
 	fprintf(stderr, "TCP: Multinet error    = %lx hex\n", socket_errno);
 #endif
-#endif /* MULTINET, BSN */
-#endif /* VMS, BSN */
+#endif  /* MULTINET, BSN */
+#endif  /* VMS, BSN */
     return -1;
 }
 
@@ -212,7 +217,7 @@ PUBLIC unsigned int HTCardinal (int *pstatus, char **pp, unsigned int max_value)
 **
 ** On exit,
 **	returns	a pointer to a static string which must be copied if
-**		it is to be kept.
+**	it is to be kept.
 */
 
 PUBLIC char *HTInetString (SockA *sin)
@@ -253,17 +258,17 @@ PUBLIC int HTParseInet (SockA *sin, char *str)
 #ifdef VMS
   if (strlen(str) >= sizeof(host))
       application_user_feedback("HTParseInet host dimension is too small!");
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
   strcpy(host, str);		/* Make a copy we can mutilate */
-  
-  /* Parse port number if present */    
+
+  /* Parse port number if present */
   if (port = strchr(host, ':')) {
       *port++ = '\0';		/* Chop off port */
       if ((*port >= '0') && (*port <= '9'))
           sin->sin_port = htons(atol(port));
   }
-  
-  /* Parse host number if present. */  
+
+  /* Parse host number if present. */
   numeric_addr = 1;
   for (tmp = host; *tmp; tmp++) {
       /* If there's a non-numeric... */
@@ -272,7 +277,7 @@ PUBLIC int HTParseInet (SockA *sin, char *str)
           goto found_non_numeric_or_done;
       }
   }
-  
+
  found_non_numeric_or_done:
   if (numeric_addr) {   /* Numeric node address: */
       sin->sin_addr.s_addr = inet_addr(host);  /* See arpa/inet.h */
@@ -280,11 +285,10 @@ PUBLIC int HTParseInet (SockA *sin, char *str)
       if (cached_host && !strcmp(cached_host, host)) {
           memcpy(&sin->sin_addr, cached_phost_h_addr, cached_phost_h_length);
       } else {
-          phost = gethostbyname(host);
-          if (!phost) {
+          if (!(phost = gethostbyname(host))) {
 #ifndef DISABLE_TRACE
-              if (www2Trace) 
-                  fprintf(stderr, 
+              if (www2Trace)
+                  fprintf(stderr,
                      "HTTPAccess: Can't find internet node name `%s'.\n", host);
 #endif
               return -1;  /* Fail? */
@@ -309,18 +313,18 @@ PUBLIC int HTParseInet (SockA *sin, char *str)
           memcpy(&sin->sin_addr, phost->h_addr, phost->h_length);
       }
   }
-  
+
 #ifndef DISABLE_TRACE
-  if (www2Trace) 
-      fprintf(stderr,  
-              "TCP: Parsed address as port %d, IP address %d.%d.%d.%d\n",
+  if (www2Trace)
+      fprintf(stderr,
+	      "TCP: Parsed address as port %d, IP address %d.%d.%d.%d\n",
               (int)ntohs(sin->sin_port),
               (int)*((unsigned char *)(&sin->sin_addr) + 0),
               (int)*((unsigned char *)(&sin->sin_addr) + 1),
               (int)*((unsigned char *)(&sin->sin_addr) + 2),
               (int)*((unsigned char *)(&sin->sin_addr) + 3));
 #endif
-  
+
   return 0;	/* OK */
 }
 
@@ -337,7 +341,7 @@ PRIVATE void get_host_details(void)
 {
     char name[MAXHOSTNAMELEN + 1];	/* The name of this host */
     int namelength = sizeof(name);
-    
+
     if (hostname)
 	return;		/* Already done */
     gethostname(name, namelength);	/* Without domain */
@@ -367,21 +371,20 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
   struct sockaddr_in soc_address;
   struct sockaddr_in *sin = &soc_address;
   int status;
-  char line[256];
 
   /* Set up defaults: */
   sin->sin_family = AF_INET;
   sin->sin_port = htons(default_port);
-  
+
   /* Get node name and optional port number: */
   {
+    char line[512];
     char *p1 = HTParse(url, "", PARSE_HOST);
 
     sprintf(line, "Looking up %s.", p1);
     HTProgress(line);
 
-    status = HTParseInet(sin, p1);
-    if (status) {
+    if (status = HTParseInet(sin, p1)) {
         sprintf(line, "Unable to locate remote host %s.", p1);
         HTProgress(line);
         free(p1);
@@ -392,13 +395,13 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
     free(p1);
   }
 
-  /* Now, let's get a socket set up from the server for the data: */      
+  /* Now, let's get a socket set up from the server for the data: */
   *s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 #ifdef SOCKS
   /* SOCKS can't yet deal with non-blocking connect request */
   status = Rconnect(*s, (struct sockaddr *)&soc_address, sizeof(soc_address));
-  if ((status == 0) && !strcmp(protocol, "FTP"))
+  if (!status && !strcmp(protocol, "FTP"))
       SOCKS_ftpsrv.s_addr = soc_address.sin_addr.s_addr;
 
   if (HTCheckActiveIcon(1)) {
@@ -420,15 +423,14 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
   {
     int ret;
     int val = 1;
-    
+
 #ifndef MULTINET
     ret = ioctl(*s, FIONBIO, &val);
 #else
     ret = socket_ioctl(*s, FIONBIO, &val);
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
     if (ret == -1) {
-        sprintf(line, "Could not make connection non-blocking.");
-        HTProgress(line);
+        HTProgress("Could not make connection non-blocking.");
 #ifndef DISABLE_TRACE
         if (www2Trace)
 	    fprintf(stderr, "Could not make connection non-blocking.\n");
@@ -467,14 +469,14 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
   if ((status < 0) && (errno == EINPROGRESS)) {
 #else
   if ((status < 0) && (socket_errno == EINPROGRESS)) {
-#endif /* MULTINET, BSN */
-#endif /* SVR4 */
+#endif  /* MULTINET, BSN */
+#endif  /* SVR4 */
       struct timeval timeout;
       int ret = 0;
 
       while (ret <= 0) {
           fd_set writefds;
-          
+
           FD_ZERO(&writefds);
           FD_SET((unsigned) *s, &writefds);
 
@@ -520,10 +522,10 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
 	       */
               if ((status < 0) &&
 		  ((errno == EISCONN) || (errno == EADDRINUSE))) {
-#endif /* VMS, UCX, BSN */
+#endif  /* VMS, UCX, BSN */
 #else
               if ((status < 0) && (socket_errno == EISCONN)) {
-#endif /* MULTINET, BSN */
+#endif  /* MULTINET, BSN */
                   status = 0;
               }
               break;
@@ -551,12 +553,12 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
 	       */
               if ((status < 0) && (errno != EALREADY) && (errno != EISCONN) &&
                   (errno != 18242)) {
-#endif /* UCX, BSN */
+#endif  /* UCX, BSN */
 #else
               if ((status < 0) && (socket_errno != EALREADY) &&
 		  (socket_errno != EISCONN)) {
-#endif /* MULTINET, BSN */
-#endif /* SVR4 */
+#endif  /* MULTINET, BSN */
+#endif  /* SVR4 */
                   break;
               }
           }
@@ -578,15 +580,14 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
   if (status >= 0) {
       int ret;
       int val = 0;
-      
+
 #ifndef MULTINET
       ret = ioctl(*s, FIONBIO, &val);
 #else
       ret = socket_ioctl(*s, FIONBIO, &val);
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
       if (ret == -1) {
-          sprintf(line, "Could not restore socket to blocking.");
-          HTProgress(line);
+          HTProgress("Could not restore socket to blocking.");
 #ifndef DISABLE_TRACE
           if (www2Trace)
 	      fprintf(stderr, "Could not restore socket to blocking.\n");
@@ -597,11 +598,11 @@ PUBLIC int HTDoConnect (char *url, char *protocol, int default_port, int *s)
        * Else the connect attempt failed or was interrupted,
        * so close up the socket.
        */
-#if !defined(VMS)
+#ifndef VMS
       close(*s);
 #else
       NETCLOSE(*s);
-#endif /* VMS */
+#endif  /* VMS */
   }
 
   return status;
@@ -639,7 +640,7 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
         FD_ZERO(&readfds);
         FD_SET((unsigned) fildes, &readfds);
 
-	/* linux (and some other os's, I think) clear timeout... 
+	/* linux (and some other os's, I think) clear timeout...
 	 * Let's reset it every time. */
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 100000;
@@ -679,13 +680,13 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
 
     return ret;
 
-#else   /* VMS, BSN */
+#else  /* VMS, BSN */
 
 #ifndef MULTINET
     nb = read(fildes, buf, nbyte);
 #else
     nb = socket_read(fildes, buf, nbyte);
-#endif /* MULTINET, BSN */
+#endif  /* MULTINET, BSN */
 
 #if !defined(MULTINET) && !defined(WIN_TCP) && !defined(SOCKETSHR)
     /*
@@ -693,7 +694,7 @@ int HTDoRead (int fildes, void *buf, unsigned nbyte)
      */
     if ((nb <= 0) && (errno != ECONNRESET) && (vaxc$errno == 8428))
 	nb = 0;
-#endif /* UCX, BSN */
+#endif  /* UCX, BSN */
 
 #ifndef DISABLE_TRACE
     if (httpTrace) {

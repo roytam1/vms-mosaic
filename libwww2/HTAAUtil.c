@@ -46,6 +46,7 @@
 #include "HTTCP.h"
 #include "HTAAUtil.h"	/* Implemented here	*/
 #include "HTAssoc.h"	/* Assoc list		*/
+#include "../libnut/str-tools.h"  /* Need my_strcasecmp */
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -68,32 +69,21 @@ extern int www2Trace;
 */
 PUBLIC HTAAScheme HTAAScheme_enum (WWW_CONST char *name)
 {
-    static char *upcased = NULL;
-    char *cur;
-
     if (!name)
 	return HTAA_UNKNOWN;
 
-    StrAllocCopy(upcased, name);
-    cur = upcased;
-    while (*cur) {
-	*cur = TOUPPER(*cur);
-	cur++;
-    }
-    
-    if (!strncmp(upcased, "NONE", 4)) {
+    if (!my_strncasecmp(name, "NONE", 4))
 	return HTAA_NONE;
-    } else if (!strncmp(upcased, "BASIC", 5)) {
+    if (!my_strncasecmp(name, "BASIC", 5))
 	return HTAA_BASIC;
-    } else if (!strncmp(upcased, "KERBEROSV4", 10)) {
+    if (!my_strncasecmp(name, "KERBEROSV4", 10))
 	return HTAA_KERBEROS_V4;
-    } else if (!strncmp(upcased, "KERBEROSV5", 10)) {
+    if (!my_strncasecmp(name, "KERBEROSV5", 10))
 	return HTAA_KERBEROS_V5;
-    } else if (!strncmp(upcased, "DIGEST", 6)) {
+    if (!my_strncasecmp(name, "DIGEST", 6))
 	return HTAA_MD5;  /* DXP */
-    } else {
-	return HTAA_UNKNOWN;
-    }
+
+    return HTAA_UNKNOWN;
 }
 
 
@@ -139,28 +129,17 @@ PUBLIC char *HTAAScheme_name (HTAAScheme scheme)
 */
 PUBLIC HTAAMethod HTAAMethod_enum (WWW_CONST char *name)
 {
-    char tmp[MAX_METHODNAME_LEN + 1];
-    WWW_CONST char *src = name;
-    char *dest = tmp;
-
     if (!name)
 	return METHOD_UNKNOWN;
 
-    while (*src) {
-	*dest++ = TOUPPER(*src);
-	src++;
-    }
-    *dest = '\0';
-
-    if (!strcmp(tmp, "GET")) {
+    if (!my_strcasecmp(name, "GET"))
 	return METHOD_GET;
-    } else if (!strcmp(tmp, "PUT")) {
+    if (!my_strcasecmp(name, "PUT"))
 	return METHOD_PUT;
-    } else if (!strcmp(tmp, "META")) {
+    if (!my_strcasecmp(name, "META"))
 	return METHOD_META;
-    } else {
-	return METHOD_UNKNOWN;
-    }
+
+    return METHOD_UNKNOWN;
 }
 
 
@@ -293,9 +272,10 @@ PUBLIC BOOL HTAA_templateMatch (WWW_CONST char *template,
 PUBLIC char *HTAA_makeProtectionTemplate (WWW_CONST char *docname)
 {
     char *template = NULL;
-    char *slash = NULL;
 
     if (docname) {
+	char *slash;
+
 	StrAllocCopy(template, docname);
 	slash = strrchr(template, '/');
 	if (slash) {

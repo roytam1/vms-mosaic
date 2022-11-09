@@ -1,4 +1,3 @@
-
 /*      Displaying messages and getting input for WWW Library
 **      =====================================================
 **
@@ -23,17 +22,9 @@
 extern char *HTPrompt (WWW_CONST char *Msg, WWW_CONST char *deflt);
 #define HTPromptPassword prompt_for_password
 
-
-/*      Display a message, don't wait for input
-**
-**      On entry,
-**              The input is a list of parameters for printf.
-*/
-extern void HTAlert (WWW_CONST char *Msg);
-
-
 /*      Display a progress message for information (and diagnostics) only
 */
+#define HTAlert mo_gui_notify_progress
 #define HTProgress mo_gui_notify_progress
 
 #define HTCheckActiveIcon mo_gui_check_icon

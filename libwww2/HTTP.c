@@ -2,7 +2,7 @@
 **	==========================
 */
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008, 2011 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -141,7 +141,7 @@ PRIVATE int SSL_confirm(char *msg)
     ch = XmxDoFourButtons(current_win->base, app_context,
 		          "VMS Mosaic: SSL Certificate Error", msg,
 		          "Yes", "No", "This session only", "Always", 520);
-    XmxSetButtonClueText(NULL, NULL, NULL, NULL, NULL);
+    XmxClearButtonClueText();
 
     ch = XmxExtractToken(ch);
     if (ch > 2) {
@@ -378,9 +378,32 @@ PRIVATE void TrimDoubleQuotes (char *value)
         value[i] = cp[i + 1];
 }
 
-void HTClose_HTTP_Socket(int sock, void *handle)
+/* Where was our last connection to? */
+static int lsocket = -1;
+static char *addr = NULL;
+
+void HTClose_HTTP_Socket(int sock, void *handle, char *host)
 {
+    if (host) {
+	/* Have a keepalive host, so make it current keepalive socket */
+	if (lsocket)
+	    HTTP_NETCLOSE(lsocket, keepalive_handle);
+	lsocket = sock;
+#ifdef HAVE_SSL
+	keepalive_handle = handle;
+#endif
+	if (addr) {
+	    /* If same host, then leave as is */
+	    if (my_strcasecmp(addr, host)) {
+	        free(addr);
+		addr = strdup(host);
+	    }
+	} else {
+	    addr = strdup(host);
+	}
+    } else {
 	HTTP_NETCLOSE(sock, handle);
+    }
 }
 
 /*		Load Document from HTTP Server			HTLoadHTTP()
@@ -397,11 +420,6 @@ void HTClose_HTTP_Socket(int sock, void *handle)
 **		<0	Error.
 **
 */
-
-/* Where was our last connection to? */
-static int lsocket = -1;
-static char *addr = NULL;
-
 PUBLIC int HTLoadHTTP (char *arg,
 		       HTParentAnchor *anAnchor,
 		       HTFormat format_out,
@@ -752,7 +770,7 @@ PUBLIC int HTLoadHTTP (char *arg,
 
 		      /* Verify this SubjectAltName (see above) */
 		      if (p = strchr(cert_host,
-				     (*cert_host == '[') ? ']' : ':'))
+			             (*cert_host == '[') ? ']' : ':'))
 			  *p = '\0';
 		      if (*cert_host == '[')
 			  cert_host++;
@@ -1010,7 +1028,7 @@ PUBLIC int HTLoadHTTP (char *arg,
         char *abspath, *docname, *hostname, *colon, *auth;
         int portnumber;
 	char *cookie = NULL;
-	BOOL secure = (strncmp(anAnchor->address, "https", 5) ? FALSE : TRUE);
+	BOOL secure = strncmp(anAnchor->address, "https", 5) ? FALSE : TRUE;
         
         abspath = HTParse(arg, "", PARSE_PATH | PARSE_PUNCTUATION);
         docname = HTParse(arg, "", PARSE_PATH);
@@ -1127,16 +1145,12 @@ PUBLIC int HTLoadHTTP (char *arg,
 		    fprintf(stderr, "HTTP: Sending authorization: %s\n", auth);
 		}
             }
-#endif
-        } else {
-#ifndef DISABLE_TRACE
-	    if (httpTrace) {
-		if (auth_proxy) {
-		    fprintf(stderr,
-			    "HTTP: Not sending proxy authorization (yet).\n");
-		} else {
-		    fprintf(stderr, "HTTP: Not sending authorization (yet).\n");
-		}
+        } else if (httpTrace) {
+	    if (auth_proxy) {
+		fprintf(stderr,
+			"HTTP: Not sending proxy authorization (yet).\n");
+	    } else {
+		fprintf(stderr, "HTTP: Not sending authorization (yet).\n");
             }
 #endif
 	}
@@ -1152,6 +1166,9 @@ PUBLIC int HTLoadHTTP (char *arg,
 #else
   if (do_post && !do_put) {
 #endif
+      int content_length = post_data ? strlen(post_data) : 4;
+      /* 4 == "lose" :-) */
+
 #ifndef DISABLE_TRACE
       if (httpTrace || www2Trace)
           fprintf(stderr, "HTTP: Doing post, content-type '%s'\n",
@@ -1160,18 +1177,10 @@ PUBLIC int HTLoadHTTP (char *arg,
       sprintf(line, "Content-type: %s\r\n",
               post_content_type ? post_content_type : "lose");
       StrAllocCat(command, line);
-      {
-        int content_length;
 
-        if (!post_data) {
-            content_length = 4;		/* 4 == "lose" :-) */
-        } else {
-            content_length = strlen(post_data);
-	}
-        sprintf(line, "Content-length: %d\r\n", content_length);
-        StrAllocCat(command, line);
-      }
-      StrAllocCat(command, crlf);	/* Blank line means "end" */
+      /* Blank line means "end" */
+      sprintf(line, "Content-length: %d\r\n\r\n", content_length);
+      StrAllocCat(command, line);
       
       if (post_data) {
           StrAllocCat(command, post_data);
@@ -1225,7 +1234,7 @@ PUBLIC int HTLoadHTTP (char *arg,
       fprintf(stderr, "%s", command);
 #endif
 
-  free(command);
+  FREE(command);
 
   /* Twirl on each request to make things look nicer */
   if (HTCheckActiveIcon(1)) {
@@ -1351,66 +1360,65 @@ PUBLIC int HTLoadHTTP (char *arg,
 		  HTProgress("Connection interrupted.");
 		  HTTP_NETCLOSE(s, handle);
 		  goto clean_up;
-              } else {
-		  if ((status < 0) &&
+              } else if ((status < 0) &&
 #ifndef MULTINET
-		      (errno == ENOTCONN || errno == ECONNRESET ||
-		       errno == EPIPE) &&
+		         (errno == ENOTCONN || errno == ECONNRESET ||
+		          errno == EPIPE) &&
 #else
-		      (socket_errno == ENOTCONN || socket_errno == ECONNRESET ||
-		       socket_errno == EPIPE) &&
+		         (socket_errno == ENOTCONN ||
+			  socket_errno == ECONNRESET ||
+			  socket_errno == EPIPE) &&
 #endif /* MULTINET, BSN, GEC */
-		      !already_retrying && !do_post) {
+		         !already_retrying && !do_post) {
 
-		      if (keepingalive) {
+		  if (keepingalive) {
 #ifndef DISABLE_TRACE
-			  if (httpTrace)
-			      fprintf(stderr,
+		      if (httpTrace)
+			  fprintf(stderr,
 			             "HTTP: Error on Keep-Alive.  Retrying.\n");
 #endif
-			  lsocket = -1;
-			  keepingalive = 0;
-			  HTTP_NETCLOSE(s, handle);
-	      		  HTProgress("Server Error: Reconnecting");
-	      		  goto try_again;
-	  	      }
-
-		      /* Arrrrgh, HTTP 0/1 compatibility problem, maybe. */
-#ifndef DISABLE_TRACE
-		      if (httpTrace)
-			  fprintf(stderr,
-			          "HTTP: Trying again with HTTP0 request.\n");
-#endif
+		      lsocket = -1;
+		      keepingalive = 0;
 		      HTTP_NETCLOSE(s, handle);
-		      extensions = NO;
-		      already_retrying = 1;
-		      HTProgress("Retrying as HTTP0 request.");
-		      goto try_again;
-		  } else {
-		      if (keepingalive) {
+	      	      HTProgress("Server Error: Reconnecting");
+	      	      goto try_again;
+	  	  }
+
+		  /* Arrrrgh, HTTP 0/1 compatibility problem, maybe. */
 #ifndef DISABLE_TRACE
-			  if (httpTrace)
-			      fprintf(stderr,
-				    "HTTP: Timeout on Keep-Alive. Retrying.\n");
+		  if (httpTrace)
+		      fprintf(stderr,
+			      "HTTP: Trying again with HTTP0 request.\n");
 #endif
- 			  lsocket = -1;
- 			  keepingalive = 0;
- 			  HTTP_NETCLOSE(s, handle);
-			  HTProgress("Server Timeout: Reconnecting");
-			  goto try_again;
-		      }
+		  HTTP_NETCLOSE(s, handle);
+		  extensions = NO;
+		  already_retrying = 1;
+		  HTProgress("Retrying as HTTP0 request.");
+		  goto try_again;
+	      } else {
+		  if (keepingalive) {
 #ifndef DISABLE_TRACE
 		      if (httpTrace)
 			  fprintf(stderr,
+				  "HTTP: Timeout on Keep-Alive. Retrying.\n");
+#endif
+ 		      lsocket = -1;
+ 		      keepingalive = 0;
+ 		      HTTP_NETCLOSE(s, handle);
+		      HTProgress("Server Timeout: Reconnecting");
+		      goto try_again;
+		  }
+#ifndef DISABLE_TRACE
+		  if (httpTrace)
+		      fprintf(stderr,
 			    "HTTP: read error; aborted connection; status %d\n",
 			    status);
 #endif
-		      HTProgress(
+		  HTProgress(
 			  "Unexpected network read error; connection aborted.");
-		      HTTP_NETCLOSE(s, handle);
-		      status = -1;
-		      goto clean_up;
-		  }
+		  HTTP_NETCLOSE(s, handle);
+		  status = -1;
+		  goto clean_up;
 	      }
           }
 	  bytes_already_read += status;
@@ -2051,8 +2059,6 @@ PUBLIC int HTLoadHTTP (char *arg,
 		/*
 		 *  400 Bad Request.
 		 *  402 Payment Required.
-		 *  403 Forbidden.
-		 *  404 Not Found.
 		 *  405 Method Not Allowed.
 		 *  406 Not Acceptable.
 		 *  409 Conflict.
@@ -2072,11 +2078,12 @@ PUBLIC int HTLoadHTTP (char *arg,
 
           case 5:		/* I think you goofed */
 	    statusError = 1;
+            HTProgress("Unexpected server error!");
             break;
             
           default:		/* Bad number */
 	    statusError = 1;
-            HTAlert("Unknown status reply from server!");
+            HTProgress("Unknown status reply from server!");
             break;
         }  /* Switch on server_status/100 */
       }	 /* Full HTTP reply */
@@ -2156,8 +2163,11 @@ PUBLIC int HTLoadHTTP (char *arg,
 	  HTMultiLoading->socket = s;
 	  HTMultiLoading->handle = (void *)handle;
 	  HTMultiLoading->length = done_length;
+	  /* If keepalive, save host */
+	  if ((lsocket != -1) && addr)
+	      HTMultiLoading->host = strdup(addr);
 	  status = HT_LOADED;
-	  lsocket = -1;
+
 	  /* Did we already read it all? */
 	  if (target->isa == &HTMIME) {
 	      int content_length = HTMIME_get_content_length(target);
@@ -2165,11 +2175,34 @@ PUBLIC int HTLoadHTTP (char *arg,
       	      if ((content_length != -1) &&
 		  (((HTMIME_get_header_length(target) + content_length) -
 		    done_length) < 1)) {
+		  /* Got it all, so finish it */
 		  HTMultiLoading->loaded = 1;
 		  (*target->isa->end_document)(target);
-		  HTTP_NETCLOSE(s, handle);
+#ifndef DISABLE_TRACE
+		  if (httpTrace)
+		      fprintf(stderr, "HTTP: Multiload got it on first read\n");
+#endif
+
+  		  /* Close socket before doing free. */
+		  if (lsocket == -1) {
+		      HTTP_NETCLOSE(s, handle);
+		  } else {
+		      /* Agreed to Keep-Alive */
+		      HTProgress("Leaving Server Connection Open");
+#ifndef DISABLE_TRACE
+		      if (httpTrace)
+			  fprintf(stderr,
+				  "HTTP: Keeping multiload connection alive\n");
+#endif
+		  }
 		  (*target->isa->free)(target);
+	      } else {
+		  /* Not finished loading, so cannot reuse yet */
+		  lsocket = -1;
 	      }
+	  } else {
+	      /* Not finished loading */
+	      lsocket = -1;
 	  }
           goto clean_up;
       }

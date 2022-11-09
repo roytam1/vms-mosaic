@@ -4,14 +4,14 @@
  * Permission is granted to copy and distribute source with out fee.
  * Commercialization of this product requires prior licensing
  * from the National Center for Supercomputing Applications of the
- * University of Illinois.  Commercialization includes the integration of this 
- * code in part or whole into a product for resale.  Free distribution of 
- * unmodified source and use of NCSA software is not considered 
+ * University of Illinois.  Commercialization includes the integration of this
+ * code in part or whole into a product for resale.  Free distribution of
+ * unmodified source and use of NCSA software is not considered
  * commercialization.
  *
  */
 
-/* Copyright (C) 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2006, 2007, 2008, 2011 - The VMS Mosaic Project */
 
 /*
  * list.c:  This module contains list manipulation routines that construct
@@ -19,7 +19,7 @@
  * list contains pointers to the head, tail, and current list position.
  * the list itsself is doubly linked with both next and previous pointers.
  *
- * ddt 
+ * ddt
  */
 #include <stdio.h>
 #include "listP.h"
@@ -45,14 +45,9 @@ static void ListPrintErr(char *s)
  */
 char *ListHead(List theList)
 {
-	if (!theList)
-		return(NULL);
-	theList->current = theList->head;
-	if (theList->head) {
+	if (theList && (theList->current = theList->head))
 		return(theList->head->value);
-	} else {
-		return(NULL);
-	}
+	return(NULL);
 }
 
 /*
@@ -62,14 +57,9 @@ char *ListHead(List theList)
  */
 char *ListTail(List theList)
 {
-	if (!theList)
-		return(NULL);
-	theList->current = theList->tail;
-	if (theList->tail) {
+	if (theList && (theList->current = theList->tail))
 		return(theList->tail->value);
-	} else {
-		return(NULL);
-	}
+	return(NULL);
 }
 
 /*
@@ -118,7 +108,7 @@ List ListCreate()
 	List retVal;
 
 	if (!(retVal = (List) calloc(1, sizeof(struct LISTSTRUCT)))) {
-		ListPrintErr("Out of Memory\n");
+		ListPrintErr("ListCreate: Out of Memory\n");
 		return((List) 0);
 	}
 	/** calloc sets them
@@ -153,13 +143,13 @@ void ListDestroy(List theList)
  * Add an entry to the end of the linked list.  Current is changed to point
  * to the added element.
  */
-int ListAddEntry(List theList, char *v)
 /* return 0 on failure */
+int ListAddEntry(List theList, char *v)
 {
 	struct LISTINSTANCE *l;
 
 	if (!(l =(struct LISTINSTANCE *) malloc(sizeof(struct LISTINSTANCE)))) {
-		ListPrintErr("Out of Memory\n");
+		ListPrintErr("ListAddEntry: Out of Memory\n");
 		return(0);
 	}
 	l->value = v;
@@ -175,7 +165,7 @@ int ListAddEntry(List theList, char *v)
 	}
 	theList->current = l;
 	theList->listCount++;
-	
+
 	return(1);
 }
 

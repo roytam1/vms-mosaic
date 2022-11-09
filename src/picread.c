@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009
  * The VMS Mosaic Project
  */
 
@@ -66,6 +66,16 @@
 #include "readSUN.h"
 #include "readTGA.h"
 #include "readXWD.h"
+
+#ifdef HAVE_SVG
+#if defined(VMS) && defined(__GNUC__)
+#include MOSAIC_SVG
+#else
+#include "mosaic_svg"
+#endif
+
+#include "readSVG.h"
+#endif
 
 #ifdef HAVE_TIFF
 #include "readTIFF.h"
@@ -425,6 +435,14 @@ unsigned char *ReadBitmap(Widget wid, char *file, int *w, int *h, int *x,
 
     if (!bit_data) {
 	rewind(fp);
+#ifdef HAVE_SVG
+	if (strstr(rbuf, "<?xml")) {
+	    bit_data = ReadSVG(fp, w, h, colrs, alpha);
+	    if (bit_data)
+		goto exit;
+	    rewind(fp);
+	}
+#endif
 	if (((rbuf[1] == 0) || (rbuf[1] == 1)) && rbuf[2] && (rbuf[2] <= 11)) {
 	    /* rbuf[0] can be any value */
 	    bit_data = ReadTGA(fp, w, h, colrs, alpha);

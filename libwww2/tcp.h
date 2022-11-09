@@ -1,18 +1,18 @@
 /*                System dependencies in the W3 library
                                    SYSTEM DEPENDENCIES
-                                             
+
    System-system differences for TCP include files and macros. This
    file includes for each system the files necessary for network and
    file I/O.
-   
+
   AUTHORS
-  
+
   TBL                Tim Berners-Lee, W3 project, CERN, <timbl@info.cern.ch>
   EvA                     Eelco van Asperen <evas@cs.few.eur.nl>
   MA                      Marc Andreessen NCSA
   AT                      Aleksandar Totic <atotic@ncsa.uiuc.edu>
   SCW                     Susan C. Weber <sweber@kyle.eitech.com>
-                         
+
   HISTORY:
   22 Feb 91               Written (TBL) as part of the WWW library.
   16 Jan 92               PC code from EvA
@@ -37,16 +37,16 @@ Default values
 
    These values may be reset and altered by system-specific sections
    later on.  There are also a bunch of defaults at the end.
-   
+
  */
 /* Default values of those: */
-#define NETCLOSE close      /* Routine to close a TCP-IP socket         */
-#define NETREAD  HTDoRead   /* Routine to read from a TCP-IP socket     */
-#define NETWRITE write      /* Routine to write to a TCP-IP socket      */
+#define NETCLOSE close      /* Routine to close a TCP-IP socket     */
+#define NETREAD  HTDoRead   /* Routine to read from a TCP-IP socket */
+#define NETWRITE write      /* Routine to write to a TCP-IP socket  */
 
 /* Unless stated otherwise, */
-#define SELECT                  /* Can handle >1 channel.               */
-#define GOT_SYSTEM              /* Can call shell with string           */
+#define SELECT              /* Can handle >1 channel.               */
+#define GOT_SYSTEM          /* Can call shell with string           */
 
 #ifdef unix
 #define GOT_PIPE
@@ -100,20 +100,20 @@ VAX/VMS
 
    Under VMS, there are many versions of TCP-IP.  Define one if you do
    not use Digital's UCX product:
-   
+
   UCX                     DEC's "Ultrix connection" (default)
   WIN_TCP                 From Wollongong originally
   MULTINET                From SRI, now from Process Software
   DECNET                  Cern's TCP socket emulation over DECnet
   SOCKETSHR               E. Meyer's socket emulation for NETLIB
-                           
+
    The last three do not interfere with the
    unix i/o library, and so they need special calls to read, write and
    close sockets.  In these cases the socket number is a VMS channel
    number, so we make the @@@ HORRIBLE @@@ assumption that a channel
    number will be greater than 10 but a unix file descriptor less than
    10.  It works.
-   
+
  */
 #ifdef vms
 #ifdef WIN_TCP
@@ -123,7 +123,7 @@ VAX/VMS
 #define NETREAD(s,b,l)  ((s)>10 ? netread((s),(b),(l)) : read((s),(b),(l)))
 #define NETWRITE(s,b,l) ((s)>10 ? netwrite((s),(b),(l)) : write((s),(b),(l)))
 #define NETCLOSE(s)     ((s)>10 ? netclose(s) : close(s))
-#endif /* WIN_TCP */
+#endif  /* WIN_TCP */
 
 #ifdef MULTINET
 #undef NETCLOSE
@@ -133,33 +133,33 @@ VAX/VMS
 #define NETWRITE(s,b,l) ((s)>10 ? socket_write((s),(b),(l)) : \
 				write((s),(b),(l)))
 #define NETCLOSE(s)     ((s)>10 ? socket_close(s) : close(s))
-#endif /* MULTINET */
+#endif  /* MULTINET */
 
 /*      Certainly this works for UCX and Multinet; not tried for Wollongong
 */
 #ifdef MULTINET
 #if defined(__DECC) && !defined(__alpha)
 #define __TYPES_LOADED 1
-#endif /* DECC, fool MultiNet types.h, GEC */ 
+#endif  /* DECC, fool MultiNet types.h, GEC */
 #ifdef __DECC
 #define _POSIX_C_SOURCE
-#endif /* DEC C */
+#endif  /* DEC C */
 #include "multinet_root:[multinet.include.sys]types.h"
 #ifdef __DECC
 #undef _POSIX_C_SOURCE
 #undef _ANSI_C_SOURCE  /* Gets defined because of _POSIX_C_SOURCE */
-#endif /* DEC C */
+#endif  /* DEC C */
 #include "multinet_root:[multinet.include]errno.h"
 #pragma nostandard
 #if defined(__DECC) && !defined(__alpha)
-#undef __TYPES_LOADED /* MultiNet 3.3D and earlier types.h is broken, GEC */
+#undef __TYPES_LOADED  /* MultiNet 3.3D and earlier types.h is broken, GEC */
 /* Due to bugs in MultiNet V3.3's ERRNO.H for DEC C on VAX, redefine some
  * things here.
  */
   int *cma$tis_errno_get_addr(void);    /* UNIX style error code */
   int *cma$tis_vmserrno_get_addr(void); /* VMS error code when errno == EVMSE */
-#define errno        (*cma$tis_errno_get_addr())
-#define vaxc$errno   (*cma$tis_vmserrno_get_addr())
+#define errno      (*cma$tis_errno_get_addr())
+#define vaxc$errno (*cma$tis_vmserrno_get_addr())
 #endif
 #pragma standard
 
@@ -169,17 +169,17 @@ VAX/VMS
 #else
 #if defined(__DECC) && (__DECC_VER > 50230003) && defined (__FD_SET) && !defined(_XOPEN_SOURCE_EXTENDED) && !defined(_TYPES_)
 /* If _TYPES_ defined, then is pre-V3.5 MultiNet, GEC */
-/* If __FD_SET defined, then ECO DECC052H installed or post V3.5B */ 
+/* If __FD_SET defined, then ECO DECC052H installed or post V3.5B */
 #define _XOPEN_SOURCE_EXTENDED
 #include <time.h>
 #undef _XOPEN_SOURCE_EXTENDED
 #undef _XOPEN_SOURCE  /* Gets defined because of _XOPEN_SOURCE_EXTENDED */
-#endif /* As if MultiNet V3.5A&B weren't bad enough, then came DECC052H, GEC */
-#endif 
+#endif  /* As if MultiNet V3.5A&B weren't bad enough, then came DECC052H, GEC */
+#endif
 #if defined(_TYPES_) && defined (__TIME_T)
 #undef __TIME_T
-#endif /* For pre-V3.5 MultiNet time.h, GEC */
-#define _ANSI_C_SOURCE /* DEC C time.h conflicts with MultiNet V3.5 types.h */
+#endif  /* For pre-V3.5 MultiNet time.h, GEC */
+#define _ANSI_C_SOURCE  /* DEC C time.h conflicts with MultiNet V3.5 types.h */
 #include "multinet_root:[multinet.include.sys]time.h"
 #undef _ANSI_C_SOURCE
 #ifdef __TIME_T
@@ -220,9 +220,9 @@ VAX/VMS
 #include <errno.h>
 #if defined(SOCKETSHR) && defined(__DECC)
 #define __FD_SET 1
-#endif /* DEC C V5.2 time.h conflicts with SOCKETSHR types.h, GEC */
+#endif  /* DEC C V5.2 time.h conflicts with SOCKETSHR types.h, GEC */
 #include <time.h>
-#endif /* Multinet */
+#endif  /* Multinet */
 
 #ifndef __STRING_LOADED
 #include <string.h>
@@ -255,12 +255,12 @@ VAX/VMS
 #include "multinet_root:[multinet.include.arpa]inet.h"
 #ifdef __DECC
 #define _POSIX_C_SOURCE
-#endif /* DEC C */
+#endif  /* DEC C */
 #include "multinet_root:[multinet.include]netdb.h"
 #ifdef __DECC
 #undef _POSIX_C_SOURCE
 #undef _ANSI_C_SOURCE  /* Gets defined because of _POSIX_C_SOURCE */
-#endif /* DEC C */
+#endif  /* DEC C */
 #include "multinet_root:[multinet.include.sys]ioctl.h"
 
 #ifdef __DECC
@@ -270,8 +270,8 @@ VAX/VMS
 #define sleep decc$sleep
 #if defined(__VMS_VER) && (__VMS_VER >= 70000000)
 #define strdup  decc$strdup
-#endif /* VMS V7, VRH */
-#endif /* DEC C, BSN */
+#endif  /* VMS V7, VRH */
+#endif  /* DEC C, BSN */
 
 #else  /* Not Multinet */
 
@@ -281,11 +281,11 @@ VAX/VMS
 #include "dn"
 #include "dnetdb"
 
-#else /* UCX or WIN */
+#else  /* UCX or WIN */
 
 #if defined(CADDR_T) && !defined(__CADDR_T)
 #define __CADDR_T
-#endif /* BSN, include file problem socket.h <-> xlib.h */
+#endif  /* BSN, include file problem socket.h <-> xlib.h */
 #include <socket.h>
 #include <in.h>
 #include <inet.h>
@@ -311,7 +311,7 @@ VAX/VMS
 #undef fgets
 #undef fgetc
 #undef fprintf
-#endif /* These Socketshr routines fail with DEC C on VAX, GEC */
+#endif  /* These Socketshr routines fail with DEC C on VAX, GEC */
 #endif
 
 #endif  /* Not DECNET */
@@ -359,8 +359,8 @@ Regular BSD unix versions
 
 /*                      Directory reading stuff - BSD or SYS V
 */
-#ifdef unix                   /* if this is to compile on a UNIX machine */
-#define GOT_READ_DIR 1        /* if directory reading functions are available */
+#ifdef unix                   /* If this is to compile on a UNIX machine */
+#define GOT_READ_DIR 1        /* If directory reading functions are available */
 #ifdef USE_DIRENT             /* sys v version */
 #include <dirent.h>
 #define direct dirent
@@ -378,10 +378,10 @@ Regular BSD unix versions
 Defaults
 
   INCLUDE FILES FOR TCP
-  
+
  */
 #ifndef TCP_INCLUDES_DONE
-#include <sys/ioctl.h> /* EJB */
+#include <sys/ioctl.h>  /* EJB */
 #include <sys/socket.h>
 #include <netinet/in.h>
 #ifndef __hpux		    /* This may or may not be good -marc */
@@ -394,7 +394,7 @@ Defaults
 /*
 
   MACROS FOR MANIPULATING MASKS FOR SELECT()
-  
+
  */
 #ifdef SELECT
 #ifndef FD_SET
@@ -410,6 +410,6 @@ typedef unsigned int fd_set;
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 64		/* Arbitrary limit */
 #endif
-#endif /* VMS, BSN */
+#endif  /* VMS, BSN */
 
-#endif /* TCP_H */
+#endif  /* TCP_H */

@@ -22,6 +22,16 @@ CC = GCC
 CC = CC
 .ENDIF
 
+.IFDEF ALPHA
+CFLOAT = /FLOAT=IEEE
+.ELSE
+.IFDEF VAX
+CFLOAT = /G_FLOAT
+.ELSE
+CFLOAT =
+.ENDIF
+.ENDIF
+
 .FIRST
         @ If F$Search("$(LIBTARGET)") .EQS. "" Then Library/Create $(LIBTARGET)
 	@ Define/NoLog Odir $(WDIR)
@@ -114,8 +124,8 @@ Odir:HTAABrow.obj :     HTAABrow.c htaabrow.h htaautil.h htalert.h htassoc.h \
                         [-.src]md5.h [-.libnut]str-tools.h [-]config.h \
 			[-]config_$(WORK).h
 Odir:HTAAUtil.obj :     HTAAUtil.c htaautil.h htassoc.h htlist.h htstring.h \
-                        htutils.h tcp.h [-]config.h [-]config_$(WORK).h \
-			[-]ssl_$(WORK).h
+                        htutils.h tcp.h [-.libnut]str-tools.h [-]config.h \
+			[-]config_$(WORK).h [-]ssl_$(WORK).h
 Odir:HTAccess.obj :     HTAccess.c htaccess.h htalert.h htanchor.h htatom.h \
                         htext.h htformat.h htlist.h html.h htmldtd.h htmime.h\
                         htparse.h htstream.h htstring.h htutils.h sgml.h \
@@ -212,8 +222,8 @@ Odir:HTMosaicHTML.obj : HTMosaicHTML.c htaccess.h htanchor.h htatom.h \
                         htutils.h sgml.h tcp.h [-]config.h [-]config_$(WORK).h
 Odir:HTNews.obj :       HTNews.c htaccess.h htanchor.h htatom.h htformat.h \
                         htalert.h htlist.h html.h htmldtd.h htnews.h htparse.h \
-                        htstream.h htstring.h htutils.h sgml.h tcp.h \
-                        [-.src]mosaic.h [-.src]newsrc.h \
+                        htstream.h htstring.h htutils.h htaautil.h sgml.h \
+			tcp.h [-.src]mosaic.h [-.src]newsrc.h \
                         [-.src]prefs.h [-.src]prefs_defs.h [-.src]toolbar.h \
                         [-]config.h [-]config_$(WORK).h
 Odir:HTParse.obj :      HTParse.c htparse.h htstring.h htutils.h \
@@ -270,7 +280,7 @@ Odir:SGML.obj :         SGML.c htchunk.h htstream.h htstring.h htutils.h \
 			[-]config_$(WORK).h
 
 .c.obj :
-	$(CC)$(CFLAGS)/OBJECT=$@ $<
+	$(CC)$(CFLAGS)$(CFLOAT)/OBJECT=$@ $<
 
 .obj.olb
 	$(LIBR) $(LIBRFLAGS) $(MMS$TARGET) $(MMS$SOURCE)

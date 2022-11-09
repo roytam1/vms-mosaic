@@ -47,13 +47,12 @@ void HTList_addObject (HTList *me, void *newObject)
     newNode->object = newObject;
     newNode->next = me->next;
     me->next = newNode;
-  }
 #ifndef DISABLE_TRACE
-  else if (reportBugs) {
+  } else if (reportBugs) {
     fprintf(stderr, "HTList: Trying to add object %p to a nonexisting list\n",
 	    newObject);
-  }
 #endif
+  }
 }
 
 void HTList_addObjectAtEnd (HTList *me, void *newObject)
@@ -68,13 +67,12 @@ void HTList_addObjectAtEnd (HTList *me, void *newObject)
     while (me->next) 
       me = me->next;
     me->next = newNode;
-  }
 #ifndef DISABLE_TRACE
-  else if (reportBugs) {
+  } else if (reportBugs) {
     fprintf(stderr, "HTList: Trying to add object %p to a nonexisting list\n",
 	    newObject);
-  }
 #endif
+  }
 }
 
 BOOL HTList_removeObject (HTList *me, void *oldObject)

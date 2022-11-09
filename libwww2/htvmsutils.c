@@ -11,7 +11,7 @@
 **
 */
 
-/* Copyright (C) 2005, 2006, 2007 - The VMS Mosaic Project */
+/* Copyright (C) 2005, 2006, 2007, 2008 - The VMS Mosaic Project */
 
 #include "../config.h"
 
@@ -92,46 +92,46 @@ PUBLIC char *HTVMS_wwwName (char *vmsname)
    for (; *src; src++) {
       switch (*src) {
          case ':':
-		*dst++ = '/';
-		break;
+	    *dst++ = '/';
+	    break;
          case '-':
-		if (dir) {
-	 	      if ((*(src - 1) == '[' || *(src - 1) == '.' ||
-			   *(src - 1) == '-') && 
-		          (*(src + 1) == '.' || *(src + 1) == '-')) {
-		          *dst++ = '/';
-                          *dst++ = '.'; 
-                          *dst++ = '.';
-		      } else {
-		          *dst++ = '-';
-		      }
-		} else {
-		      if (*(src - 1) == ']')
-			  *dst++ = '/';
-		      *dst++ = '-';
-		}
-                break;
+	    if (dir) {
+	       if ((*(src - 1) == '[' || *(src - 1) == '.' ||
+		    *(src - 1) == '-') && 
+		   (*(src + 1) == '.' || *(src + 1) == '-')) {
+		  *dst++ = '/';
+                  *dst++ = '.'; 
+                  *dst++ = '.';
+	       } else {
+		  *dst++ = '-';
+	       }
+	    } else {
+	       if (*(src - 1) == ']')
+		  *dst++ = '/';
+	       *dst++ = '-';
+	    }
+            break;
          case '.':
-		if (dir) {
-                      if (*(src - 1) != '[')
-			  *dst++ = '/';
-                } else {
-		      if (*(src - 1) == ']')
-			  *dst++ = '/';
-                      *dst++ = '.';
-		}
-                break;
+	    if (dir) {
+               if (*(src - 1) != '[')
+		  *dst++ = '/';
+            } else {
+	       if (*(src - 1) == ']')
+		  *dst++ = '/';
+               *dst++ = '.';
+	    }
+            break;
          case '[':
-		dir = 1;
-		break;
+	    dir = 1;
+	    break;
          case ']':
-		dir = 0;
-		break;
+	    dir = 0;
+	    break;
          default:
-		if (*(src - 1) == ']')
-		      *dst++ = '/';
-                *dst++ = *src;
-                break;
+	    if (*(src - 1) == ']')
+	       *dst++ = '/';
+            *dst++ = *src;
+            break;
       }
    }
    *dst = '\0';
@@ -160,22 +160,20 @@ PUBLIC char *HTVMS_wwwName (char *vmsname)
 PUBLIC char *HTVMS_name (WWW_CONST char *nn, WWW_CONST char *fn)
 {
     static char vmsname[INFINITY];	/* Returned */
-    char *filename = (char *)malloc(strlen(fn) + 1);
-    char *nodename = nn ? (char *)malloc(strlen(nn) + 2 + 1) :
-			  (char *)malloc(2 + 1);
+    char *filename = strdup(fn);
+    char *nodename;
     char *second;		/* 2nd slash */
     char *last;			/* Last slash */
     char *hostname = (char *)HTHostName();
 
-    if (!filename || !nodename)
+    if (!filename)
 	outofmem(__FILE__, "HTVMSname");
-    strcpy(filename, fn);
-    *nodename = '\0';
 
-    /* On same node?  Yes if node names match */
-    if (nn && strncmp(nn, "localhost", 9)) {
+    /* On same node?  Yes if node names match. */
+    if (nn && *nn && strncmp(nn, "localhost", 9)) {
         char *p, *q;
 
+	nodename = calloc(1, strlen(nn) + 2 + 1);
         for (p = hostname, q = (char *)nn;
 	     *p && *p != '.' && *q && *q != '.'; p++, q++) {
 	    if (TOUPPER(*p) != TOUPPER(*q)) {
@@ -187,6 +185,8 @@ PUBLIC char *HTVMS_name (WWW_CONST char *nn, WWW_CONST char *fn)
 		break;
 	    }
 	}
+    } else {
+	nodename = strdup("");
     }
     second = strchr(filename + 1, '/');		/* 2nd slash */
     last = strrchr(filename, '/');		/* Last slash */
@@ -221,10 +221,10 @@ PUBLIC char *HTVMS_name (WWW_CONST char *nn, WWW_CONST char *fn)
 */
 PUBLIC int HTStat (WWW_CONST char *filename, stat_t *info)
 {
-   /* 
+   /*
     * The following stuff does not work in VMS with a normal stat...
     * -->   /disk$user/duns/www if www is a directory
-    *		is statted like: 	/disk$user/duns/www.dir 
+    *		is statted like: 	/disk$user/duns/www.dir
     *		after a normal stat has failed
     * -->   /disk$user/duns	if duns is a toplevel directory
     *		is statted like:	/disk$user/000000/duns.dir
@@ -240,8 +240,7 @@ PUBLIC int HTStat (WWW_CONST char *filename, stat_t *info)
    char Name[256];
 
    /* Try normal stat... */
-   Result = stat((char *)filename, info);
-   if (!Result)
+   if (!(Result = stat((char *)filename, info)))
       return(Result);
 
    /* Make local copy */
@@ -250,17 +249,17 @@ PUBLIC int HTStat (WWW_CONST char *filename, stat_t *info)
    /* Failed, so do device search in case root is requested */
    if (!strcmp(Name, "/"))   /* Root requested */
       return(-1);
-   
+
    /* Failed so this might be a directory, add '.dir' */
    Len = strlen(Name) - 1;
    if (Name[Len] == '/')
       Name[Len] = '\0';
-   
+
    /* Fail in case of device */
    Ptr = strchr(Name + 1, '/');
    if (!Ptr && (Name[0] == '/'))   /* Device only... */
       strcat(Name, "/000000/000000");
-   
+
    if (Ptr) {  /* Correct filename in case of toplevel dir */
       Ptr2 = strchr(Ptr + 1, '/');
       if (!Ptr2 && (Name[0] == '/')) {
@@ -274,8 +273,7 @@ PUBLIC int HTStat (WWW_CONST char *filename, stat_t *info)
    }
 
    /* Try in case a file on toplevel directory or .DIR was already specified */
-   Result = stat(Name, info);
-   if (!Result)
+   if (!(Result = stat(Name, info)))
       return(Result);
 
    /* Add .DIR and try again */
@@ -314,13 +312,11 @@ PRIVATE DIR *HTVMSopendir(char *dirname)
    long status;
    struct dsc$descriptor_s entryname_desc;
    struct dsc$descriptor_s dirname_desc;
-   char DirEntry[256];
-   char VMSentry[256];
-   char UnixEntry[256];
+   char DirEntry[256], VMSentry[256], UnixEntry[256];
    char *dot;
    int index;
 
-   /* Check if directory exists 
+   /* Check if directory exists
     * dirname can look like /disk$user/duns/www/test/multi
     * or like               /disk$user/duns/www/test/multi/
     * DirEntry should look like disk$user:[duns.www.test]multi in both cases
@@ -356,7 +352,7 @@ PRIVATE DIR *HTVMSopendir(char *dirname)
          strcat(DirEntry, ".dir");
       }
    } else {
-      *dot = ']';   
+      *dot = ']';
       strcat(DirEntry, ".dir");
    }
 
@@ -372,7 +368,7 @@ PRIVATE DIR *HTVMSopendir(char *dirname)
    entryname_desc.dsc$b_class = DSC$K_CLASS_S;
    entryname_desc.dsc$a_pointer = VMSentry;
 
-   status = lib$find_file(&dirname_desc, &entryname_desc, 
+   status = lib$find_file(&dirname_desc, &entryname_desc,
                           &dir.context, 0, 0, 0, 0);
    if (!(status & 0x01))   /* Directory not found */
       return(NULL);
@@ -403,30 +399,29 @@ PRIVATE struct dirent *HTVMSreaddir(DIR *dirp)
    entryname_desc.dsc$b_class = DSC$K_CLASS_S;
    entryname_desc.dsc$a_pointer = VMSentry;
 
-   status = lib$find_file(&dirp->dirname_desc, &entryname_desc, 
+   status = lib$find_file(&dirp->dirname_desc, &entryname_desc,
                           &dirp->context, 0,0,0,0);
-   if (status == RMS$_NMF) {  /* No more files */
+   if (status == RMS$_NMF)  /* No more files */
       return(NULL);
-   } else {
-      /* ok */
-      if (!(status & 0x01))
-	 return(0);
-      if (HTVMSFileVersions) {
-         space = strchr(VMSentry, ' ');
-      } else {
-         space = strchr(VMSentry, ';');
-      }
-      if (space)
-         *space = '\0';
 
-      /* Convert to unix style... */
-      UnixEntry = HTVMS_wwwName(VMSentry);
-      slash = strrchr(UnixEntry, '/') + 1;
-      strcpy(entry.d_name, slash);
-      entry.d_namlen = strlen(entry.d_name);
-      entry.d_fileno = 1;
-      return(&entry);
+   /* ok */
+   if (!(status & 0x01))
+      return(0);
+   if (HTVMSFileVersions) {
+      space = strchr(VMSentry, ' ');
+   } else {
+      space = strchr(VMSentry, ';');
    }
+   if (space)
+      *space = '\0';
+
+   /* Convert to unix style... */
+   UnixEntry = HTVMS_wwwName(VMSentry);
+   slash = strrchr(UnixEntry, '/') + 1;
+   strcpy(entry.d_name, slash);
+   entry.d_namlen = strlen(entry.d_name);
+   entry.d_fileno = 1;
+   return(&entry);
 }
 
 PRIVATE int HTVMSclosedir(DIR *dirp)
@@ -666,7 +661,7 @@ PUBLIC int HTVMSBrowseDir (WWW_CONST char *address,
 	if (cp1 && (cp1 != pathname) && strncmp(cp1 + 1, "000000", 6)) {
 	    *cp1 = '\0';
 	    cp2 = strrchr(pathname, '/');
-	    /* Top level directory has no parent (ignoring [000000]) */ 
+	    /* Top level directory has no parent (ignoring [000000]) */
 	    if (cp2 && (cp2 != pathname)) {
 		StrAllocCopy(parent, cp2 + 1);
 		StrAllocCopy(backpath, pathname);
@@ -748,7 +743,7 @@ PUBLIC int HTVMSBrowseDir (WWW_CONST char *address,
 	    }
 	    END(HTML_PRE);
 	    fclose(fp);
-        } 
+        }
     }
     free(header);
     if (parent) {
@@ -762,8 +757,7 @@ PUBLIC int HTVMSBrowseDir (WWW_CONST char *address,
 	}
 	PUTS("<A HREF=\"");
 	PUTS(relative);
-	PUTS("\">");
-	PUTS("Up to ");
+	PUTS("\">Up to ");
 	HTUnEscape(parent);
 	PUTS(parent);
 	END(HTML_A);

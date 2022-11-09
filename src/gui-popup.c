@@ -52,7 +52,7 @@
  * mosaic-x@ncsa.uiuc.edu.                                                  *
  ****************************************************************************/
 
-/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007
+/* Copyright (C) 1998, 1999, 2000, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -98,7 +98,7 @@ static char **user_defs_get_entries(FILE *fp, int *num)
   char str[512];
   int i = 0;
 
-  while (fgets(str, 512, fp)) {
+  while (fgets(str, 512, fp) && (i < 100)) {
       int index = 0;
 
       while (isspace(str[index]))
@@ -115,7 +115,7 @@ static char **user_defs_get_entries(FILE *fp, int *num)
 		  i++;
 		  break;
 		default:  /* Error */
-		  fprintf(stderr, "User defined field wrong:%s.  Ignoring it\n",
+		  fprintf(stderr, "User defined field wrong: %s. Ignoring it\n",
 			  &str[index]);
 	      }
 	  } else {	/* Button name */
@@ -132,6 +132,7 @@ static char **user_defs_get_entries(FILE *fp, int *num)
   }
   if (i % 2 == 1) {
       fprintf(stderr, "Problem in gui_popup.c:%d \n", __LINE__);
+      free(entries);
       return NULL;
   }
 
@@ -180,7 +181,7 @@ static void select_cb(Widget w, XtPointer client_data, Atom *sel, Atom *type,
       mode = 'F';
       break;
     default:  /* Error */
-      fprintf(stderr, "User defined field wrong:%s. Ignoring it\n", begin);
+      fprintf(stderr, "User defined field wrong: %s.  Ignoring it\n", begin);
       XtFree(value);
       free(begin);
       return;
@@ -301,7 +302,7 @@ static PopupItem *popup_build_user_defs()
   FILE *fp;
   int num, i;
 
-  if (num = get_home(&str)) 
+  if (get_home(&str)) 
       return NULL;
 	
   file = malloc(sizeof(char) * (strlen(str) + strlen("/.mosaic-user-defs") +1));
@@ -329,10 +330,11 @@ static PopupItem *popup_build_user_defs()
   }
   items = build_user_defs_items(entries, num);
 
-  for (i = 0; i < (num + 2); i++)
-      free(entries[i]);
-  free(entries);
-
+  if (entries) {
+      for (i = 0; i < (num + 2); i++)
+	  free(entries[i]);
+      free(entries);
+  }
   return items;
 }
 
@@ -465,9 +467,10 @@ static Widget PopupMenuBuilder(Widget parent, int type, char *title,
       } else {
           columns = (i / mcol_max) + 1;
       }
-      XmxSetArg(XmNpacking, XmPACK_COLUMN);
-      XmxSetArg(XmNnumColumns, columns);
-      XmxSetValues(menu);
+      XtVaSetValues(menu,
+      		    XmNpacking, XmPACK_COLUMN,
+		    XmNnumColumns, columns,
+		    NULL);
   }
   return type == XmMENU_POPUP ? menu : cascade;
 }
@@ -705,8 +708,8 @@ static XmxCallback(fsb_OKCallback)
   char *url = (char *) client_data;
   char efilename[MO_LINE_LENGTH];
   
-  /* Remove the widget from the screen, and kill it. */
-  XtUnmanageChild(w);
+  /* Remove the widget from the screen. */
+  XmxUnmanageCallbackWidget();
   
   /* Retrieve the character string from the compound string format. */
   XmStringGetLtoR(cbs->value, XmSTRING_DEFAULT_CHARSET, &filename);
@@ -726,7 +729,7 @@ static XmxCallback(fsb_OKCallback)
 
 static XmxCallback(fsb_CancelCallback)
 {
-  XtUnmanageChild(w);
+  XmxUnmanageCallbackWidget();
 }
 
 static void fsb(char *src)
@@ -984,7 +987,7 @@ static int hot_button = 0;
 void mo_init_hotlist_menu(mo_hotlist *list)
 {
     /* This doesn't check the first button, but that is okay because
-     * the first two buttons are always back and forward */
+     * the first two buttons are always back and forward. */
     while (popup_items[hot_button].acst.act_code != -1) 
         hot_button++;
   
