@@ -70,9 +70,9 @@
 #include "../libhtmlw/HTMLP.h"
 #include <Xm/List.h>
 
-#ifdef VMS
+//#ifdef VMS
 extern char ftp_type[16];
-#endif /* VMS, BSN */
+//#endif /* VMS, BSN */
 
 #define __SRC__
 #include "../libwww2/HTAAUtil.h"

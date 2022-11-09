@@ -57,7 +57,7 @@
  */
 
 #include "../config.h"
-#include "../libwww2/htparse.h"
+#include "../libwww2/HTParse.h"
 #include "mosaic.h"
 #include "gui-ftp.h"
 #include "mo-www.h"

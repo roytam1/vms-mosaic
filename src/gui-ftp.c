@@ -56,7 +56,7 @@
 
 #include "../config.h"
 
-#include "../libwww2/HTftp.h"
+#include "../libwww2/HTFTP.h"
 #include "mosaic.h"
 #include "gui.h"
 #include "gui-ftp.h"

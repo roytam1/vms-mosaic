@@ -158,10 +158,10 @@ typedef char *caddr_t;
 #define CADDR_T 1     /* DECwindows Motif 1.1 xresource.h wants CADDR_T, GEC */
 #endif
 #endif
-#ifndef __GNUC__
-#include "../libXmx/Xmx.h"
-#else
+#if defined(VMS) && !defined(__GNUC__)
 #include "Xmx.h"
+#else
+#include "../libXmx/Xmx.h"
 #endif
 #include "toolbar.h"
 
@@ -306,10 +306,13 @@ typedef enum {
 #endif /* VMS, BSN */
 #endif
 
-#ifdef VMS
+//#ifdef VMS
 #ifndef MAIL_PREFIX_DEFAULT
 #define MAIL_PREFIX_DEFAULT ""
 #endif /* Mail prefix for VMS MAIL */
+#ifndef IDENT_VER
+#define IDENT_VER ""
+#endif
 
 #ifndef PRINT_DEFAULT
 #define PRINT_DEFAULT "Print/Name=\"Mosaic print\"/Notify/Identify/Delete"
@@ -318,7 +321,7 @@ typedef enum {
 #ifndef EDITOR_DEFAULT
 #define EDITOR_DEFAULT "Edit"
 #endif /* Editor command for source editing */
-#endif /* VMS, BSN, GEC */
+//#endif /* VMS, BSN, GEC */
 
 #ifndef VMS
 #if defined(bsdi)

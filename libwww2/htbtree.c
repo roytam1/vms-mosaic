@@ -19,6 +19,8 @@
 #endif
 #include <string.h>
 
+#include "../src/mosaic.h"
+
 #define MAXIMUM(a, b) ((a) > (b) ? (a) : (b))
 
 PRIVATE Boolean add_only_new = False;

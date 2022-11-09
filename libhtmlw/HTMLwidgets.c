@@ -73,7 +73,7 @@
 #include <Xm/RowColumn.h>
 #include <Xm/Label.h>
 #include <Xm/List.h>
-#include <Xm/Scrollbar.h>
+#include <Xm/ScrollBar.h>
 
 #include "HTMLmiscdefs.h"
 #include "HTMLparse.h"

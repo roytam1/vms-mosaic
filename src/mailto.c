@@ -67,7 +67,7 @@
 
 #include <Xm/Text.h>
 #include <Xm/TextF.h>
-#include <Xm/FilesB.h>
+#include <Xm/FileSB.h>
 
 #ifdef VMS
 #include <unixio.h>

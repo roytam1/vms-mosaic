@@ -57,7 +57,7 @@
 #ifndef __POPUP_H__
 #define __POPUP_H__
 
-#include "../libhtmlw/htmlp.h"
+#include "../libhtmlw/HTMLP.h"
 #include "hotlist.h"			/* Need mo_hotlist below */
 #include <Xm/DrawingA.h>
 #include <Xm/ScrollBar.h>
@@ -133,7 +133,7 @@ void mo_reinit_hotlist_menu(mo_hotlist *);
 
 #include "gui-ftp.h"			/* ftp_rmbm_cb definition */
 #include "gui-menubar.h"		/* menubar_cb definition */
-#include "../libhtmlw/htmlputil.h"	/* LocateElement definition */
+#include "../libhtmlw/HTMLPutil.h"	/* LocateElement definition */
 
 static XmxCallback(copy_link_cb);
 static XmxCallback(image_cb);

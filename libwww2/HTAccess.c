@@ -35,7 +35,7 @@
 #include "HTList.h"
 #include "HText.h"	/* See bugs above */
 #include "HTAlert.h"
-#include "HTMime.h"
+#include "HTMIME.h"
 #include "HTTP.h"
 
 #include "../libnut/str-tools.h"
@@ -114,7 +114,9 @@ PUBLIC void SILLY_VAXC()
 {
     HTLoadHTTP();
     HTLoadFile();
+#ifdef VMS
     HTLoadTelnet();
+#endif
     HTLoadFinger();
     HTGetNewsHost();
     HTLoadGopher();

@@ -29,6 +29,8 @@
 #include "../src/newsrc.h"
 #include "../src/prefs.h"
 
+#include <pwd.h>
+
 #define NEWS_PORT 119		/* See rfc977 */
 
 #ifndef DEFAULT_NEWS_HOST
@@ -81,6 +83,8 @@ PRIVATE HTStructured *target;			/* The output sink */
 PRIVATE HTStructuredClass targetClass;		/* Copy of fn addresses */
 PRIVATE HTParentAnchor *node_anchor;		/* Its anchor */
 
+PRIVATE HTList *NNTP_AuthInfo = NULL;		/* AUTHINFO database */
+
 int ConfigView = 0;                      	/* View format configure */
 int newsShowAllGroups = 0;
 int newsShowReadGroups = 0;
@@ -98,6 +102,7 @@ int newsAuthWidth = 30;
 #define START(e) (*targetClass.start_element)(target, e, 0, 0)
 #define END(e) (*targetClass.end_element)(target, e)
 
+PRIVATE int response (WWW_CONST char *command);
 
 /* escapeString ()
    Expects: str -- String to escape
@@ -689,6 +694,317 @@ PRIVATE BOOL initialize (void)
   return YES;
 }
 
+typedef enum {
+    NNTPAUTH_ERROR = 0,		/* general failure */
+    NNTPAUTH_OK = 281,		/* authenticated successfully */
+    NNTPAUTH_CLOSE = 502	/* server probably closed connection */
+} NNTPAuthResult;
+
+typedef struct _NNTPAuth {
+    char *host;
+    char *user;
+    char *pass;
+} NNTPAuth;
+
+
+#ifndef NEWS_AUTH_FILE
+#define NEWS_AUTH_FILE ".newsauth"
+#endif
+
+/*
+ * Initialize the authentication list by loading the user's $HOME/.newsauth
+ * file.  That file is part of tin's configuration and is used by a few other
+ * programs.
+ */
+static void load_NNTP_AuthInfo(void)
+{
+    FILE *fp;
+    char buffer[LINE_LENGTH + 1];
+    char *fname, *home_ptr;
+    char *name = NEWS_AUTH_FILE;
+    char home[256];
+#ifndef VMS
+    struct passwd *pwdent;
+#endif
+
+    /*
+     * Try the HOME environment variable, then the password file
+     */
+    if (!(home_ptr = getenv("HOME"))) {
+#ifndef VMS
+        if (!(pwdent = getpwuid(getuid()))) {
+	    home[0] = '\0';
+        } else {
+            strcpy(home, pwdent->pw_dir);
+        }
+#else
+        home[0] = '\0';
+#endif
+    } else {
+        strcpy(home, home_ptr);
+    }
+
+    fname = (char *)malloc(strlen(home) + strlen(name) + 2);
+#ifndef VMS
+    sprintf(fname, "%s/%s", home, name);
+#else
+    sprintf(fname, "%s%s", home, name);
+#endif
+
+    if (fp = fopen(fname, "r")) {
+	while (fgets(buffer, sizeof(buffer), fp)) {
+	    char the_host[LINE_LENGTH + 1];
+	    char the_pass[LINE_LENGTH + 1];
+	    char the_user[LINE_LENGTH + 1];
+
+	    if ((buffer[0] != '#') &&
+		(sscanf(buffer, "%s%s%s", the_host, the_pass, the_user) == 3) &&
+		strlen(the_host) && strlen(the_pass) && strlen(the_user)) {
+		NNTPAuth *auth = calloc(1, sizeof(NNTPAuth));
+
+		if (!auth)
+		    break;
+		StrAllocCopy(auth->host, the_host);
+		StrAllocCopy(auth->pass, the_pass);
+		StrAllocCopy(auth->user, the_user);
+
+		HTList_addObject(NNTP_AuthInfo, auth);
+	    }
+	}
+	fclose(fp);
+    }
+    free(fname);
+}
+
+/*
+ *  This function handles nntp authentication. - FM
+ */
+static NNTPAuthResult HTHandleAuthInfo(char *host)
+{
+    HTList *cur = NULL;
+    NNTPAuth *auth = NULL;
+    char *UserName = NULL;
+    char *PassWord = NULL;
+    char *msg = NULL;
+    char buffer[512];
+    int status, tries;
+
+    /*
+     * Make sure we have an interactive user and a host.  - FM
+     */
+    if (!(host && *host))
+	return NNTPAUTH_ERROR;
+
+    /*
+     * Check for an existing authorization entry.  - FM
+     */
+    if (!NNTP_AuthInfo) {
+	NNTP_AuthInfo = HTList_new();
+	load_NNTP_AuthInfo();
+    }
+
+    cur = NNTP_AuthInfo;
+    while (auth = (NNTPAuth *) HTList_nextObject(cur)) {
+	if (!my_strcasecmp(auth->host, host)) {
+	    UserName = auth->user;
+	    PassWord = auth->pass;
+	    break;
+	}
+    }
+
+    /*
+     * Handle the username.  - FM
+     */
+    buffer[sizeof(buffer) - 1] = '\0';
+    tries = 3;
+
+    while (tries) {
+	if (!UserName) {
+	    sprintf(buffer, "Username for news host '%s':", host);
+	    UserName = HTPrompt(buffer, "guest");
+	    if (!(UserName && *UserName)) {
+		free(UserName);
+		return NNTPAUTH_ERROR;
+	    }
+	}
+	sprintf(buffer, "AUTHINFO USER %.*s\r\n",
+		(int) sizeof(buffer) - 17, UserName);
+	if ((status = response(buffer)) < 0) {
+	    if (status == HT_INTERRUPTED) {
+		HTProgress("Connection interrupted.");
+	    } else {
+		HTAlert("Connection aborted.");
+	    }
+	    if (auth) {
+		if (auth->user != UserName) {
+		    free(auth->user);
+		    auth->user = UserName;
+		}
+	    } else {
+		free(UserName);
+	    }
+	    return NNTPAUTH_CLOSE;
+	}
+	if (status == 281) {
+	    /*
+	     * Username is accepted and no password is required.  - FM
+	     */
+	    if (auth) {
+		if (auth->user != UserName) {
+		    free(auth->user);
+		    auth->user = UserName;
+		}
+	    } else {
+		/*
+		 * Store the accepted username and no password.  - FM
+		 */
+		if (auth = calloc(1, sizeof(NNTPAuth))) {
+		    StrAllocCopy(auth->host, host);
+		    auth->user = UserName;
+		    HTList_addObject(NNTP_AuthInfo, auth);
+		}
+	    }
+	    return NNTPAUTH_OK;
+	}
+	if (status != 381) {
+	    /*
+	     * Not success, nor a request for the password, so it must be an
+	     * error.  - FM
+	     */
+	    HTAlert(response_text);
+	    tries--;
+	    if ((tries > 0) && prompt_for_yes_or_no("Change username?")) {
+		if (!auth || auth->user != UserName)
+		    free(UserName);
+		if ((UserName = HTPrompt("Username:", "guest")) && *UserName)
+		    continue;
+	    }
+	    if (auth) {
+		if (auth->user != UserName) {
+		    free(auth->user);
+		    auth->user = NULL;
+		}
+		if (auth->pass) {
+		    free(auth->pass);
+		    auth->pass = NULL;
+		}
+	    }
+	    free(UserName);
+	    return NNTPAUTH_ERROR;
+	}
+	break;
+    }
+
+    if (status == 381) {
+	/*
+	 * Handle the password.  - FM
+	 */
+	tries = 3;
+	while (tries) {
+	    if (!PassWord) {
+		sprintf(buffer, "Password for news host '%s':", host);
+		PassWord = HTPromptPassword(buffer);
+		if (!(PassWord && *PassWord)) {
+		    free(PassWord);
+		    return NNTPAUTH_ERROR;
+		}
+	    }
+	    sprintf(buffer, "AUTHINFO PASS %.*s\r\n",
+		    (int) sizeof(buffer) - 17, PassWord);
+	    if ((status = response(buffer)) < 0) {
+		if (status == HT_INTERRUPTED) {
+		    HTProgress("Connection interrupted.");
+		} else {
+		    HTAlert("Connection aborted.");
+		}
+		if (auth) {
+		    if (auth->user != UserName) {
+			free(auth->user);
+			auth->user = UserName;
+		    }
+		    if (auth->pass != PassWord) {
+			free(auth->pass);
+			auth->pass = PassWord;
+		    }
+		} else {
+		    free(UserName);
+		    free(PassWord);
+		}
+		return NNTPAUTH_CLOSE;
+	    }
+	    if (status == 502) {
+		/*
+		 * That's what INN's nnrpd returns.  It closes the connection
+		 * after this.  - kw
+		 */
+		HTAlert(response_text);
+		if (auth) {
+		    if (auth->user == UserName)
+			UserName = NULL;
+		    free(auth->user);
+		    auth->user = NULL;
+		    if (auth->pass == PassWord)
+			PassWord = NULL;
+		    free(auth->pass);
+		    auth->pass = NULL;
+		}
+		if (UserName)
+		    free(UserName);
+		if (PassWord)
+		    free(PassWord);
+		return NNTPAUTH_CLOSE;
+	    }
+	    if (status == 281) {
+		/*
+		 * Password also is accepted, and everything has been stored. 
+		 * - FM
+		 */
+		if (auth) {
+		    if (auth->user != UserName) {
+			free(auth->user);
+			auth->user = UserName;
+		    }
+		    if (auth->pass != PassWord) {
+			free(auth->pass);
+			auth->pass = PassWord;
+		    }
+		} else {
+		    if (auth = calloc(1, sizeof(NNTPAuth))) {
+			StrAllocCopy(auth->host, host);
+			auth->user = UserName;
+			auth->pass = PassWord;
+			HTList_addObject(NNTP_AuthInfo, auth);
+		    }
+		}
+		return NNTPAUTH_OK;
+	    }
+	    /*
+	     * Not success, so it must be an error.  - FM
+	     */
+	    HTAlert(response_text);
+	    if (!auth || auth->pass != PassWord)
+		free(PassWord);
+	    PassWord = NULL;
+
+	    tries--;
+	    if ((tries > 0) && HTConfirm("Change password?"))
+		continue;
+
+	    if (auth) {
+		if (auth->user == UserName)
+		    UserName = NULL;
+		free(auth->user);
+		auth->user = NULL;
+		free(auth->pass);
+		auth->pass = NULL;
+	    }
+	    if (UserName)
+		free(UserName);
+	    break;
+	}
+    }
+    return NNTPAUTH_ERROR;
+}
 
 /*	Send NNTP Command line to remote host & Check Response
 **	------------------------------------------------------
@@ -720,7 +1036,9 @@ PRIVATE int response (WWW_CONST char *command)
 {
   int result;    
   char *p = response_text;
+  int auth_tried = 0;
 
+ retry:
   if (command) {
     int status;
     int length = strlen(command);
@@ -750,6 +1068,20 @@ PRIVATE int response (WWW_CONST char *command)
 	fprintf(stderr, "NNTP Response: %s\n", response_text);
 #endif
       sscanf(response_text, "%d", &result);
+
+      if ((result == 480) && !auth_tried) {
+        /* Authentication needed */
+	NNTPAuthResult auth_result = HTHandleAuthInfo(HTNewsHost);
+
+	if ((auth_result == NNTPAUTH_CLOSE) && (s != -1)) {
+	  NETCLOSE(s);
+	  s = -1;
+	}
+	if ((auth_result == NNTPAUTH_OK) && !auth_tried) {
+	  auth_tried = 1;
+	  goto retry;
+	}
+      }
       return result;	    
     }
     
@@ -1359,7 +1691,7 @@ static char *makespaces(char *str, int len)
     while (len--)
       *p++ = ' ';
     *p = '\0';
-  } else if (l > len) { 
+  } else { 
     spaces[0] = '\0';
   }
   return spaces;

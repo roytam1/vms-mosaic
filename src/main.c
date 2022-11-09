@@ -60,7 +60,7 @@
  * C&C Software Technology Center
  */
 #include "../config.h"
-#include "../libwww2/htcookie.h"
+#include "../libwww2/HTCookie.h"
 #include "mosaic.h"
 #include "main.h"
 #include "gui.h"
@@ -93,13 +93,13 @@
 #define LNM$_STRING 2
 
 char *built_time = BUILD_TIME;
-char *ident_ver = IDENT_VER;
 static int has_mbx = 0;
 static short mbx_channel;
 static char mbx_buf[200];
 unsigned long mbx_event_flag = 23;  /* Must be flag in first cluster ( < 32) */
 unsigned short mbx_iosb[4];
 #endif /* VMS, BSN, GEC */
+char *ident_ver = IDENT_VER;
 
 #ifndef VMS
 char *userPath = NULL;

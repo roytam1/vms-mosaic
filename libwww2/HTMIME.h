@@ -16,6 +16,16 @@
 #include "HTAnchor.h"
 #endif
 
+#ifdef MOTIF
+#include <Xm/XmP.h>
+# ifdef MOTIF1_2
+#  include <Xm/ManagerP.h>
+# endif /* MOTIF1_2 */
+#else
+#include <X11/IntrinsicP.h>
+#include <X11/ConstrainP.h>
+#endif /* MOTIF */
+
 typedef struct mime_rec {
 	char *last_modified;
 	char *expires;

@@ -59,8 +59,8 @@
 #include "hotlist.h"
 #include "hotfile.h"
 #include "mo-www.h"
-#include "../libhtmlw/HTMLp.h"
-#include "../libhtmlw/HTMLputil.h"
+#include "../libhtmlw/HTMLP.h"
+#include "../libhtmlw/HTMLPutil.h"
 
 /* The new file format provides support for nested hotlists of interesting
    documents within the browser.  It uses a subset of HTML.

@@ -31,7 +31,7 @@
 #include "../config.h"
 #include "mosaic.h"
 #include <X11/Xlib.h>
-#include "readsun.h"
+#include "readSUN.h"
 #include "quantize.h"
 
 #ifndef DISABLE_TRACE

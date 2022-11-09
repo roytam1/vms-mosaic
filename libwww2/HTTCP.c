@@ -60,7 +60,9 @@ extern int errno;
 #endif /* errno */
 
 #ifndef VMS
+#if !defined(linux) && !defined(__linux)
 extern char *sys_errlist[];		/* See man perror on cernvax */
+#endif
 extern int sys_nerr;
 #endif /* VMS, BSN */
 

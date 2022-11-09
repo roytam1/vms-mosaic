@@ -49,7 +49,7 @@
 #define XLIB_ILLEGAL_ACCESS  1		/* Get access to Display struct */
 #include "mosaic.h"
 #include "XWDFile.h"
-#include "readxwd.h"
+#include "readXWD.h"
 #include "quantize.h"
 
 #ifndef DISABLE_TRACE

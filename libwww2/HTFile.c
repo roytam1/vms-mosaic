@@ -42,11 +42,13 @@
 #include "HTIcon.h"
 #include "HTSort.h"
 
-#ifdef __GNUC__
+#if defined(VMS) && defined(__GNUC__)
 #include <stat.h>
 #endif /* GNU C, probably should do in tcp.h */
 
+#ifdef VMS
 #include "HTVMSUtils.h"
+#endif
 #include "../libnut/system.h"
 
 /* Define parameter that everyone should already have */

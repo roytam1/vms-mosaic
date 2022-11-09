@@ -61,7 +61,7 @@
 #include "../libwww2/HTAlert.h"
 #include "mosaic.h"
 #include "main.h"
-#include "../libhtmlw/HTMLp.h"
+#include "../libhtmlw/HTMLP.h"
 #include "../libhtmlw/HTMLfont.h"
 #include "gui.h"
 #include "grpan.h"

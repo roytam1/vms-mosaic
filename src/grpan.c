@@ -55,7 +55,7 @@
 /* Copyright (C) 2005, 2006 - The VMS Mosaic Project */
 
 #include "../config.h"
-#include "../libwww2/htparse.h"
+#include "../libwww2/HTParse.h"
 #include "mosaic.h"
 #include "grpan.h"
 #include "grpan-www.h"

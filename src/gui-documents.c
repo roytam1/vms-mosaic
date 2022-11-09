@@ -55,10 +55,10 @@
 /* Copyright (C) 1998, 1999, 2000, 2005, 2006, 2007 - The VMS Mosaic Project */
 
 #include "../config.h"
-#include "../libwww2/htaautil.h"
-#include "../libwww2/htnews.h"
-#include "../libwww2/htmime.h"
-#include "../libwww2/http.h"
+#include "../libwww2/HTAAUtil.h"
+#include "../libwww2/HTNews.h"
+#include "../libwww2/HTMIME.h"
+#include "../libwww2/HTTP.h"
 #include "mosaic.h"
 #include "gui.h"
 #include "gui-documents.h"
@@ -70,7 +70,7 @@
 #include "globalhist.h"
 #include "annotate.h"
 #include "history.h"
-#include "../libhtmlw/htmlp.h"
+#include "../libhtmlw/HTMLP.h"
 #include "../libnut/str-tools.h"
 
 #ifdef CCI

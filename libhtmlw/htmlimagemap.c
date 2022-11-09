@@ -32,7 +32,7 @@
 #include <ctype.h>
 #include <math.h>
 
-#include "../libhtmlw/HTMLp.h"
+#include "../libhtmlw/HTMLP.h"
 #include "../libhtmlw/HTMLPutil.h"
 
 #ifndef DISABLE_TRACE

@@ -25,8 +25,8 @@
 #include "../config.h"
 #include "mosaic.h"
 #include <X11/Xlib.h>
-#include "readbmp.h"
-#include "readjpeg.h"
+#include "readBMP.h"
+#include "readJPEG.h"
 #include "medcut.h"
 #include "quantize.h"
 

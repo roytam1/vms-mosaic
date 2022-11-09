@@ -55,7 +55,7 @@
 
 /* Copyright (C) 1997 - G.Dauphin
  *
- * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007
+ * Copyright (C) 1998, 1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008
  * The VMS Mosaic Project
  */
 
@@ -648,6 +648,10 @@ static char ExpandEscape(char *esc, char **endp, char **new)
 		} else {
 			/* Unicode punctuation, etc. */
 			switch (value) {
+			    case 712:
+				/* Vertical line */
+				val = '|';
+				break;
 			    case 956:
 				/* mu */
 				*new = "SYMC m";
@@ -703,6 +707,10 @@ static char ExpandEscape(char *esc, char **endp, char **new)
 			        /* rsaquo */
 			        val = '>';
 				break;
+			    case 8260:
+			        /* fraction slash */
+			        val = '/';
+				break;
 			    case 8482:
 				/* Trademark */
 				*new = "SYM 212";
@@ -719,9 +727,17 @@ static char ExpandEscape(char *esc, char **endp, char **new)
 				/* Up pointing triangle */
 				*new = "SYM 221";
 				break;
+			    case 9658:
+				/* Right pointing black arrow */
+				*new = "SYM 174";
+				break;
 			    case 9660:
 				/* Down pointing triangle */
 				*new = "SYM 223";
+				break;
+			    case 9668:
+				/* Left pointing black arrow */
+				*new = "SYM 172";
 				break;
 			    default:
 				/* No support */
@@ -951,6 +967,8 @@ static char *clean_text(char *txt, int expand, int is_white)
 	    char *newtext;
 	    char *ptr = txt;
 	    char *ptr2 = txt;
+	    char *ori_txt = txt;
+	    int remalloc_txt = 0;
 
 	    while (*ptr) {
 		unsigned char c1 = (unsigned char)*ptr;
@@ -1009,6 +1027,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 			text_mark(newtext, is_white);
 			free(newtext);
 			txt = ptr2 = ptr += 2;
+			remalloc_txt = 1; 
 			symbol_marks(do_symbol);
 		    } else {
 			trace_utf8(ptr);
@@ -1038,6 +1057,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 			text_mark(newtext, is_white);
 			free(newtext);
 			txt = ptr2 = ptr += 2;
+			remalloc_txt = 1;
 			symbol_marks(do_symbol);
 		    } else {
 			trace_utf8(ptr);
@@ -1053,6 +1073,11 @@ static char *clean_text(char *txt, int expand, int is_white)
 		    switch (c2) {
 		      case 0x80:
 			switch (c3) {
+			  case 0x8E:
+			  case 0x8F:
+			    /* LRM and RLM */
+			    ptr += 3;
+			    break;
 			  case 0x92:
 			    /* Figure dash */
 			  case 0x93:
@@ -1424,6 +1449,7 @@ static char *clean_text(char *txt, int expand, int is_white)
 			text_mark(newtext, is_white);
 			free(newtext);
 			txt = ptr2 = ptr += 3;
+			remalloc_txt = 1;
 			symbol_marks(do_symbol);
 		    } else if (do_symbol < 0) {
 			trace_utf8(ptr);
@@ -1459,7 +1485,17 @@ static char *clean_text(char *txt, int expand, int is_white)
 		}
 	    }
 	    *ptr2 = '\0';
+
+	    /* Keep pointer at start of memory segment to prevent
+	     * free routine problems */
+	    if (remalloc_txt) {
+		char *new_txt = strdup(txt);
+
+		free(ori_txt);
+		txt = new_txt;
+	    }
 	}
+
 	return expand_escapes(txt, expand, is_white);
 }
 

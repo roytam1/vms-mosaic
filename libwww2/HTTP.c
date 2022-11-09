@@ -2159,13 +2159,17 @@ PUBLIC int HTLoadHTTP (char *arg,
 	  status = HT_LOADED;
 	  lsocket = -1;
 	  /* Did we already read it all? */
-	  if ((target->isa == &HTMIME) &&
-      	      (((HTMIME_get_header_length(target) +
-	  	 HTMIME_get_content_length(target)) - done_length) < 1)) {
-	      HTMultiLoading->loaded = 1;
-	      (*target->isa->end_document)(target);
-	      HTTP_NETCLOSE(s, handle);
-	      (*target->isa->free)(target);
+	  if (target->isa == &HTMIME) {
+	      int content_length = HTMIME_get_content_length(target);
+
+      	      if ((content_length != -1) &&
+		  (((HTMIME_get_header_length(target) + content_length) -
+		    done_length) < 1)) {
+		  HTMultiLoading->loaded = 1;
+		  (*target->isa->end_document)(target);
+		  HTTP_NETCLOSE(s, handle);
+		  (*target->isa->free)(target);
+	      }
 	  }
           goto clean_up;
       }
@@ -2200,6 +2204,8 @@ PUBLIC int HTLoadHTTP (char *arg,
       /* return_nothing is high. */
       (*target->isa->put_string)(target, "<mosaic-access-override>\n");
       HTProgress("No content was returned.");
+      if (HTMultiLoading)
+	  HTMultiLoading->loaded = 1;
   }
 
   (*target->isa->end_document)(target);

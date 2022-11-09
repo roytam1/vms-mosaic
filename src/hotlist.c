@@ -66,7 +66,7 @@
 #include <Xm/List.h>
 #include <Xm/TextF.h>
 #include <Xm/ToggleBG.h>
-#include <Xm/FilesB.h>
+#include <Xm/FileSB.h>
 #include <sys/types.h>
 
 #include "../libnut/system.h"

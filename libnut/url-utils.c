@@ -179,7 +179,7 @@ int rind(char *s, char c)
 }
 
 
-int getline(char *s, int n, FILE *f)
+int _getline(char *s, int n, FILE *f)
 {
     register int i = 0;
 

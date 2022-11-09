@@ -20,7 +20,7 @@
 #include <Xm/TextF.h>
 #include <Xm/RowColumn.h>
 #include <Xm/List.h>
-#include <Xm/Scrollbar.h>
+#include <Xm/ScrollBar.h>
 #include <Xm/Label.h>
 
 void _FreeAppletStruct(AppletInfo * ats)

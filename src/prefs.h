@@ -390,6 +390,7 @@ void set_pref_int(int pref_id, int value);
 void set_pref_float(int pref_id, float value);
 
 #ifndef VMS
+#include "mosaic.h"
 void mo_preferences_dialog(mo_window *win);
 #endif /* VMS, Useless, at least for now, GEC */
 

@@ -58,7 +58,7 @@
 
 #include "HTUtils.h"
 #include "HTParse.h"
-#include "HTTCP.H"
+#include "HTTCP.h"
 #include "HTFile.h"
 #include "HTTP.h"
 #include "HTAlert.h"
@@ -68,6 +68,10 @@
 #include "../src/mosaic.h"
 #include "../libnut/str-tools.h"
 #include "../libnut/system.h"
+
+#ifndef VMS
+#include <pwd.h>
+#endif
 
 #ifndef DISABLE_TRACE
 int cookieTrace;

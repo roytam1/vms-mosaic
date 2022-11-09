@@ -561,7 +561,7 @@ PUBLIC void HTFileInit (void)
 
 #define MAX_STRING_LEN 256
 
-static int getline(char *s, int n, FILE *f) 
+static int _getline(char *s, int n, FILE *f) 
 {
   register int i = 0;
   
@@ -618,7 +618,7 @@ int HTLoadExtensionsConfigFile(char *fn)
       return -1;
   }
 
-  while (!getline(l, MAX_STRING_LEN, f)) {
+  while (!_getline(l, MAX_STRING_LEN, f)) {
       /* Always get rid of leading white space for "line" */
       for (ptr = l; *ptr && isspace(*ptr); ptr++)
 	  ;

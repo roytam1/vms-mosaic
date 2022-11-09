@@ -114,7 +114,11 @@ Initial
 #include <X11/IntrinsicP.h> 
 #include <X11/StringDefs.h>
 #include <Xm/Xm.h>
+#ifdef VMS
 #include <X11/Shape.h>
+#else
+#include <X11/extensions/shape.h>
+#endif
 #include <Xmu/Converters.h>
 #include "LiteClueP.h"
 

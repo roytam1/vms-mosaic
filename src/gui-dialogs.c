@@ -57,7 +57,7 @@
  */
 
 #include "../config.h"
-#include "../libwww2/HTalert.h"
+#include "../libwww2/HTAlert.h"
 #include "mosaic.h"
 #include "gui-dialogs.h"
 #include "gui-documents.h"
@@ -75,7 +75,7 @@
 #include <Xm/TextF.h>
 #include <Xm/DrawingA.h>
 #include <Xm/ScrollBar.h>
-#include <Xm/FilesB.h>
+#include <Xm/FileSB.h>
 #include <Xm/Protocols.h>
 
 #ifdef VMS
@@ -104,7 +104,9 @@ extern int is_uncompressed;
 /* For ~ expansion */
 #include <pwd.h>
 extern int sys_nerr;
+#ifndef linux
 extern char *sys_errlist[];
+#endif
 #endif /* VMS, GEC */
 
 extern int errno;

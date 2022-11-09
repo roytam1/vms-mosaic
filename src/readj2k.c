@@ -35,7 +35,7 @@
 #ifdef HAVE_JPEG
 
 #include "mosaic.h"
-#include "readj2k.h"
+#include "readJ2K.h"
 #include "quantize.h"
 #include "openjpeg.h"
 

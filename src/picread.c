@@ -68,7 +68,7 @@
 #include "readXWD.h"
 
 #ifdef HAVE_TIFF
-#include "readTIFF.H"
+#include "readTIFF.h"
 #endif
 
 #ifdef HAVE_JPEG

@@ -116,7 +116,9 @@ extern char *strdup(char *str);
 
 #ifndef VMS
 extern int sys_nerr;
+#ifndef linux
 extern char *sys_errlist[];
+#endif
 extern int errno;
 #endif
 

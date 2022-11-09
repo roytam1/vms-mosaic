@@ -65,7 +65,6 @@
 #define _POSIX_C_SOURCE  /* Work around the inclusion of types.h, GEC */
 #endif
 #endif
-#include "../src/prefs.h"  /* Does the required include of X11/Intrinsic.h */
 #if defined(__DECC) && defined(MULTINET) && !defined(__alpha)
 #undef _POSIX_C_SOURCE
 #undef _ANSI_C_SOURCE  /* Gets defined because of _POSIX_C_SOURCE */
@@ -79,6 +78,9 @@
 #include "HTIcon.h"
 #include "HText.h"
 
+#include "../src/prefs.h"  /* Does the required include of X11/Intrinsic.h */
+
+
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 64           /* Arbitrary limit */
 #endif
@@ -91,7 +93,7 @@
 #include <setjmp.h>
 #endif /* SOCKETSHR, GEC */
 
-#ifdef __GNUC__
+#if defined(VMS) && defined(__GNUC__)
 #include <stat.h>
 #endif /* GNU C, probably should do in tcp.h, GEC */
 

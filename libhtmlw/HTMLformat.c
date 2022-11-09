@@ -59,6 +59,7 @@
  * The VMS Mosaic Project
  */
 
+#include <sys/time.h>
 #include <time.h>
 #ifndef VMS
 struct timeval Tv;

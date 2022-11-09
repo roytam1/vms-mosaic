@@ -6,7 +6,7 @@ char x2c(char *what);
 void unescape_url(char *url);
 void plustospace(char *str);
 int rind(char *s, char c);
-int getline(char *s, int n, FILE *f);
+int _getline(char *s, int n, FILE *f);
 void send_fd(FILE *f, FILE *fd);
 int ind(char *s, char c);
 void escape_shell_cmd(char *cmd);

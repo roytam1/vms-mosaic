@@ -9,7 +9,7 @@
 #include "../config.h"
 #include "mosaic.h"
 #include <X11/Xlib.h>
-#include "readtga.h"
+#include "readTGA.h"
 #include "libtarga.h"
 #include "quantize.h"
 

@@ -59,26 +59,26 @@
 #include "../config.h"
 
 /* Moved libwww2 above mosaic.h to avoid VAXC compiler errors, PGE */
-#include "../libwww2/htutils.h"
-#include "../libwww2/htstring.h"
+#include "../libwww2/HTUtils.h"
+#include "../libwww2/HTString.h"
 #ifdef MULTINET
 #if defined(__TIME_T) && !defined(__TYPES_LOADED) && !defined(__TYPES)
 #define __TYPES_LOADED
 #endif /* Different defs in OpenVMS and MultiNet include files, BSN */
 #endif /* MULTINET, BSN */
 #include "../libwww2/tcp.h"
-#include "../libwww2/httcp.h"
-#include "../libwww2/htparse.h"
-#include "../libwww2/htaccess.h"
-#include "../libwww2/html.h"
-#include "../libwww2/htext.h"
-#include "../libwww2/htinit.h"
-#include "../libwww2/htmime.h"
+#include "../libwww2/HTTCP.h"
+#include "../libwww2/HTParse.h"
+#include "../libwww2/HTAccess.h"
+#include "../libwww2/HTML.h"
+#include "../libwww2/HText.h"
+#include "../libwww2/HTInit.h"
+#include "../libwww2/HTMIME.h"
 #include "../libnut/system.h"
 #ifdef VAXC
 #include "mosaic.h"
 #endif /* VAXC, GEC */
-#include "../libhtmlw/html.h"
+#include "../libhtmlw/HTML.h"
 
 #ifndef VAXC
 #include "mosaic.h"
@@ -91,10 +91,12 @@
 #include "../libnut/str-tools.h"
 #include <ctype.h>
 #include <stdio.h>
+#ifdef VMS
 #include <unixio.h>
-#include <Xm/FilesB.h>
+#endif
+#include <Xm/FileSB.h>
 
-#ifdef __GNUC__
+#if defined(VMS) && defined(__GNUC__)
 #include <stat.h>
 #endif
 
@@ -116,7 +118,7 @@ extern int cci_get;
 
 #define __MAX_HOME_LEN__ 256
 #define __SRC__
-#include "../libwww2/htaautil.h"
+#include "../libwww2/HTAAUtil.h"
 extern int securityType;
 
 extern XtAppContext app_context;

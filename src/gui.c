@@ -58,12 +58,12 @@
 
 #include "../config.h"
 #include "../libwww2/HTAABrow.h"
-#include "../libwww2/htalert.h"
-#include "../libwww2/HTfile.h"
-#include "../libwww2/HTftp.h"
-#include "../libwww2/HTcookie.h"
-#include "../libwww2/http.h"
-#include "../libwww2/htparse.h"
+#include "../libwww2/HTAlert.h"
+#include "../libwww2/HTFile.h"
+#include "../libwww2/HTFTP.h"
+#include "../libwww2/HTCookie.h"
+#include "../libwww2/HTTP.h"
+#include "../libwww2/HTParse.h"
 #include "mosaic.h"
 #include "gui.h"
 #include "gui-documents.h"
@@ -75,7 +75,7 @@
 #include "pan.h"
 #include "pixmaps.h"
 #include "colors.h"
-#include "../libhtmlw/HTMLp.h"
+#include "../libhtmlw/HTMLP.h"
 #include "../libnut/system.h"
 #include "../libnut/str-tools.h"
 #include "history.h"
@@ -633,14 +633,14 @@ char *machine;
 static char *shortmachine;
 char *machine_with_domain;
 
-#ifdef VMS
+//#ifdef VMS
 /*
 ** Need to distinguish between commandline -home argument and Xresource file
 ** homeDocument setting so that commandline takes precedence over WWW_HOME
 ** environment variable.
 */
 static char *cmdline_homeDocument = NULL;
-#endif /* VMS, LLL */
+//#endif /* VMS, LLL */
 
 static int cursorAnimCnt;
 static int makeBusy = 0;
@@ -675,14 +675,14 @@ extern Pixmap securityKerberos4, securityBasic, securityMd5, securityNone,
 struct utsname mo_uname;
 #endif
 
-#ifdef VMS
+//#ifdef VMS
 extern unsigned long mbx_event_flag;
 extern unsigned short mbx_iosb[4];
-static char mbx_name[64];
 static XtInputId mo_InputId;
+static char mbx_name[64];
 static int use_mbx = 0;
 static int grp_mbx = 0;
-#endif /* VMS, BSN, TJA */
+//#endif /* VMS, BSN, TJA */
 
 
 static int kioskSafe(char *url)
@@ -5411,6 +5411,7 @@ static void setup_imagekill(void)
  ****************************************************************************/
 void mo_do_gui(int argc, char **argv)
 {
+    int j, status;
 #ifdef VMS
 #define SYI$_HW_NAME 4362
 #define SYI$_VERSION 4096
@@ -5418,7 +5419,6 @@ void mo_do_gui(int argc, char **argv)
     int syi_version = SYI$_VERSION;
     char hardware[32], VMS_version[16];
     char *cp;
-    int j, status;
     unsigned short l_hardware, l_version;
 
     struct  dsc$descriptor_s {
@@ -5429,8 +5429,8 @@ void mo_do_gui(int argc, char **argv)
     } hardware_desc = { sizeof(hardware), 14, 1, NULL },
         VMS_version_desc = { sizeof(VMS_version), 14, 1, NULL };
 
-    int no_preferences = 0;
 #endif /* VMS, BSN, PGE, GEC */
+    int no_preferences = 0;
 #ifdef MONO_DEFAULT
     int use_color = 0;
 #else
@@ -6261,6 +6261,13 @@ void mo_do_gui(int argc, char **argv)
 #ifdef VMS /* Make temp files in SYS$SCRATCH if TMPDIR not defined. PGE */
             if (!tmp_dir)
                 tmp_dir = getenv("SYS$SCRATCH");
+#endif
+#ifdef linux /* for some ease */
+            if (!tmp_dir)
+            {
+                tmp_dir = (char *) malloc(strlen("/tmp") + 1);
+                sprintf(tmp_dir,"/tmp");
+            }
 #endif
             /* It can still be NULL when we leave here -- then we'll just
              * let tmpnam() do what it does best. */

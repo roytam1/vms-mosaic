@@ -74,7 +74,7 @@
 #include <Xm/ToggleB.h>
 #include <Xm/TextF.h>
 #include <Xm/Text.h>
-#include <Xm/FilesB.h>
+#include <Xm/FileSB.h>
 #include "bitmaps/annotate.xbm"
 #ifndef VMS
 #include "../libnut/system.h"

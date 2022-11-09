@@ -85,8 +85,8 @@
 #else
 #define PREFERENCES_FILENAME "mosaic.preferences"
 #endif
-#define PREFERENCES_MAJOR_VERSION 2
-#define PREFERENCES_MINOR_VERSION 9
+#define PREFERENCES_MAJOR_VERSION 3
+#define PREFERENCES_MINOR_VERSION 0
 
 /***************************/
 /* Static Global Variables */
@@ -536,9 +536,10 @@ Boolean read_preferences_file(prefsStructP inPrefsStruct)
     status = read_pref_boolean(fp,
 	eTITLEISWINDOWTITLE, "TITLEISWINDOWTITLE") ? status : 0;
 
-    status = read_pref_skip(fp,"USEICONBAR") ? status : 0;
-    status = read_pref_skip(fp, "USETEXTBUTTONBAR") ? status : 0;
-
+    if (strcmp(version, "2.9")) {
+        status = read_pref_skip(fp,"USEICONBAR") ? status : 0;
+        status = read_pref_skip(fp, "USETEXTBUTTONBAR") ? status : 0;
+    }
     status = read_pref_boolean(fp,
 	eTWIRLING_TRANSFER_ICON, "TWIRLING_TRANSFER_ICON") ? status : 0;
     status = read_pref_boolean(fp,
@@ -1054,6 +1055,9 @@ Boolean write_preferences_file(prefsStructP inPrefsStruct)
     write_pref_boolean(fp, eAUTO_PLACE_WINDOWS, "AUTO_PLACE_WINDOWS");
     write_pref_boolean(fp, eINITIAL_WINDOW_ICONIC, "INITIAL_WINDOW_ICONIC");
     write_pref_boolean(fp, eTITLEISWINDOWTITLE, "TITLEISWINDOWTITLE");
+    fprintf(fp, "USEICONBAR: False\n");
+    fprintf(fp, "USETEXTBUTTONBAR: False\n");
+
     write_pref_boolean(fp, eTWIRLING_TRANSFER_ICON, "TWIRLING_TRANSFER_ICON");
     write_pref_boolean(fp, eSECURITYICON, "SECURITYICON");
     write_pref_int(fp, eTWIRL_INCREMENT, "TWIRL_INCREMENT");
